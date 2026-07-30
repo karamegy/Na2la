@@ -13,7 +13,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- مكتبة html2canvas لالتقاط الصور -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -527,7 +526,7 @@
             <h3>🧾 معاينة وطباعة الفاتورة الرسمية المعتمدة</h3>
             <select id="invoice-select" onchange="renderSelectedInvoice()" style="margin-bottom: 10px;"></select>
             
-            <!-- منطقة الفاتورة القابلة للتصدير كصورة أو PDF -->
+            <!-- منطقة الفاتورة القابلة للتصدير كصورة أو PDF أو فتحها منفردة -->
             <div id="print-area" style="background:#ffffff; color:#334155; padding:15px; border:2px solid var(--accent); border-radius:8px;">
                 <div style="text-align:center;">
                     <h3 style="color:#0f172a;">🚚 أسطورة الطريق - Chevrolet Pickup (1.5 Tons)</h3>
@@ -545,7 +544,7 @@
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
-                <button class="btn-main" onclick="window.print()">🖨️ طباعة الفاتورة التقليدية</button>
+                <button class="btn-main" onclick="openInvoiceStandalone()">🔍 فتح الفاتورة كصفحة منفردة باللوجو</button>
                 <button class="btn-success" onclick="exportInvoiceAsImage()">📸 تصدير الفاتورة كـ صورة (PNG)</button>
                 <button class="btn-warning" onclick="exportInvoiceAsPDF()">📄 تصدير الفاتورة كملف PDF</button>
                 <button class="btn-main" style="background:#25d366;" onclick="sendInvoiceWhatsApp()">💬 إرسال تفاصيل الفاتورة عبر واتساب</button>
@@ -890,6 +889,7 @@
                 else cust.debt += price;
             }
             saveDataAll(); render(); this.reset(); clearSignature(); currentGPS = ''; uploadedImgBase64 = '';
+            alert('تم حفظ الرحلة وتحديث البيانات بنجاح! 💾');
         });
 
         function isCanvasBlank(canvas) {
@@ -1077,7 +1077,54 @@
             document.getElementById('inv-sig-container').innerHTML = s.signature ? `<p>توقيع المستلم:</p><img src="${s.signature}" style="width:120px; border:1px solid #ccc; border-radius:4px;">` : '<span>لم يتم التوقيع</span>';
         }
 
-        // دوال التصدير الجديدة (صورة، PDF، واتساب)
+        // فتح الفاتورة كصفحة مستقلة بذاتها مع اللوجو وتفاصيل الرحلة
+        function openInvoiceStandalone() {
+            const id = document.getElementById('invoice-select').value;
+            const s = appData.shipments.find(ship => ship.id == id);
+            if (!s) return alert('يرجى اختيار شحنة صحيحة');
+
+            const invoiceWindow = window.open('', '_blank');
+            invoiceWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>فاتورة رحلة #${s.id} - أسطورة الطريق</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 25px; background: #f8fafc; color: #334155; }
+                        .invoice-box { max-width: 700px; margin: auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #2563eb; }
+                        .logo-area { text-align: center; margin-bottom: 20px; }
+                        .logo-area h2 { color: #0f172a; margin-bottom: 5px; }
+                        .details-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        .details-table th, .details-table td { padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-size: 14px; }
+                        .details-table th { background: #2563eb; color: #fff; }
+                        .print-btn { display: block; width: 100%; margin-top: 20px; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
+                    </style>
+                </head>
+                <body>
+                    <div class="invoice-box">
+                        <div class="logo-area">
+                            <h2>🚚 أسطورة الطريق - Chevrolet Pickup (1.5 Tons)</h2>
+                            <p style="font-size: 12px; color: #64748b;">إذن تسليم واستلام شحنة رسمي وموثق</p>
+                        </div>
+                        <table class="details-table">
+                            <tr><th>رقم الفاتورة</th><td>${s.id}</td></tr>
+                            <tr><th>اسم العميل</th><td>${s.name}</td></tr>
+                            <tr><th>رقم الهاتف</th><td>${s.phone || '-'}</td></tr>
+                            <tr><th>عنوان التوصيل</th><td>${s.address || '-'}</td></tr>
+                            <tr><th>وصف الحمولة</th><td>${s.item}</td></tr>
+                            <tr><th>الأجرة المطلوبة</th><td>${s.price} ج.م</td></tr>
+                            <tr><th>حالة الشحنة</th><td>${s.status}</td></tr>
+                            <tr><th>التوقيع الرقمي</th><td>${s.signature ? `<img src="${s.signature}" style="max-width:150px; display:block;"/>` : 'لا يوجد توقيع'}</td></tr>
+                        </table>
+                        <button class="print-btn" onclick="window.print()">🖨️ طباعة الفاتورة أو حفظها PDF</button>
+                    </div>
+                </body>
+                </html>
+            `);
+            invoiceWindow.document.close();
+        }
+
         function exportInvoiceAsImage() {
             const element = document.getElementById('print-area');
             html2canvas(element, { scale: 2 }).then(canvas => {
