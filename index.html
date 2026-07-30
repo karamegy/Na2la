@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - Global Transport Hub V55</title>
+    <title>أسطورة الطريق - Global Transport Hub V56</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -41,21 +41,11 @@
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
         body { background-color: var(--bg); color: var(--text-color); padding: 12px; padding-bottom: 70px; direction: rtl; transition: background 0.3s, color 0.3s; }
         
-        .app-3d-logo-container {
-            text-align: center;
-            margin: 10px 0 16px 0;
-            perspective: 1000px;
-        }
+        .app-3d-logo-container { text-align: center; margin: 10px 0 16px 0; perspective: 1000px; }
         .logo-3d {
-            display: inline-block;
-            background: linear-gradient(135deg, #2563eb, #1e293b, #3b82f6);
-            color: #ffffff;
-            padding: 14px 28px;
-            border-radius: 16px;
-            font-size: 20px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
+            display: inline-block; background: linear-gradient(135deg, #2563eb, #1e293b, #3b82f6);
+            color: #ffffff; padding: 14px 28px; border-radius: 16px; font-size: 20px; font-weight: 900;
+            text-transform: uppercase; letter-spacing: 1.5px;
             box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
@@ -147,7 +137,7 @@
     </div>
 
     <div class="news-ticker">
-        <marquee scrollamount="5">🌟 أهلاً بك في نظام أسطورة الطريق المطور V55 (نظام إدارة شيفروليه بيك اب 1.5 طن) 🚀</marquee>
+        <marquee scrollamount="5">🌟 أهلاً بك في نظام أسطورة الطريق المطور V56 (تم إصلاح حفظ السائقين والفواتير والمزايا بالكامل) 🚀</marquee>
     </div>
 
     <!-- شاشة قفل النظام والدخول -->
@@ -573,6 +563,29 @@
         let visitorGPS = '';
         let visitorImgBase64 = '';
 
+        let appData = JSON.parse(localStorage.getItem('transportAppV56')) || { 
+            shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
+            drivers: [{id: 1, name: 'عماد', phone: '01000000000', pin: '01036', status: 'متاح 🟢', title: 'أسطورة الطريق'}], 
+            chat: [], posts: [] 
+        };
+
+        const firebaseConfig = { apiKey: "", authDomain: "", databaseURL: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            try { firebase.initializeApp(firebaseConfig); } catch(e) {}
+        }
+        const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
+
+        if (db) {
+            db.ref('transportAppV56').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    appData = data;
+                    saveToPhone();
+                    render();
+                }
+            });
+        }
+
         function unlockApp() {
             if (document.getElementById('pin-input').value === storedPin) {
                 currentUserRole = 'admin';
@@ -664,23 +677,14 @@
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
-        const firebaseConfig = { apiKey: "", authDomain: "", databaseURL: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
-        if (typeof firebase !== 'undefined' && !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
-
-        let appData = JSON.parse(localStorage.getItem('transportAppV55')) || { 
-            shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
-            drivers: [{id: 1, name: 'عماد', phone: '01000000000', pin: '01036', status: 'متاح 🟢', title: 'أسطورة الطريق'}], 
-            chat: [], posts: [] 
-        };
-        let currentGPS = '';
-
         function saveDataAll() {
             saveToPhone();
-            if (navigator.onLine && db) db.ref('transportAppV55').set(appData);
+            if (navigator.onLine && db) {
+                db.ref('transportAppV56').set(appData);
+            }
             updateCloudStatus(navigator.onLine && !!db);
         }
-        function saveToPhone() { localStorage.setItem('transportAppV55', JSON.stringify(appData)); }
+        function saveToPhone() { localStorage.setItem('transportAppV56', JSON.stringify(appData)); }
         function updateCloudStatus(on) {
             const b = document.getElementById('cloud-status');
             if (b) { b.innerText = on ? 'سحابي ☁️' : 'مكاني 📱'; b.style.background = on ? 'var(--success)' : 'var(--warning)'; }
@@ -729,6 +733,7 @@
             }
         }
 
+        let currentGPS = '';
         const canvas = document.getElementById('signature-pad');
         const ctx = canvas ? canvas.getContext('2d') : null;
         let isDrawing = false;
@@ -765,23 +770,29 @@
         }
 
         let uploadedImgBase64 = '';
-        document.getElementById('ship-img').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) { uploadedImgBase64 = event.target.result; };
-                reader.readAsDataURL(file);
-            }
-        });
+        const shipImgInput = document.getElementById('ship-img');
+        if(shipImgInput) {
+            shipImgInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) { uploadedImgBase64 = event.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
 
-        document.getElementById('vis-img').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) { visitorImgBase64 = event.target.result; };
-                reader.readAsDataURL(file);
-            }
-        });
+        const visImgInput = document.getElementById('vis-img');
+        if(visImgInput) {
+            visImgInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) { visitorImgBase64 = event.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
 
         document.getElementById('chat-form').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -826,7 +837,18 @@
             appData.drivers.push({ id: Date.now(), name, phone, pin, status: 'متاح 🟢', title: 'سائق مستجد' });
             saveDataAll(); render();
             this.reset(); document.getElementById('driver-register-container').style.display = 'none';
-            alert('تم إنشاء حساب السائق بنجاح!');
+            alert('تم تسجيل السائق بنجاح!');
+        });
+
+        document.getElementById('driver-profile-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            appData.drivers.push({
+                id: Date.now(), name: document.getElementById('drv-fullname').value,
+                phone: document.getElementById('drv-phone').value, pin: document.getElementById('drv-pin').value,
+                status: 'متاح 🟢', title: 'سائق مستجد'
+            });
+            saveDataAll(); render(); this.reset(); alert('تم إضافة السائق للنظام بنجاح!');
         });
 
         document.getElementById('visitor-shipment-form').addEventListener('submit', function(e) {
@@ -964,17 +986,6 @@
             saveDataAll(); render(); this.reset();
         });
 
-        document.getElementById('driver-profile-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            if (currentUserRole !== 'admin') return;
-            appData.drivers.push({
-                id: Date.now(), name: document.getElementById('drv-fullname').value,
-                phone: document.getElementById('drv-phone').value, pin: document.getElementById('drv-pin').value,
-                status: 'متاح 🟢', title: 'سائق مستجد'
-            });
-            saveDataAll(); render(); this.reset(); alert('تم تسجيل السائق بنجاح!');
-        });
-
         function cycleStatus(id) {
             const s = appData.shipments.find(ship => ship.id === id);
             if (!s) return;
@@ -1058,14 +1069,32 @@
             if(!sel) return;
             sel.innerHTML = '';
             let list = currentUserRole === 'driver' ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            if (list.length === 0) {
+                sel.innerHTML = `<option value="">لا توجد شحنات متاحة</option>`;
+                clearInvoiceView();
+                return;
+            }
             list.forEach((s) => { sel.innerHTML += `<option value="${s.id}">رقم: ${s.id} - العميل: ${s.name} (${s.item})</option>`; });
             renderSelectedInvoice();
         }
 
+        function clearInvoiceView() {
+            document.getElementById('inv-id').innerText = '-';
+            document.getElementById('inv-client').innerText = '-';
+            document.getElementById('inv-phone').innerText = '-';
+            document.getElementById('inv-address').innerText = '-';
+            document.getElementById('inv-item').innerText = '-';
+            document.getElementById('inv-price').innerText = '-';
+            document.getElementById('inv-status').innerText = '-';
+            document.getElementById('inv-sig-container').innerHTML = '';
+        }
+
         function renderSelectedInvoice() {
-            const id = document.getElementById('invoice-select').value;
+            const sel = document.getElementById('invoice-select');
+            if (!sel || !sel.value) return;
+            const id = sel.value;
             const s = appData.shipments.find(ship => ship.id == id);
-            if (!s) return;
+            if (!s) { clearInvoiceView(); return; }
             document.getElementById('inv-id').innerText = s.id;
             document.getElementById('inv-client').innerText = s.name;
             document.getElementById('inv-phone').innerText = s.phone || '-';
@@ -1333,7 +1362,7 @@
             const ws = XLSX.utils.json_to_sheet(appData.shipments);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-            XLSX.writeFile(wb, "Asstort_AlTariq_Hub_V55.xlsx");
+            XLSX.writeFile(wb, "Asstort_AlTariq_Hub_V56.xlsx");
         }
 
         setupNavigation();
