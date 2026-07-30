@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - Global Transport Hub V60</title>
+    <title>أسطورة الطريق - Global Transport Hub V60 PRO</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -137,7 +137,7 @@
     </div>
 
     <div class="news-ticker">
-        <marquee scrollamount="5">🌟 تم تفعيل نظام V60 الذكي: مساعد الذكاء الاصطناعي للأعطال، تحليلات الأرباح المتقدمة، وإدارة الأسطول 🚀</marquee>
+        <marquee scrollamount="5">🌟 تم تفعيل النظام بنجاح: الحفظ الفوري للرحلات والبيانات يعمل الآن بكفاءة عالية 🚀</marquee>
     </div>
 
     <!-- شاشة قفل النظام والدخول -->
@@ -212,7 +212,7 @@
         <div style="display: flex; gap: 6px; align-items: center;">
             <button type="button" onclick="lockSystem()" class="btn-sm" style="background:var(--danger); color:#fff;">🔒 قفل النظام</button>
             <button type="button" onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌙/☀️</button>
-            <span class="cloud-badge" id="cloud-status">جاري التحقق...</span>
+            <span class="cloud-badge" id="cloud-status">محلي 📱</span>
         </div>
     </header>
 
@@ -259,7 +259,7 @@
     <section id="shipments-tab" class="app-section">
         <div class="card" id="new-shipment-card">
             <h3 id="form-title-heading">تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)</h3>
-            <form id="shipment-form" onsubmit="event.preventDefault();">
+            <form id="shipment-form" onsubmit="saveShipmentHandler(event);">
                 <input type="hidden" id="edit-shipment-id" value="">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                     <input type="text" id="ship-name" required placeholder="اسم العميل">
@@ -580,6 +580,8 @@
         let loggedInDriverName = 'عماد';
         let visitorGPS = '';
         let visitorImgBase64 = '';
+        let currentGPS = '';
+        let uploadedImgBase64 = '';
 
         let appData = JSON.parse(localStorage.getItem('transportAppV60')) || { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
@@ -587,21 +589,8 @@
             chat: [], posts: [] 
         };
 
-        const firebaseConfig = { apiKey: "", authDomain: "", databaseURL: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
-        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-            try { firebase.initializeApp(firebaseConfig); } catch(e) {}
-        }
-        const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
-
-        if (db) {
-            db.ref('transportAppV60').on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data && currentUserRole) { 
-                    appData = data;
-                    saveToPhone();
-                    render();
-                }
-            });
+        function saveDataAll() {
+            localStorage.setItem('transportAppV60', JSON.stringify(appData));
         }
 
         function unlockApp() {
@@ -701,19 +690,6 @@
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
-        function saveDataAll() {
-            saveToPhone();
-            if (navigator.onLine && db) {
-                db.ref('transportAppV60').set(appData);
-            }
-            updateCloudStatus(navigator.onLine && !!db);
-        }
-        function saveToPhone() { localStorage.setItem('transportAppV60', JSON.stringify(appData)); }
-        function updateCloudStatus(on) {
-            const b = document.getElementById('cloud-status');
-            if (b) { b.innerText = on ? 'سحابي ☁️' : 'مكاني 📱'; b.style.background = on ? 'var(--success)' : 'var(--warning)'; }
-        }
-
         let leafletMap = null;
         function initMap() {
             const mapContainer = document.getElementById('map');
@@ -757,7 +733,6 @@
             }
         }
 
-        let currentGPS = '';
         const canvas = document.getElementById('signature-pad');
         const ctx = canvas ? canvas.getContext('2d') : null;
         let isDrawing = false;
@@ -793,7 +768,6 @@
             if(tabId === 'drivers-monitor-tab') renderDriversMonitor();
         }
 
-        let uploadedImgBase64 = '';
         const shipImgInput = document.getElementById('ship-img');
         if(shipImgInput) {
             shipImgInput.addEventListener('change', function(e) {
@@ -917,88 +891,75 @@
             alert('تم تسجيل حجز الرحلة بنجاح!');
         });
 
-        document.getElementById('shipment-form').addEventListener('submit', function(e) {
+        function saveShipmentHandler(e) {
             e.preventDefault();
-            e.stopPropagation();
-            
             if (currentUserRole !== 'admin') { 
                 alert('تسجيل الشحنات الجديدة متاح للمدير فقط!'); 
                 return; 
             }
             
-            try {
-                const editId = document.getElementById('edit-shipment-id').value;
-                const price = parseFloat(document.getElementById('ship-price').value) || 0;
-                const fuelCost = parseFloat(document.getElementById('ship-fuel-cost').value) || 0;
-                const extraCost = parseFloat(document.getElementById('ship-extra-cost').value) || 0;
-                const netProfit = price - (fuelCost + extraCost);
-                const name = document.getElementById('ship-name').value;
-                const phone = document.getElementById('ship-phone').value;
-                const address = document.getElementById('ship-address').value;
-                const item = document.getElementById('ship-item').value;
-                const assignedDriver = document.getElementById('ship-assigned-driver').value || 'عماد';
-                const signatureData = (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx && !isCanvasBlank(canvas)) ? canvas.toDataURL() : '';
+            const editId = document.getElementById('edit-shipment-id').value;
+            const price = parseFloat(document.getElementById('ship-price').value) || 0;
+            const fuelCost = parseFloat(document.getElementById('ship-fuel-cost').value) || 0;
+            const extraCost = parseFloat(document.getElementById('ship-extra-cost').value) || 0;
+            const netProfit = price - (fuelCost + extraCost);
+            const name = document.getElementById('ship-name').value;
+            const phone = document.getElementById('ship-phone').value;
+            const address = document.getElementById('ship-address').value;
+            const item = document.getElementById('ship-item').value;
+            const assignedDriver = document.getElementById('ship-assigned-driver').value || 'عماد';
+            const signatureData = (canvas && ctx && !isCanvasBlank(canvas)) ? canvas.toDataURL() : '';
 
-                if (editId) {
-                    const s = appData.shipments.find(ship => ship.id == editId);
-                    if (s) {
-                        s.name = name; s.phone = phone; s.address = address; s.item = item;
-                        s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost; s.netProfit = netProfit;
-                        s.assignedDriver = assignedDriver;
-                        if (currentGPS) s.gps = currentGPS;
-                        if (uploadedImgBase64) s.docImg = uploadedImgBase64;
-                        if (signatureData) s.signature = signatureData;
-                    }
-                    document.getElementById('edit-shipment-id').value = '';
+            if (editId) {
+                const s = appData.shipments.find(ship => ship.id == editId);
+                if (s) {
+                    s.name = name; s.phone = phone; s.address = address; s.item = item;
+                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost; s.netProfit = netProfit;
+                    s.assignedDriver = assignedDriver;
+                    if (currentGPS) s.gps = currentGPS;
+                    if (uploadedImgBase64) s.docImg = uploadedImgBase64;
+                    if (signatureData) s.signature = signatureData;
+                }
+                document.getElementById('edit-shipment-id').value = '';
+            } else {
+                const newShipment = {
+                    id: Date.now(), 
+                    name, 
+                    phone, 
+                    address, 
+                    item, 
+                    assignedDriver,
+                    price, 
+                    fuelCost, 
+                    extraCost, 
+                    netProfit, 
+                    gps: currentGPS || '', 
+                    docImg: uploadedImgBase64 || '',
+                    status: '⏳ قيد الانتظار', 
+                    signature: signatureData
+                };
+                
+                if (!appData.shipments) appData.shipments = [];
+                appData.shipments.unshift(newShipment);
+
+                if (!appData.customers) appData.customers = [];
+                let cust = appData.customers.find(c => c.name === name);
+                if (!cust) {
+                    appData.customers.push({ id: Date.now(), name, phone, debt: price });
                 } else {
-                    const newShipment = {
-                        id: Date.now(), 
-                        name, 
-                        phone, 
-                        address, 
-                        item, 
-                        assignedDriver,
-                        price, 
-                        fuelCost, 
-                        extraCost, 
-                        netProfit, 
-                        gps: currentGPS || '', 
-                        docImg: uploadedImgBase64 || '',
-                        status: '⏳ قيد الانتظار', 
-                        signature: signatureData
-                    };
-                    
-                    if (!appData.shipments) appData.shipments = [];
-                    appData.shipments.unshift(newShipment);
-
-                    if (!appData.customers) appData.customers = [];
-                    let cust = appData.customers.find(c => c.name === name);
-                    if (!cust) {
-                        appData.customers.push({ id: Date.now(), name, phone, debt: price });
-                    } else {
-                        cust.debt += price;
-                    }
+                    cust.debt += price;
                 }
-
-                saveDataAll(); 
-                render(); 
-                
-                this.reset(); 
-                if (typeof clearSignature === 'function') clearSignature(); 
-                currentGPS = ''; 
-                uploadedImgBase64 = '';
-                
-                const shipmentsTabBtn = document.querySelector('nav button:nth-child(2)') || document.querySelector('nav button');
-                if (shipmentsTabBtn && typeof switchTab === 'function') {
-                    switchTab('shipments-tab', shipmentsTabBtn);
-                }
-
-                alert('تم حفظ الرحلة وبقاؤك في نفس الصفحة بنجاح! 💾');
-            } catch (err) {
-                console.error("خطأ أثناء حفظ الرحلة:", err);
-                alert('حدث خطأ أثناء حفظ الرحلة.');
             }
-        });
+
+            saveDataAll(); 
+            render(); 
+            document.getElementById('shipment-form').reset(); 
+            if (typeof clearSignature === 'function') clearSignature(); 
+            currentGPS = ''; 
+            uploadedImgBase64 = '';
+            
+            alert('تم حفظ الرحلة بنجاح! 💾');
+        }
 
         function isCanvasBlank(canvas) {
             const blank = document.createElement('canvas');
@@ -1455,8 +1416,6 @@
             XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
             XLSX.writeFile(wb, "Asstort_AlTariq_Hub_V60.xlsx");
         }
-
-        updateCloudStatus(navigator.onLine && !!db);
     </script>
 </body>
 </html>
