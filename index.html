@@ -125,7 +125,7 @@
 
         .load-post-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
         .load-post-media { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-        .load-post-media img, .load-post-media video { width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+        .load-post-media img, .load-post-media video { width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); cursor: pointer; }
         
         .notification-badge-container { position: relative; display: inline-block; }
         .notif-count-badge { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border-radius: 50%; padding: 2px 6px; font-size: 9px; font-weight: bold; }
@@ -141,7 +141,7 @@
     </div>
 
     <div class="news-ticker">
-        <marquee scrollamount="5">🌟 تم تفعيل النظام السحابي بنجاح: مزامنة حية وفورية للحجوزات والبيانات مع مميزات مجتمع وعالم السائقين 🚀</marquee>
+        <marquee scrollamount="5">🌟 تم تحديث نظام تشغيل الوسائط (صور وفيديوهات) بنجاح: عرض فوري وتفاعلي لجميع ملفات الأسطول والمجتمع 🚀</marquee>
     </div>
 
     <!-- شاشة قفل النظام والدخول -->
@@ -262,6 +262,14 @@
                     <p style="font-size: 11px; opacity: 0.9;">نصائح للتعامل مع المنحدرات، الأجواء الممطرة، وتثبيت الأحمال داخل الصندوق المغلق.</p>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- نافذة منبثقة لعرض الصور والفيديوهات بحجم كبير -->
+    <div id="mediaViewerModal" class="custom-modal" onclick="closeMediaViewer()">
+        <div style="position: relative; max-width: 90%; max-height: 90vh; display: flex; justify-content: center; align-items: center;" onclick="event.stopPropagation()">
+            <button type="button" onclick="closeMediaViewer()" class="btn-danger btn-sm" style="position: absolute; top: -35px; left: 0; z-index: 10002;">✕ إغلاق</button>
+            <div id="mediaViewerContent" style="text-align: center;"></div>
         </div>
     </div>
 
@@ -681,6 +689,9 @@
                 if (!appData.communityPosts) {
                     appData.communityPosts = [];
                 }
+                if (!appData.posts) {
+                    appData.posts = [];
+                }
             } else {
                 saveDataAll();
             }
@@ -800,6 +811,23 @@
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
+        // عارض الصور والفيديوهات المكبر
+        function viewMedia(src, type) {
+            const modal = document.getElementById('mediaViewerModal');
+            const content = document.getElementById('mediaViewerContent');
+            content.innerHTML = '';
+            if (type === 'video') {
+                content.innerHTML = `<video controls autoplay src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px;"></video>`;
+            } else {
+                content.innerHTML = `<img src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px; object-fit:contain;"/>`;
+            }
+            modal.style.display = 'flex';
+        }
+        function closeMediaViewer() {
+            document.getElementById('mediaViewerModal').style.display = 'none';
+            document.getElementById('mediaViewerContent').innerHTML = '';
+        }
+
         let leafletMap = null;
         function initMap() {
             const mapContainer = document.getElementById('map');
@@ -877,6 +905,7 @@
             if(tabId === 'crud-tab' && currentUserRole === 'admin') renderCRUDTable();
             if(tabId === 'drivers-monitor-tab') renderDriversMonitor();
             if(tabId === 'account-tab') renderMyAccount();
+            if(tabId === 'public-feed-tab') renderPublicPosts();
         }
 
         const shipImgInput = document.getElementById('ship-img');
@@ -961,9 +990,9 @@
                 if (p.files && p.files.length > 0) {
                     p.files.forEach(f => {
                         if (f.type.startsWith('image/')) {
-                            filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px; display:block;" onclick="window.open(this.src)"/>`;
+                            filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'image')"/>`;
                         } else if (f.type.startsWith('video/')) {
-                            filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px; display:block;"></video>`;
+                            filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'video')"></video>`;
                         } else {
                             filesHtml += `<div style="background:#e2e8f0; padding:6px; border-radius:4px; margin-top:4px; font-size:11px;">📁 مستند مرفق: <a href="${f.data}" download="${f.name}" target="_blank">${f.name}</a></div>`;
                         }
@@ -1041,14 +1070,57 @@
             const desc = document.getElementById('post-desc').value;
             let imagesArr = [];
             let videoStr = '';
+            
             const imgFiles = document.getElementById('post-images').files;
-            for (let i = 0; i < imgFiles.length; i++) { imagesArr.push(await fileToBase64(imgFiles[i])); }
+            for (let i = 0; i < imgFiles.length; i++) { 
+                imagesArr.push(await fileToBase64(imgFiles[i])); 
+            }
+            
             const vidFile = document.getElementById('post-videos').files[0];
-            if (vidFile) { videoStr = await fileToBase64(vidFile); }
+            if (vidFile) { 
+                videoStr = await fileToBase64(vidFile); 
+            }
+            
             if(!appData.posts) appData.posts = [];
             appData.posts.unshift({ id: Date.now(), title, desc, images: imagesArr, video: videoStr, date: new Date().toLocaleDateString('ar-EG') });
-            saveDataAll(); this.reset(); alert('تم نشر الرحلة بنجاح! 🚀');
+            saveDataAll(); 
+            this.reset(); 
+            renderPublicPosts();
+            alert('تم نشر الرحلة بنجاح! 🚀');
         });
+
+        function renderPublicPosts() {
+            const feedContainer = document.getElementById('public-posts-feed');
+            if (!feedContainer) return;
+            feedContainer.innerHTML = '';
+            let posts = appData.posts || [];
+            if (posts.length === 0) {
+                feedContainer.innerHTML = '<p style="text-align:center; opacity:0.7; padding:15px;">لا توجد إعلانات عامة أو رحلات منشورة حالياً.</p>';
+                return;
+            }
+            posts.forEach(p => {
+                let mediaHtml = '';
+                if (p.images && p.images.length > 0) {
+                    p.images.forEach(img => {
+                        mediaHtml += `<img src="${img}" onclick="viewMedia('${img}', 'image')" alt="صورة الرحلة"/>`;
+                    });
+                }
+                if (p.video) {
+                    mediaHtml += `<video src="${p.video}" onclick="viewMedia('${p.video}', 'video')" muted></video>`;
+                }
+
+                feedContainer.innerHTML += `
+                    <div class="load-post-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h4 style="font-size:13px; color:var(--accent);">${p.title}</h4>
+                            <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                        </div>
+                        <p style="font-size:11px; margin-top:6px; line-height:1.4;">${p.desc}</p>
+                        ${mediaHtml ? `<div class="load-post-media">${mediaHtml}</div>` : ''}
+                    </div>
+                `;
+            });
+        }
 
         function fileToBase64(file) {
             return new Promise((resolve, reject) => {
@@ -1372,8 +1444,8 @@
             document.getElementById('inv-price').innerText = s.price;
             document.getElementById('inv-status').innerText = s.status;
             
-            document.getElementById('inv-img-preview').innerHTML = s.docImg ? `<p style="font-size:10px; font-weight:bold;">صورة مستند/بضاعة الرحلة:</p><img src="${s.docImg}" style="max-width:140px; max-height:100px; border:1px solid #ccc; border-radius:4px;">` : '';
-            document.getElementById('inv-sig-container').innerHTML = s.signature ? `<p>توقيع المستلم:</p><img src="${s.signature}" style="width:120px; border:1px solid #ccc; border-radius:4px;">` : '<span>لم يتم التوقيع</span>';
+            document.getElementById('inv-img-preview').innerHTML = s.docImg ? `<p style="font-size:10px; font-weight:bold;">صورة مستند/بضاعة الرحلة:</p><img src="${s.docImg}" onclick="viewMedia('${s.docImg}', 'image')" style="max-width:140px; max-height:100px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">` : '';
+            document.getElementById('inv-sig-container').innerHTML = s.signature ? `<p>توقيع المستلم:</p><img src="${s.signature}" onclick="viewMedia('${s.signature}', 'image')" style="width:120px; border:1px solid #ccc; border-radius:4px; cursor:pointer;">` : '<span>لم يتم التوقيع</span>';
         }
 
         function openInvoiceStandalone() {
@@ -1556,94 +1628,83 @@
             if (shipList) {
                 shipList.innerHTML = '';
                 activeShipments.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query)).forEach(s => {
-                    let badgeClass = s.status.includes('في الطريق') ? 'bg-transit' : s.status.includes('تم التسليم') ? 'bg-delivered' : s.status.includes('مرتجع') ? 'bg-returned' : 'bg-pending';
+                    let badgeClass = s.status.includes('قيد الانتظار') ? 'bg-pending' : (s.status.includes('الطريق') ? 'bg-transit' : (s.status.includes('التسليم') ? 'bg-delivered' : 'bg-returned'));
                     shipList.innerHTML += `
                         <tr>
-                            <td>${s.name}</td>
-                            <td>${s.item}</td>
+                            <td><b>${s.name}</b><br><small>${s.phone || ''}</small></td>
+                            <td>${s.item} ${s.docImg ? `<br><img src="${s.docImg}" onclick="viewMedia('${s.docImg}', 'image')" style="width:30px; height:30px; border-radius:4px; object-fit:cover; cursor:pointer;" title="عرض المستند">` : ''}</td>
                             <td>${s.assignedDriver || 'عام'}</td>
                             <td>${s.price} ج.م</td>
-                            <td style="font-weight:bold;">${s.netProfit || 0} ج.م</td>
+                            <td>${s.netProfit || 0} ج.م</td>
                             <td><span class="badge ${badgeClass}" onclick="cycleStatus(${s.id})">${s.status}</span></td>
                             <td>
-                                ${currentUserRole === 'admin' ? `<button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>` : ''}
-                                <button type="button" class="btn-success btn-sm" onclick="sendWhatsAppNotice(${s.id})">💬</button>
-                                <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">🔳</button>
+                                <button type="button" class="btn-sm btn-success" onclick="sendWhatsAppNotice(${s.id})">واتساب</button>
+                                <button type="button" class="btn-sm btn-warning" onclick="showQR(${s.id})">QR</button>
+                                ${currentUserRole === 'admin' ? `<button type="button" class="btn-sm btn-danger" onclick="crudDelete('shipments', ${s.id})">حذف</button>` : ''}
                             </td>
                         </tr>`;
-                });
-            }
-
-            const feedContainer = document.getElementById('public-posts-feed');
-            if (feedContainer) {
-                feedContainer.innerHTML = (appData.posts || []).length === 0 ? `<p style="text-align:center; padding:15px; opacity:0.7;">لا توجد منشورات.</p>` : '';
-                (appData.posts || []).forEach(p => {
-                    let mediaHtml = '';
-                    if (p.images) p.images.forEach(img => mediaHtml += `<img src="${img}" onclick="window.open(this.src)">`);
-                    if (p.video) mediaHtml += `<video controls src="${p.video}"></video>`;
-                    feedContainer.innerHTML += `<div class="load-post-card"><h4 style="color:var(--accent);">${p.title}</h4><p>${p.desc}</p><div class="load-post-media">${mediaHtml}</div></div>`;
                 });
             }
 
             const chatBox = document.getElementById('chat-messages-list');
             if (chatBox) {
                 chatBox.innerHTML = '';
-                (appData.chat || []).forEach(msg => {
-                    chatBox.innerHTML += `<div class="chat-bubble ${msg.role === 'admin' ? 'admin' : 'driver'}"><div style="font-size:9px; font-weight:bold;">${msg.sender} (${msg.time})</div><div>${msg.text}</div></div>`;
+                (appData.chat || []).forEach(c => {
+                    let bubbleClass = c.role === 'admin' ? 'admin' : 'driver';
+                    chatBox.innerHTML += `<div class="chat-bubble ${bubbleClass}"><b>${c.sender}:</b> ${c.text} <div style="font-size:8px; opacity:0.7; text-align:left;">${c.time}</div></div>`;
                 });
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
 
-            const driversTable = document.getElementById('drivers-list-table');
-            if (driversTable && currentUserRole === 'admin') {
-                driversTable.innerHTML = '';
-                (appData.drivers || []).forEach(d => {
-                    driversTable.innerHTML += `<tr><td>${d.name}</td><td>${d.phone}</td><td><b>${d.title || 'سائق'}</b></td><td>🔒</td><td><button type="button" class="btn-warning btn-sm" onclick="editDriver(${d.id})">✏️</button> <button type="button" class="btn-danger btn-sm" onclick="crudDelete('drivers', ${d.id})">حذف</button></td></tr>`;
+            renderPublicPosts();
+
+            const truckList = document.getElementById('trucks-list');
+            if (truckList) {
+                truckList.innerHTML = '';
+                (appData.trucks || []).forEach(t => {
+                    truckList.innerHTML += `<tr><td>${t.number}</td><td>${t.driver}</td><td>${t.km}</td><td>${t.nextOil}</td><td>${t.expiry}</td></tr>`;
                 });
             }
 
-            const treasuryList = document.getElementById('treasury-list'); 
-            if (treasuryList && currentUserRole === 'admin') {
-                treasuryList.innerHTML = '';
-                (appData.treasury || []).forEach(t => { treasuryList.innerHTML += `<tr><td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'};">${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`; });
-            }
-
-            const docsList = document.getElementById('docs-list'); 
-            if (docsList && currentUserRole === 'admin') {
+            const docsList = document.getElementById('docs-list');
+            if (docsList) {
                 docsList.innerHTML = '';
-                (appData.docs || []).forEach(d => { docsList.innerHTML += `<div style="background:var(--bg); padding:6px; border-radius:6px; display:flex; justify-content:space-between;"><span>📄 ${d.title}</span><a href="${d.file}" target="_blank" class="btn-main btn-sm">معاينة</a></div>`; });
+                (appData.docs || []).forEach(d => {
+                    docsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; font-size:11px;"><span>📄 ${d.title}</span> <button type="button" class="btn-sm btn-main" onclick="viewMedia('${d.file}', 'image')">عرض المستند</button></div>`;
+                });
             }
 
-            const truckList = document.getElementById('trucks-list'); 
-            if (truckList && currentUserRole === 'admin') {
-                truckList.innerHTML = '';
-                (appData.trucks || []).forEach(t => { truckList.innerHTML += `<tr><td>${t.number}</td><td>${t.driver}</td><td>${t.km} KM</td><td><span class="badge ${t.km >= t.nextOil ? 'bg-returned' : 'bg-delivered'}">${t.km >= t.nextOil ? 'تغيير زيت' : 'ممتاز'}</span></td><td>${t.expiry}</td></tr>`; });
+            const drvTable = document.getElementById('drivers-list-table');
+            if (drvTable) {
+                drvTable.innerHTML = '';
+                (appData.drivers || []).forEach(d => {
+                    drvTable.innerHTML += `<tr><td>${d.name}</td><td>${d.phone}</td><td>${d.title || 'سائق'}</td><td><code>${d.pin}</code></td><td><button type="button" class="btn-sm btn-warning" onclick="editDriver(${d.id})">تعديل</button></td></tr>`;
+                });
             }
 
-            const expList = document.getElementById('expenses-list'); 
-            if (expList && currentUserRole === 'admin') {
+            const expList = document.getElementById('expenses-list');
+            if (expList) {
                 expList.innerHTML = '';
-                (appData.expenses || []).forEach(ex => { expList.innerHTML += `<tr><td>${ex.title}</td><td style="color:var(--danger);">${ex.amount} ج.م</td><td>${ex.date}</td></tr>`; });
+                (appData.expenses || []).forEach(e => {
+                    expList.innerHTML += `<tr><td>${e.title}</td><td>${e.amount} ج.م</td><td>${e.date}</td></tr>`;
+                });
             }
 
-            const custList = document.getElementById('customers-list'); 
-            if (custList && currentUserRole === 'admin') {
+            const treasList = document.getElementById('treasury-list');
+            if (treasList) {
+                treasList.innerHTML = '';
+                (appData.treasury || []).forEach(tr => {
+                    treasList.innerHTML += `<tr><td>${tr.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${tr.amount} ج.م</td><td>${tr.desc}</td><td>${tr.date}</td></tr>`;
+                });
+            }
+
+            const custList = document.getElementById('customers-list');
+            if (custList) {
                 custList.innerHTML = '';
-                (appData.customers || []).forEach(c => { custList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:${c.debt > 0 ? 'var(--danger)' : 'var(--success)'};">${c.debt} ج.م</td><td><button type="button" class="btn-main btn-sm" onclick="payDebt(${c.id})">تحصيل</button></td></tr>`; });
+                (appData.customers || []).forEach(c => {
+                    custList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td>${c.debt} ج.م</td><td>${currentUserRole === 'admin' ? `<button type="button" class="btn-sm btn-success" onclick="payDebt(${c.id})">تحصيل</button>` : '-'}</td></tr>`;
+                });
             }
-
-            updateInvoiceDropdown();
-            renderDriversMonitor();
-            renderMyAccount();
-            if(currentUserRole === 'admin') renderCRUDTable();
-        }
-
-        function exportToExcel() {
-            if (currentUserRole !== 'admin') return;
-            const ws = XLSX.utils.json_to_sheet(appData.shipments || []);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-            XLSX.writeFile(wb, "Asstort_AlTariq_Hub_V60.xlsx");
         }
     </script>
 </body>
