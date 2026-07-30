@@ -1,1 +1,1380 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أسطورة الطريق - Global Transport Hub V56</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    
+    <!-- المكتبات الأساسية -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        :root {
+            --primary: #0f172a;
+            --accent: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #334155;
+            --border-color: #cbd5e1;
+        }
 
+        body.dark-mode {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --border-color: #334155;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        body { background-color: var(--bg); color: var(--text-color); padding: 12px; padding-bottom: 70px; direction: rtl; transition: background 0.3s, color 0.3s; }
+        
+        .app-3d-logo-container { text-align: center; margin: 10px 0 16px 0; perspective: 1000px; }
+        .logo-3d {
+            display: inline-block; background: linear-gradient(135deg, #2563eb, #1e293b, #3b82f6);
+            color: #ffffff; padding: 14px 28px; border-radius: 16px; font-size: 20px; font-weight: 900;
+            text-transform: uppercase; letter-spacing: 1.5px;
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .logo-3d span { color: #38bdf8; }
+
+        .news-ticker {
+            background: #1e293b; color: #38bdf8; padding: 8px 12px; border-radius: 8px;
+            font-size: 13px; margin-bottom: 12px; border-right: 4px solid var(--accent); overflow: hidden; white-space: nowrap;
+        }
+        .news-ticker marquee { font-weight: bold; }
+
+        #lock-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; z-index: 9999; display: flex;
+            flex-direction: column; justify-content: center; align-items: center; color: white; padding: 20px; overflow-y: auto;
+        }
+        #lock-screen input { width: 260px; text-align: center; font-size: 18px; letter-spacing: 2px; margin: 10px 0; padding: 10px; border-radius: 6px; border: none; }
+
+        #visitor-booking-container, #driver-register-container {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.95); z-index: 10000; justify-content: center; align-items: center; padding: 15px; overflow-y: auto;
+        }
+
+        header { 
+            background: linear-gradient(135deg, #0f172a, #1e293b); 
+            color: #fff; padding: 16px; border-radius: 12px; margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+        }
+
+        .alert-banner { background: var(--danger); color: white; padding: 8px; border-radius: 8px; font-size: 11px; margin-bottom: 10px; font-weight: bold; display: none; }
+        .cloud-badge { background: var(--success); color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-bottom: 12px; }
+        .stat-card { background: var(--card-bg); padding: 10px; border-radius: 8px; border-right: 4px solid var(--accent); text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .stat-card h4 { font-size: 10px; opacity: 0.8; }
+        .stat-card p { font-size: 12px; font-weight: bold; margin-top: 2px; }
+
+        .search-box { width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; font-size: 13px; background: var(--card-bg); color: var(--text-color); }
+
+        nav { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; background: var(--card-bg); padding: 8px; border-radius: 10px; border: 1px solid var(--border-color); }
+        nav button { background: #e2e8f0; color: #334155; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; font-weight: bold; font-size: 11px; }
+        nav button.active { background: var(--accent); color: white; }
+
+        .app-section { display: none; }
+        .app-section.active { display: block; }
+        .card { background: var(--card-bg); padding: 14px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); margin-bottom: 12px; border: 1px solid var(--border-color); }
+        .card h3 { margin-bottom: 10px; font-size: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 4px; }
+
+        input, select, textarea, button { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; background: var(--card-bg); color: var(--text-color); margin-bottom: 6px; }
+        .btn-main { background-color: var(--accent); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-success { background-color: var(--success); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-danger { background-color: var(--danger); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-warning { background-color: var(--warning); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-sm { padding: 4px 6px; font-size: 10px; width: auto; display: inline-block; margin: 2px; }
+
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        table th, table td { border: 1px solid var(--border-color); padding: 6px; text-align: center; font-size: 11px; }
+        table th { background-color: var(--accent); color: white; }
+
+        #signature-pad { border: 1px dashed var(--border-color); border-radius: 6px; background: #fff; width: 100%; height: 80px; touch-action: none; }
+        .badge { padding: 3px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; color: white; cursor: pointer; }
+        
+        .bg-pending { background-color: var(--warning); }
+        .bg-transit { background-color: var(--accent); }
+        .bg-delivered { background-color: var(--success); }
+        .bg-returned { background-color: var(--danger); }
+
+        #map { height: 300px; width: 100%; border-radius: 8px; margin-top: 10px; }
+
+        .chat-container { display: flex; flex-direction: column; height: 350px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg); overflow: hidden; }
+        .chat-messages { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .chat-bubble { max-width: 75%; padding: 8px 12px; border-radius: 10px; font-size: 11px; line-height: 1.4; position: relative; }
+        .chat-bubble.admin { background: var(--accent); color: white; align-self: flex-start; border-bottom-right-radius: 0; }
+        .chat-bubble.driver { background: #334155; color: white; align-self: flex-end; border-bottom-left-radius: 0; }
+        .chat-input-area { display: flex; padding: 8px; background: var(--card-bg); border-top: 1px solid var(--border-color); gap: 6px; }
+
+        .load-post-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .load-post-media { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .load-post-media img, .load-post-media video { width: 100px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <div class="app-3d-logo-container">
+        <div class="logo-3d">
+            🚚 أسطورة <span>الطريق</span> HUB
+        </div>
+    </div>
+
+    <div class="news-ticker">
+        <marquee scrollamount="5">🌟 نظام أسطورة الطريق المطور V56 (الرحلات متكاملة بمميزات الفواتير والصور والـ GPS) 🚀</marquee>
+    </div>
+
+    <!-- شاشة قفل النظام والدخول -->
+    <div id="lock-screen">
+        <div style="background: #1e293b; padding: 25px; border-radius: 12px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <h3 style="margin-bottom: 6px;">🔐 بوابة أسطورة الطريق</h3>
+            <p style="font-size: 11px; opacity: 0.8; margin-bottom: 15px;">أدخل رمز المدير (عماد) أو رمز السائق الخاص بك</p>
+            
+            <input type="password" id="pin-input" maxlength="15" placeholder="أدخل رمز الدخول هنا...">
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+                <div style="display:flex; gap:6px;">
+                    <button class="btn-main" onclick="unlockApp()" style="flex:1; padding: 10px;">دخول المدير (عماد)</button>
+                    <button class="btn-warning" onclick="driverLogin()" style="flex:1; padding: 10px;">دخول كـ سائق</button>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px solid #334155; margin: 6px 0;">
+                
+                <button type="button" class="btn-success" onclick="openVisitorBooking()" style="padding: 12px; font-size: 13px;">📦 حجز رحلة جديدة (للزبائن والزوار)</button>
+                <button type="button" onclick="openDriverRegister()" style="width:100%; background:var(--purple); color:white; padding:12px; border:none; border-radius:6px; font-weight:bold; font-size: 13px; cursor:pointer;">👨‍✈️ تسجيل حساب جديد للسائقين</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة تسجيل السائقين -->
+    <div id="driver-register-container">
+        <div class="card" style="width: 100%; max-width: 400px; background: var(--card-bg); color: var(--text-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:var(--purple);">👨‍✈️ تسجيل حساب سائق جديد</h3>
+                <button onclick="closeDriverRegister()" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
+            </div>
+            <form id="public-driver-form">
+                <input type="text" id="pub-drv-name" required placeholder="اسم السائق الرباعي">
+                <input type="tel" id="pub-drv-phone" required placeholder="رقم الهاتف / واتساب">
+                <input type="password" id="pub-drv-pin" required placeholder="اختر رمز مرور سري للدخول (PIN)">
+                <button type="submit" class="btn-success" style="padding: 10px; margin-top: 6px;">إنشاء الحساب والتسجيل فوراً 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- نافذة حجز الزوار -->
+    <div id="visitor-booking-container">
+        <div class="card" style="width: 100%; max-width: 450px; background: var(--card-bg); color: var(--text-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:var(--accent);">📦 حجز رحلة للزوار (حمولة حتى 1.5 طن)</h3>
+                <button onclick="closeVisitorBooking()" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
+            </div>
+            <form id="visitor-shipment-form">
+                <input type="text" id="vis-name" required placeholder="اسم العميل الرباعي">
+                <input type="tel" id="vis-phone" required placeholder="رقم الهاتف">
+                <input type="text" id="vis-address" required placeholder="عنوان التوصيل بالتفصيل">
+                <input type="text" id="vis-item" required placeholder="وصف الحمولة">
+                <input type="number" id="vis-price" required placeholder="الأجرة المتفق عليها (ج.م)">
+                <div>
+                    <button type="button" class="btn-warning btn-sm" onclick="captureVisitorGPS()">📍 تسجيل موقعي الحالي عبر GPS</button>
+                    <span id="vis-gps-status" style="font-size: 10px; opacity: 0.8; display:block; margin-top:2px;"></span>
+                </div>
+                <div style="margin-top: 8px;">
+                    <label style="font-size:10px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
+                    <input type="file" id="vis-img" accept="image/*" capture="environment">
+                </div>
+                <button type="submit" class="btn-success" style="padding: 10px; margin-top: 10px;">حجز وإرسال تنبيه واتساب للإدارة 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <header>
+        <div>
+            <h2>أسطورة الطريق - Chevrolet Pickup</h2>
+            <small style="opacity: 0.8;" id="user-role-badge">لوحة التحكم</small>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+            <button onclick="lockSystem()" class="btn-sm" style="background:var(--danger); color:#fff;">🔒 قفل النظام</button>
+            <button onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌙/☀️</button>
+            <span class="cloud-badge" id="cloud-status">جاري التحقق...</span>
+        </div>
+    </header>
+
+    <div id="license-alert" class="alert-banner"></div>
+
+    <nav id="main-nav"></nav>
+
+    <input type="text" id="global-search" class="search-box" placeholder="🔍 بحث شامل في المنصة..." onkeyup="render()">
+
+    <div class="stats-grid" id="admin-stats">
+        <div class="stat-card"><h4>الشحنات</h4><p id="stat-shipments">0</p></div>
+        <div class="stat-card" style="border-right-color: var(--success);"><h4>الإيرادات</h4><p id="stat-revenue">0 ج.م</p></div>
+        <div class="stat-card" style="border-right-color: var(--purple);"><h4>صافي الأرباح</h4><p id="stat-net-profit">0 ج.م</p></div>
+        <div class="stat-card" style="border-right-color: var(--success);"><h4>الخزينة النقدية</h4><p id="stat-cash">0 ج.م</p></div>
+        <div class="stat-card" style="border-right-color: var(--danger);"><h4>الديون</h4><p id="stat-debts">0 ج.م</p></div>
+    </div>
+
+    <!-- 1. لوحة التحكم الإدارية الشاملة -->
+    <section id="crud-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--danger);">
+            <h3 style="color: var(--danger);">⚙️ لوحة التحكم الإدارية الشاملة (للمدير فقط)</h3>
+            <div style="margin-bottom: 12px;">
+                <label style="font-weight:bold; font-size:11px;">اختر القسم للإدارة والتحكم:</label>
+                <select id="crud-section-select" onchange="renderCRUDTable()" style="font-weight:bold;">
+                    <option value="shipments">📦 إدارة الشحنات والرحلات</option>
+                    <option value="posts">📢 إدارة منشورات لوحة الرحلات</option>
+                    <option value="trucks">🚚 إدارة الأسطول والسيارات</option>
+                    <option value="drivers">👨‍✈️ إدارة السائقين والألقاب</option>
+                    <option value="customers">👥 إدارة العملاء والديون</option>
+                    <option value="treasury">💵 سجل الخزينة والحركات</option>
+                    <option value="expenses">⛽ سجل المصروفات</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr id="crud-table-headers"></tr></thead>
+                    <tbody id="crud-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. الشحنات -->
+    <section id="shipments-tab" class="app-section">
+        <div class="card" id="new-shipment-card">
+            <h3 id="form-title-heading">تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)</h3>
+            <form id="shipment-form">
+                <input type="hidden" id="edit-shipment-id" value="">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <input type="text" id="ship-name" required placeholder="اسم العميل">
+                    <input type="tel" id="ship-phone" placeholder="رقم الهاتف (واتساب)">
+                </div>
+                <input type="text" id="ship-address" required placeholder="عنوان التوصيل">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <input type="text" id="ship-item" required placeholder="وصف الحمولة">
+                    <input type="number" id="ship-price" required placeholder="الأجرة (ج.م)">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <input type="number" id="ship-fuel-cost" placeholder="تكلفة الوقود (ج.م)">
+                    <input type="number" id="ship-extra-cost" placeholder="مصاريف أخرى (ج.م)">
+                </div>
+                <div>
+                    <label style="font-size:10px; font-weight:bold;">تعيين للسائق:</label>
+                    <select id="ship-assigned-driver"><option value="">-- بدون تعيين (عام) --</option></select>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <button type="button" class="btn-warning btn-sm" onclick="captureGPS()">📍 تسجيل موقع GPS</button>
+                    <span id="gps-status" style="font-size: 10px; opacity: 0.8;"></span>
+                </div>
+                <div>
+                    <label style="font-size:10px; font-weight:bold;">📷 صورة المستند أو الحمولة:</label>
+                    <input type="file" id="ship-img" accept="image/*" capture="environment">
+                </div>
+                <div>
+                    <label style="font-size:10px; font-weight:bold;">توقيع المستلم الرقمي:</label>
+                    <canvas id="signature-pad"></canvas>
+                    <button type="button" onclick="clearSignature()" class="btn-sm" style="background:#64748b; color:#fff;">مسح التوقيع</button>
+                </div>
+                <button type="submit" class="btn-main" style="padding: 10px; margin-top:8px;">حفظ الرحلة وتوليد QR وإرسال واتساب 💾</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 id="shipments-table-title">سجل الرحلات المباشر</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>العميل</th>
+                            <th>الحمولة</th>
+                            <th>السائق المعين</th>
+                            <th>الأجرة</th>
+                            <th>صافي الربح</th>
+                            <th>الحالة</th>
+                            <th>إدارة وإشعارات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shipments-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. لوحة الرحلات العامة -->
+    <section id="public-feed-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--purple);">
+            <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
+            <div id="admin-post-form-card" style="background: var(--bg); padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 1px dashed var(--border-color);">
+                <h4 style="font-size: 12px; margin-bottom: 6px;">➕ نشر رحلة أو إعلان جديد (للمدير فقط)</h4>
+                <form id="public-post-form">
+                    <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
+                    <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+                        <div>
+                            <label style="font-size:10px; font-weight:bold;">📷 رفع صور:</label>
+                            <input type="file" id="post-images" accept="image/*" multiple>
+                        </div>
+                        <div>
+                            <label style="font-size:10px; font-weight:bold;">🎥 رفع فيديو:</label>
+                            <input type="file" id="post-videos" accept="video/*">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-success" style="padding: 8px; margin-top: 6px;">نشر في لوحة الرحلات العامة 🚀</button>
+                </form>
+            </div>
+            <div id="public-posts-feed"></div>
+        </div>
+    </section>
+
+    <!-- 4. الدردشة الفورية -->
+    <section id="chat-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--success);">
+            <h3 style="color: var(--success);">💬 غرفة المحادثة والتواصل الفوري (المدير ⇄ السائقين)</h3>
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages-list"></div>
+                <form id="chat-form" class="chat-input-area">
+                    <input type="text" id="chat-input-text" required placeholder="اكتب رسالتك هنا..." style="margin-bottom:0; flex:1;">
+                    <button type="submit" class="btn-success" style="width: 80px; margin-bottom:0;">إرسال ✈️</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. الخريطة -->
+    <section id="map-tab" class="app-section">
+        <div class="card">
+            <h3>🗺️ خريطة نقاط التسليم المباشرة</h3>
+            <div id="map"></div>
+        </div>
+    </section>
+
+    <!-- 6. مراقبة السائقين والألقاب -->
+    <section id="drivers-monitor-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--warning);">
+            <h3 style="color: var(--warning);">👁️ لوحة مراقبة حالة السائقين وترقية الألقاب (بواسطة المدير)</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>اسم السائق</th>
+                            <th>رقم الهاتف</th>
+                            <th>اللقب أو الترقية الاحترافية</th>
+                            <th>الحالة التشغيلية</th>
+                            <th>الرحلات النشطة</th>
+                            <th>تحكم سريع بالحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drivers-monitor-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. الخزنة -->
+    <section id="treasury-tab" class="app-section">
+        <div class="card">
+            <h3>إدارة حركة النقدية والمقبوضات</h3>
+            <form id="cash-form">
+                <select id="cash-type">
+                    <option value="in">إيداع / تحصيل نقدي (+)</option>
+                    <option value="out">سحب / مصروفات الخزنة (-)</option>
+                </select>
+                <input type="number" id="cash-amount" placeholder="المبلغ (ج.م)" required>
+                <input type="text" id="cash-desc" placeholder="البيان / السبب" required>
+                <button type="submit" class="btn-success">تسجيل حركة نقدية</button>
+            </form>
+        </div>
+        <div class="card">
+            <h3>سجل حركة الخزنة</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead>
+                    <tbody id="treasury-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 8. الأسطول -->
+    <section id="fleet-tab" class="app-section">
+        <div class="card">
+            <h3>إضافة مركبة وجدولة الصيانة (شيفروليه بيك اب 1.5 طن)</h3>
+            <form id="truck-form">
+                <input type="text" id="truck-num" value="شيفروليه بيك اب (صندوق مغلق)" placeholder="رقم أو اسم السيارة/الشاحنة" required>
+                <input type="text" id="driver-name" value="عماد" placeholder="اسم السائق المسؤول" required>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    <input type="number" id="truck-km" placeholder="عداد KM" required>
+                    <input type="number" id="truck-next-oil" placeholder="غيّار الزيت القادم KM" required>
+                </div>
+                <label style="font-size: 11px;">تاريخ انتهاء الرخصة:</label>
+                <input type="date" id="truck-expiry" required>
+                <button type="submit" class="btn-main">حفظ المركبة</button>
+            </form>
+        </div>
+        <div class="card">
+            <h3>📂 مكتبة وثائق وعقود الأسطول</h3>
+            <form id="doc-form">
+                <input type="text" id="doc-title" placeholder="اسم المستند" required>
+                <input type="file" id="doc-file" accept="image/*" required>
+                <button type="submit" class="btn-warning">حفظ المستند للمكتبة</button>
+            </form>
+            <div id="docs-list" style="margin-top: 10px; display: grid; gap: 6px;"></div>
+        </div>
+        <div class="card">
+            <h3>حالة المركبات والتراخيص</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت</th><th>الرخصة</th></tr></thead>
+                    <tbody id="trucks-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 9. السائقين -->
+    <section id="drivers-tab" class="app-section">
+        <div class="card">
+            <h3>👨‍✈️ تسجيل سائق جديد وبروفايل التشغيل</h3>
+            <form id="driver-profile-form">
+                <input type="text" id="drv-fullname" placeholder="اسم السائق الرباعي" required>
+                <input type="tel" id="drv-phone" placeholder="رقم الهاتف / واتساب" required>
+                <input type="password" id="drv-pin" placeholder="رمز المرور الخاص بالسائق" required>
+                <button type="submit" class="btn-main">إضافة السائق للنظام</button>
+            </form>
+        </div>
+        <div class="card">
+            <h3>قائمة السائقين المسجلين</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>السائق</th><th>الهاتف</th><th>اللقب الحالي</th><th>رمز الدخول</th><th>إدارة وتعديل</th></tr></thead>
+                    <tbody id="drivers-list-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 10. المصروفات -->
+    <section id="expenses-tab" class="app-section">
+        <div class="card">
+            <h3>تسجيل المصروفات التشغيلية</h3>
+            <form id="expense-form">
+                <input type="text" id="exp-title" placeholder="بيان المصروف" required>
+                <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
+                <button type="submit" class="btn-danger">تسجيل المصروف</button>
+            </form>
+        </div>
+        <div class="card">
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                    <tbody id="expenses-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 11. الحسابات -->
+    <section id="customers-tab" class="app-section">
+        <div class="card">
+            <h3>حسابات العملاء والديون</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th><th>تحصيل</th></tr></thead>
+                    <tbody id="customers-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- 12. التقارير والفواتير -->
+    <section id="reports-tab" class="app-section">
+        <div class="card" id="admin-reports-actions">
+            <h3>خيارات الإدارة والتقارير</h3>
+            <button class="btn-success" onclick="sendDailySummaryWhatsApp()" style="margin-bottom: 8px;">📲 إرسال التقرير اليومي عبر واتساب</button>
+            <button class="btn-main" onclick="exportToExcel()" style="margin-bottom: 8px;">📊 تصدير البيانات إلى Excel</button>
+            <button class="btn-warning" onclick="changePin()" style="margin-bottom: 8px;">🔑 تغيير رمز PIN الخزنة الرئيسي للمدير</button>
+            <button class="btn-danger" onclick="clearAll()">⚠️ مسح كل البيانات</button>
+        </div>
+
+        <div class="card">
+            <h3>🧾 معاينة وطباعة الفاتورة الرسمية المعتمدة</h3>
+            <select id="invoice-select" onchange="renderSelectedInvoice()" style="margin-bottom: 10px;"></select>
+            
+            <div id="print-area" style="background:#ffffff; color:#334155; padding:15px; border:2px solid var(--accent); border-radius:8px;">
+                <div style="text-align:center;">
+                    <h3 style="color:#0f172a;">🚚 أسطورة الطريق - Chevrolet Pickup (1.5 Tons)</h3>
+                    <p style="font-size:11px; opacity:0.8;">إذن تسليم واستلام شحنة رسمي (صندوق مغلق وحبال تأمين)</p>
+                </div>
+                <hr style="margin:10px 0; border:0; border-top:1px solid #cbd5e1;">
+                <p><strong>رقم الفاتورة:</strong> <span id="inv-id">-</span></p>
+                <p><strong>اسم العميل:</strong> <span id="inv-client">-</span></p>
+                <p><strong>هاتف العميل:</strong> <span id="inv-phone">-</span></p>
+                <p><strong>عنوان التوصيل:</strong> <span id="inv-address">-</span></p>
+                <p><strong>تفاصيل الحمولة:</strong> <span id="inv-item">-</span></p>
+                <p><strong>الأجرة المطلوبة:</strong> <span id="inv-price">-</span> ج.م</p>
+                <p><strong>حالة الشحنة:</strong> <span id="inv-status">-</span></p>
+                <div id="inv-img-preview" style="margin-top:10px; text-align:center;"></div>
+                <div id="inv-sig-container" style="margin-top:15px; text-align:left;"></div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+                <button class="btn-main" onclick="openInvoiceStandalone()">🔍 فتح الفاتورة كصفحة منفردة باللوجو</button>
+                <button class="btn-success" onclick="exportInvoiceAsImage()">📸 تصدير الفاتورة كـ صورة (PNG)</button>
+                <button class="btn-warning" onclick="exportInvoiceAsPDF()">📄 تصدير الفاتورة كملف PDF</button>
+                <button class="btn-main" style="background:#25d366;" onclick="sendInvoiceWhatsApp()">💬 إرسال تفاصيل الفاتورة عبر واتساب</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- نافذة QR -->
+    <div id="qr-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:10001; justify-content:center; align-items:center; flex-direction:column; color:white;">
+        <div id="qrcode" style="background:white; padding:15px; border-radius:8px;"></div>
+        <button class="btn-danger" onclick="closeQRModal()" style="margin-top:15px; width:150px;">إغلاق</button>
+    </div>
+
+    <script>
+        const driverTitlesList = [
+            "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
+            "وسام الأمان الأول", "درع القيادة الآمنة", "سفير السلامة", "خبير توفير الوقود", "فاحص محترف",
+            "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "الالتزام التام",
+            "سيد المسافات الطويلة", "الاستجابة الفورية", "رجل المهام الليلية", "دينامو العمل", "المرن المبدع",
+            "ابتسامة العملاء", "سفير الأخلاق", "حلّال المشاكل", "الأمانة المطلقة", "المظهر الاحترافي",
+            "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
+        ];
+
+        let storedPin = localStorage.getItem('app_pin') || '01036';
+        let currentUserRole = ''; 
+        let loggedInDriverName = 'عماد';
+        let visitorGPS = '';
+        let visitorImgBase64 = '';
+
+        let appData = JSON.parse(localStorage.getItem('transportAppV56')) || { 
+            shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
+            drivers: [{id: 1, name: 'عماد', phone: '01000000000', pin: '01036', status: 'متاح 🟢', title: 'أسطورة الطريق'}], 
+            chat: [], posts: [] 
+        };
+
+        const firebaseConfig = { apiKey: "", authDomain: "", databaseURL: "", projectId: "", storageBucket: "", messagingSenderId: "", appId: "" };
+        if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+            try { firebase.initializeApp(firebaseConfig); } catch(e) {}
+        }
+        const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
+
+        if (db) {
+            db.ref('transportAppV56').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && currentUserRole) { 
+                    appData = data;
+                    saveToPhone();
+                    render();
+                }
+            });
+        }
+
+        function unlockApp() {
+            if (document.getElementById('pin-input').value === storedPin) {
+                currentUserRole = 'admin';
+                loggedInDriverName = 'عماد';
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = 'لوحة تحكم المدير (عماد)';
+                setupNavigation();
+                setAdminUIMode();
+                render();
+            } else {
+                alert('رمز PIN الخاص بالمدير غير صحيح!');
+            }
+        }
+
+        function driverLogin() {
+            const pin = document.getElementById('pin-input').value;
+            const driver = appData.drivers.find(d => d.pin === pin);
+            if (driver) {
+                currentUserRole = 'driver';
+                loggedInDriverName = driver.name;
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `بروفايل السائق: ${driver.name} (${driver.title || 'سائق مستجد'})`;
+                setupNavigation();
+                setDriverUIMode();
+                render();
+            } else {
+                alert('رمز السائق غير صحيح!');
+            }
+        }
+
+        function setupNavigation() {
+            const nav = document.getElementById('main-nav');
+            if (currentUserRole === 'admin') {
+                nav.innerHTML = `
+                    <button class="active" onclick="switchTab('crud-tab', this)" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>
+                    <button onclick="switchTab('shipments-tab', this)">📦 الشحنات</button>
+                    <button onclick="switchTab('public-feed-tab', this)" style="background:var(--purple); color:#fff;">📢 لوحة الرحلات</button>
+                    <button onclick="switchTab('chat-tab', this)" style="background:var(--success); color:#fff;">💬 الدردشة</button>
+                    <button onclick="switchTab('map-tab', this)">🗺️ الخريطة الحية</button>
+                    <button onclick="switchTab('drivers-monitor-tab', this)" style="background:var(--warning); color:#fff;">👁️ مراقبة السائقين</button>
+                    <button onclick="switchTab('treasury-tab', this)">💵 الخزنة</button>
+                    <button onclick="switchTab('fleet-tab', this)">🚚 الأسطول</button>
+                    <button onclick="switchTab('drivers-tab', this)">👨‍✈️ السائقين</button>
+                    <button onclick="switchTab('expenses-tab', this)">⛽ المصروفات</button>
+                    <button onclick="switchTab('customers-tab', this)">👥 الحسابات</button>
+                    <button onclick="switchTab('reports-tab', this)">📊 التقارير</button>
+                `;
+            } else {
+                nav.innerHTML = `
+                    <button class="active" onclick="switchTab('shipments-tab', this)">📦 شحناتى ومهماتي</button>
+                    <button onclick="switchTab('public-feed-tab', this)" style="background:var(--purple); color:#fff;">📢 لوحة الرحلات العامة</button>
+                    <button onclick="switchTab('chat-tab', this)" style="background:var(--success); color:#fff;">💬 الدردشة الفورية</button>
+                    <button onclick="switchTab('map-tab', this)">🗺️ الخريطة الحية</button>
+                    <button onclick="switchTab('reports-tab', this)">📊 التقارير والفواتير</button>
+                `;
+            }
+        }
+
+        function openVisitorBooking() { document.getElementById('visitor-booking-container').style.display = 'flex'; }
+        function closeVisitorBooking() { document.getElementById('visitor-booking-container').style.display = 'none'; }
+        function openDriverRegister() { document.getElementById('driver-register-container').style.display = 'flex'; }
+        function closeDriverRegister() { document.getElementById('driver-register-container').style.display = 'none'; }
+        function lockSystem() { 
+            currentUserRole = ''; 
+            document.getElementById('lock-screen').style.display = 'flex'; 
+            document.getElementById('pin-input').value = ''; 
+        }
+
+        function setAdminUIMode() {
+            document.getElementById('new-shipment-card').style.display = 'block';
+            document.getElementById('admin-stats').style.display = 'grid';
+            document.getElementById('admin-post-form-card').style.display = 'block';
+            document.getElementById('admin-reports-actions').style.display = 'block';
+            document.getElementById('shipments-table-title').innerText = 'سجل الرحلات المباشر (كافة شحنات الأسطول)';
+        }
+
+        function setDriverUIMode() {
+            document.getElementById('new-shipment-card').style.display = 'none';
+            document.getElementById('admin-stats').style.display = 'none';
+            document.getElementById('admin-post-form-card').style.display = 'none';
+            document.getElementById('admin-reports-actions').style.display = 'none';
+            document.getElementById('shipments-table-title').innerText = 'شحناتي المخصصة لي فقط';
+        }
+
+        function changePin() {
+            const p = prompt('أدخل رمز PIN الجديد للمدير (حتى 15 رقم):');
+            if (p) { storedPin = p; localStorage.setItem('app_pin', p); alert('تم تحديث رمز المدير بنجاح!'); }
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode'));
+        }
+        if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
+
+        function saveDataAll() {
+            saveToPhone();
+            if (navigator.onLine && db) {
+                db.ref('transportAppV56').set(appData);
+            }
+            updateCloudStatus(navigator.onLine && !!db);
+        }
+        function saveToPhone() { localStorage.setItem('transportAppV56', JSON.stringify(appData)); }
+        function updateCloudStatus(on) {
+            const b = document.getElementById('cloud-status');
+            if (b) { b.innerText = on ? 'سحابي ☁️' : 'مكاني 📱'; b.style.background = on ? 'var(--success)' : 'var(--warning)'; }
+        }
+
+        let leafletMap = null;
+        function initMap() {
+            const mapContainer = document.getElementById('map');
+            if (!mapContainer) return;
+            if (!leafletMap) {
+                leafletMap = L.map('map').setView([30.0444, 31.2357], 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
+            } else {
+                leafletMap.invalidateSize();
+            }
+            leafletMap.eachLayer((layer) => { if (layer instanceof L.Marker) leafletMap.removeLayer(layer); });
+            let targetList = currentUserRole === 'driver' ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            targetList.forEach(s => {
+                if (s.gps) {
+                    const coords = s.gps.split(',');
+                    if(coords.length === 2) {
+                        L.marker([parseFloat(coords[0]), parseFloat(coords[1])]).addTo(leafletMap)
+                         .bindPopup(`<b>${s.name}</b><br>${s.item} (${s.status})`);
+                    }
+                }
+            });
+        }
+
+        function captureGPS() {
+            if (navigator.geolocation) {
+                document.getElementById('gps-status').innerText = 'جاري التحديد...';
+                navigator.geolocation.getCurrentPosition(pos => {
+                    currentGPS = `${pos.coords.latitude},${pos.coords.longitude}`;
+                    document.getElementById('gps-status').innerText = 'تم التحديد ✅';
+                }, () => { alert('تعذر الحصول على الموقع الجغرافي'); });
+            }
+        }
+
+        function captureVisitorGPS() {
+            if (navigator.geolocation) {
+                document.getElementById('vis-gps-status').innerText = 'جاري تحديد موقعك...';
+                navigator.geolocation.getCurrentPosition(pos => {
+                    visitorGPS = `${pos.coords.latitude},${pos.coords.longitude}`;
+                    document.getElementById('vis-gps-status').innerText = 'تم تحديد موقعك بنجاح ✅';
+                }, () => { alert('تعذر الحصول على الموقع الجغرافي'); });
+            }
+        }
+
+        let currentGPS = '';
+        const canvas = document.getElementById('signature-pad');
+        const ctx = canvas ? canvas.getContext('2d') : null;
+        let isDrawing = false;
+        function resizeCanvas() {
+            if (canvas) {
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = 80 * ratio;
+                if (ctx) ctx.scale(ratio, ratio);
+            }
+        }
+        if (canvas) {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('touchstart', (e) => { startDrawing(e.touches[0]); e.preventDefault(); }, {passive: false});
+            canvas.addEventListener('touchmove', (e) => { draw(e.touches[0]); e.preventDefault(); }, {passive: false});
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+        function startDrawing(e) { isDrawing = true; if(!ctx) return; ctx.beginPath(); const rect = canvas.getBoundingClientRect(); ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top); }
+        function draw(e) { if (!isDrawing || !ctx) return; const rect = canvas.getBoundingClientRect(); ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top); ctx.stroke(); }
+        function stopDrawing() { isDrawing = false; }
+        function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+            if(tabId === 'map-tab') setTimeout(initMap, 200);
+            if(tabId === 'reports-tab') updateInvoiceDropdown();
+            if(tabId === 'crud-tab' && currentUserRole === 'admin') renderCRUDTable();
+            if(tabId === 'drivers-monitor-tab') renderDriversMonitor();
+        }
+
+        let uploadedImgBase64 = '';
+        const shipImgInput = document.getElementById('ship-img');
+        if(shipImgInput) {
+            shipImgInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) { uploadedImgBase64 = event.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        const visImgInput = document.getElementById('vis-img');
+        if(visImgInput) {
+            visImgInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) { visitorImgBase64 = event.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const textInput = document.getElementById('chat-input-text');
+            const senderName = currentUserRole === 'admin' ? '👑 عماد (المدير)' : `👨‍✈️ ${loggedInDriverName}`;
+            appData.chat.push({
+                id: Date.now(), sender: senderName, role: currentUserRole, text: textInput.value,
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            });
+            saveDataAll(); render(); textInput.value = '';
+        });
+
+        document.getElementById('public-post-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') { alert('عذراً، النشر متاح للمدير فقط!'); return; }
+            const title = document.getElementById('post-title').value;
+            const desc = document.getElementById('post-desc').value;
+            let imagesArr = [];
+            let videoStr = '';
+            const imgFiles = document.getElementById('post-images').files;
+            for (let i = 0; i < imgFiles.length; i++) { imagesArr.push(await fileToBase64(imgFiles[i])); }
+            const vidFile = document.getElementById('post-videos').files[0];
+            if (vidFile) { videoStr = await fileToBase64(vidFile); }
+            appData.posts.unshift({ id: Date.now(), title, desc, images: imagesArr, video: videoStr, date: new Date().toLocaleDateString('ar-EG') });
+            saveDataAll(); render(); this.reset(); alert('تم نشر الرحلة بنجاح! 🚀');
+        });
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        document.getElementById('public-driver-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('pub-drv-name').value;
+            const phone = document.getElementById('pub-drv-phone').value;
+            const pin = document.getElementById('pub-drv-pin').value;
+            appData.drivers.push({ id: Date.now(), name, phone, pin, status: 'متاح 🟢', title: 'سائق مستجد' });
+            saveDataAll(); render();
+            this.reset(); document.getElementById('driver-register-container').style.display = 'none';
+            alert('تم تسجيل السائق بنجاح!');
+        });
+
+        document.getElementById('driver-profile-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            appData.drivers.push({
+                id: Date.now(), name: document.getElementById('drv-fullname').value,
+                phone: document.getElementById('drv-phone').value, pin: document.getElementById('drv-pin').value,
+                status: 'متاح 🟢', title: 'سائق مستجد'
+            });
+            saveDataAll(); render(); this.reset(); alert('تم إضافة السائق للنظام بنجاح!');
+        });
+
+        document.getElementById('visitor-shipment-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('vis-name').value;
+            const phone = document.getElementById('vis-phone').value;
+            const address = document.getElementById('vis-address').value;
+            const item = document.getElementById('vis-item').value;
+            const price = parseFloat(document.getElementById('vis-price').value) || 0;
+            appData.shipments.unshift({
+                id: Date.now(), name, phone, address, item, assignedDriver: 'عماد',
+                price, fuelCost: 0, extraCost: 0, netProfit: price,
+                gps: visitorGPS, docImg: visitorImgBase64, status: '⏳ قيد الانتظار (طلب زائر)', signature: ''
+            });
+            let cust = appData.customers.find(c => c.name === name);
+            if (!cust) appData.customers.push({ id: Date.now(), name, phone, debt: price });
+            else cust.debt += price;
+            saveDataAll(); render();
+            this.reset(); visitorGPS = ''; visitorImgBase64 = '';
+            document.getElementById('vis-gps-status').innerText = '';
+            document.getElementById('visitor-booking-container').style.display = 'none';
+            alert('تم تسجيل حجز الرحلة بنجاح!');
+        });
+
+        document.getElementById('shipment-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') { alert('تسجيل الشحنات الجديدة متاح للمدير فقط!'); return; }
+            const editId = document.getElementById('edit-shipment-id').value;
+            const price = parseFloat(document.getElementById('ship-price').value) || 0;
+            const fuelCost = parseFloat(document.getElementById('ship-fuel-cost').value) || 0;
+            const extraCost = parseFloat(document.getElementById('ship-extra-cost').value) || 0;
+            const netProfit = price - (fuelCost + extraCost);
+            const name = document.getElementById('ship-name').value;
+            const phone = document.getElementById('ship-phone').value;
+            const address = document.getElementById('ship-address').value;
+            const item = document.getElementById('ship-item').value;
+            const assignedDriver = document.getElementById('ship-assigned-driver').value || 'عماد';
+            const signatureData = canvas && ctx && !isCanvasBlank(canvas) ? canvas.toDataURL() : '';
+
+            if (editId) {
+                const s = appData.shipments.find(ship => ship.id == editId);
+                if (s) {
+                    s.name = name; s.phone = phone; s.address = address; s.item = item;
+                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost; s.netProfit = netProfit;
+                    s.assignedDriver = assignedDriver;
+                    if (currentGPS) s.gps = currentGPS;
+                    if (uploadedImgBase64) s.docImg = uploadedImgBase64;
+                    if (signatureData) s.signature = signatureData;
+                }
+                document.getElementById('edit-shipment-id').value = '';
+            } else {
+                appData.shipments.unshift({
+                    id: Date.now(), name, phone, address, item, assignedDriver,
+                    price, fuelCost, extraCost, netProfit, gps: currentGPS, docImg: uploadedImgBase64,
+                    status: '⏳ قيد الانتظار', signature: signatureData
+                });
+                let cust = appData.customers.find(c => c.name === name);
+                if (!cust) appData.customers.push({ id: Date.now(), name, phone, debt: price });
+                else cust.debt += price;
+            }
+            saveDataAll(); render(); this.reset(); clearSignature(); currentGPS = ''; uploadedImgBase64 = '';
+            alert('تم حفظ الرحلة وتحديث البيانات بنجاح! 💾');
+        });
+
+        function isCanvasBlank(canvas) {
+            const blank = document.createElement('canvas');
+            blank.width = canvas.width; blank.height = canvas.height;
+            return canvas.toDataURL() === blank.toDataURL();
+        }
+
+        function editShipment(id) {
+            if (currentUserRole !== 'admin') { alert('التعديل متاح للمدير فقط!'); return; }
+            const s = appData.shipments.find(ship => ship.id === id);
+            if (!s) return;
+            document.getElementById('edit-shipment-id').value = s.id;
+            document.getElementById('ship-name').value = s.name;
+            document.getElementById('ship-phone').value = s.phone || '';
+            document.getElementById('ship-address').value = s.address || '';
+            document.getElementById('ship-item').value = s.item;
+            document.getElementById('ship-price').value = s.price;
+            document.getElementById('ship-fuel-cost').value = s.fuelCost || '';
+            document.getElementById('ship-extra-cost').value = s.extraCost || '';
+            document.getElementById('ship-assigned-driver').value = s.assignedDriver || '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function editDriver(id) {
+            if (currentUserRole !== 'admin') { alert('تعديل السائقين متاح للمدير فقط!'); return; }
+            const d = appData.drivers.find(driver => driver.id === id);
+            if (!d) return;
+            let newName = prompt("تعديل اسم السائق:", d.name);
+            let newPhone = prompt("تعديل رقم الهاتف:", d.phone);
+            if (newName !== null && newPhone !== null) { d.name = newName; d.phone = newPhone; saveDataAll(); render(); }
+        }
+
+        document.getElementById('cash-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            appData.treasury.unshift({
+                id: Date.now(), type: document.getElementById('cash-type').value,
+                amount: parseFloat(document.getElementById('cash-amount').value) || 0,
+                desc: document.getElementById('cash-desc').value, date: new Date().toLocaleDateString('ar-EG')
+            });
+            saveDataAll(); render(); this.reset();
+        });
+
+        document.getElementById('doc-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            const file = document.getElementById('doc-file').files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    appData.docs.push({ id: Date.now(), title: document.getElementById('doc-title').value, file: event.target.result });
+                    saveDataAll(); render(); document.getElementById('doc-form').reset();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('truck-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            appData.trucks.push({
+                id: Date.now(), number: document.getElementById('truck-num').value, driver: document.getElementById('driver-name').value,
+                km: parseInt(document.getElementById('truck-km').value) || 0, nextOil: parseInt(document.getElementById('truck-next-oil').value) || 0, expiry: document.getElementById('truck-expiry').value
+            });
+            saveDataAll(); render(); this.reset();
+        });
+
+        document.getElementById('expense-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (currentUserRole !== 'admin') return;
+            appData.expenses.unshift({ id: Date.now(), title: document.getElementById('exp-title').value, amount: parseFloat(document.getElementById('exp-amount').value) || 0, date: new Date().toLocaleDateString('ar-EG') });
+            saveDataAll(); render(); this.reset();
+        });
+
+        function cycleStatus(id) {
+            const s = appData.shipments.find(ship => ship.id === id);
+            if (!s) return;
+            if (currentUserRole === 'driver' && s.assignedDriver !== loggedInDriverName) { alert('لا يمكنك تعديل شحنة غير مخصصة لك!'); return; }
+            const states = ['⏳ قيد الانتظار', '🚚 في الطريق', '✅ تم التسليم', '⚠️ مرتجع'];
+            s.status = states[(states.indexOf(s.status) + 1) % states.length];
+            saveDataAll(); render();
+        }
+
+        function updateDriverStatus(driverName, newStatus) {
+            let drv = appData.drivers.find(d => d.name === driverName);
+            if (drv) { drv.status = newStatus; saveDataAll(); renderDriversMonitor(); }
+        }
+
+        function updateDriverTitle(driverId, newTitle) {
+            if (currentUserRole !== 'admin') { alert('الترقية للمدير فقط!'); return; }
+            let drv = appData.drivers.find(d => d.id === driverId);
+            if (drv) { drv.title = newTitle; saveDataAll(); renderDriversMonitor(); alert(`تم التحديث بنجاح!`); }
+        }
+
+        function renderDriversMonitor() {
+            const tbody = document.getElementById('drivers-monitor-list');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            appData.drivers.forEach(d => {
+                let assignedTrips = appData.shipments.filter(s => s.assignedDriver === d.name && !s.status.includes('تم التسليم')).map(s => s.item).join(', ') || 'لا توجد رحلات';
+                let titleOptions = '';
+                driverTitlesList.forEach(t => { titleOptions += `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`; });
+                let disabledAttr = (currentUserRole !== 'admin') ? 'disabled' : '';
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:bold;">${d.name}</td>
+                        <td>${d.phone}</td>
+                        <td><select class="form-control" style="font-size:11px; padding:4px;" ${disabledAttr} onchange="updateDriverTitle(${d.id}, this.value)">${titleOptions}</select></td>
+                        <td><span class="badge ${d.status && d.status.includes('في رحلة') ? 'bg-transit' : 'bg-delivered'}">${d.status || 'متاح 🟢'}</span></td>
+                        <td>${assignedTrips}</td>
+                        <td>
+                            <button class="btn-success btn-sm" onclick="updateDriverStatus('${d.name}', 'متاح 🟢')">متاح</button>
+                            <button class="btn-warning btn-sm" onclick="updateDriverStatus('${d.name}', 'في رحلة 🚚')">في رحلة</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function payDebt(id) {
+            if (currentUserRole !== 'admin') return;
+            const amt = parseFloat(prompt('المبلغ المحصل:')) || 0;
+            const cust = appData.customers.find(c => c.id === id);
+            if (cust && amt > 0) {
+                cust.debt = Math.max(0, cust.debt - amt);
+                appData.treasury.unshift({ id: Date.now(), type: 'in', amount: amt, desc: `تحصيل مديونية: ${cust.name}`, date: new Date().toLocaleDateString('ar-EG') });
+                saveDataAll(); render();
+            }
+        }
+
+        function sendWhatsAppNotice(id) {
+            const s = appData.shipments.find(ship => ship.id === id);
+            if (!s || !s.phone) return alert('لا يوجد رقم هاتف للعميل');
+            const msg = `مرحباً ${s.name}، تحديث لشحنتك (${s.item}): حالتها الآن [${s.status}].`;
+            window.open(`https://wa.me/${s.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function showQR(id) {
+            const qrd = document.getElementById('qrcode');
+            qrd.innerHTML = '';
+            new QRCode(qrd, { text: `SHIPMENT-ID:${id}`, width: 128, height: 128 });
+            document.getElementById('qr-modal').style.display = 'flex';
+        }
+        function closeQRModal() { document.getElementById('qr-modal').style.display = 'none'; }
+
+        function sendDailySummaryWhatsApp() {
+            if (currentUserRole !== 'admin') return;
+            const totalRev = appData.shipments.reduce((acc, s) => acc + s.price, 0);
+            const totalProfit = appData.shipments.reduce((acc, s) => acc + s.netProfit, 0);
+            const msg = `*📊 تقرير أسطورة الطريق اليومي*\n📦 الشحنات: ${appData.shipments.length}\n💵 الإيرادات: ${totalRev} ج.م\n💰 صافي الربح: ${totalProfit} ج.م`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function updateInvoiceDropdown() {
+            const sel = document.getElementById('invoice-select');
+            if(!sel) return;
+            sel.innerHTML = '';
+            let list = currentUserRole === 'driver' ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            if (list.length === 0) {
+                sel.innerHTML = `<option value="">لا توجد شحنات متاحة</option>`;
+                clearInvoiceView();
+                return;
+            }
+            list.forEach((s) => { sel.innerHTML += `<option value="${s.id}">رقم: ${s.id} - العميل: ${s.name} (${s.item})</option>`; });
+            renderSelectedInvoice();
+        }
+
+        function clearInvoiceView() {
+            document.getElementById('inv-id').innerText = '-';
+            document.getElementById('inv-client').innerText = '-';
+            document.getElementById('inv-phone').innerText = '-';
+            document.getElementById('inv-address').innerText = '-';
+            document.getElementById('inv-item').innerText = '-';
+            document.getElementById('inv-price').innerText = '-';
+            document.getElementById('inv-status').innerText = '-';
+            document.getElementById('inv-img-preview').innerHTML = '';
+            document.getElementById('inv-sig-container').innerHTML = '';
+        }
+
+        function renderSelectedInvoice() {
+            const sel = document.getElementById('invoice-select');
+            if (!sel || !sel.value) return;
+            const id = sel.value;
+            const s = appData.shipments.find(ship => ship.id == id);
+            if (!s) { clearInvoiceView(); return; }
+            document.getElementById('inv-id').innerText = s.id;
+            document.getElementById('inv-client').innerText = s.name;
+            document.getElementById('inv-phone').innerText = s.phone || '-';
+            document.getElementById('inv-address').innerText = s.address || '-';
+            document.getElementById('inv-item').innerText = s.item;
+            document.getElementById('inv-price').innerText = s.price;
+            document.getElementById('inv-status').innerText = s.status;
+            
+            document.getElementById('inv-img-preview').innerHTML = s.docImg ? `<p style="font-size:10px; font-weight:bold;">صورة مستند/بضاعة الرحلة:</p><img src="${s.docImg}" style="max-width:140px; max-height:100px; border:1px solid #ccc; border-radius:4px;">` : '';
+            document.getElementById('inv-sig-container').innerHTML = s.signature ? `<p>توقيع المستلم:</p><img src="${s.signature}" style="width:120px; border:1px solid #ccc; border-radius:4px;">` : '<span>لم يتم التوقيع</span>';
+        }
+
+        function openInvoiceStandalone() {
+            const id = document.getElementById('invoice-select').value;
+            const s = appData.shipments.find(ship => ship.id == id);
+            if (!s) return alert('يرجى اختيار شحنة صحيحة');
+
+            const invoiceWindow = window.open('', '_blank');
+            invoiceWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="ar" dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>فاتورة رحلة #${s.id} - أسطورة الطريق</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 25px; background: #f8fafc; color: #334155; }
+                        .invoice-box { max-width: 700px; margin: auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #2563eb; }
+                        .logo-area { text-align: center; margin-bottom: 20px; }
+                        .logo-area h2 { color: #0f172a; margin-bottom: 5px; }
+                        .details-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        .details-table th, .details-table td { padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-size: 14px; }
+                        .details-table th { background: #2563eb; color: #fff; }
+                        .print-btn { display: block; width: 100%; margin-top: 20px; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
+                    </style>
+                </head>
+                <body>
+                    <div class="invoice-box">
+                        <div class="logo-area">
+                            <h2>🚚 أسطورة الطريق - Chevrolet Pickup (1.5 Tons)</h2>
+                            <p style="font-size: 12px; color: #64748b;">إذن تسليم واستلام شحنة رسمي وموثق</p>
+                        </div>
+                        <table class="details-table">
+                            <tr><th>رقم الفاتورة</th><td>${s.id}</td></tr>
+                            <tr><th>اسم العميل</th><td>${s.name}</td></tr>
+                            <tr><th>رقم الهاتف</th><td>${s.phone || '-'}</td></tr>
+                            <tr><th>عنوان التوصيل</th><td>${s.address || '-'}</td></tr>
+                            <tr><th>وصف الحمولة</th><td>${s.item}</td></tr>
+                            <tr><th>الأجرة المطلوبة</th><td>${s.price} ج.م</td></tr>
+                            <tr><th>حالة الشحنة</th><td>${s.status}</td></tr>
+                            <tr><th>صورة المستند</th><td>${s.docImg ? `<img src="${s.docImg}" style="max-width:150px; display:block;"/>` : 'لا توجد صورة'}</td></tr>
+                            <tr><th>التوقيع الرقمي</th><td>${s.signature ? `<img src="${s.signature}" style="max-width:150px; display:block;"/>` : 'لا يوجد توقيع'}</td></tr>
+                        </table>
+                        <button class="print-btn" onclick="window.print()">🖨️ طباعة الفاتورة أو حفظها PDF</button>
+                    </div>
+                </body>
+                </html>
+            `);
+            invoiceWindow.document.close();
+        }
+
+        function exportInvoiceAsImage() {
+            const element = document.getElementById('print-area');
+            html2canvas(element, { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Invoice_${document.getElementById('inv-id').innerText}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        function exportInvoiceAsPDF() {
+            const { jsPDF } = window.jspdf;
+            const element = document.getElementById('print-area');
+            html2canvas(element, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                pdf.save(`Invoice_${document.getElementById('inv-id').innerText}.pdf`);
+            });
+        }
+
+        function sendInvoiceWhatsApp() {
+            const id = document.getElementById('inv-id').innerText;
+            const client = document.getElementById('inv-client').innerText;
+            const phone = document.getElementById('inv-phone').innerText;
+            const address = document.getElementById('inv-address').innerText;
+            const item = document.getElementById('inv-item').innerText;
+            const price = document.getElementById('inv-price').innerText;
+            const status = document.getElementById('inv-status').innerText;
+
+            const msg = `🧾 *فاتورة نقل شحنة - أسطورة الطريق*\n\n` +
+                        `🔹 *رقم الفاتورة:* ${id}\n` +
+                        `👤 *اسم العميل:* ${client}\n` +
+                        `📍 *العنوان:* ${address}\n` +
+                        `📦 *الحمولة:* ${item}\n` +
+                        `💵 *الأجرة المطلوبة:* ${price} ج.م\n` +
+                        `📌 *حالة الشحنة:* ${status}\n\n` +
+                        `شكراً لتعاملك معنا! 🚚💨`;
+
+            let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+            window.open(waLink, '_blank');
+        }
+
+        function renderCRUDTable() {
+            if (currentUserRole !== 'admin') return;
+            const section = document.getElementById('crud-section-select').value;
+            const headers = document.getElementById('crud-table-headers');
+            const tbody = document.getElementById('crud-table-body');
+            headers.innerHTML = ''; tbody.innerHTML = '';
+
+            if (section === 'shipments') {
+                headers.innerHTML = `<th>العميل</th><th>الحمولة</th><th>السائق</th><th>الأجرة</th><th>الحالة</th><th>تحكم</th>`;
+                appData.shipments.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.item}</td><td>${item.assignedDriver || 'عام'}</td><td>${item.price} ج.م</td><td>${item.status}</td><td><button class="btn-warning btn-sm" onclick="editShipment(${item.id}); switchTab('shipments-tab', document.querySelector('nav button:nth-child(2)'))">تعديل</button> <button class="btn-danger btn-sm" onclick="crudDelete('shipments', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'posts') {
+                headers.innerHTML = `<th>العنوان</th><th>التفاصيل</th><th>التاريخ</th><th>حذف</th>`;
+                appData.posts.forEach(item => {
+                    tbody.innerHTML += `<tr><td><b>${item.title}</b></td><td>${item.desc.substring(0, 30)}...</td><td>${item.date}</td><td><button class="btn-danger btn-sm" onclick="crudDelete('posts', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'trucks') {
+                headers.innerHTML = `<th>السيارة</th><th>السائق</th><th>KM</th><th>الرخصة</th><th>حذف</th>`;
+                appData.trucks.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.number}</td><td>${item.driver}</td><td>${item.km}</td><td>${item.expiry}</td><td><button class="btn-danger btn-sm" onclick="crudDelete('trucks', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'drivers') {
+                headers.innerHTML = `<th>السائق</th><th>الهاتف</th><th>اللقب</th><th>حذف</th>`;
+                appData.drivers.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.phone}</td><td>${item.title || 'سائق'}</td><td><button class="btn-danger btn-sm" onclick="crudDelete('drivers', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'customers') {
+                headers.innerHTML = `<th>العميل</th><th>الهاتف</th><th>الديون</th><th>حذف</th>`;
+                appData.customers.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.phone || '-'}</td><td>${item.debt} ج.م</td><td><button class="btn-danger btn-sm" onclick="crudDelete('customers', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'treasury') {
+                headers.innerHTML = `<th>النوع</th><th>المبلغ</th><th>البيان</th><th>حذف</th>`;
+                appData.treasury.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.type}</td><td>${item.amount} ج.م</td><td>${item.desc}</td><td><button class="btn-danger btn-sm" onclick="crudDelete('treasury', ${item.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'expenses') {
+                headers.innerHTML = `<th>البيان</th><th>المبلغ</th><th>حذف</th>`;
+                appData.expenses.forEach(item => {
+                    tbody.innerHTML += `<tr><td>${item.title}</td><td>${item.amount} ج.م</td><td><button class="btn-danger btn-sm" onclick="crudDelete('expenses', ${item.id})">حذف</button></td></tr>`;
+                });
+            }
+        }
+
+        function crudDelete(type, id) {
+            if (currentUserRole !== 'admin') return;
+            if (confirm('تأكيد الحذف؟')) { appData[type] = appData[type].filter(item => item.id !== id); saveDataAll(); render(); renderCRUDTable(); }
+        }
+
+        function clearAll() {
+            if (currentUserRole !== 'admin') return;
+            if (confirm('مسح كل البيانات؟')) { appData = { shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], drivers: [], chat: [], posts: [] }; saveDataAll(); render(); }
+        }
+
+        function render() {
+            const query = document.getElementById('global-search') ? document.getElementById('global-search').value.toLowerCase() : '';
+            const driverSelect = document.getElementById('ship-assigned-driver');
+            if (driverSelect) {
+                driverSelect.innerHTML = '<option value="">-- بدون تعيين (عام) --</option>';
+                appData.drivers.forEach(d => { driverSelect.innerHTML += `<option value="${d.name}">${d.name}</option>`; });
+            }
+
+            const totalRev = appData.shipments.reduce((acc, s) => acc + s.price, 0);
+            const totalProfit = appData.shipments.reduce((acc, s) => acc + (s.netProfit || 0), 0);
+            const totalExp = appData.expenses.reduce((acc, e) => acc + e.amount, 0);
+            const totalCash = appData.treasury.reduce((acc, t) => acc + (t.type === 'in' ? t.amount : -t.amount), 0);
+
+            if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = appData.shipments.length;
+            if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = totalRev + ' ج.م';
+            if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = (totalProfit - totalExp) + ' ج.م';
+            if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = totalCash + ' ج.م';
+            if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = appData.customers.reduce((acc, c) => acc + c.debt, 0) + ' ج.م';
+
+            let activeShipments = currentUserRole === 'driver' ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            const shipList = document.getElementById('shipments-list'); 
+            if (shipList) {
+                shipList.innerHTML = '';
+                activeShipments.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query)).forEach(s => {
+                    let badgeClass = s.status.includes('في الطريق') ? 'bg-transit' : s.status.includes('تم التسليم') ? 'bg-delivered' : s.status.includes('مرتجع') ? 'bg-returned' : 'bg-pending';
+                    shipList.innerHTML += `
+                        <tr>
+                            <td>${s.name}</td>
+                            <td>${s.item}</td>
+                            <td>${s.assignedDriver || 'عام'}</td>
+                            <td>${s.price} ج.م</td>
+                            <td style="font-weight:bold;">${s.netProfit || 0} ج.م</td>
+                            <td><span class="badge ${badgeClass}" onclick="cycleStatus(${s.id})">${s.status}</span></td>
+                            <td>
+                                ${currentUserRole === 'admin' ? `<button class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>` : ''}
+                                <button class="btn-success btn-sm" onclick="sendWhatsAppNotice(${s.id})">💬</button>
+                                <button class="btn-main btn-sm" onclick="showQR(${s.id})">🔳</button>
+                            </td>
+                        </tr>`;
+                });
+            }
+
+            const feedContainer = document.getElementById('public-posts-feed');
+            if (feedContainer) {
+                feedContainer.innerHTML = appData.posts.length === 0 ? `<p style="text-align:center; padding:15px; opacity:0.7;">لا توجد منشورات.</p>` : '';
+                appData.posts.forEach(p => {
+                    let mediaHtml = '';
+                    if (p.images) p.images.forEach(img => mediaHtml += `<img src="${img}" onclick="window.open(this.src)">`);
+                    if (p.video) mediaHtml += `<video controls src="${p.video}"></video>`;
+                    feedContainer.innerHTML += `<div class="load-post-card"><h4 style="color:var(--accent);">${p.title}</h4><p>${p.desc}</p><div class="load-post-media">${mediaHtml}</div></div>`;
+                });
+            }
+
+            const chatBox = document.getElementById('chat-messages-list');
+            if (chatBox) {
+                chatBox.innerHTML = '';
+                appData.chat.forEach(msg => {
+                    chatBox.innerHTML += `<div class="chat-bubble ${msg.role === 'admin' ? 'admin' : 'driver'}"><div style="font-size:9px; font-weight:bold;">${msg.sender} (${msg.time})</div><div>${msg.text}</div></div>`;
+                });
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+            const driversTable = document.getElementById('drivers-list-table');
+            if (driversTable && currentUserRole === 'admin') {
+                driversTable.innerHTML = '';
+                appData.drivers.forEach(d => {
+                    driversTable.innerHTML += `<tr><td>${d.name}</td><td>${d.phone}</td><td><b>${d.title || 'سائق'}</b></td><td>🔒</td><td><button class="btn-warning btn-sm" onclick="editDriver(${d.id})">✏️</button> <button class="btn-danger btn-sm" onclick="crudDelete('drivers', ${d.id})">حذف</button></td></tr>`;
+                });
+            }
+
+            const treasuryList = document.getElementById('treasury-list'); 
+            if (treasuryList && currentUserRole === 'admin') {
+                treasuryList.innerHTML = '';
+                appData.treasury.forEach(t => { treasuryList.innerHTML += `<tr><td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'};">${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`; });
+            }
+
+            const docsList = document.getElementById('docs-list'); 
+            if (docsList && currentUserRole === 'admin') {
+                docsList.innerHTML = '';
+                appData.docs.forEach(d => { docsList.innerHTML += `<div style="background:var(--bg); padding:6px; border-radius:6px; display:flex; justify-content:space-between;"><span>📄 ${d.title}</span><a href="${d.file}" target="_blank" class="btn-main btn-sm">معاينة</a></div>`; });
+            }
+
+            const truckList = document.getElementById('trucks-list'); 
+            if (truckList && currentUserRole === 'admin') {
+                truckList.innerHTML = '';
+                appData.trucks.forEach(t => { truckList.innerHTML += `<tr><td>${t.number}</td><td>${t.driver}</td><td>${t.km} KM</td><td><span class="badge ${t.km >= t.nextOil ? 'bg-returned' : 'bg-delivered'}">${t.km >= t.nextOil ? 'تغيير زيت' : 'ممتاز'}</span></td><td>${t.expiry}</td></tr>`; });
+            }
+
+            const expList = document.getElementById('expenses-list'); 
+            if (expList && currentUserRole === 'admin') {
+                expList.innerHTML = '';
+                appData.expenses.forEach(ex => { expList.innerHTML += `<tr><td>${ex.title}</td><td style="color:var(--danger);">${ex.amount} ج.م</td><td>${ex.date}</td></tr>`; });
+            }
+
+            const custList = document.getElementById('customers-list'); 
+            if (custList && currentUserRole === 'admin') {
+                custList.innerHTML = '';
+                appData.customers.forEach(c => { custList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:${c.debt > 0 ? 'var(--danger)' : 'var(--success)'};">${c.debt} ج.م</td><td><button class="btn-main btn-sm" onclick="payDebt(${c.id})">تحصيل</button></td></tr>`; });
+            }
+
+            updateInvoiceDropdown();
+            renderDriversMonitor();
+            if(currentUserRole === 'admin') renderCRUDTable();
+        }
+
+        function exportToExcel() {
+            if (currentUserRole !== 'admin') return;
+            const ws = XLSX.utils.json_to_sheet(appData.shipments);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
+            XLSX.writeFile(wb, "Asstort_AlTariq_Hub_V56.xlsx");
+        }
+
+        updateCloudStatus(navigator.onLine && !!db);
+    </script>
+</body>
+</html>
