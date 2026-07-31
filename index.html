@@ -315,7 +315,9 @@
         </div>
         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
             <a href="operations-hub.html" class="btn-sm" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none;">⚙️ غرفة العمليات</a>
-            <a href="world.html" class="btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none;">🌍 عالم جديد</a>
+            <!-- زر عالم جديد المرئي والمجاور لغرفة العمليات -->
+            <a href="world.html" class="btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; display: inline-block;">🌍 عالم جديد</a>
+            
             <button type="button" onclick="openModal('driversCommunityModal')" class="btn-sm" style="background:#0284c7; color:#fff;">👥 مجتمع السائقين</button>
             <button type="button" onclick="openModal('driversWorldModal')" class="btn-sm" style="background:#0d9488; color:#fff;">🌍 عالم السائقين</button>
             <button type="button" onclick="lockSystem()" class="btn-sm" style="background:var(--danger); color:#fff;">🔒 قفل</button>
@@ -1732,196 +1734,238 @@
                 const imgData = canvas.toDataURL('image/png');
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const imgWidth = 190;
+                const pageHeight = 295;
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+                let heightLeft = imgHeight;
+                let position = 10;
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
                 pdf.save(`Invoice_${document.getElementById('inv-id').innerText}.pdf`);
             });
         }
 
         function sendInvoiceWhatsApp() {
-            const id = document.getElementById('inv-id').innerText;
+            const sId = document.getElementById('inv-id').innerText;
             const client = document.getElementById('inv-client').innerText;
-            const phone = document.getElementById('inv-phone').innerText;
-            const address = document.getElementById('inv-address').innerText;
-            const item = document.getElementById('inv-item').innerText;
             const price = document.getElementById('inv-price').innerText;
-            const status = document.getElementById('inv-status').innerText;
-
-            const msg = `🧾 *فاتورة نقل شحنة - أسطورة الطريق*\n\n` +
-                        `🔹 *رقم الفاتورة:* ${id}\n` +
-                        `👤 *اسم العميل:* ${client}\n` +
-                        `📍 *العنوان:* ${address}\n` +
-                        `📦 *الحمولة:* ${item}\n` +
-                        `💵 *الأجرة المطلوبة:* ${price} ج.م\n` +
-                        `📌 *حالة الشحنة:* ${status}\n\n` +
-                        `شكراً لتعاملك معنا! 🚚💨`;
-
-            let waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-            window.open(waLink, '_blank');
-        }
-
-        function renderCRUDTable() {
-            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') return;
-            const section = document.getElementById('crud-section-select').value;
-            const headers = document.getElementById('crud-table-headers');
-            const tbody = document.getElementById('crud-table-body');
-            headers.innerHTML = ''; tbody.innerHTML = '';
-
-            if (section === 'shipments') {
-                headers.innerHTML = `<th>العميل</th><th>الحمولة</th><th>السائق</th><th>الأجرة</th><th>الحالة</th><th>تحكم</th>`;
-                (appData.shipments || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.item}</td><td>${item.assignedDriver || 'عام'}</td><td>${item.price} ج.م</td><td>${item.status}</td><td><button type="button" class="btn-warning btn-sm" onclick="editShipment(${item.id}); switchTab('shipments-tab', document.querySelector('.sidebar-nav-list button:nth-child(3)'))">تعديل</button> <button type="button" class="btn-danger btn-sm" onclick="crudDelete('shipments', ${item.id})">حذف</button></td></tr>`;
-                });
-            } else if (section === 'posts') {
-                headers.innerHTML = `<th>العنوان</th><th>التفاصيل</th><th>التاريخ</th><th>حذف</th>`;
-                (appData.posts || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td><b>${item.title}</b></td><td>${item.desc.substring(0, 30)}...</td><td>${item.date}</td><td><button type="button" class="btn-danger btn-sm" onclick="crudDelete('posts', ${item.id})">حذف</button></td></tr>`;
-                });
-            } else if (section === 'drivers') {
-                headers.innerHTML = `<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>حذف</th>`;
-                (appData.drivers || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.phone}</td><td>${item.role}</td><td>${item.title}</td><td><button type="button" class="btn-danger btn-sm" onclick="crudDelete('drivers', ${item.id})">حذف</button></td></tr>`;
-                });
-            } else if (section === 'customers') {
-                headers.innerHTML = `<th>العميل</th><th>الهاتف</th><th>المديونية</th><th>إدارة</th>`;
-                (appData.customers || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td>${item.name}</td><td>${item.phone}</td><td>${item.debt} ج.م</td><td><button type="button" class="btn-success btn-sm" onclick="payDebt(${item.id})">تحصيل</button></td></tr>`;
-                });
-            } else if (section === 'treasury') {
-                headers.innerHTML = `<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th>`;
-                (appData.treasury || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td>${item.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${item.amount} ج.م</td><td>${item.desc}</td><td>${item.date}</td></tr>`;
-                });
-            } else if (section === 'expenses') {
-                headers.innerHTML = `<th>البيان</th><th>المبلغ</th><th>التاريخ</th>`;
-                (appData.expenses || []).forEach(item => {
-                    tbody.innerHTML += `<tr><td>${item.title}</td><td>${item.amount} ج.م</td><td>${item.date}</td></tr>`;
-                });
+            const phone = document.getElementById('inv-phone').innerText;
+            const msg = `🧾 فاتورة شحنة رقم #${sId}\nالعميل: ${client}\nالأجرة: ${price} ج.م\nشكراً لتعاملكم معنا في أسطورة الطريق.`;
+            if (phone && phone !== '-') {
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+            } else {
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
             }
-        }
-
-        function crudDelete(type, id) {
-            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') return;
-            if (confirm('هل أنت متأكد من الحذف؟')) {
-                if (type === 'shipments') appData.shipments = appData.shipments.filter(x => x.id !== id);
-                if (type === 'posts') appData.posts = appData.posts.filter(x => x.id !== id);
-                if (type === 'drivers') appData.drivers = appData.drivers.filter(x => x.id !== id);
-                saveDataAll();
-                renderCRUDTable();
-            }
-        }
-
-        function exportToExcel() {
-            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') return;
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(appData.shipments || []), "الشحنات");
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(appData.drivers || []), "السائقين");
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(appData.customers || []), "العملاء");
-            XLSX.writeFile(wb, "RoadLegend_Data.xlsx");
         }
 
         function clearAll() {
-            if (currentUserRole !== 'admin') { alert('متاح لمدير النظام فقط!'); return; }
-            if (confirm('تحذير: سيتم مسح كافة البيانات نهائياً! هل أنت متأكد؟')) {
+            if (currentUserRole !== 'admin') { alert('مسح البيانات متاح لمدير النظام الأساسي فقط!'); return; }
+            if (confirm('⚠️ تحذير شديد: هل أنت متأكد من رغبتك في مسح كافة بيانات التطبيق نهائياً؟')) {
                 localStorage.removeItem('transportAppV60');
+                db.ref('transportAppV60').remove();
                 location.reload();
+            }
+        }
+
+        function renderCRUDTable() {
+            const section = document.getElementById('crud-section-select').value;
+            const headers = document.getElementById('crud-table-headers');
+            const body = document.getElementById('crud-table-body');
+            headers.innerHTML = ''; body.innerHTML = '';
+
+            if (section === 'shipments') {
+                headers.innerHTML = `<th>العميل</th><th>الهاتف</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>إجراء</th>`;
+                (appData.shipments || []).forEach(s => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${s.name}</td><td>${s.phone || '-'}</td><td>${s.item}</td><td>${s.price}</td><td>${s.status}</td>
+                            <td><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${s.id})">حذف</button></td>
+                        </tr>`;
+                });
+            } else if (section === 'posts') {
+                headers.innerHTML = `<th>العنوان</th><th>التفاصيل</th><th>التاريخ</th><th>إجراء</th>`;
+                (appData.posts || []).forEach(p => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${p.title}</td><td>${p.desc.substring(0, 30)}...</td><td>${p.date}</td>
+                            <td><button class="btn-danger btn-sm" onclick="deleteItem('posts', ${p.id})">حذف</button></td>
+                        </tr>`;
+                });
+            } else if (section === 'trucks') {
+                headers.innerHTML = `<th>المركبة</th><th>السائق</th><th>KM</th><th>إجراء</th>`;
+                (appData.trucks || []).forEach(t => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${t.number}</td><td>${t.driver}</td><td>${t.km}</td>
+                            <td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${t.id})">حذف</button></td>
+                        </tr>`;
+                });
+            } else if (section === 'drivers') {
+                headers.innerHTML = `<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>إجراء</th>`;
+                (appData.drivers || []).forEach(d => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${d.name}</td><td>${d.phone}</td><td>${d.role}</td>
+                            <td>${d.name !== 'المدير' ? `<button class="btn-danger btn-sm" onclick="deleteItem('drivers', ${d.id})">حذف</button>` : 'محمي'}</td>
+                        </tr>`;
+                });
+            } else if (section === 'customers') {
+                headers.innerHTML = `<th>العميل</th><th>الهاتف</th><th>الديون</th><th>إجراء</th>`;
+                (appData.customers || []).forEach(c => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${c.name}</td><td>${c.phone || '-'}</td><td>${c.debt} ج.م</td>
+                            <td><button class="btn-warning btn-sm" onclick="payDebt(${c.id})">تحصيل</button></td>
+                        </tr>`;
+                });
+            } else if (section === 'treasury') {
+                headers.innerHTML = `<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراء</th>`;
+                (appData.treasury || []).forEach(tr => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${tr.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${tr.amount}</td><td>${tr.desc}</td><td>${tr.date}</td>
+                            <td><button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${tr.id})">حذف</button></td>
+                        </tr>`;
+                });
+            } else if (section === 'expenses') {
+                headers.innerHTML = `<th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>إجراء</th>`;
+                (appData.expenses || []).forEach(ex => {
+                    body.innerHTML += `
+                        <tr>
+                            <td>${ex.title}</td><td>${ex.amount}</td><td>${ex.date}</td>
+                            <td><button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${ex.id})">حذف</button></td>
+                        </tr>`;
+                });
+            }
+        }
+
+        function deleteItem(type, id) {
+            if (currentUserRole !== 'admin' && (currentUserRole === 'supervisor' && type === 'drivers')) {
+                alert('غير مسموح لك بحذف هذا العنصر!');
+                return;
+            }
+            if (confirm('هل أنت متأكد من الحذف؟')) {
+                appData[type] = (appData[type] || []).filter(item => item.id !== id);
+                saveDataAll();
+                renderCRUDTable();
+                render();
             }
         }
 
         function render() {
             const searchVal = document.getElementById('global-search').value.toLowerCase();
             
+            // Stats calculation
+            const totalShipments = (appData.shipments || []).length;
+            const totalRevenue = (appData.shipments || []).reduce((acc, s) => acc + s.price, 0);
+            const totalNetProfit = (appData.shipments || []).reduce((acc, s) => acc + s.netProfit, 0);
+            const totalTreasuryIn = (appData.treasury || []).filter(t => t.type === 'in').reduce((acc, t) => acc + t.amount, 0);
+            const totalTreasuryOut = (appData.treasury || []).filter(t => t.type === 'out').reduce((acc, t) => acc + t.amount, 0);
+            const totalDebts = (appData.customers || []).reduce((acc, c) => acc + c.debt, 0);
+
+            document.getElementById('stat-shipments').innerText = totalShipments;
+            document.getElementById('stat-revenue').innerText = totalRevenue + ' ج.م';
+            document.getElementById('stat-net-profit').innerText = totalNetProfit + ' ج.م';
+            document.getElementById('stat-cash').innerText = (totalTreasuryIn - totalTreasuryOut) + ' ج.م';
+            document.getElementById('stat-debts').innerText = totalDebts + ' ج.م';
+
+            // Shipments List
             const shipmentsList = document.getElementById('shipments-list');
-            if (shipmentsList) {
-                shipmentsList.innerHTML = '';
-                let targetShipments = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
-                
-                targetShipments.filter(s => s.name.toLowerCase().includes(searchVal) || s.item.toLowerCase().includes(searchVal)).forEach(s => {
-                    let badgeClass = s.status.includes('انتظار') ? 'bg-pending' : (s.status.includes('الطريق') ? 'bg-transit' : (s.status.includes('التسليم') ? 'bg-delivered' : 'bg-returned'));
+            shipmentsList.innerHTML = '';
+            let targetShipments = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
+            
+            let filteredShipments = targetShipments.filter(s => 
+                s.name.toLowerCase().includes(searchVal) || 
+                s.item.toLowerCase().includes(searchVal) || 
+                (s.phone && s.phone.includes(searchVal))
+            );
+
+            if (filteredShipments.length === 0) {
+                shipmentsList.innerHTML = `<tr><td colspan="7" style="text-align:center; opacity:0.7;">لا توجد شحنات مطابقة للبحث</td></tr>`;
+            } else {
+                filteredShipments.forEach(s => {
+                    let badgeClass = 'bg-pending';
+                    if (s.status.includes('الطريق')) badgeClass = 'bg-transit';
+                    else if (s.status.includes('التسليم')) badgeClass = 'bg-delivered';
+                    else if (s.status.includes('مرتجع')) badgeClass = 'bg-returned';
+
                     shipmentsList.innerHTML += `
                         <tr>
-                            <td>${s.name}</td>
+                            <td style="font-weight:bold;">${s.name}</td>
                             <td>${s.item}</td>
                             <td>${s.assignedDriver || 'عام'}</td>
                             <td>${s.price} ج.م</td>
-                            <td>${s.netProfit || 0} ج.م</td>
-                            <td><span class="badge ${badgeClass}" onclick="cycleStatus(${s.id})">${s.status}</span></td>
+                            <td style="font-weight:bold; color:var(--success);">${s.netProfit || 0} ج.م</td>
+                            <td><span class="badge ${badgeClass}" onclick="cycleStatus(${s.id})" title="اضغط لتغيير الحالة">${s.status}</span></td>
                             <td>
-                                <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">QR</button>
                                 <button type="button" class="btn-success btn-sm" onclick="sendWhatsAppNotice(${s.id})">واتساب</button>
-                                ${currentUserRole === 'admin' || currentUserRole === 'supervisor' ? `<button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>` : ''}
+                                <button type="button" class="btn-warning btn-sm" onclick="showQR(${s.id})">QR</button>
+                                ${currentUserRole === 'admin' || currentUserRole === 'supervisor' ? `<button type="button" class="btn-main btn-sm" onclick="editShipment(${s.id})">تعديل</button>` : ''}
+                                ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteItem('shipments', ${s.id})">حذف</button>` : ''}
                             </td>
                         </tr>
                     `;
                 });
             }
 
-            const customersList = document.getElementById('customers-list');
-            if (customersList) {
-                customersList.innerHTML = '';
-                (appData.customers || []).forEach(c => {
-                    customersList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${c.debt} ج.م</td><td><button type="button" class="btn-success btn-sm" onclick="payDebt(${c.id})">تحصيل</button></td></tr>`;
+            // Driver select dropdown for shipments
+            const driverSelect = document.getElementById('ship-assigned-driver');
+            if(driverSelect) {
+                driverSelect.innerHTML = `<option value="">-- بدون تعيين (عام) --</option>`;
+                (appData.drivers || []).forEach(d => {
+                    driverSelect.innerHTML += `<option value="${d.name}">${d.name} (${d.role || 'سائق'})</option>`;
                 });
             }
 
+            // Treasury List
             const treasuryList = document.getElementById('treasury-list');
-            if (treasuryList) {
+            if(treasuryList) {
                 treasuryList.innerHTML = '';
-                let totalCash = 0;
-                (appData.treasury || []).forEach(t => {
-                    if (t.type === 'in') totalCash += t.amount; else totalCash -= t.amount;
-                    treasuryList.innerHTML += `<tr><td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`;
+                (appData.treasury || []).forEach(tr => {
+                    treasuryList.innerHTML += `<tr><td>${tr.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${tr.amount} ج.م</td><td>${tr.desc}</td><td>${tr.date}</td></tr>`;
                 });
-                const statCash = document.getElementById('stat-cash');
-                if(statCash) statCash.innerText = totalCash + ' ج.م';
             }
 
-            const expensesList = document.getElementById('expenses-list');
-            if (expensesList) {
-                expensesList.innerHTML = '';
-                let totalExp = 0;
-                (appData.expenses || []).forEach(e => {
-                    totalExp += e.amount;
-                    expensesList.innerHTML += `<tr><td>${e.title}</td><td>${e.amount} ج.م</td><td>${e.date}</td></tr>`;
-                });
-                const statDebts = document.getElementById('stat-debts');
-                if(statDebts) statDebts.innerText = totalExp + ' ج.م';
-            }
-
+            // Trucks List
             const trucksList = document.getElementById('trucks-list');
-            if (trucksList) {
+            if(trucksList) {
                 trucksList.innerHTML = '';
                 (appData.trucks || []).forEach(t => {
                     trucksList.innerHTML += `<tr><td>${t.number}</td><td>${t.driver}</td><td>${t.km} KM</td><td>${t.nextOil} KM</td><td>${t.expiry}</td></tr>`;
                 });
             }
 
+            // Docs List
             const docsList = document.getElementById('docs-list');
-            if (docsList) {
+            if(docsList) {
                 docsList.innerHTML = '';
-                (appData.docs || []).forEach(d => {
-                    docsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; font-size:11px;"><span>📄 ${d.title}</span><a href="${d.file}" download="doc.jpg" class="btn-sm btn-main" style="text-decoration:none;">تحميل</a></div>`;
+                (appData.docs || []).forEach(doc => {
+                    docsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; font-size:11px;"><span>📄 ${doc.title}</span> <a href="${doc.file}" download="${doc.title}.jpg" class="btn-sm btn-main" style="text-decoration:none;">تحميل المستند</a></div>`;
                 });
             }
 
-            const chatList = document.getElementById('chat-messages-list');
-            if (chatList) {
-                chatList.innerHTML = '';
-                (appData.chat || []).forEach(m => {
-                    let bubbleClass = m.role === 'admin' ? 'admin' : 'driver';
-                    chatList.innerHTML += `<div class="chat-bubble ${bubbleClass}"><b>${m.sender}:</b> ${m.text} <span style="font-size:8px; opacity:0.7; display:block; text-align:left;">${m.time}</span></div>`;
+            // Expenses List
+            const expensesList = document.getElementById('expenses-list');
+            if(expensesList) {
+                expensesList.innerHTML = '';
+                (appData.expenses || []).forEach(ex => {
+                    expensesList.innerHTML += `<tr><td>${ex.title}</td><td>${ex.amount} ج.م</td><td>${ex.date}</td></tr>`;
                 });
-                chatList.scrollTop = chatList.scrollHeight;
             }
 
-            let totalRev = (appData.shipments || []).reduce((acc, s) => acc + s.price, 0);
-            let totalNetProfit = (appData.shipments || []).reduce((acc, s) => acc + (s.netProfit || 0), 0);
-            
-            if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = (appData.shipments || []).length;
-            if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = totalRev + ' ج.م';
-            if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = totalNetProfit + ' ج.م';
-
-            renderDriversListTable();
+            // Customers List
+            const customersList = document.getElementById('customers-list');
+            if(customersList) {
+                customersList.innerHTML = '';
+                (appData.customers || []).forEach(c => {
+                    customersList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${c.debt} ج.م</td><td><button type="button" class="btn-warning btn-sm" onclick="payDebt(${c.id})">تحصيل جزء/الكل</button></td></tr>`;
+                });
+            }
         }
     </script>
 </body>
