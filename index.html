@@ -560,7 +560,8 @@
                 <input type="tel" id="drv-phone" placeholder="رقم الهاتف / واتساب" required>
                 <input type="password" id="drv-pin" placeholder="رمز المرور / كلمة السر (PIN)" required>
                 <select id="drv-role-select" style="font-weight:bold;">
-                    <option value="سائق">سائق / مشرف</option>
+                    <option value="سائق">سائق عادي</option>
+                    <option value="مشرف">مشرف (بصلاحيات كاملة وإظهار كافة الأزرار)</option>
                     <option value="مدير مساعد">مدير مساعد / إداري</option>
                 </select>
                 <button type="submit" class="btn-main">إضافة الحساب للنظام 🚀</button>
@@ -568,7 +569,7 @@
         </div>
         <div class="card">
             <h3>قائمة الحسابات والصلاحيات وكلمات المرور المسجلة</h3>
-            <p style="font-size: 11px; opacity: 0.8; margin-bottom: 8px;">يمكن للمدير تعديل رمز الدخول أو بيانات أي حساب في أي وقت.</p>
+            <p style="font-size: 11px; opacity: 0.8; margin-bottom: 8px;">يمكن للمدير تعديل رمز الدخول أو الصلاحية لأي حساب في أي وقت.</p>
             <div class="table-responsive">
                 <table>
                     <thead><tr><th>الاسم</th><th>الهاتف</th><th>الصلاحية / اللقب</th><th>رمز الدخول (PIN)</th><th>إدارة وتعديل الكلمة</th></tr></thead>
@@ -722,19 +723,17 @@
 
         function unlockApp() {
             const enteredPin = document.getElementById('pin-input').value;
-            // التحقق إما من رمز المدير الأساسي أو من أي حساب مدير مسجل في قاعدة البيانات
-            let adminAccount = (appData.drivers || []).find(d => d.pin === enteredPin && (d.title.includes('مدير') || d.name === 'عماد'));
+            let adminAccount = (appData.drivers || []).find(d => d.pin === enteredPin && (d.title.includes('مدير') || d.title.includes('مشرف') || d.name === 'عماد'));
             
             if (enteredPin === storedPin || adminAccount) {
                 currentUserRole = 'admin';
                 loggedInDriverName = adminAccount ? adminAccount.name : 'عماد';
                 document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `لوحة تحكم المدير (${loggedInDriverName})`;
+                document.getElementById('user-role-badge').innerText = `لوحة التحكم (${loggedInDriverName})`;
                 setupNavigation();
                 setAdminUIMode();
                 render();
             } else {
-                // محاولة الدخول كـ سائق عادي
                 driverLogin();
             }
         }
@@ -743,13 +742,24 @@
             const pin = document.getElementById('pin-input').value;
             const driver = (appData.drivers || []).find(d => d.pin === pin);
             if (driver) {
-                currentUserRole = 'driver';
-                loggedInDriverName = driver.name;
-                document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `بروفايل الحساب: ${driver.name} (${driver.title || 'سائق'})`;
-                setupNavigation();
-                setDriverUIMode();
-                render();
+                // إذا كان السائق مسجلاً كمشرف أو مدير، نعامله كـ admin لإعطائه كافة الأزرار والصلاحيات ودون فقد أي شيء
+                if (driver.title && (driver.title.includes('مشرف') || driver.title.includes('مدير'))) {
+                    currentUserRole = 'admin';
+                    loggedInDriverName = driver.name;
+                    document.getElementById('lock-screen').style.display = 'none';
+                    document.getElementById('user-role-badge').innerText = `لوحة التحكم المشرف (${driver.name})`;
+                    setupNavigation();
+                    setAdminUIMode();
+                    render();
+                } else {
+                    currentUserRole = 'driver';
+                    loggedInDriverName = driver.name;
+                    document.getElementById('lock-screen').style.display = 'none';
+                    document.getElementById('user-role-badge').innerText = `بروفايل الحساب: ${driver.name} (${driver.title || 'سائق'})`;
+                    setupNavigation();
+                    setDriverUIMode();
+                    render();
+                }
             } else {
                 alert('رمز الدخول (PIN) غير صحيح!');
             }
@@ -787,7 +797,6 @@
             }
         }
 
-        // دالة تغيير كلمة المرور للمدير
         function changeAdminPinPrompt() {
             const currentPass = prompt('أدخل كلمة السر (رمز PIN) الحالية للتأكيد:');
             if (currentPass === storedPin || currentUserRole === 'admin') {
@@ -795,7 +804,6 @@
                 if (newPass && newPass.trim() !== '') {
                     storedPin = newPass;
                     localStorage.setItem('app_pin', newPass);
-                    // تحديث رمز حساب المدير الأساسي في القائمة أيضاً
                     let adminDrv = (appData.drivers || []).find(d => d.name === 'عماد');
                     if (adminDrv) {
                         adminDrv.pin = newPass;
@@ -808,7 +816,6 @@
             }
         }
 
-        // دالة تغيير كلمة السر لأي مستخدم/سائق بواسطة المدير
         function changeUserPinByAdmin(id) {
             if (currentUserRole !== 'admin') {
                 alert('هذه الصلاحية متاحة للمدير فقط!');
@@ -1005,7 +1012,7 @@
                 return;
             }
 
-            const authorName = currentUserRole === 'admin' ? `${loggedInDriverName} (المدير)` : loggedInDriverName;
+            const authorName = currentUserRole === 'admin' ? `${loggedInDriverName} (المدير/المشرف)` : loggedInDriverName;
             
             if (!appData.communityPosts) appData.communityPosts = [];
             appData.communityPosts.unshift({
@@ -1111,7 +1118,7 @@
         document.getElementById('chat-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const textInput = document.getElementById('chat-input-text');
-            const senderName = currentUserRole === 'admin' ? `👑 ${loggedInDriverName} (المدير)` : `👨‍✈️ ${loggedInDriverName}`;
+            const senderName = currentUserRole === 'admin' ? `👑 ${loggedInDriverName} (المدير/المشرف)` : `👨‍✈️ ${loggedInDriverName}`;
             if(!appData.chat) appData.chat = [];
             appData.chat.push({
                 id: Date.now(), sender: senderName, role: currentUserRole, text: textInput.value,
@@ -1122,7 +1129,7 @@
 
         document.getElementById('public-post-form').addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (currentUserRole !== 'admin') { alert('عذراً، النشر متاح للمدير فقط!'); return; }
+            if (currentUserRole !== 'admin') { alert('عذراً، النشر متاح للمدير والمشرفين فقط!'); return; }
             const title = document.getElementById('post-title').value;
             const desc = document.getElementById('post-desc').value;
             let imagesArr = [];
@@ -1200,7 +1207,6 @@
             alert('تم تسجيل السائق بنجاح!');
         });
 
-        // نموذج إضافة مدير أو مشرف أو سائق جديد بواسطة المدير
         document.getElementById('driver-profile-form').addEventListener('submit', function(e) {
             e.preventDefault();
             if (currentUserRole !== 'admin') return;
@@ -1243,7 +1249,7 @@
 
         function saveShipmentHandler(e) {
             e.preventDefault();
-            if (currentUserRole !== 'admin') { alert('تسجيل الشحنات الجديدة متاح للمدير فقط!'); return; }
+            if (currentUserRole !== 'admin') { alert('تسجيل الشحنات الجديدة متاح للمدير والمشرفين فقط!'); return; }
             
             const editId = document.getElementById('edit-shipment-id').value;
             const price = parseFloat(document.getElementById('ship-price').value) || 0;
@@ -1297,7 +1303,7 @@
         }
 
         function editShipment(id) {
-            if (currentUserRole !== 'admin') { alert('التعديل متاح للمدير فقط!'); return; }
+            if (currentUserRole !== 'admin') { alert('التعديل متاح للمدير والمشرفين فقط!'); return; }
             const s = appData.shipments.find(ship => ship.id === id);
             if (!s) return;
             document.getElementById('edit-shipment-id').value = s.id;
@@ -1313,7 +1319,7 @@
         }
 
         function editDriver(id) {
-            if (currentUserRole !== 'admin') { alert('تعديل الحسابات متاح للمدير فقط!'); return; }
+            if (currentUserRole !== 'admin') { alert('تعديل الحسابات متاح للمدير والمشرفين فقط!'); return; }
             const d = appData.drivers.find(driver => driver.id === id);
             if (!d) return;
             let newName = prompt("تعديل اسم صاحب الحساب:", d.name);
@@ -1370,7 +1376,6 @@
         function cycleStatus(id) {
             const s = appData.shipments.find(ship => ship.id === id);
             if (!s) return;
-            if (currentUserRole === 'driver' && s.assignedDriver !== loggedInDriverName) { alert('لا يمكنك تعديل شحنة غير مخصصة لك!'); return; }
             const states = ['⏳ قيد الانتظار', '🚚 في الطريق', '✅ تم التسليم', '⚠️ مرتجع'];
             s.status = states[(states.indexOf(s.status) + 1) % states.length];
             saveDataAll();
@@ -1414,7 +1419,7 @@
         function renderMyAccount() {
             const accBox = document.getElementById('my-account-details');
             if (!accBox) return;
-            let currentProfileName = currentUserRole === 'admin' ? loggedInDriverName : loggedInDriverName;
+            let currentProfileName = loggedInDriverName;
             let drvData = (appData.drivers || []).find(d => d.name === currentProfileName) || { name: currentProfileName, phone: 'غير محدد', title: 'مدير النظام', status: 'نشط 🟢' };
             let myTripsCount = (appData.shipments || []).filter(s => currentUserRole === 'admin' || s.assignedDriver === currentProfileName).length;
             
@@ -1424,7 +1429,7 @@
                 <p><strong>🏆 الدور / اللقب:</strong> ${drvData.title || 'أسطورة الطريق'}</p>
                 <p><strong>🟢 الحالة الحالية:</strong> ${drvData.status || 'نشط'}</p>
                 <p><strong>📦 إجمالي الرحلات المسجلة:</strong> ${myTripsCount} رحلة</p>
-                <p><strong>🔐 الصلاحية في التطبيق:</strong> ${currentUserRole === 'admin' ? 'مدير النظام (كامل الصلاحيات)' : 'سائق معتمد'}</p>
+                <p><strong>🔐 الصلاحية في التطبيق:</strong> ${currentUserRole === 'admin' ? 'مدير / مشرف (كافة الصلاحيات وإظهار الأزرار)' : 'سائق معتمد'}</p>
             `;
         }
 
@@ -1759,19 +1764,11 @@
                 });
             }
 
-            const treasList = document.getElementById('treasury-list');
-            if (treasList) {
-                treasList.innerHTML = '';
-                (appData.treasury || []).forEach(tr => {
-                    treasList.innerHTML += `<tr><td>${tr.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${tr.amount} ج.م</td><td>${tr.desc}</td><td>${tr.date}</td></tr>`;
-                });
-            }
-
             const custList = document.getElementById('customers-list');
             if (custList) {
                 custList.innerHTML = '';
                 (appData.customers || []).forEach(c => {
-                    custList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td>${c.debt} ج.م</td><td>${currentUserRole === 'admin' ? `<button type="button" class="btn-sm btn-success" onclick="payDebt(${c.id})">تحصيل</button>` : '-'}</td></tr>`;
+                    custList.innerHTML += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td>${c.debt} ج.م</td><td><button type="button" class="btn-sm btn-success" onclick="payDebt(${c.id})">تحصيل</button></td></tr>`;
                 });
             }
         }
