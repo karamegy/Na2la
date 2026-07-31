@@ -140,6 +140,7 @@
             overflow: hidden; 
             background: var(--secondary-text);
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            cursor: pointer;
         }
 
         .profile-avatar-wrapper img { 
@@ -462,6 +463,43 @@
             color: var(--text-color); 
             border: 1px solid var(--border-color);
         }
+
+        /* تنسيق معرض صور الملف الشخصي داخل المودال */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding: 4px;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+            aspect-ratio: 1;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-item span {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 8px;
+            text-align: center;
+            padding: 2px;
+        }
     </style>
 </head>
 <body data-theme="light">
@@ -486,11 +524,10 @@
                 </label>
             </div>
 
-            <div class="profile-avatar-wrapper">
+            <!-- الضغط على صورة البروفايل يفتح قائمة الخيارات -->
+            <div class="profile-avatar-wrapper" onclick="openAvatarOptionsModal()" title="اضغط لتغيير الصورة الشخصية">
                 <img id="profile-avatar-img" src="https://via.placeholder.com/150" alt="صورة المستخدم">
-                <label class="avatar-upload-btn">
-                    تغيير <input type="file" accept="image/*" hidden onchange="updateAvatarPhoto(this)">
-                </label>
+                <div class="avatar-upload-btn">تغيير</div>
             </div>
 
             <div class="profile-info-body">
@@ -583,6 +620,31 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- نافذة خيارات صورة الملف الشخصي (التقاط، تحميل، أو معرض الصور السابقة مع المصدر) -->
+    <div id="avatarOptionsModal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 style="margin-bottom:12px; color:var(--primary-color); text-align:center;">📷 خيارات صورة الملف الشخصي</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                <button type="button" class="submit-btn" style="background:var(--primary-color);" onclick="triggerCameraCapture()">📸 التقاط صورة جديدة بالكاميرا</button>
+                <button type="button" class="submit-btn" style="background:var(--success-color);" onclick="triggerGalleryUpload()">📁 تحميل صورة من الملفات أو المعرض</button>
+            </div>
+
+            <!-- عناصر مخفية للتحويل المباشر للكاميرا أو الملفات مع تحديد النوع -->
+            <input type="file" id="hiddenCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="processSelectedAvatar(this, 'التقاط بالكاميرا')">
+            <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;" onchange="processSelectedAvatar(this, 'تحميل من الملفات')">
+
+            <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                <label style="font-size:11px; font-weight:bold; color:var(--secondary-text);">أو اختر من صورك السابقة (مع معرفة مصدر الرفع):</label>
+                <div id="previousAvatarsGallery" class="gallery-grid">
+                    <!-- يتم ملؤها ديناميكياً -->
+                </div>
+            </div>
+
+            <button type="button" onclick="closeAvatarOptionsModal()" class="submit-btn" style="width:100%; background:var(--danger-color); margin-top:12px;">إغلاق</button>
+        </div>
     </div>
 
     <!-- نافذة تعديل البيانات الشخصية -->
@@ -904,6 +966,86 @@
         function openNotificationModal() { document.getElementById('notificationModal').style.display = 'flex'; }
         function closeNotificationModal() { document.getElementById('notificationModal').style.display = 'none'; }
 
+        // إدارة نافذة خيارات صورة الملف الشخصي والمعرض
+        function openAvatarOptionsModal() {
+            document.getElementById('avatarOptionsModal').style.display = 'flex';
+            renderAvatarGallery();
+        }
+        function closeAvatarOptionsModal() {
+            document.getElementById('avatarOptionsModal').style.display = 'none';
+        }
+
+        function triggerCameraCapture() {
+            document.getElementById('hiddenCameraInput').click();
+        }
+
+        function triggerGalleryUpload() {
+            document.getElementById('hiddenFileInput').click();
+        }
+
+        async function processSelectedAvatar(input, sourceMethod) {
+            if (input.files && input.files[0]) {
+                const base64 = await fileToBase64(input.files[0]);
+                saveNewAvatarData(base64, sourceMethod);
+            }
+        }
+
+        function saveNewAvatarData(base64Url, sourceMethod) {
+            if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
+            
+            // حفظ الصورة الحالية مع المصدر
+            appData.drivers[0].avatar = base64Url;
+            appData.drivers[0].avatarSource = sourceMethod;
+
+            // تخزين الصورة في قائمة الصور السابقة (Gallery) مع مصدرها
+            if (!appData.drivers[0].avatarHistory) {
+                appData.drivers[0].avatarHistory = [];
+            }
+            // منع التكرار وإضافتها في المقدمة
+            appData.drivers[0].avatarHistory = appData.drivers[0].avatarHistory.filter(item => item.url !== base64Url);
+            appData.drivers[0].avatarHistory.unshift({
+                url: base64Url,
+                source: sourceMethod,
+                date: new Date().toLocaleDateString()
+            });
+
+            saveDataAll();
+            closeAvatarOptionsModal();
+            alert(`تم تحديث صورة البروفايل بنجاح عبر: (${sourceMethod})! 📸`);
+        }
+
+        function renderAvatarGallery() {
+            const container = document.getElementById('previousAvatarsGallery');
+            container.innerHTML = '';
+
+            let history = (appData.drivers && appData.drivers[0] && appData.drivers[0].avatarHistory) ? appData.drivers[0].avatarHistory : [];
+
+            if (history.length === 0) {
+                container.innerHTML = `<div style="grid-column: span 3; text-align:center; font-size:11px; color:var(--secondary-text);">لا توجد صور سابقة مرفوعة بعد.</div>`;
+                return;
+            }
+
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'gallery-item';
+                div.title = `تم الرفع بواسطة: ${item.source}`;
+                div.onclick = () => {
+                    if (confirm(`هل تريد استخدام هذه الصورة؟\nتم الرفع عبر: [ ${item.source} ]`)) {
+                        appData.drivers[0].avatar = item.url;
+                        appData.drivers[0].avatarSource = `إعادة استخدام (${item.source})`;
+                        saveDataAll();
+                        closeAvatarOptionsModal();
+                        alert('تم استرجاع وتعيين الصورة بنجاح!');
+                    }
+                };
+                div.innerHTML = `
+                    <img src="${item.url}" alt="صورة سابقة">
+                    <span>${item.source}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
         function saveProfileChanges(e) {
             e.preventDefault();
             if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
@@ -931,16 +1073,6 @@
             closeNotificationModal();
             document.getElementById('notifText').value = '';
             alert('تم إرسال الإشعار وتعميمه بنجاح للفئة المستهدفة! 🚀');
-        }
-
-        async function updateAvatarPhoto(input) {
-            if (input.files && input.files[0]) {
-                const base64 = await fileToBase64(input.files[0]);
-                if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
-                appData.drivers[0].avatar = base64;
-                saveDataAll();
-                alert('تم تحديث صورة البروفايل بنجاح! 📸');
-            }
         }
 
         async function updateCoverPhoto(input) {
