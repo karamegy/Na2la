@@ -175,6 +175,12 @@
             display: flex;
             flex-direction: column;
             gap: 3px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .notif-item:hover {
+            background: var(--accent-glow);
         }
 
         .notif-time {
@@ -719,12 +725,12 @@
             if(btn.style.opacity === "0.6") {
                 btn.style.opacity = "1";
                 btn.innerHTML = "☁️ سحابي متصل";
-                addNotification("تمت مزامنة البيانات السحابية بنجاح.");
+                addNotification("تمت مزامنة البيانات السحابية بنجاح.", "feed");
                 alert("☁️ تم الاتصال بالسحابة بنجاح ومزامنة البيانات!");
             } else {
                 btn.style.opacity = "0.6";
                 btn.innerHTML = "☁️ وضع غير متصل";
-                addNotification("تحول التطبيق إلى وضع غير متصل (Offline Mode).");
+                addNotification("تحول التطبيق إلى وضع غير متصل (Offline Mode).", "feed");
             }
         }
 
@@ -737,13 +743,13 @@
             let notifs = localStorage.getItem("driver_app_notifications_v5");
             if (!notifs) {
                 const defaultNotifs = [
-                    { id: 1, text: "مرحباً بك في النظام المطور V52.", time: "اليوم", unread: true },
-                    { id: 2, text: "تنبيه: تم رصد حالة طقس ممتازة على طريق العين السخنة.", time: "منذ ساعة", unread: true }
+                    { id: 1, text: "مرحباً بك في النظام المطور V52.", time: "اليوم", unread: true, target: "feed" },
+                    { id: 2, text: "تنبيه: تم رصد حالة طقس ممتازة على طريق العين السخنة.", time: "منذ ساعة", unread: true, target: "feed" }
                 ];
                 localStorage.setItem("driver_app_notifications_v5", JSON.stringify(defaultNotifs));
                 return defaultNotifs;
             }
-            return JSON.parse(notifs);
+            return JSON.parse(notifs).map(n => ({ ...n, target: n.target || 'feed' }));
         }
 
         function saveNotifications(notifs) {
@@ -751,13 +757,14 @@
             updateNotificationBadge();
         }
 
-        function addNotification(text) {
+        function addNotification(text, targetSection = 'feed') {
             let notifs = getNotifications();
             notifs.unshift({
                 id: Date.now(),
                 text: text,
                 time: "الآن",
-                unread: true
+                unread: true,
+                target: targetSection
             });
             saveNotifications(notifs);
             loadNotificationsUI();
@@ -781,7 +788,7 @@
                 return;
             }
 
-            notifs.forEach(n => {
+            notifs.forEach((n, index) => {
                 const item = document.createElement("div");
                 item.className = "notif-item";
                 item.style.borderColor = n.unread ? "var(--primary-color)" : "var(--border-color)";
@@ -789,6 +796,27 @@
                     <span>${escapeHtml(n.text)}</span>
                     <span class="notif-time">${n.time}</span>
                 `;
+
+                // حدث النقر على الإشعار للانتقال المباشر وتحديد كمقروء
+                item.onclick = function() {
+                    n.unread = false;
+                    let allNotifs = getNotifications();
+                    allNotifs[index].unread = false;
+                    saveNotifications(allNotifs);
+                    loadNotificationsUI();
+
+                    // إغلاق القائمة المنسدلة
+                    document.getElementById("notifDropdown").style.display = "none";
+                    
+                    // الانتقال للقسم المحدد
+                    if (n.target) {
+                        const targetBtn = document.querySelector(`.sector-btn[onclick*="${n.target}"]`);
+                        if (targetBtn) {
+                            switchSection(n.target, targetBtn);
+                        }
+                    }
+                };
+
                 body.appendChild(item);
             });
             updateNotificationBadge();
@@ -914,7 +942,6 @@
             });
         }
 
-        // ميزة البحث الفوري المنفذة برمجياً
         function searchCommunityPosts() {
             const query = document.getElementById("searchFeedInput").value.toLowerCase();
             const items = document.querySelectorAll(".feed-item");
@@ -931,7 +958,6 @@
             });
         }
 
-        // ميزة نسخ النص السريع
         function copyPostText(text) {
             navigator.clipboard.writeText(text).then(() => {
                 alert("📋 تم نسخ نص الإشارة إلى الحافظة بنجاح!");
@@ -981,7 +1007,7 @@
                 });
                 saveProfilePosts(profilePosts);
                 loadProfilePosts();
-                addNotification("تمت مشاركة منشور جديد بنجاح إلى ملفك الشخصي.");
+                addNotification("تمت مشاركة منشور جديد بنجاح إلى ملفك الشخصي.", "profile");
                 alert("🚀 تم ربط ومشاركة المنشور بنجاح على بروفايلك!");
             }
         }
@@ -1038,7 +1064,7 @@
             document.getElementById("postText").value = "";
             document.getElementById("postImageInput").value = "";
             loadPosts();
-            addNotification(isEmergency ? "🆘 تم إطلاق إشارة طوارئ جديدة بنجاح في الأسطول." : "🚀 تم إرسال إشارة رادار جديدة بنجاح.");
+            addNotification(isEmergency ? "🆘 تم إطلاق إشارة طوارئ جديدة بنجاح في الأسطول." : "🚀 تم إرسال إشارة رادار جديدة بنجاح.", "feed");
         }
 
         function reactPost(postId, reactionType) {
@@ -1077,7 +1103,7 @@
                 });
                 savePosts(posts);
                 loadPosts();
-                addNotification("تم إضافة تعليق جديد على أحد المنشورات في رادار الأسطول.");
+                addNotification("تم إضافة تعليق جديد على أحد المنشورات في رادار الأسطول.", "feed");
             }
         }
 
@@ -1119,7 +1145,7 @@
             const resBox = document.getElementById("calcResult");
             resBox.style.display = "block";
             resBox.innerHTML = `⛽ إجمالي استهلاك الوقود: ${totalLiters.toFixed(1)} لتر<br>💵 إجمالي تكلفة الرحلة: ${totalCost.toFixed(2)} جنيه`;
-            addNotification(`تم حساب رحلة جديدة مسافتها ${dist} كم بتكلفة ${totalCost.toFixed(2)} جنيه.`);
+            addNotification(`تم حساب رحلة جديدة مسافتها ${dist} كم بتكلفة ${totalCost.toFixed(2)} جنيه.`, "calculator");
         }
 
         function escapeHtml(text) {
@@ -1130,7 +1156,7 @@
 
     <!-- زر الانتقال بتصميم 3D وعنوان عالم جديد -->
     <div style="text-align: center; margin: 30px 0;">
-        <a href="index.html" class="road-btn" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 32px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #fff; text-decoration: none; border-radius: 16px; font-weight: bold; font-size: 16px; box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.4), inset 0 -3px 4px rgba(0, 0, 0, 0.3); transition: transform 0.1s ease, box-shadow 0.1s ease; border: 1px solid rgba(255, 255, 255, 0.2);">
+        <a href="Com.html" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 32px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #ffffff; text-decoration: none; border-radius: 16px; font-weight: bold; font-size: 16px; box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.4), inset 0 -3px 4px rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2);">
             🌐 عالم جديد
         </a>
     </div>
