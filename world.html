@@ -419,6 +419,9 @@
                 
                 <!-- زر أيقونة كاميرا "شارك رحلتك" أسفل تعديل السيرة الذاتية مباشرة -->
                 <button type="button" class="submit-btn" onclick="toggleSharePostBox()" style="width: 100%; padding: 8px; font-size: 12px; margin-top: 6px; background-color: var(--success-color);">📷 شارك رحلتك، صورك، وأجمل اللحظات</button>
+
+                <!-- زر إشعار وإرسال الأصدقاء (المديرين، المشرفين، والسائقين) المرتبط بحساباتهم -->
+                <button type="button" class="submit-btn" onclick="openNotificationModal()" style="width: 100%; padding: 8px; font-size: 12px; margin-top: 6px; background-color: var(--warning-color);">🔔 إشعار وإرسال الأصدقاء (المديرين، المشرفين، والسائقين)</button>
             </div>
         </div>
 
@@ -519,13 +522,36 @@
         </div>
     </div>
 
+    <!-- نافذة إرسال الإشعارات المخصصة للمديرين، المشرفين، والسائقين المرتبطة بحساباتهم -->
+    <div id="notificationModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.8); z-index:10000; justify-content:center; align-items:center; padding:15px;">
+        <div style="background:var(--card-bg); padding:20px; border-radius:12px; width:100%; max-width:400px; color:var(--text-color); border:1px solid var(--border-color);">
+            <h3 style="margin-bottom:10px; color:var(--warning-color);">🔔 إشعار وتنبيه الحسابات المرتبطة</h3>
+            <p style="font-size: 11px; color: var(--secondary-text); margin-bottom: 10px;">إرسال رسالة إشعار فورية تربط وتصل إلى حسابات الأصدقاء على المنصة حسب الفئة:</p>
+            <form onsubmit="sendTargetedNotification(event)">
+                <label style="font-size:10px; font-weight:bold;">الفئة المستهدفة:</label>
+                <select id="targetGroup" class="calc-input" style="margin-bottom:8px;">
+                    <option value="all">👥 جميع الحسابات (الكل)</option>
+                    <option value="managers">🛡️ المديرون</option>
+                    <option value="supervisors">⭐ المشرفون</option>
+                    <option value="drivers">🚛 السائقون</option>
+                </select>
+                <label style="font-size:10px; font-weight:bold;">نص الإشعار / التنبيه:</label>
+                <textarea id="notifText" class="calc-input" rows="3" style="margin-bottom:12px; resize:none;" placeholder="اكتب نص الإشعار الموجه للأصدقاء..." required></textarea>
+                <div style="display:flex; gap:6px;">
+                    <button type="submit" class="submit-btn" style="flex:1; background:var(--warning-color);">إرسال الإشعار 🚀</button>
+                    <button type="button" onclick="closeNotificationModal()" class="submit-btn" style="flex:1; background:var(--danger-color);">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // تكوين Firebase والربط المحلي
         const firebaseConfig = { databaseURL: "https://na2la-default-rtdb.firebaseio.com/" };
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.database();
 
-        let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [] };
+        let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [], notifications: [] };
 
         const localSavedData = localStorage.getItem('transportAppV60');
         if (localSavedData) {
@@ -579,6 +605,37 @@
 
         function closeEditProfileModal() {
             document.getElementById('editProfileModal').style.display = 'none';
+        }
+
+        function openNotificationModal() {
+            document.getElementById('notificationModal').style.display = 'flex';
+        }
+
+        function closeNotificationModal() {
+            document.getElementById('notificationModal').style.display = 'none';
+        }
+
+        function sendTargetedNotification(e) {
+            e.preventDefault();
+            const group = document.getElementById('targetGroup').value;
+            const text = document.getElementById('notifText').value;
+
+            if(!appData.notifications) appData.notifications = [];
+            let currentUser = (appData.drivers && appData.drivers.length > 0) ? appData.drivers[0].name : "مدير المنصة";
+
+            let newNotif = {
+                sender: currentUser,
+                target: group,
+                message: text,
+                date: new Date().toLocaleString()
+            };
+
+            appData.notifications.unshift(newNotif);
+            saveDataAll();
+
+            document.getElementById('notifText').value = '';
+            closeNotificationModal();
+            alert('تم إرسال الإشعار بنجاح لجميع الحسابات المرتبطة بالمنصة! 🔔');
         }
 
         function toggleSharePostBox() {
