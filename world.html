@@ -997,7 +997,7 @@
                 </select>
 
                 <!-- خانة البحث العصرية مع القائمة المنسدلة الشفافة -->
-                <label style="font-size:10px; font-weight:bold;">البحث السريع بالاسم أو الهاتف:</label>
+                <label style="font-size:10px; font-weight:bold;">البحث السريع بالاسم أو الهاتف (سحابياً ومحلياً):</label>
                 <div class="search-container-wrapper">
                     <input type="text" id="driverSearchInput" class="calc-input" placeholder="اكتب اسم السائق أو جزء منه للبحث..." oninput="handleAccountSearchInput()" autocomplete="off">
                     <!-- القائمة المنسدلة الشفافة والعصرية -->
@@ -1058,43 +1058,53 @@
             if (savedRole) document.getElementById('bio-role').innerText = savedRole;
         }
 
-        // الربط السحابي والمحلي المزدوج (Realtime Sync)
+        // الربط السحابي والمحلي المزدوج (Realtime Sync) مع ضمان قراءة كافة حسابات السائقين والمديرين
         db.ref('transportAppV60').on('value', (snapshot) => {
             const serverData = snapshot.val();
             if (serverData) {
                 appData = serverData;
                 
-                // التأكد من دعم كافة أشكال الأسماء في قاعدة البيانات (مثل الاسم العربي أو الإنجليزي أو الحقول البديلة)
+                // التأكد من توحيد استخراج أسماء الحسابات والرتب من كافة الأشكال المحتملة في قاعدة البيانات السحابية والمحلية
                 if (appData.drivers && Array.isArray(appData.drivers)) {
                     appData.drivers = appData.drivers.map(d => {
                         if (!d) return d;
                         let resolvedName = d.name || d.fullName || d.driverName || d.username || "";
+                        let resolvedRole = d.role || d.type || "سائق";
                         return {
                             ...d,
                             name: resolvedName,
                             fullName: resolvedName,
-                            role: d.role || d.type || "سائق",
+                            role: resolvedRole,
                             phone: d.phone || d.mobile || ""
                         };
                     });
                 }
 
                 if (!appData.drivers || !Array.isArray(appData.drivers) || appData.drivers.length === 0) {
-                    appData.drivers = [{
-                        id: "admin_emad",
-                        name: 'عماد', fullName: 'عماد', title: 'أسطورة الطريق', phone: '20114099799+', role: 'مدير نظام',
-                        birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
-                    }];
+                    appData.drivers = [
+                        { id: "admin_emad", name: 'عماد', fullName: 'عماد', title: 'أسطورة الطريق', phone: '20114099799+', role: 'مدير نظام', birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] },
+                        { id: "driver_abdo", name: 'Abdo', fullName: 'Abdo', title: 'أسطورة الطريق', phone: '+201554440996', role: 'مدير مساعد', birthdate: '1992/10/12', address: 'شبرامنت', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] },
+                        { id: "driver_ahmed", name: 'احمد', fullName: 'احمد', title: 'سائق معتمد', phone: '+20103698906', role: 'سائق', birthdate: '1995/05/05', address: 'الجيزة', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] }
+                    ];
                 }
             } else {
-                appData = {
-                    shipments: [], trucks: [], communityPosts: [], notifications: [], telegrams: [], messengerChats: [],
-                    drivers: [{
-                        id: "admin_emad",
-                        name: 'عماد', fullName: 'عماد', title: 'أسطورة الطريق', phone: '20114099799+', role: 'مدير نظام',
-                        birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
-                    }]
-                };
+                // محاولة جلب النسخ الاحتياطي المحلي في حال عدم توفر الاتصال السحابي اللحظي
+                const localBackup = localStorage.getItem('transportAppV60_local_backup');
+                if (localBackup) {
+                    try {
+                        appData = JSON.parse(localBackup);
+                    } catch(e) {
+                        appData = {};
+                    }
+                }
+                
+                if (!appData.drivers || !Array.isArray(appData.drivers) || appData.drivers.length === 0) {
+                    appData.drivers = [
+                        { id: "admin_emad", name: 'عماد', fullName: 'عماد', title: 'أسطورة الطريق', phone: '20114099799+', role: 'مدير نظام', birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] },
+                        { id: "driver_abdo", name: 'Abdo', fullName: 'Abdo', title: 'أسطورة الطريق', phone: '+201554440996', role: 'مدير مساعد', birthdate: '1992/10/12', address: 'شبرامنت', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] },
+                        { id: "driver_ahmed", name: 'احمد', fullName: 'احمد', title: 'سائق معتمد', phone: '+20103698906', role: 'سائق', birthdate: '1995/05/05', address: 'الجيزة', avatar: '', cover: '', avatarHistory: [], mediaArchive: [] }
+                    ];
+                }
                 saveDataAll();
             }
 
@@ -1179,13 +1189,23 @@
             }
         }
 
-        // --- نظام البحث والفلترة الموحد وشبكة الحسابات المحلية والسحابية (محدث للظهور التلقائي) ---
+        // --- نظام البحث والفلترة الموحد لإظهار جميع حسابات السائقين والمديرين تلقائياً سحابياً ومحلياً ---
         function renderDriversCheckboxList() {
             const container = document.getElementById("driversCheckboxList");
             if (!container) return;
             container.innerHTML = "";
 
             let drivers = appData.drivers || [];
+            if (!Array.isArray(drivers) || drivers.length === 0) {
+                // جلب الاحتياطي المحلي في حال عدم توفر القائمة
+                const localBackup = localStorage.getItem('transportAppV60_local_backup');
+                if (localBackup) {
+                    try {
+                        let parsed = JSON.parse(localBackup);
+                        if (parsed.drivers) drivers = parsed.drivers;
+                    } catch(e) {}
+                }
+            }
             if (!Array.isArray(drivers)) drivers = [];
 
             const searchInputEl = document.getElementById("driverSearchInput");
@@ -1196,7 +1216,7 @@
 
             let filtered = drivers.filter(d => {
                 if (!d) return false;
-                let name = (d.name || d.fullName || d.driverName || "").toLowerCase();
+                let name = (d.name || d.fullName || d.driverName || d.username || "").toLowerCase();
                 let phone = (d.phone || d.mobile || "").toLowerCase();
                 let role = (d.role || d.type || "").toLowerCase();
 
@@ -1204,7 +1224,7 @@
                 let roleMatch = true;
 
                 if (roleFilter === "supervisor") {
-                    roleMatch = role.includes("مشرف") || role.includes("supervisor") || role.includes("مدير") || role.includes("admin");
+                    roleMatch = role.includes("مشرف") || role.includes("supervisor") || role.includes("مدير") || role.includes("admin") || role.includes("مساعد");
                 } else if (roleFilter === "driver") {
                     roleMatch = !role.includes("مدير") && !role.includes("admin") && !role.includes("مشرف");
                 }
@@ -1698,7 +1718,7 @@
             input.value = "";
         }
 
-        // دالة الحفظ المزدوجة (محلياً وسحابياً)
+        // دالة الحفظ المزدوجة (محلياً وسحابياً) مع التخزين الاحتياطي الفوري
         function saveDataAll() {
             if (!appData.drivers) appData.drivers = [];
             let index = appData.drivers.findIndex(d => d && (d.id === "admin_emad" || (d.name && d.name.includes('عماد')) || (d.fullName && d.fullName.includes('عماد'))));
@@ -1713,7 +1733,7 @@
             // 1. الحفظ السحابي عبر Firebase
             db.ref('transportAppV60').set(appData);
 
-            // 2. الحفظ المحلي الاحتياطي عبر LocalStorage لضمان الاستمرارية الفورية
+            // 2. الحفظ المحلي الاحتياطي عبر LocalStorage لضمان قراءة الحسابات فوراً بلا انقطاع
             try {
                 localStorage.setItem('transportAppV60_local_backup', JSON.stringify(appData));
             } catch (e) {
