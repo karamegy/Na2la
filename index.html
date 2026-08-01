@@ -1983,6 +1983,263 @@
                 });
             }
         }
-    </script>
+            const sigCont = document.getElementById('inv-sig-container');
+            sigCont.innerHTML = s.signature ? `<p style="font-size:9px; font-weight:bold;">التوقيع الرقمي للمستلم:</p><img src="${s.signature}" style="max-width:140px; height:45px; border:1px solid #cbd5e1; border-radius:4px;"/>` : `<p style="font-size:9px; opacity:0.7;">لا يوجد توقيع رقمي مسجل لهذه الرحلة</p>`;
+        }
+
+        function openInvoiceStandalone() {
+            const printContent = document.getElementById('print-area').innerHTML;
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html lang="ar" dir="rtl">
+                <head>
+                    <title>فاتورة أسطورة الطريق الرسمية</title>
+                    <style>
+                        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; background: #f8fafc; color: #334155; }
+                        .invoice-card { background: #ffffff; padding: 20px; border-radius: 8px; border: 2px solid #2563eb; max-width: 500px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+                    </style>
+                </head>
+                <body>
+                    <div class="invoice-card">${printContent}</div>
+                    <script>window.print();<\/script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+        }
+
+        function exportInvoiceAsImage() {
+            const printArea = document.getElementById('print-area');
+            html2canvas(printArea).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `Invoice_${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        function exportInvoiceAsPDF() {
+            const { jsPDF } = window.jspdf;
+            const printArea = document.getElementById('print-area');
+            html2canvas(printArea).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190; 
+                const pageHeight = 295;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10;
+
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                pdf.save(`Invoice_${Date.now()}.pdf`);
+            });
+        }
+
+        function sendInvoiceWhatsApp() {
+            const sel = document.getElementById('invoice-select');
+            if (!sel || !sel.value) return;
+            const s = (appData.shipments || []).find(ship => ship.id == sel.value);
+            if (!s || !s.phone) return alert('رقم هاتف العميل غير موجود');
+            const msg = `🧾 تفاصيل فاتورة شحنتك من أسطورة الطريق:\n- رقم الرحلة: ${s.id}\n- الحمولة: ${s.item}\n- الأجرة: ${s.price} ج.م\n- الحالة: ${s.status}`;
+            window.open(`https://wa.me/${s.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function exportToExcel() {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') return;
+            let wsData = (appData.shipments || []).map(s => ({
+                "رقم الرحلة": s.id, "العميل": s.name, "الهاتف": s.phone, "العنوان": s.address,
+                "الحمولة": s.item, "السائق": s.assignedDriver, "الأجرة": s.price, "صافي الربح": s.netProfit, "الحالة": s.status
+            }));
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Shipments");
+            XLSX.writeFile(wb, "Transport_Hub_Report.xlsx");
+        }
+
+        function clearAll() {
+            if (currentUserRole !== 'admin') { alert('مسح البيانات متاح لمدير النظام الأساسي فقط!'); return; }
+            if (confirm('⚠️ تحذير خطير: هل أنت متأكد من مسح كافة البيانات بشكل نهائي؟')) {
+                localStorage.removeItem('transportAppV60');
+                db.ref('transportAppV60').remove();
+                location.reload();
+            }
+        }
+
+        function renderCRUDTable() {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') return;
+            const sec = document.getElementById('crud-section-select').value;
+            const headers = document.getElementById('crud-table-headers');
+            const body = document.getElementById('crud-table-body');
+            headers.innerHTML = ''; body.innerHTML = '';
+
+            if (sec === 'shipments') {
+                headers.innerHTML = `<th>العميل</th><th>الحمولة</th><th>السائق</th><th>الأجرة</th><th>الحالة</th><th>إجراءات</th>`;
+                (appData.shipments || []).forEach(s => {
+                    body.innerHTML += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.assignedDriver}</td><td>${s.price}</td><td>${s.status}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('shipments', ${s.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'posts') {
+                headers.innerHTML = `<th>العنوان</th><th>التاريخ</th><th>إجراءات</th>`;
+                (appData.posts || []).forEach(p => {
+                    body.innerHTML += `<tr><td>${p.title}</td><td>${p.date}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('posts', ${p.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'trucks') {
+                headers.innerHTML = `<th>المركبة</th><th>السائق</th><th>KM</th><th>إجراءات</th>`;
+                (appData.trucks || []).forEach(t => {
+                    body.innerHTML += `<tr><td>${t.number}</td><td>${t.driver}</td><td>${t.km}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('trucks', ${t.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'drivers') {
+                headers.innerHTML = `<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>إجراءات</th>`;
+                (appData.drivers || []).forEach(d => {
+                    body.innerHTML += `<tr><td>${d.name}</td><td>${d.phone}</td><td>${d.role}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('drivers', ${d.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'customers') {
+                headers.innerHTML = `<th>العميل</th><th>الهاتف</th><th>الديون</th><th>إجراءات</th>`;
+                (appData.customers || []).forEach(c => {
+                    body.innerHTML += `<tr><td>${c.name}</td><td>${c.phone}</td><td>${c.debt}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('customers', ${c.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'treasury') {
+                headers.innerHTML = `<th>النوع</th><th>المبلغ</th><th>البيان</th><th>إجراءات</th>`;
+                (appData.treasury || []).forEach(t => {
+                    body.innerHTML += `<tr><td>${t.type}</td><td>${t.amount}</td><td>${t.desc}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('treasury', ${t.id})">حذف</button></td></tr>`;
+                });
+            } else if (sec === 'expenses') {
+                headers.innerHTML = `<th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th>`;
+                (appData.expenses || []).forEach(e => {
+                    body.innerHTML += `<tr><td>${e.title}</td><td>${e.amount}</td><td>${e.date}</td><td><button type="button" class="btn-danger btn-sm" onclick="deleteItem('expenses', ${e.id})">حذف</button></td></tr>`;
+                });
+            }
+        }
+
+        function deleteItem(collection, id) {
+            if (currentUserRole !== 'admin') { alert('الحذف متاح لمدير النظام فقط!'); return; }
+            if (confirm('هل أنت متأكد من الحذف؟')) {
+                appData[collection] = (appData[collection] || []).filter(item => item.id !== id);
+                saveDataAll();
+                renderCRUDTable();
+                render();
+            }
+        }
+
+        function render() {
+            let targetShipments = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
+            let searchVal = document.getElementById('global-search').value.toLowerCase();
+            if (searchVal) {
+                targetShipments = targetShipments.filter(s => 
+                    s.name.toLowerCase().includes(searchVal) || s.item.toLowerCase().includes(searchVal) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(searchVal))
+                );
+            }
+
+            const shipmentsList = document.getElementById('shipments-list');
+            if (shipmentsList) {
+                shipmentsList.innerHTML = '';
+                if (targetShipments.length === 0) {
+                    shipmentsList.innerHTML = `<tr><td colspan="7" style="text-align:center; opacity:0.7;">لا توجد شحنات مطابقة</td></tr>`;
+                } else {
+                    targetShipments.forEach(s => {
+                        shipmentsList.innerHTML += `
+                            <tr>
+                                <td><b>${s.name}</b><br><small>${s.phone || ''}</small></td>
+                                <td>${s.item}</td>
+                                <td>${s.assignedDriver || 'عام'}</td>
+                                <td><b>${s.price} ج.م</b></td>
+                                <td style="color:var(--success);"><b>${s.netProfit || s.price} ج.م</b></td>
+                                <td><span class="badge bg-transit" onclick="cycleStatus(${s.id})" style="cursor:pointer;" title="اضغط لتغيير الحالة">${s.status}</span></td>
+                                <td>
+                                    ${(currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-main btn-sm" onclick="editShipment(${s.id})">تعديل</button>` : ''}
+                                    <button type="button" class="btn-warning btn-sm" onclick="showQR(${s.id})">QR</button>
+                                    <button type="button" class="btn-success btn-sm" onclick="sendWhatsAppNotice(${s.id})">واتساب</button>
+                                    ${(currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deleteItem('shipments', ${s.id})">حذف</button>` : ''}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            }
+
+            const totalRev = (appData.shipments || []).reduce((acc, s) => acc + s.price, 0);
+            const totalProfit = (appData.shipments || []).reduce((acc, s) => acc + (s.netProfit || s.price), 0);
+            const totalExpenses = (appData.expenses || []).reduce((acc, e) => acc + e.amount, 0);
+            const netNetProfit = totalProfit - totalExpenses;
+            const treasuryIn = (appData.treasury || []).filter(t => t.type === 'in').reduce((acc, t) => acc + t.amount, 0);
+            const treasuryOut = (appData.treasury || []).filter(t => t.type === 'out').reduce((acc, t) => acc + t.amount, 0);
+            const totalCash = treasuryIn - treasuryOut;
+            const totalDebts = (appData.customers || []).reduce((acc, c) => acc + c.debt, 0);
+
+            if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = (appData.shipments || []).length;
+            if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = `${totalRev} ج.م`;
+            if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = `${netNetProfit} ج.م`;
+            if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = `${totalCash} ج.م`;
+            if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = `${totalDebts} ج.م`;
+
+            const driverSelect = document.getElementById('ship-assigned-driver');
+            if (driverSelect) {
+                driverSelect.innerHTML = `<option value="">-- بدون تعيين (عام) --</option>`;
+                (appData.drivers || []).forEach(d => { driverSelect.innerHTML += `<option value="${d.name}">${d.name} (${d.role})</option>`; });
+            }
+
+            const treasuryList = document.getElementById('treasury-list');
+            if (treasuryList) {
+                treasuryList.innerHTML = '';
+                (appData.treasury || []).forEach(t => {
+                    treasuryList.innerHTML += `<tr><td style="color:${t.type==='in'?'var(--success)':'var(--danger)'};">${t.type==='in'?'إيداع(+)':'سحب(-)'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`;
+                });
+            }
+
+            const trucksList = document.getElementById('trucks-list');
+            if (trucksList) {
+                trucksList.innerHTML = '';
+                (appData.trucks || []).forEach(tr => {
+                    trucksList.innerHTML += `<tr><td>${tr.number}</td><td>${tr.driver}</td><td>${tr.km} KM</td><td>${tr.nextOil} KM</td><td>${tr.expiry}</td></tr>`;
+                });
+            }
+
+            const docsList = document.getElementById('docs-list');
+            if (docsList) {
+                docsList.innerHTML = '';
+                (appData.docs || []).forEach(doc => {
+                    docsList.innerHTML += `<div style="background:var(--bg); padding:5px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;"><span>📄 ${doc.title}</span><a href="${doc.file}" download="${doc.title}.png" class="btn-sm btn-main" target="_blank">تحميل</a></div>`;
+                });
+            }
+
+            const expensesList = document.getElementById('expenses-list');
+            if (expensesList) {
+                expensesList.innerHTML = '';
+                (appData.expenses || []).forEach(ex => {
+                    expensesList.innerHTML += `<tr><td>${ex.title}</td><td>${ex.amount} ج.م</td><td>${ex.date}</td></tr>`;
+                });
+            }
+
+            const customersList = document.getElementById('customers-list');
+            if (customersList) {
+                customersList.innerHTML = '';
+                (appData.customers || []).forEach(cust => {
+                    customersList.innerHTML += `<tr><td>${cust.name}</td><td>${cust.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${cust.debt} ج.م</td><td><button type="button" class="btn-success btn-sm" onclick="payDebt(${cust.id})">تحصيل</button></td></tr>`;
+                });
+            }
+
+            const chatList = document.getElementById('chat-messages-list');
+            if (chatList) {
+                chatList.innerHTML = '';
+                (appData.chat || []).forEach(c => {
+                    let bubbleClass = (c.role === 'admin' || c.role === 'supervisor') ? 'admin' : 'driver';
+                    chatList.innerHTML += `
+                        <div class="chat-bubble ${bubbleClass}">
+                            <div style="font-size:9px; opacity:0.8; margin-bottom:2px;"><b>${c.sender}</b> (${c.time})</div>
+                            <div>${c.text}</div>
+                        </div>
+                    `;
+                });
+                chatList.scrollTop = chatList.scrollHeight;
+            }
+        }
+
+</script>
 </body>
 </html>
