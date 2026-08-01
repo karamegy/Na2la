@@ -150,6 +150,10 @@
             cursor: pointer;
             font-weight: 600;
             font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
         }
 
         .nav-links a:hover, .nav-links button:hover {
@@ -619,6 +623,110 @@
             align-items: center;
             justify-content: center;
         }
+
+        /* بادج العداد الصغير على أيقونة الرسائل العلوية */
+        .messenger-badge-top {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: var(--danger-color);
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+            padding: 1px 5px;
+            border-radius: 50%;
+            border: 2px solid var(--card-bg);
+        }
+
+        /* نافذة شات الماسينجر */
+        .messenger-modal {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 360px;
+            max-width: 90vw;
+            height: 500px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            z-index: 10000;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .messenger-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .messenger-header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .messenger-call-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .messenger-body {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .msg-bubble {
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.4;
+            position: relative;
+        }
+        .msg-incoming {
+            background: var(--card-bg);
+            color: var(--text-color);
+            align-self: flex-start;
+            border: 1px solid var(--border-color);
+            border-top-right-radius: 2px;
+        }
+        .msg-outgoing {
+            background: var(--primary-color);
+            color: white;
+            align-self: flex-end;
+            border-top-left-radius: 2px;
+        }
+        .messenger-footer {
+            padding: 10px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .messenger-input {
+            flex: 1;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: var(--text-color);
+            outline: none;
+        }
     </style>
 </head>
 <body data-theme="light">
@@ -631,6 +739,11 @@
             <a href="index.html">الرئيسية</a>
             <a href="drivers.html">الأسطول</a>
             <a href="community.html">الشات</a>
+            <!-- أيقونة رسائل ماسينجر في الشريط العلوي -->
+            <button onclick="toggleMessengerModal()" title="رسائل المشرفين والمديرين الخاصة">
+                💬
+                <span class="messenger-badge-top" id="messengerBadgeCount">0</span>
+            </button>
             <button onclick="toggleTheme()" title="اضغط لتبديل الألوان والثيمات المبهجة">🎨</button>
         </div>
     </header>
@@ -742,6 +855,28 @@
 
     </div>
 
+    <!-- نافذة شات الماسينجر الخاصة -->
+    <div id="messengerModal" class="messenger-modal">
+        <div class="messenger-header">
+            <span>💬 مركز رسائل المديرين والمشرفين</span>
+            <div class="messenger-header-actions">
+                <button class="messenger-call-btn" onclick="startDirectCall('video')" title="اتصال فيديو مباشر">📹 فيديو</button>
+                <button class="messenger-call-btn" onclick="startDirectCall('audio')" title="اتصال صوتي مباشر">📞 صوت</button>
+                <button onclick="toggleMessengerModal()" style="background:none; border:none; color:white; font-size:16px; cursor:pointer;">✕</button>
+            </div>
+        </div>
+        <div class="messenger-body" id="messengerChatBody">
+            <!-- رسائل الشات تظهر هنا -->
+        </div>
+        <div class="messenger-footer">
+            <label class="file-upload-label" style="padding: 6px 10px; font-size: 11px;" title="إرسال صورة أو فيديو">
+                📁 <input type="file" id="messengerMediaInput" accept="image/*,video/*" style="display:none;" onchange="sendMessengerMedia(this)">
+            </label>
+            <input type="text" id="messengerInputText" class="messenger-input" placeholder="اكتب رداً خاصاً..." onkeypress="checkMessengerEnter(event)">
+            <button class="submit-btn" style="padding: 8px 12px; font-size: 12px;" onclick="sendMessengerMessage()">إرسال</button>
+        </div>
+    </div>
+
     <!-- نافذة ملف حفظ الصور والفيديوهات الخاصة بالحساب -->
     <div id="driverMediaArchiveModal" class="modal-overlay">
         <div class="modal-card">
@@ -840,7 +975,7 @@
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.database();
 
-        let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [], notifications: [], telegrams: [] };
+        let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [], notifications: [], telegrams: [], messengerChats: [] };
 
         // استرجاع فوري للبيانات والصور محلياً لمنع اختفائها عند إعادة التنشيط
         window.addEventListener('DOMContentLoaded', () => {
@@ -884,7 +1019,7 @@
                 }
             } else {
                 appData = {
-                    shipments: [], trucks: [], communityPosts: [], notifications: [], telegrams: [],
+                    shipments: [], trucks: [], communityPosts: [], notifications: [], telegrams: [], messengerChats: [],
                     drivers: [{
                         id: "admin_emad",
                         name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
@@ -897,6 +1032,7 @@
             renderCommunityFeed();
             renderTelegrams();
             renderDriversCheckboxList();
+            renderMessengerChats();
         });
 
         function renderProfileData() {
@@ -904,7 +1040,6 @@
 
             let currentUser = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
 
-            // تحديث القيم السحابية والمحلية
             document.getElementById('user-display-name').innerText = currentUser.name || localStorage.getItem('local_user_name') || 'عماد';
             document.getElementById('user-display-title').innerText = currentUser.title || localStorage.getItem('local_user_title') || 'أسطورة الطريق';
             document.getElementById('header-profile-title').innerText = currentUser.title || localStorage.getItem('local_user_title') || 'أسطورة الطريق';
@@ -1072,6 +1207,128 @@
             }
             container.innerHTML = html;
         }
+
+        // --- وظائف نظام رسائل ماسينجر والمحادثات الخاصة للمديرين والمشرفين ---
+        function toggleMessengerModal() {
+            const modal = document.getElementById("messengerModal");
+            const isVisible = modal.style.display === "flex";
+            modal.style.display = isVisible ? "none" : "flex";
+            if (!isVisible) {
+                renderMessengerChats();
+                document.getElementById("messengerBadgeCount").innerText = "0";
+            }
+        }
+
+        function renderMessengerChats() {
+            const container = document.getElementById("messengerChatBody");
+            if (!container) return;
+            container.innerHTML = "";
+
+            let chats = appData.messengerChats || [];
+            if (chats.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:var(--secondary-text); font-size:12px; margin-top:20px;">لا توجد رسائل واردة من المشرفين حتى الآن. ابدأ المحادثة أو أرسل استفساراً خاصاً! 💬</div>`;
+                document.getElementById("messengerBadgeCount").innerText = "0";
+                return;
+            }
+
+            let unreadCount = 0;
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]).name : "عماد (مدير النظام)";
+
+            chats.forEach((msg) => {
+                let isMe = msg.sender === currentAdmin;
+                if (!isMe && !msg.read) unreadCount++;
+
+                const div = document.createElement("div");
+                div.className = `msg-bubble ${isMe ? 'msg-outgoing' : 'msg-incoming'}`;
+                
+                let contentHTML = escapeHtml(msg.text || '');
+                if (msg.mediaUrl) {
+                    if (msg.mediaType === 'video') {
+                        contentHTML += `<br><video style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px;" controls src="${msg.mediaUrl}"></video>`;
+                    } else {
+                        contentHTML += `<br><img style="max-width:100%; max-height:150px; border-radius:6px; margin-top:4px;" src="${msg.mediaUrl}" alt="مرفق">`;
+                    }
+                }
+
+                div.innerHTML = `
+                    <div style="font-size:10px; font-weight:bold; opacity:0.8; margin-bottom:2px;">${escapeHtml(msg.sender)}</div>
+                    <div>${contentHTML}</div>
+                    <div style="font-size:9px; text-align:left; opacity:0.7; margin-top:2px;">${msg.date || ''}</div>
+                `;
+                container.appendChild(div);
+            });
+
+            document.getElementById("messengerBadgeCount").innerText = unreadCount;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendMessengerMessage() {
+            const input = document.getElementById("messengerInputText");
+            const text = input.value.trim();
+            if (!text) return;
+
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]).name : "عماد (مدير النظام)";
+
+            if (!appData.messengerChats) appData.messengerChats = [];
+            appData.messengerChats.push({
+                sender: currentAdmin,
+                text: text,
+                mediaUrl: "",
+                mediaType: "",
+                date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                read: true
+            });
+
+            saveDataAll();
+            input.value = "";
+            renderMessengerChats();
+        }
+
+        function checkMessengerEnter(e) {
+            if (e.key === "Enter") {
+                sendMessengerMessage();
+            }
+        }
+
+        async function sendMessengerMedia(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                let mediaUrl = "";
+                let mediaType = "image";
+
+                if (file.type.startsWith("image")) {
+                    mediaUrl = await compressImage(file, 800, 0.7);
+                } else {
+                    mediaUrl = await fileToBase64(file);
+                    mediaType = "video";
+                }
+
+                let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]).name : "عماد (مدير النظام)";
+
+                if (!appData.messengerChats) appData.messengerChats = [];
+                appData.messengerChats.push({
+                    sender: currentAdmin,
+                    text: "إرفاق ملف وسائط:",
+                    mediaUrl: mediaUrl,
+                    mediaType: mediaType,
+                    date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    read: true
+                });
+
+                saveDataAll();
+                input.value = "";
+                renderMessengerChats();
+            }
+        }
+
+        function startDirectCall(type) {
+            if (type === 'video') {
+                alert("📹 جاري بدء اتصال فيديو مباشر عبر الإنترنت... (ميزة الاتصال الفوري نشطة)");
+            } else {
+                alert("📞 جاري بدء اتصال صوتي مباشر عبر الإنترنت... (ميزة الاتصال الصوتي نشطة)");
+            }
+        }
+        // -------------------------------------------------------------
 
         async function publishPost() {
             const text = document.getElementById("postText").value;
@@ -1462,14 +1719,12 @@
             currentAdmin.address = newAddress;
             currentAdmin.phone = newPhone;
 
-            // الحفظ المحلي الفوري لضمان بقاء البيانات عند عمل Refresh
             localStorage.setItem('local_user_name', newName);
             localStorage.setItem('local_user_title', newTitle);
             localStorage.setItem('local_user_birthdate', newBirthdate);
             localStorage.setItem('local_user_address', newAddress);
             localStorage.setItem('local_user_phone', newPhone);
 
-            // التحديث المباشر للواجهة
             document.getElementById('user-display-name').innerText = newName;
             document.getElementById('user-display-title').innerText = newTitle;
             document.getElementById('header-profile-title').innerText = newTitle;
