@@ -1058,14 +1058,14 @@
             const serverData = snapshot.val();
             if (serverData) {
                 appData = serverData;
-                if (!appData.drivers || appData.drivers.length === 0) {
+                if (!appData.drivers || !Array.isArray(appData.drivers) || appData.drivers.length === 0) {
                     appData.drivers = [{
                         id: "admin_emad",
                         name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
                         birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
                     }];
                 } else {
-                    let index = appData.drivers.findIndex(d => d.id === "admin_emad");
+                    let index = appData.drivers.findIndex(d => d && (d.id === "admin_emad" || d.name === 'عماد (مدير النظام)'));
                     if (index === -1) {
                         appData.drivers[0].id = "admin_emad";
                     }
@@ -1092,13 +1092,14 @@
         });
 
         function syncLocalUserToDriversList() {
-            if (!appData.drivers) appData.drivers = [];
+            if (!appData.drivers || !Array.isArray(appData.drivers)) appData.drivers = [];
             const localName = localStorage.getItem('local_user_name') || 'عماد (مدير النظام)';
             const localPhone = localStorage.getItem('local_user_phone') || '01000000000';
             const localRole = localStorage.getItem('local_user_role') || 'مدير نظام';
 
-            let adminUser = appData.drivers.find(d => d.id === "admin_emad");
+            let adminUser = appData.drivers.find(d => d && (d.id === "admin_emad" || d.name === localName));
             if (adminUser) {
+                adminUser.id = "admin_emad";
                 if (!adminUser.name) adminUser.name = localName;
                 if (!adminUser.phone) adminUser.phone = localPhone;
                 if (!adminUser.role) adminUser.role = localRole;
@@ -1122,7 +1123,7 @@
         function renderProfileData() {
             if (!appData.drivers || appData.drivers.length === 0) return;
 
-            let currentUser = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+            let currentUser = appData.drivers.find(d => d && d.id === "admin_emad") || appData.drivers[0];
 
             document.getElementById('user-display-name').innerText = currentUser.name || localStorage.getItem('local_user_name') || 'عماد';
             document.getElementById('user-display-title').innerText = currentUser.title || localStorage.getItem('local_user_title') || 'أسطورة الطريق';
@@ -1157,17 +1158,23 @@
             }
         }
 
-        // --- الإصلاح الجذري لدالة البحث والفلترة وضمان ظهور جميع الحسابات ---
+        // --- نظام البحث والفلترة المتقدم لجميع الحسابات (مديرون، مشرفون، سائقون) ---
         function renderDriversCheckboxList() {
             const container = document.getElementById("driversCheckboxList");
             if (!container) return;
             container.innerHTML = "";
 
             let drivers = appData.drivers || [];
-            let searchQuery = (document.getElementById("driverSearchInput").value || "").toLowerCase().trim();
-            let roleFilter = document.getElementById("targetGroupFilter").value;
+            if (!Array.isArray(drivers)) drivers = [];
+
+            const searchInputEl = document.getElementById("driverSearchInput");
+            const targetGroupFilterEl = document.getElementById("targetGroupFilter");
+
+            let searchQuery = searchInputEl ? (searchInputEl.value || "").toLowerCase().trim() : "";
+            let roleFilter = targetGroupFilterEl ? targetGroupFilterEl.value : "all";
 
             let filtered = drivers.filter(d => {
+                if (!d) return false;
                 let name = (d.name || d.fullName || d.driverName || "بدون اسم").toLowerCase();
                 let phone = (d.phone || d.mobile || "").toLowerCase();
                 let role = (d.role || d.type || "سائق").toLowerCase();
@@ -1178,7 +1185,7 @@
                 if (roleFilter === "supervisor") {
                     roleMatch = role.includes("مشرف") || role.includes("supervisor") || role.includes("مدير") || role.includes("admin");
                 } else if (roleFilter === "driver") {
-                    roleMatch = !role.includes("مدير") && !role.includes("admin");
+                    roleMatch = !role.includes("مدير") && !role.includes("admin") && !role.includes("مشرف");
                 }
 
                 return nameMatch && roleMatch;
@@ -1198,10 +1205,10 @@
                 div.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; border-bottom: 1px solid var(--border-color); font-size: 11px;";
                 div.innerHTML = `
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1;">
-                        <input type="checkbox" class="driver-checkbox" value="${driverName}" onchange="updateSelectedCount()">
-                        <span>👤 ${driverName} <span style="color:var(--primary-color);">(${driverRole})</span></span>
+                        <input type="checkbox" class="driver-checkbox" value="${escapeHtml(driverName)}" onchange="updateSelectedCount()">
+                        <span>👤 ${escapeHtml(driverName)} <span style="color:var(--primary-color);">(${escapeHtml(driverRole)})</span></span>
                     </label>
-                    <span style="font-size: 10px; color: var(--secondary-text);">${driverPhone}</span>
+                    <span style="font-size: 10px; color: var(--secondary-text);">${escapeHtml(driverPhone)}</span>
                 `;
                 container.appendChild(div);
             });
@@ -1210,8 +1217,11 @@
 
         function handleAccountSearchInput() {
             renderDriversCheckboxList();
-            const query = (document.getElementById("driverSearchInput").value || "").trim().toLowerCase();
+            const searchInputEl = document.getElementById("driverSearchInput");
             const dropdown = document.getElementById("glassAccountsDropdown");
+            if (!searchInputEl || !dropdown) return;
+
+            const query = (searchInputEl.value || "").trim().toLowerCase();
 
             if (query.length === 0) {
                 dropdown.style.display = "none";
@@ -1219,7 +1229,10 @@
             }
 
             let drivers = appData.drivers || [];
+            if (!Array.isArray(drivers)) drivers = [];
+
             let matched = drivers.filter(d => {
+                if (!d) return false;
                 let name = (d.name || d.fullName || d.driverName || "").toLowerCase();
                 let phone = (d.phone || d.mobile || "").toLowerCase();
                 return name.includes(query) || phone.includes(query);
@@ -1236,8 +1249,8 @@
                 let dName = d.name || d.fullName || d.driverName || "مستخدم";
                 let dRole = d.role || d.type || "عضو";
                 html += `
-                    <div class="glass-account-item" onclick="selectAccountFromGlassDropdown('${dName}')">
-                        <span>👤 <b>${dName}</b> <span style="font-size:10px; opacity:0.8;">(${dRole})</span></span>
+                    <div class="glass-account-item" onclick="selectAccountFromGlassDropdown('${escapeHtml(dName)}')">
+                        <span>👤 <b>${escapeHtml(dName)}</b> <span style="font-size:10px; opacity:0.8;">(${escapeHtml(dRole)})</span></span>
                         <span style="font-size:10px; color:var(--primary-color);">تحديد ✓</span>
                     </div>
                 `;
@@ -1247,8 +1260,10 @@
         }
 
         function selectAccountFromGlassDropdown(name) {
-            document.getElementById("driverSearchInput").value = name;
-            document.getElementById("glassAccountsDropdown").style.display = "none";
+            const searchInputEl = document.getElementById("driverSearchInput");
+            const dropdown = document.getElementById("glassAccountsDropdown");
+            if (searchInputEl) searchInputEl.value = name;
+            if (dropdown) dropdown.style.display = "none";
             renderDriversCheckboxList();
 
             const checkboxes = document.querySelectorAll(".driver-checkbox");
@@ -1282,6 +1297,7 @@
 
         function renderCommunityFeed() {
             const container = document.getElementById("postsFeedContainer");
+            if (!container) return;
             container.innerHTML = "";
 
             if (!appData.communityPosts || appData.communityPosts.length === 0) {
@@ -1304,7 +1320,7 @@
                     post.comments.forEach((c, cIndex) => {
                         commentsHTML += `
                             <div class="comment-item">
-                                <div><b>${c.author}:</b> ${c.text}</div>
+                                <div><b>${escapeHtml(c.author)}:</b> ${escapeHtml(c.text)}</div>
                                 <button class="delete-btn" onclick="deleteComment(${index}, ${cIndex})">حذف</button>
                             </div>
                         `;
@@ -1319,7 +1335,7 @@
                 postDiv.setAttribute("data-type", post.type || "posts");
                 postDiv.innerHTML = `
                     <div class="feed-header">
-                        <span>🚛 ${post.author || 'سائق'} <span class="feed-time">(${post.date || 'الآن'})</span></span>
+                        <span>🚛 ${escapeHtml(post.author || 'سائق')} <span class="feed-time">(${post.date || 'الآن'})</span></span>
                         ${isOwnerOrAdmin ? `<button class="delete-btn" onclick="deletePost(${index})">🗑️ حذف</button>` : ''}
                     </div>
                     <div class="feed-text">${escapeHtml(post.text || '')}</div>
@@ -1575,6 +1591,7 @@
 
         function renderDriverArchiveGallery() {
             const container = document.getElementById('driverArchiveGalleryContainer');
+            if (!container) return;
             container.innerHTML = '';
 
             let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
@@ -1658,7 +1675,7 @@
 
         function saveDataAll() {
             if (!appData.drivers) appData.drivers = [];
-            let index = appData.drivers.findIndex(d => d.id === "admin_emad");
+            let index = appData.drivers.findIndex(d => d && (d.id === "admin_emad" || d.name === 'عماد (مدير النظام)'));
             if (index !== -1) {
                 appData.drivers[index].id = "admin_emad";
             } else if (appData.drivers.length > 0) {
@@ -1823,6 +1840,7 @@
 
         function renderAvatarGallery() {
             const container = document.getElementById('previousAvatarsGallery');
+            if (!container) return;
             container.innerHTML = '';
 
             let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
@@ -1969,7 +1987,7 @@
 
         function escapeHtml(text) {
             if (!text) return '';
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
     </script>
 </body>
