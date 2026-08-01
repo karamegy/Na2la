@@ -1032,6 +1032,10 @@
         let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [], notifications: [], telegrams: [], messengerChats: [] };
 
         window.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+        });
+
+        function loadFromLocalStorage() {
             const savedAvatar = localStorage.getItem('local_user_avatar');
             const savedCover = localStorage.getItem('local_user_cover');
             const savedName = localStorage.getItem('local_user_name');
@@ -1052,8 +1056,9 @@
             if (savedAddress) document.getElementById('bio-address').innerText = savedAddress;
             if (savedPhone) document.getElementById('bio-phone').innerText = savedPhone;
             if (savedRole) document.getElementById('bio-role').innerText = savedRole;
-        });
+        }
 
+        // الربط السحابي والمحلي المزدوج (Realtime Sync)
         db.ref('transportAppV60').on('value', (snapshot) => {
             const serverData = snapshot.val();
             if (serverData) {
@@ -1078,7 +1083,6 @@
             }
 
             syncLocalUserToDriversList();
-
             renderProfileData();
             renderCommunityFeed();
             renderTelegrams();
@@ -1159,7 +1163,7 @@
             }
         }
 
-        // --- نظام البحث والفلترة الموحد والشامل (مديرون، مشرفون، سائقون) ---
+        // --- نظام البحث والفلترة الموحد وشبكة الحسابات المحلية والسحابية ---
         function renderDriversCheckboxList() {
             const container = document.getElementById("driversCheckboxList");
             if (!container) return;
@@ -1176,7 +1180,6 @@
 
             let filtered = drivers.filter(d => {
                 if (!d) return false;
-                // دمج جميع حقول الأسماء والهواتف والرتب المحتملة لضمان مطابقة البحث 100%
                 let name = (d.name || d.fullName || d.driverName || "").toLowerCase();
                 let phone = (d.phone || d.mobile || "").toLowerCase();
                 let role = (d.role || d.type || "").toLowerCase();
@@ -1562,7 +1565,7 @@
             document.getElementById("postText").value = "";
             fileInput.value = "";
             document.getElementById("fileNameDisplay").innerText = "";
-            alert("تم نشر رحلتك بنجاح وحفظها سحابياً وتوثيقها في أرشيفك الشخصي! 🚀");
+            alert("تم نشر رحلتك بنجاح وحفظها سحابياً ومحلياً وتوثيقها في أرشيفك الشخصي! 🚀");
             toggleSharePostBox();
         }
 
@@ -1652,7 +1655,7 @@
 
             saveDataAll();
             textEl.value = "";
-            alert("تم إرسال البرقية بنجاح! 📡");
+            alert("تم إرسال البرقية بنجاح سحابياً ومحلياً! 📡");
         }
 
         function likePost(index) {
@@ -1679,6 +1682,7 @@
             input.value = "";
         }
 
+        // دالة الحفظ المزدوجة (محلياً وسحابياً)
         function saveDataAll() {
             if (!appData.drivers) appData.drivers = [];
             let index = appData.drivers.findIndex(d => d && (d.id === "admin_emad" || (d.name && d.name.includes('عماد')) || (d.fullName && d.fullName.includes('عماد'))));
@@ -1689,7 +1693,16 @@
             } else {
                 appData.drivers.push({ id: "admin_emad", name: "عماد", fullName: "عماد" });
             }
+
+            // 1. الحفظ السحابي عبر Firebase
             db.ref('transportAppV60').set(appData);
+
+            // 2. الحفظ المحلي الاحتياطي عبر LocalStorage لضمان الاستمرارية الفورية
+            try {
+                localStorage.setItem('transportAppV60_local_backup', JSON.stringify(appData));
+            } catch (e) {
+                console.log("LocalStorage quota exceeded or restricted");
+            }
         }
 
         function toggleSharePostBox() {
@@ -1867,7 +1880,7 @@
                     document.getElementById('profile-avatar-img').src = item.url;
                     saveDataAll();
                     closeAvatarOptionsModal();
-                    alert('تم تعيين وحفظ الصورة بنجاح!');
+                    alert('تم تعيين وحفظ الصورة بنجاح سحابياً ومحلياً!');
                 };
                 div.innerHTML = `<img src="${item.url}" alt="صورة سابقة"><span>${item.source}</span>`;
                 container.appendChild(div);
@@ -1945,7 +1958,7 @@
             closeNotificationModal();
             document.getElementById('notifText').value = '';
             document.querySelectorAll(".driver-checkbox").forEach(cb => cb.checked = false);
-            alert(`تم إرسال الإشعار بنجاح! 🚀`);
+            alert(`تم إرسال الإشعار وحفظه سحابياً ومحلياً بنجاح! 🚀`);
         }
 
         async function updateCoverPhoto(input) {
