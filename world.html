@@ -732,7 +732,7 @@
             top: 100%;
             left: 0;
             right: 0;
-            background: rgba(255, 255, 255, 0.75);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -746,27 +746,27 @@
         }
 
         [data-theme="dark"] .glass-accounts-dropdown {
-            background: rgba(30, 41, 59, 0.85);
+            background: rgba(30, 41, 59, 0.95);
             border-color: rgba(51, 65, 85, 0.5);
         }
 
         [data-theme="purple"] .glass-accounts-dropdown {
-            background: rgba(49, 46, 129, 0.85);
+            background: rgba(49, 46, 129, 0.95);
             border-color: rgba(76, 29, 149, 0.5);
         }
 
         [data-theme="sunset"] .glass-accounts-dropdown {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.95);
             border-color: rgba(254, 205, 211, 0.5);
         }
 
         [data-theme="emerald"] .glass-accounts-dropdown {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.95);
             border-color: rgba(167, 243, 208, 0.5);
         }
 
         [data-theme="cyberpunk"] .glass-accounts-dropdown {
-            background: rgba(24, 24, 27, 0.85);
+            background: rgba(24, 24, 27, 0.95);
             border-color: rgba(39, 39, 42, 0.5);
         }
 
@@ -992,14 +992,14 @@
                 <label style="font-size:10px; font-weight:bold;">فلترة الفئة المستهدفة:</label>
                 <select id="targetGroupFilter" class="calc-input" style="margin-bottom:8px;" onchange="renderDriversCheckboxList()">
                     <option value="all">👥 الكل (سائقون ومشرفون ومديرون)</option>
-                    <option value="supervisor">⭐ المشرفون فقط</option>
-                    <option value="driver">🚛 السائقون فقط</option>
+                    <option value="supervisor">⭐ المشرفون والمديرون</option>
+                    <option value="driver">🚛 السائقون</option>
                 </select>
 
                 <!-- خانة البحث العصرية مع القائمة المنسدلة الشفافة -->
-                <label style="font-size:10px; font-weight:bold;">البحث السريع بالاسم:</label>
+                <label style="font-size:10px; font-weight:bold;">البحث السريع بالاسم أو الهاتف:</label>
                 <div class="search-container-wrapper">
-                    <input type="text" id="driverSearchInput" class="calc-input" placeholder="اكتب الحرف الأول أو اسم السائق للبحث..." oninput="handleAccountSearchInput()" autocomplete="off">
+                    <input type="text" id="driverSearchInput" class="calc-input" placeholder="اكتب اسم السائق أو جزء منه للبحث..." oninput="handleAccountSearchInput()" autocomplete="off">
                     <!-- القائمة المنسدلة الشفافة والعصرية -->
                     <div id="glassAccountsDropdown" class="glass-accounts-dropdown"></div>
                 </div>
@@ -1157,7 +1157,7 @@
             }
         }
 
-        // --- التعديل الجذري وحل مشكلة عدم ظهور الحسابات في البحث والفلترة ---
+        // --- الإصلاح الجذري لدالة البحث والفلترة وضمان ظهور جميع الحسابات ---
         function renderDriversCheckboxList() {
             const container = document.getElementById("driversCheckboxList");
             if (!container) return;
@@ -1168,37 +1168,40 @@
             let roleFilter = document.getElementById("targetGroupFilter").value;
 
             let filtered = drivers.filter(d => {
-                let name = (d.name || "").toLowerCase();
-                let phone = (d.phone || "").toLowerCase();
-                let role = (d.role || "").toLowerCase();
+                let name = (d.name || d.fullName || d.driverName || "بدون اسم").toLowerCase();
+                let phone = (d.phone || d.mobile || "").toLowerCase();
+                let role = (d.role || d.type || "سائق").toLowerCase();
 
-                // مطابقة البحث بالاسم أو رقم الهاتف (مع دعم الحروف الصغيرة والكبيرة)
-                let nameMatch = name.includes(searchQuery) || phone.includes(searchQuery);
+                let nameMatch = searchQuery === "" || name.includes(searchQuery) || phone.includes(searchQuery);
                 let roleMatch = true;
 
                 if (roleFilter === "supervisor") {
                     roleMatch = role.includes("مشرف") || role.includes("supervisor") || role.includes("مدير") || role.includes("admin");
                 } else if (roleFilter === "driver") {
-                    // إذا كان الفلتر "السائقون فقط"، نجعل الشرط مرناً بحيث يظهر من ليس مديراً صريحاً أو يحتوي على كلمة سائق، أو نقوم بعرض الجميع إذا أردت تفادي إخفاء الحسابات الجديدة. هنا تم توسيع نطاق المطابقة لمنع اختفاء النتائج:
-                    roleMatch = role.includes("سائق") || role.includes("driver") || !role.includes("مدير");
+                    roleMatch = !role.includes("مدير") && !role.includes("admin");
                 }
+
                 return nameMatch && roleMatch;
             });
 
             if (filtered.length === 0) {
-                container.innerHTML = `<div style="font-size: 11px; color: var(--secondary-text); text-align: center; padding: 10px;">لا توجد نتائج مطابقة للبحث. تأكد من صحة الاسم أو جرب تغيير الفلتر إلى "الكل".</div>`;
+                container.innerHTML = `<div style="font-size: 11px; color: var(--secondary-text); text-align: center; padding: 10px;">لا توجد حسابات مطابقة. جرب مسح حقل البحث أو اختيار "الكل".</div>`;
                 return;
             }
 
             filtered.forEach((driver) => {
+                let driverName = driver.name || driver.fullName || driver.driverName || "مستخدم بدون اسم";
+                let driverRole = driver.role || driver.type || "عضو";
+                let driverPhone = driver.phone || driver.mobile || "";
+
                 const div = document.createElement("div");
                 div.style.cssText = "display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; border-bottom: 1px solid var(--border-color); font-size: 11px;";
                 div.innerHTML = `
                     <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1;">
-                        <input type="checkbox" class="driver-checkbox" value="${driver.name || 'مستخدم'}" onchange="updateSelectedCount()">
-                        <span>👤 ${driver.name || 'بدون اسم'} <span style="color:var(--primary-color);">(${driver.role || 'عضو'})</span></span>
+                        <input type="checkbox" class="driver-checkbox" value="${driverName}" onchange="updateSelectedCount()">
+                        <span>👤 ${driverName} <span style="color:var(--primary-color);">(${driverRole})</span></span>
                     </label>
-                    <span style="font-size: 10px; color: var(--secondary-text);">${driver.phone || ''}</span>
+                    <span style="font-size: 10px; color: var(--secondary-text);">${driverPhone}</span>
                 `;
                 container.appendChild(div);
             });
@@ -1216,7 +1219,11 @@
             }
 
             let drivers = appData.drivers || [];
-            let matched = drivers.filter(d => (d.name || "").toLowerCase().includes(query) || (d.phone || "").includes(query));
+            let matched = drivers.filter(d => {
+                let name = (d.name || d.fullName || d.driverName || "").toLowerCase();
+                let phone = (d.phone || d.mobile || "").toLowerCase();
+                return name.includes(query) || phone.includes(query);
+            });
 
             if (matched.length === 0) {
                 dropdown.innerHTML = `<div style="padding: 8px; text-align: center; font-size: 11px; color: var(--secondary-text);">لا توجد حسابات مطابقة</div>`;
@@ -1226,9 +1233,11 @@
 
             let html = "";
             matched.forEach(d => {
+                let dName = d.name || d.fullName || d.driverName || "مستخدم";
+                let dRole = d.role || d.type || "عضو";
                 html += `
-                    <div class="glass-account-item" onclick="selectAccountFromGlassDropdown('${d.name}')">
-                        <span>👤 <b>${d.name}</b> <span style="font-size:10px; opacity:0.8;">(${d.role || 'عضو'})</span></span>
+                    <div class="glass-account-item" onclick="selectAccountFromGlassDropdown('${dName}')">
+                        <span>👤 <b>${dName}</b> <span style="font-size:10px; opacity:0.8;">(${dRole})</span></span>
                         <span style="font-size:10px; color:var(--primary-color);">تحديد ✓</span>
                     </div>
                 `;
