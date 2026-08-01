@@ -846,11 +846,23 @@
             const serverData = snapshot.val();
             if (serverData) {
                 appData = serverData;
+                // التأكد من وجود السائق الأساسي بالمعرف الثابت
+                if (!appData.drivers || appData.drivers.length === 0) {
+                    appData.drivers = [{
+                        id: "admin_emad",
+                        name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
+                        birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
+                    }];
+                }
             } else {
-                appData.drivers = [{
-                    name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
-                    birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
-                }];
+                appData = {
+                    shipments: [], trucks: [], communityPosts: [], notifications: [], telegrams: [],
+                    drivers: [{
+                        id: "admin_emad",
+                        name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
+                        birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
+                    }]
+                };
                 saveDataAll();
             }
             renderProfileData();
@@ -860,14 +872,10 @@
         });
 
         function renderProfileData() {
-            if (!appData.drivers || appData.drivers.length === 0) {
-                appData.drivers = [{
-                    name: 'عماد (مدير النظام)', title: 'أسطورة الطريق', phone: '01000000000', role: 'مدير نظام',
-                    birthdate: '1990/01/01', address: 'القاهرة / الجيزة - بجوار الأهرامات', avatar: '', cover: '', avatarHistory: [], mediaArchive: []
-                }];
-            }
+            if (!appData.drivers || appData.drivers.length === 0) return;
 
-            let currentUser = appData.drivers[0];
+            // البحث عن السائق الأساسي بالمعرف الثابت أو استخدام العنصر الأول كاحتياطي
+            let currentUser = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
 
             document.getElementById('user-display-name').innerText = currentUser.name || 'عماد';
             document.getElementById('user-display-title').innerText = currentUser.title || 'أسطورة الطريق';
@@ -883,14 +891,20 @@
             let userPosts = (appData.communityPosts || []).filter(p => p.author && p.author.includes(currentUser.name));
             document.getElementById('acc-posts-count').innerText = userPosts.length;
 
-            if (currentUser.avatar) {
-                document.getElementById('profile-avatar-img').src = currentUser.avatar;
+            // تطبيق الصورة الشخصية بدقة
+            const avatarImg = document.getElementById('profile-avatar-img');
+            if (currentUser.avatar && currentUser.avatar.trim() !== "") {
+                avatarImg.src = currentUser.avatar;
             } else {
-                document.getElementById('profile-avatar-img').src = "https://via.placeholder.com/150";
+                avatarImg.src = "https://via.placeholder.com/150";
             }
 
-            if (currentUser.cover) {
-                document.getElementById('cover-section-bg').style.backgroundImage = `url(${currentUser.cover})`;
+            // تطبيق صورة الغلاف بدقة
+            const coverSection = document.getElementById('cover-section-bg');
+            if (currentUser.cover && currentUser.cover.trim() !== "") {
+                coverSection.style.backgroundImage = `url(${currentUser.cover})`;
+            } else {
+                coverSection.style.backgroundImage = `linear-gradient(135deg, #2563eb, #1e293b, #059669)`;
             }
         }
 
@@ -979,7 +993,7 @@
                     });
                 }
 
-                let currentUser = (appData.drivers && appData.drivers.length > 0) ? appData.drivers[0].name : "عماد (مدير النظام)";
+                let currentUser = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]).name : "عماد (مدير النظام)";
                 let isOwnerOrAdmin = (post.author === currentUser || currentUser.includes("مدير") || currentUser.includes("مشرف"));
 
                 const postDiv = document.createElement("div");
@@ -1050,10 +1064,11 @@
             }
 
             if (!appData.drivers || appData.drivers.length === 0) {
-                appData.drivers = [{ name: "عماد (مدير النظام)", mediaArchive: [] }];
+                appData.drivers = [{ id: "admin_emad", name: "عماد (مدير النظام)", mediaArchive: [] }];
             }
 
-            let currentUser = appData.drivers[0].name || "عماد (مدير النظام)";
+            let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+            let currentUser = currentAdmin.name || "عماد (مدير النظام)";
 
             const newPost = {
                 author: currentUser,
@@ -1070,8 +1085,8 @@
             appData.communityPosts.unshift(newPost);
 
             if (mediaUrl) {
-                if (!appData.drivers[0].mediaArchive) appData.drivers[0].mediaArchive = [];
-                appData.drivers[0].mediaArchive.unshift({
+                if (!currentAdmin.mediaArchive) currentAdmin.mediaArchive = [];
+                currentAdmin.mediaArchive.unshift({
                     url: mediaUrl,
                     type: mediaType,
                     date: new Date().toLocaleDateString()
@@ -1120,7 +1135,8 @@
             const container = document.getElementById('driverArchiveGalleryContainer');
             container.innerHTML = '';
 
-            let archive = (appData.drivers && appData.drivers[0] && appData.drivers[0].mediaArchive) ? appData.drivers[0].mediaArchive : [];
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            let archive = (currentAdmin && currentAdmin.mediaArchive) ? currentAdmin.mediaArchive : [];
 
             if (archive.length === 0) {
                 container.innerHTML = `<div style="grid-column: span 2; text-align:center; font-size:11px; color:var(--secondary-text); padding: 20px;">لا توجد صور أو فيديوهات محفوظة في أرشيفك الشخصي بعد.</div>`;
@@ -1142,9 +1158,12 @@
 
         function deleteFromDriverArchive(index) {
             if (confirm("هل تريد حذف هذه الوسائط من أرشيف حسابك؟")) {
-                appData.drivers[0].mediaArchive.splice(index, 1);
-                saveDataAll();
-                renderDriverArchiveGallery();
+                let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+                if (currentAdmin && currentAdmin.mediaArchive) {
+                    currentAdmin.mediaArchive.splice(index, 1);
+                    saveDataAll();
+                    renderDriverArchiveGallery();
+                }
             }
         }
 
@@ -1156,7 +1175,8 @@
                 return;
             }
 
-            let currentUser = (appData.drivers && appData.drivers.length > 0) ? appData.drivers[0].name : "عماد (مدير النظام)";
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            let currentUser = currentAdmin ? currentAdmin.name : "عماد (مدير النظام)";
 
             if (!appData.telegrams) appData.telegrams = [];
             appData.telegrams.unshift({
@@ -1181,7 +1201,8 @@
             const text = input.value;
             if (text.trim() === "") return;
 
-            let currentUser = (appData.drivers && appData.drivers.length > 0) ? appData.drivers[0].name : "عماد (مدير النظام)";
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            let currentUser = currentAdmin ? currentAdmin.name : "عماد (مدير النظام)";
 
             if (!appData.communityPosts[index].comments) appData.communityPosts[index].comments = [];
             appData.communityPosts[index].comments.push({
@@ -1194,6 +1215,12 @@
         }
 
         function saveDataAll() {
+            if (appData.drivers && appData.drivers.length > 0) {
+                let index = appData.drivers.findIndex(d => d.id === "admin_emad");
+                if (index === -1) {
+                    appData.drivers[0].id = "admin_emad";
+                }
+            }
             db.ref('transportAppV60').set(appData);
         }
 
@@ -1260,12 +1287,13 @@
 
         function openEditProfileModal() { 
             document.getElementById('editProfileModal').style.display = 'flex'; 
-            if(appData.drivers && appData.drivers[0]) {
-                document.getElementById('edit-name').value = appData.drivers[0].name || '';
-                document.getElementById('edit-title').value = appData.drivers[0].title || '';
-                document.getElementById('edit-birthdate').value = appData.drivers[0].birthdate || '';
-                document.getElementById('edit-address').value = appData.drivers[0].address || '';
-                document.getElementById('edit-phone').value = appData.drivers[0].phone || '';
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            if(currentAdmin) {
+                document.getElementById('edit-name').value = currentAdmin.name || '';
+                document.getElementById('edit-title').value = currentAdmin.title || '';
+                document.getElementById('edit-birthdate').value = currentAdmin.birthdate || '';
+                document.getElementById('edit-address').value = currentAdmin.address || '';
+                document.getElementById('edit-phone').value = currentAdmin.phone || '';
             }
         }
         function closeEditProfileModal() { document.getElementById('editProfileModal').style.display = 'none'; }
@@ -1295,13 +1323,17 @@
         }
 
         function saveNewAvatarData(base64Url, sourceMethod) {
-            if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
-            appData.drivers[0].avatar = base64Url;
-            appData.drivers[0].avatarSource = sourceMethod;
+            if (!appData.drivers || appData.drivers.length === 0) {
+                appData.drivers = [{ id: "admin_emad" }];
+            }
+            let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+            currentAdmin.id = "admin_emad";
+            currentAdmin.avatar = base64Url;
+            currentAdmin.avatarSource = sourceMethod;
 
-            if (!appData.drivers[0].avatarHistory) appData.drivers[0].avatarHistory = [];
-            appData.drivers[0].avatarHistory = appData.drivers[0].avatarHistory.filter(item => item.url !== base64Url);
-            appData.drivers[0].avatarHistory.unshift({
+            if (!currentAdmin.avatarHistory) currentAdmin.avatarHistory = [];
+            currentAdmin.avatarHistory = currentAdmin.avatarHistory.filter(item => item.url !== base64Url);
+            currentAdmin.avatarHistory.unshift({
                 url: base64Url,
                 source: sourceMethod,
                 date: new Date().toLocaleDateString()
@@ -1316,7 +1348,8 @@
             const container = document.getElementById('previousAvatarsGallery');
             container.innerHTML = '';
 
-            let history = (appData.drivers && appData.drivers[0] && appData.drivers[0].avatarHistory) ? appData.drivers[0].avatarHistory : [];
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            let history = (currentAdmin && currentAdmin.avatarHistory) ? currentAdmin.avatarHistory : [];
 
             if (history.length === 0) {
                 container.innerHTML = `<div style="grid-column: span 3; text-align:center; font-size:11px; color:var(--secondary-text);">لا توجد صور سابقة مرفوعة بعد.</div>`;
@@ -1327,7 +1360,8 @@
                 const div = document.createElement('div');
                 div.className = 'gallery-item';
                 div.onclick = () => {
-                    appData.drivers[0].avatar = item.url;
+                    let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+                    currentAdmin.avatar = item.url;
                     saveDataAll();
                     closeAvatarOptionsModal();
                     alert('تم تعيين وحفظ الصورة بنجاح!');
@@ -1339,12 +1373,16 @@
 
         function saveProfileChanges(e) {
             e.preventDefault();
-            if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
-            appData.drivers[0].name = document.getElementById('edit-name').value;
-            appData.drivers[0].title = document.getElementById('edit-title').value;
-            appData.drivers[0].birthdate = document.getElementById('edit-birthdate').value;
-            appData.drivers[0].address = document.getElementById('edit-address').value;
-            appData.drivers[0].phone = document.getElementById('edit-phone').value;
+            if (!appData.drivers || appData.drivers.length === 0) {
+                appData.drivers = [{ id: "admin_emad" }];
+            }
+            let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+            currentAdmin.id = "admin_emad";
+            currentAdmin.name = document.getElementById('edit-name').value;
+            currentAdmin.title = document.getElementById('edit-title').value;
+            currentAdmin.birthdate = document.getElementById('edit-birthdate').value;
+            currentAdmin.address = document.getElementById('edit-address').value;
+            currentAdmin.phone = document.getElementById('edit-phone').value;
             saveDataAll();
             closeEditProfileModal();
             alert('تم تحديث الملف الشخصي بنجاح! 💾');
@@ -1366,7 +1404,8 @@
 
             let recipients = [];
             selectedCheckboxes.forEach(cb => recipients.push(cb.value));
-            let currentUser = (appData.drivers && appData.drivers.length > 0) ? appData.drivers[0].name : "عماد (مدير النظام)";
+            let currentAdmin = (appData.drivers && appData.drivers.length > 0) ? (appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0]) : null;
+            let currentUser = currentAdmin ? currentAdmin.name : "عماد (مدير النظام)";
 
             if(!appData.notifications) appData.notifications = [];
             appData.notifications.unshift({
@@ -1386,8 +1425,12 @@
         async function updateCoverPhoto(input) {
             if (input.files && input.files.length === 0) return;
             const base64 = await fileToBase64(input.files[0]);
-            if (!appData.drivers || appData.drivers.length === 0) appData.drivers = [{}];
-            appData.drivers[0].cover = base64;
+            if (!appData.drivers || appData.drivers.length === 0) {
+                appData.drivers = [{ id: "admin_emad" }];
+            }
+            let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
+            currentAdmin.id = "admin_emad";
+            currentAdmin.cover = base64;
             saveDataAll();
             alert('تم تحديث وحفظ صورة الغلاف بنجاح سحابياً! 🌅');
         }
@@ -1400,7 +1443,7 @@
             }
         }
 
-        // دالة تبديل الألوان والثيمات بشكل مبهج وحديث (ضوئي، مظلم، بنفسجي، غروبي، زمردي، سايبربانك)
+        // دالة تبديل الألوان والثيمات بشكل مبهج وحديث
         function toggleTheme() {
             const body = document.body;
             const currentTheme = body.getAttribute("data-theme") || "light";
