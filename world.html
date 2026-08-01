@@ -842,6 +842,18 @@
 
         let appData = { shipments: [], trucks: [], drivers: [], communityPosts: [], notifications: [], telegrams: [] };
 
+        // استرجاع فوري للصور محلياً لمنع اختفائها عند إعادة التنشيط
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedAvatar = localStorage.getItem('local_user_avatar');
+            const savedCover = localStorage.getItem('local_user_cover');
+            if (savedAvatar) {
+                document.getElementById('profile-avatar-img').src = savedAvatar;
+            }
+            if (savedCover) {
+                document.getElementById('cover-section-bg').style.backgroundImage = `url(${savedCover})`;
+            }
+        });
+
         db.ref('transportAppV60').on('value', (snapshot) => {
             const serverData = snapshot.val();
             if (serverData) {
@@ -897,15 +909,27 @@
             const avatarImg = document.getElementById('profile-avatar-img');
             if (currentUser.avatar && currentUser.avatar.trim() !== "") {
                 avatarImg.src = currentUser.avatar;
+                localStorage.setItem('local_user_avatar', currentUser.avatar);
             } else {
-                avatarImg.src = "https://via.placeholder.com/150";
+                const localAvatar = localStorage.getItem('local_user_avatar');
+                if (localAvatar) {
+                    avatarImg.src = localAvatar;
+                } else {
+                    avatarImg.src = "https://via.placeholder.com/150";
+                }
             }
 
             const coverSection = document.getElementById('cover-section-bg');
             if (currentUser.cover && currentUser.cover.trim() !== "") {
                 coverSection.style.backgroundImage = `url(${currentUser.cover})`;
+                localStorage.setItem('local_user_cover', currentUser.cover);
             } else {
-                coverSection.style.backgroundImage = `linear-gradient(135deg, #2563eb, #1e293b, #059669)`;
+                const localCover = localStorage.getItem('local_user_cover');
+                if (localCover) {
+                    coverSection.style.backgroundImage = `url(${localCover})`;
+                } else {
+                    coverSection.style.backgroundImage = `linear-gradient(135deg, #2563eb, #1e293b, #059669)`;
+                }
             }
         }
 
@@ -1254,7 +1278,6 @@
             });
         }
 
-        // دالة ضغط الصور لمنع تضخم حجم البيانات وفشل الحفظ في فايربيس
         function compressImage(file, maxWidth = 800, quality = 0.7) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -1369,6 +1392,10 @@
             currentAdmin.avatar = base64Url;
             currentAdmin.avatarSource = sourceMethod;
 
+            // حفظ محلي فوري لمنع أي اختفاء عند الريفريش
+            localStorage.setItem('local_user_avatar', base64Url);
+            document.getElementById('profile-avatar-img').src = base64Url;
+
             if (!currentAdmin.avatarHistory) currentAdmin.avatarHistory = [];
             currentAdmin.avatarHistory = currentAdmin.avatarHistory.filter(item => item.url !== base64Url);
             currentAdmin.avatarHistory.unshift({
@@ -1379,7 +1406,7 @@
 
             saveDataAll();
             closeAvatarOptionsModal();
-            alert(`تم تحديث وحفظ الصورة الشخصية بنجاح سحابياً! 📸`);
+            alert(`تم تحديث وحفظ الصورة الشخصية بنجاح سحابياً ومحلياً! 📸`);
         }
 
         function renderAvatarGallery() {
@@ -1400,6 +1427,8 @@
                 div.onclick = () => {
                     let currentAdmin = appData.drivers.find(d => d.id === "admin_emad") || appData.drivers[0];
                     currentAdmin.avatar = item.url;
+                    localStorage.setItem('local_user_avatar', item.url);
+                    document.getElementById('profile-avatar-img').src = item.url;
                     saveDataAll();
                     closeAvatarOptionsModal();
                     alert('تم تعيين وحفظ الصورة بنجاح!');
@@ -1463,7 +1492,6 @@
         async function updateCoverPhoto(input) {
             if (input.files && input.files.length === 0) return;
             
-            // ضغط صورة الغلاف لتجنب الحجم الزائد
             const compressedBase64 = await compressImage(input.files[0], 1000, 0.7);
 
             if (!appData.drivers || appData.drivers.length === 0) {
@@ -1473,10 +1501,12 @@
             currentAdmin.id = "admin_emad";
             currentAdmin.cover = compressedBase64;
             
-            // تحديث عرض الغلاف فوراً محلياً وتحديث قاعدة البيانات
+            // حفظ محلي فوري وتطبيق مباشر
+            localStorage.setItem('local_user_cover', compressedBase64);
             document.getElementById('cover-section-bg').style.backgroundImage = `url(${compressedBase64})`;
+            
             saveDataAll();
-            alert('تم تحديث وحفظ صورة الغلاف بنجاح سحابياً! 🌅');
+            alert('تم تحديث وحفظ صورة الغلاف بنجاح سحابياً ومحلياً! 🌅');
         }
 
         function sharePostItem() {
