@@ -29,10 +29,6 @@
             padding-bottom: 90px;
         }
 
-        nav {
-            display: none;
-        }
-
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -79,7 +75,7 @@
         .community-cover {
             width: 100%;
             height: 220px;
-            background-image: url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80');
+            background-color: #0f172a;
             background-size: cover;
             background-position: center;
             position: relative;
@@ -506,7 +502,7 @@
         <div id="adminPanel" class="admin-dashboard-panel">
             <h3>
                 <span>🛠️ لوحة إدارة النظام والتحكم (المدير)</span>
-                <span style="font-size: 0.75rem; color: #22c55e;">● النظام متصل</span>
+                <span id="dbStatusIndicator" style="font-size: 0.75rem; color: #22c55e;">● متصل بقاعدة البيانات</span>
             </h3>
             
             <div class="admin-stats-grid">
@@ -516,7 +512,7 @@
                 </div>
                 <div class="admin-stat-card">
                     <span>حالة المزامنة السحابية</span>
-                    <strong style="color: #22c55e;">نشط</strong>
+                    <strong style="color: #22c55e;">Firestore نشط</strong>
                 </div>
                 <div class="admin-stat-card">
                     <span>حالة النظام</span>
@@ -537,7 +533,7 @@
                     <label for="activeAccountIsAdmin" style="color: #38bdf8; font-weight: bold; cursor: pointer; margin-bottom: 0;">منح صلاحيات مشرف / مدير مجموعة (يسمح بتغيير الغلاف)</label>
                 </div>
                 <button class="btn" style="background:#38bdf8; color:#0f172a; font-weight:bold;" onclick="saveActiveAccountProfile()">حفظ وتطبيق بيانات الحساب فوراً</button>
-                <button class="btn btn-danger" onclick="clearAllCommunityData()" style="padding: 8px;">🗑️ مسح وتنظيف كافة بيانات المنشورات والمجتمع</button>
+                <button class="btn btn-danger" onclick="clearAllCommunityDataFromCloud()" style="padding: 8px;">🗑️ مسح وتنظيف كافة بيانات المنشورات والمجتمع من السحابة</button>
             </div>
         </div>
 
@@ -561,7 +557,7 @@
         <h2 class="section-title" onclick="toggleTeamSection()" title="اضغط للإظهار أو الإخفاء">
             <span>👥 أبرز السائقين والمشرفين في الجروب (اضغط للطي/الإظهار)</span>
             <div>
-                <span style="font-size: 0.75rem; color: var(--primary-color); margin-left: 8px;" onclick="event.stopPropagation(); renderTeamMembers();">🔄 تحديث</span>
+                <span style="font-size: 0.75rem; color: var(--primary-color); margin-left: 8px;" onclick="event.stopPropagation(); loadTeamMembersFromCloud();">🔄 تحديث</span>
                 <span id="teamToggleArrow" style="font-size: 0.8rem;">▼</span>
             </div>
         </h2>
@@ -594,72 +590,102 @@
         <!-- حائط المنشورات والجروب العام -->
         <h2 class="section-title" style="cursor: default;">📢 حائط جروب نقلة العام</h2>
         <div id="groupFeedStream">
-            <p style="text-align: center; color: #94a3b8; padding: 20px;">جاري تحميل منشورات المجتمع...</p>
+            <p style="text-align: center; color: #94a3b8; padding: 20px;">جاري تحميل منشورات المجتمع من السحابة...</p>
         </div>
 
     </div>
 
-    <script>
-        let currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user')) || {
+    <!-- سكربت التطبيق وقاعدة البيانات السحابية (Firebase Firestore) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+        import { 
+            getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, 
+            query, orderBy, onSnapshot, setDoc, getDoc 
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            authDomain: "n2la-642d3.firebaseapp.com",
+            projectId: "n2la-642d3",
+            storageBucket: "n2la-642d3.firebasestorage.app",
+            messagingSenderId: "1085749997466",
+            appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+            measurementId: "G-KH4ZYFB8LC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+
+        // جعل الدوال متاحة عالمياً في النطاق العام (Window) لتعمل مع أحداث الأزرار HTML
+        window.db = db;
+        window.currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user')) || {
             name: "عماد (سائق ربع نقل)",
             details: "سيارة ربع نقل - تجهيز حبال وصندوق",
             isAdmin: true
         };
 
-        function updateAccountUI() {
+        window.updateAccountUI = function() {
             const adminNavBtn = document.getElementById('adminNavBtn');
             const coverUploadWrapper = document.getElementById('coverUploadWrapper');
 
-            if (currentAccount.isAdmin) {
+            if (window.currentAccount.isAdmin) {
                 adminNavBtn.style.display = 'flex';
                 if(coverUploadWrapper) coverUploadWrapper.style.display = 'block';
             } else {
                 adminNavBtn.style.display = 'none';
                 if(coverUploadWrapper) coverUploadWrapper.style.display = 'block';
             }
-            document.getElementById('postingAsAccountName').innerText = currentAccount.name;
-            loadCommunityCover();
-            renderTeamMembers();
-            renderPlatformAccountsDirectory();
+            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name;
+            loadCommunityCoverFromCloud();
+            window.loadTeamMembersFromCloud();
+            window.renderPlatformAccountsDirectory();
         }
 
-        // دالة تحميل صورة الغلاف المحدثة وتطبيقها بقوة على العنصر
-        function loadCommunityCover() {
-            const savedCover = localStorage.getItem('na2la_community_cover');
-            const coverArea = document.getElementById('communityCoverArea');
-            if (savedCover && coverArea) {
-                coverArea.style.backgroundImage = `url('${savedCover}')`;
+        // جلب صورة الغلاف من السحابة (Firestore)
+        async function loadCommunityCoverFromCloud() {
+            try {
+                const coverDocRef = doc(db, "community_settings", "cover");
+                const docSnap = await getDoc(coverDocRef);
+                const coverArea = document.getElementById('communityCoverArea');
+                if (coverArea) {
+                    if (docSnap.exists() && docSnap.data().url) {
+                        coverArea.style.backgroundImage = `url('${docSnap.data().url}')`;
+                    } else {
+                        coverArea.style.backgroundImage = `url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80')`;
+                    }
+                }
+            } catch (e) {
+                console.error("خطأ في جلب الغلاف:", e);
             }
         }
+        window.loadCommunityCoverFromCloud = loadCommunityCoverFromCloud;
 
-        // دالة رفع وتغيير غلاف الجروب من المعرض بشكل فوري وحفظه في الذاكرة المحلية
-        function handleCoverUpload(input) {
+        // رفع وتغيير غلاف الجروب وحفظه سحابياً (بدون قيود حجم localStorage)
+        window.handleCoverUpload = async function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
                 const reader = new FileReader();
                 
-                reader.onload = function(e) {
+                reader.onload = async function(e) {
                     const base64Image = e.target.result;
-                    // تخزين الصورة في التخزين المحلي لتظل ثابتة
-                    localStorage.setItem('na2la_community_cover', base64Image);
-                    
-                    const coverArea = document.getElementById('communityCoverArea');
-                    if (coverArea) {
-                        coverArea.style.backgroundImage = `url('${base64Image}')`;
+                    try {
+                        await setDoc(doc(db, "community_settings", "cover"), { url: base64Image });
+                        const coverArea = document.getElementById('communityCoverArea');
+                        if (coverArea) {
+                            coverArea.style.backgroundImage = `url('${base64Image}')`;
+                        }
+                        alert("✔ تم تغيير وتحديث غلاف الجروب وحفظه في السحابة بنجاح!");
+                    } catch (err) {
+                        alert("حدث خطأ أثناء حفظ الغلاف سحابياً: " + err.message);
                     }
-                    
-                    alert("✔ تم تغيير وتحديث غلاف الجروب بنجاح وتم ربطه بقاعدة المنصة!");
                 };
-                
-                reader.onerror = function() {
-                    alert("حدث خطأ أثناء قراءة الصورة، يرجى المحاولة مرة أخرى.");
-                };
-
                 reader.readAsDataURL(file);
             }
         }
 
-        function toggleTeamSection() {
+        window.toggleTeamSection = function() {
             const container = document.getElementById('teamMembersContainer');
             const arrow = document.getElementById('teamToggleArrow');
             if (container.style.display === 'none' || container.style.display === '') {
@@ -671,71 +697,80 @@
             }
         }
 
-        function renderTeamMembers() {
+        // تحميل أعضاء الفريق من سحابة Firestore
+        window.loadTeamMembersFromCloud = async function() {
             const container = document.getElementById('teamMembersGrid');
-            let members = JSON.parse(localStorage.getItem('na2la_team_members')) || [
-                { name: "عماد", role: "سائق رئيسي", avatar: "", isOnline: true },
-                { name: "أحمد محمود", role: "مشرف النظام", avatar: "", isOnline: true },
-                { name: "إبراهيم حسن", role: "سائق ربع نقل", avatar: "", isOnline: false }
-            ];
+            try {
+                const querySnapshot = await getDocs(collection(db, "community_team"));
+                let members = [];
+                querySnapshot.forEach((docItem) => {
+                    members.push({ id: docItem.id, ...docItem.data() });
+                });
 
-            container.innerHTML = members.map((m, index) => {
-                let avatarStyle = m.avatar ? `background-image: url('${m.avatar}');` : '';
-                let avatarIcon = m.avatar ? '' : '👤';
-                let onlineStatus = (m.isOnline !== undefined) ? m.isOnline : (index % 2 === 0);
-                let statusClass = onlineStatus ? 'online' : 'offline';
-                let statusLabel = onlineStatus ? 'متصل الآن' : 'غير متصل';
+                if (members.length === 0) {
+                    // بيانات افتراضية أولية إذا كانت القاعدة فارغة
+                    members = [
+                        { name: "عماد", role: "سائق رئيسي", avatar: "", isOnline: true },
+                        { name: "أحمد محمود", role: "مشرف النظام", avatar: "", isOnline: true }
+                    ];
+                }
 
-                return `
-                    <div class="team-card">
-                        <div>
-                            <div class="team-avatar-container">
-                                <div class="team-avatar" style="${avatarStyle}">${avatarIcon}</div>
-                                <div class="status-dot ${statusClass}" title="${statusLabel}"></div>
+                container.innerHTML = members.map((m) => {
+                    let avatarStyle = m.avatar ? `background-image: url('${m.avatar}');` : '';
+                    let avatarIcon = m.avatar ? '' : '👤';
+                    let statusClass = m.isOnline ? 'online' : 'offline';
+                    let statusLabel = m.isOnline ? 'متصل الآن' : 'غير متصل';
+
+                    return `
+                        <div class="team-card">
+                            <div>
+                                <div class="team-avatar-container">
+                                    <div class="team-avatar" style="${avatarStyle}">${avatarIcon}</div>
+                                    <div class="status-dot ${statusClass}" title="${statusLabel}"></div>
+                                </div>
+                                <h5>${m.name}</h5>
+                                <span class="role-badge">${m.role}</span>
+                                <div class="status-text ${statusClass}">● ${statusLabel}</div>
                             </div>
-                            <h5>${m.name}</h5>
-                            <span class="role-badge">${m.role}</span>
-                            <div class="status-text ${statusClass}">● ${statusLabel}</div>
+                            <div class="team-card-actions">
+                                <button class="btn btn-danger" onclick="removeTeamMember('${m.id}')" style="padding: 6px; font-size: 0.75rem; width: 100%;">🗑️ إزالة من الجروب</button>
+                            </div>
                         </div>
-                        <div class="team-card-actions">
-                            <button class="btn btn-danger" onclick="removeTeamMember(${index})" style="padding: 6px; font-size: 0.75rem; width: 100%;">🗑️ إزالة من الجروب</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error("خطأ في جلب الفريق:", e);
+            }
         }
 
-        function removeTeamMember(index) {
-            let members = JSON.parse(localStorage.getItem('na2la_team_members')) || [];
-            members.splice(index, 1);
-            localStorage.setItem('na2la_team_members', JSON.stringify(members));
-            renderTeamMembers();
-            renderPlatformAccountsDirectory();
-            alert(`✔ تمت إزالة العضو بنجاح.`);
+        window.removeTeamMember = async function(docId) {
+            if(confirm("هل تريد إزالة هذا العضو من الجروب؟")) {
+                try {
+                    await deleteDoc(doc(db, "community_team", docId));
+                    window.loadTeamMembersFromCloud();
+                    alert("✔ تمت إزالة العضو بنجاح.");
+                } catch(e) {
+                    alert("خطأ أثناء الحذف: " + e.message);
+                }
+            }
         }
 
         function getRegisteredPlatformAccounts() {
-            let defaultAccounts = [
+            return [
                 { name: "عماد", role: "سائق ربع نقل", avatar: "", isOnline: true },
                 { name: "أحمد محمود", role: "مشرف النظام", avatar: "", isOnline: true },
                 { name: "إبراهيم حسن", role: "سائق نقل ثقيل", avatar: "", isOnline: false },
                 { name: "محمود سعيد", role: "سائق ميكروباص", avatar: "", isOnline: true },
                 { name: "خالد عبد الله", role: "ممول وعميل", avatar: "", isOnline: false }
             ];
-            return JSON.parse(localStorage.getItem('na2la_all_platform_accounts')) || defaultAccounts;
         }
 
-        function renderPlatformAccountsDirectory(filterText = "") {
+        window.renderPlatformAccountsDirectory = function(filterText = "") {
             const container = document.getElementById('platformAccountsList');
             let accounts = getRegisteredPlatformAccounts();
 
             if (filterText) {
                 accounts = accounts.filter(acc => acc.name.toLowerCase().includes(filterText.toLowerCase()) || acc.role.toLowerCase().includes(filterText.toLowerCase()));
-            }
-
-            if (accounts.length === 0) {
-                container.innerHTML = `<div style="padding: 10px; text-align: center; color: #94a3b8; font-size: 0.85rem;">لا توجد حسابات مطابقة للبحث</div>`;
-                return;
             }
 
             container.innerHTML = accounts.map(acc => {
@@ -751,61 +786,69 @@
             }).join('');
         }
 
-        function filterPlatformAccounts() {
-            const query = document.getElementById('platformAccountSearchInput').value;
-            renderPlatformAccountsDirectory(query);
+        window.filterPlatformAccounts = function() {
+            const queryText = document.getElementById('platformAccountSearchInput').value;
+            window.renderPlatformAccountsDirectory(queryText);
         }
 
-        function addAccountToCommunityTeam(name, role, avatar, isOnline) {
-            let members = JSON.parse(localStorage.getItem('na2la_team_members')) || [];
-            if (members.some(m => m.name === name)) {
-                alert(`الحساب "${name}" موجود بالفعل في قائمة أعضاء الجروب.`);
-                return;
+        window.addAccountToCommunityTeam = async function(name, role, avatar, isOnline) {
+            try {
+                await addDoc(collection(db, "community_team"), { name, role, avatar, isOnline });
+                window.loadTeamMembersFromCloud();
+                alert(`✔ تمت إضافة "${name}" إلى جروب السائقين بنجاح سحابياً!`);
+            } catch(e) {
+                alert("حدث خطأ أثناء الإضافة: " + e.message);
             }
-            members.push({ name, role, avatar, isOnline });
-            localStorage.setItem('na2la_team_members', JSON.stringify(members));
-            renderTeamMembers();
-            alert(`✔ تمت إضافة "${name}" إلى جروب السائقين بنجاح!`);
         }
 
-        function toggleAdminPanel() {
+        window.toggleAdminPanel = function() {
             const panel = document.getElementById('adminPanel');
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-            refreshAdminStats();
+            window.refreshAdminStats();
         }
 
-        function refreshAdminStats() {
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
-            document.getElementById('adminTotalPosts').innerText = posts.length;
-            document.getElementById('activeAccountName').value = currentAccount.name;
-            document.getElementById('activeAccountDetails').value = currentAccount.details;
-            document.getElementById('activeAccountIsAdmin').checked = !!currentAccount.isAdmin;
+        window.refreshAdminStats = async function() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "community_posts"));
+                document.getElementById('adminTotalPosts').innerText = querySnapshot.size;
+            } catch(e) {
+                document.getElementById('adminTotalPosts').innerText = "0";
+            }
+            document.getElementById('activeAccountName').value = window.currentAccount.name;
+            document.getElementById('activeAccountDetails').value = window.currentAccount.details;
+            document.getElementById('activeAccountIsAdmin').checked = !!window.currentAccount.isAdmin;
         }
 
-        function saveActiveAccountProfile() {
+        window.saveActiveAccountProfile = function() {
             const newName = document.getElementById('activeAccountName').value.trim();
             const newDetails = document.getElementById('activeAccountDetails').value.trim();
             const newIsAdmin = document.getElementById('activeAccountIsAdmin').checked;
             
-            if (newName) currentAccount.name = newName;
-            if (newDetails) currentAccount.details = newDetails;
-            currentAccount.isAdmin = newIsAdmin;
+            if (newName) window.currentAccount.name = newName;
+            if (newDetails) window.currentAccount.details = newDetails;
+            window.currentAccount.isAdmin = newIsAdmin;
 
-            localStorage.setItem('na2la_logged_user', JSON.stringify(currentAccount));
-            updateAccountUI();
+            localStorage.setItem('na2la_logged_user', JSON.stringify(window.currentAccount));
+            window.updateAccountUI();
             alert("✔ تم تحديث بيانات وصلاحيات الحساب المتصل بنجاح!");
         }
 
-        function clearAllCommunityData() {
-            if(confirm("هل أنت متأكد من رغبتك في حذف جميع منشورات الجروب؟")) {
-                localStorage.removeItem('na2la_community_posts');
-                renderGroupFeed();
-                refreshAdminStats();
-                alert("تم مسح جميع المنشورات بنجاح.");
+        window.clearAllCommunityDataFromCloud = async function() {
+            if(confirm("هل أنت متأكد من رغبتك في حذف جميع منشورات الجروب من السحابة نهائياً؟")) {
+                try {
+                    const querySnapshot = await getDocs(collection(db, "community_posts"));
+                    let deletions = querySnapshot.docs.map(d => deleteDoc(doc(db, "community_posts", d.id)));
+                    await Promise.all(deletions);
+                    window.refreshAdminStats();
+                    alert("تم مسح جميع المنشورات من السحابة بنجاح.");
+                } catch(e) {
+                    alert("حدث خطأ أثناء الحذف: " + e.message);
+                }
             }
         }
 
-        function publishGroupPost() {
+        // نشر منشور جديد في Firestore
+        window.publishGroupPost = function() {
             const text = document.getElementById('groupPostText').value.trim();
             const fileInput = document.getElementById('groupPostImage');
 
@@ -817,161 +860,164 @@
             if (fileInput.files[0]) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    savePostToStorage(text, e.target.result);
+                    savePostToCloud(text, e.target.result);
                 };
                 reader.readAsDataURL(fileInput.files[0]);
             } else {
-                savePostToStorage(text, "");
+                savePostToCloud(text, "");
             }
         }
 
-        function savePostToStorage(text, imgData) {
-            const savedAvatar = localStorage.getItem('driverAvatar_' + currentAccount.name) || "";
-            const newPost = {
-                id: Date.now(),
-                author: currentAccount.name,
-                avatar: savedAvatar,
-                text: text,
-                image: imgData,
-                time: "الآن",
-                likes: 0,
-                likedByMe: false,
-                comments: []
-            };
+        async function savePostToCloud(text, imgData) {
+            try {
+                await addDoc(collection(db, "community_posts"), {
+                    author: window.currentAccount.name,
+                    avatar: "",
+                    text: text,
+                    image: imgData,
+                    timestamp: new Date(),
+                    time: "الآن",
+                    likes: 0,
+                    likedBy: [],
+                    comments: []
+                });
 
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
-            posts.unshift(newPost);
-            localStorage.setItem('na2la_community_posts', JSON.stringify(posts));
-
-            document.getElementById('groupPostText').value = "";
-            document.getElementById('groupPostImage').value = "";
-            renderGroupFeed();
-            refreshAdminStats();
+                document.getElementById('groupPostText').value = "";
+                document.getElementById('groupPostImage').value = "";
+                window.refreshAdminStats();
+                alert("🚀 تم النشر في الجروب بنجاح وظهر لجميع السائقين سحابياً!");
+            } catch (e) {
+                alert("خطأ أثناء النشر: " + e.message);
+            }
         }
 
-        function toggleLike(postId) {
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
-            posts = posts.map(p => {
-                if (p.id === postId) {
-                    if (p.likedByMe) {
-                        p.likes = Math.max(0, p.likes - 1);
-                        p.likedByMe = false;
-                    } else {
-                        p.likes += 1;
-                        p.likedByMe = true;
-                    }
+        // تفاعل الإعجاب (Likes) سحابياً
+        window.toggleLike = async function(postId, likesCount, likedByArray) {
+            try {
+                const postRef = doc(db, "community_posts", postId);
+                let currentUserName = window.currentAccount.name;
+                let likedBy = likedByArray || [];
+                let isLiked = likedBy.includes(currentUserName);
+
+                if (isLiked) {
+                    likedBy = likedBy.filter(name => name !== currentUserName);
+                    likesCount = Math.max(0, likesCount - 1);
+                } else {
+                    likedBy.push(currentUserName);
+                    likesCount += 1;
                 }
-                return p;
-            });
-            localStorage.setItem('na2la_community_posts', JSON.stringify(posts));
-            renderGroupFeed();
+
+                await updateDoc(postRef, {
+                    likes: likesCount,
+                    likedBy: likedBy
+                });
+            } catch(e) {
+                console.error("خطأ في تحديث الإعجاب:", e);
+            }
         }
 
-        function toggleComments(postId) {
+        window.toggleComments = function(postId) {
             const section = document.getElementById(`commentsSection_${postId}`);
             section.style.display = section.style.display === 'block' ? 'none' : 'block';
         }
 
-        function addComment(postId) {
+        // إضافة تعليق سحابياً
+        window.addComment = async function(postId, existingComments) {
             const input = document.getElementById(`commentInput_${postId}`);
             const commentText = input.value.trim();
 
             if (!commentText) return;
 
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
-            posts = posts.map(p => {
-                if (p.id === postId) {
-                    if (!p.comments) p.comments = [];
-                    p.comments.push({
-                        author: currentAccount.name,
-                        text: commentText,
-                        time: "الآن"
-                    });
-                }
-                return p;
-            });
+            try {
+                const postRef = doc(db, "community_posts", postId);
+                let comments = existingComments || [];
+                comments.push({
+                    author: window.currentAccount.name,
+                    text: commentText,
+                    time: "الآن"
+                });
 
-            localStorage.setItem('na2la_community_posts', JSON.stringify(posts));
-            renderGroupFeed();
+                await updateDoc(postRef, { comments: comments });
+                input.value = "";
+            } catch(e) {
+                alert("خطأ في إضافة التعليق: " + e.message);
+            }
         }
 
-        function renderGroupFeed() {
+        // الاستماع الفوري للتحديثات (Real-time Listener) لمنشورات الجروب
+        function initRealtimeFeed() {
             const container = document.getElementById('groupFeedStream');
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
+            const q = query(collection(db, "community_posts"), orderBy("timestamp", "desc"));
 
-            if (posts.length === 0) {
-                container.innerHTML = "<p style='text-align: center; color: #94a3b8; padding: 20px;'>لا توجد منشورات في الجروب حالياً. كن أول المشاركين!</p>";
-                return;
-            }
+            onSnapshot(q, (snapshot) => {
+                let posts = [];
+                snapshot.forEach((docItem) => {
+                    posts.push({ id: docItem.id, ...docItem.data() });
+                });
 
-            container.innerHTML = posts.map(p => {
-                let avatarStyle = p.avatar ? `background-image: url('${p.avatar}');` : '';
-                let avatarText = p.avatar ? '' : '🚛';
-                let commentsHtml = (p.comments || []).map(c => `
-                    <div class="comment-item">
-                        <strong>${c.author}:</strong> ${c.text}
-                    </div>
-                `).join('');
+                if (posts.length === 0) {
+                    container.innerHTML = "<p style='text-align: center; color: #94a3b8; padding: 20px;'>لا توجد منشورات في الجروب حالياً. كن أول المشاركين!</p>";
+                    return;
+                }
 
-                return `
-                    <div class="post-card">
-                        <div class="post-header">
-                            <div class="post-avatar" style="${avatarStyle}">${avatarText}</div>
-                            <div class="post-author-info">
-                                <h4>${p.author}</h4>
-                                <span>${p.time}</span>
+                container.innerHTML = posts.map(p => {
+                    let avatarStyle = p.avatar ? `background-image: url('${p.avatar}');` : '';
+                    let avatarText = p.avatar ? '' : '🚛';
+                    let likedByMe = (p.likedBy || []).includes(window.currentAccount.name);
+                    
+                    let commentsHtml = (p.comments || []).map(c => `
+                        <div class="comment-item">
+                            <strong>${c.author}:</strong> ${c.text}
+                        </div>
+                    `).join('');
+
+                    // ترميز مصفوفة المعجبين والتعليقات لتمريرها بأمان في الدوال
+                    let likedByJson = JSON.stringify(p.likedBy || []).replace(/"/g, '&quot;');
+                    let commentsJson = JSON.stringify(p.comments || []).replace(/"/g, '&quot;');
+
+                    return `
+                        <div class="post-card">
+                            <div class="post-header">
+                                <div class="post-avatar" style="${avatarStyle}">${avatarText}</div>
+                                <div class="post-author-info">
+                                    <h4>${p.author}</h4>
+                                    <span>${p.time}</span>
+                                </div>
+                            </div>
+                            <div class="post-body">${p.text}</div>
+                            ${p.image ? `<img src="${p.image}" class="post-image">` : ''}
+                            
+                            <div class="post-actions">
+                                <button class="post-action-btn ${likedByMe ? 'active' : ''}" onclick="toggleLike('${p.id}', ${p.likes || 0}, ${likedByJson})">
+                                    👍 أعجبني (${p.likes || 0})
+                                </button>
+                                <button class="post-action-btn" onclick="toggleComments('${p.id}')">
+                                    💬 تعليقات (${(p.comments || []).length})
+                                </button>
+                            </div>
+
+                            <div id="commentsSection_${p.id}" class="comments-section">
+                                <div id="commentsList_${p.id}">
+                                    ${commentsHtml}
+                                </div>
+                                <div class="comment-input-group">
+                                    <input type="text" id="commentInput_${p.id}" placeholder="اكتب تعليقاً...">
+                                    <button class="btn" style="width: auto; padding: 6px 15px; font-size:0.8rem;" onclick="addComment('${p.id}', ${commentsJson})">إرسال</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="post-body">${p.text}</div>
-                        ${p.image ? `<img src="${p.image}" class="post-image">` : ''}
-                        
-                        <div class="post-actions">
-                            <button class="post-action-btn ${p.likedByMe ? 'active' : ''}" onclick="toggleLike(${p.id})">
-                                👍 أعجبني (${p.likes || 0})
-                            </button>
-                            <button class="post-action-btn" onclick="toggleComments(${p.id})">
-                                💬 تعليقات (${(p.comments || []).length})
-                            </button>
-                        </div>
-
-                        <div id="commentsSection_${p.id}" class="comments-section">
-                            <div id="commentsList_${p.id}">
-                                ${commentsHtml}
-                            </div>
-                            <div class="comment-input-group">
-                                <input type="text" id="commentInput_${p.id}" placeholder="اكتب تعليقاً...">
-                                <button class="btn" style="width: auto; padding: 6px 15px; font-size:0.8rem;" onclick="addComment(${p.id})">إرسال</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            }, (error) => {
+                console.error("خطأ في جلب الحائط سحابياً:", error);
+                container.innerHTML = "<p style='text-align: center; color: #ef4444; padding: 20px;'>حدث خطأ في الاتصال بقاعدة البيانات السحابية.</p>";
+            });
         }
 
         window.onload = function() {
-            updateAccountUI();
-            renderGroupFeed();
+            window.updateAccountUI();
+            initRealtimeFeed();
         };
     </script>
-
-    <!-- سكربت Firebase المرتبط بالقاعدة الأصلية -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.5.com/firebasejs/10.12.2/firebase-app.js"; // تم تعديلها أو تركها كما كانت
-      import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
-        authDomain: "n2la-642d3.firebaseapp.com",
-        projectId: "n2la-642d3",
-        storageBucket: "n2la-642d3.firebasestorage.app",
-        messagingSenderId: "1085749997466",
-        appId: "1:1085749997466:web:13e5535dc6d2312397d423",
-        measurementId: "G-KH4ZYFB8LC"
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const analytics = getAnalytics(app);
-    </script>
-
 </body>
 </html>
