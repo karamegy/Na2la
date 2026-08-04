@@ -524,7 +524,7 @@
     <div class="bottom-nav">
         <a href="index.html" class="bottom-nav-item">
             <span class="icon">🏠</span>
-            <span>الرئيسية</span>
+            <span>الرئيسية</span> مفعل
         </a>
         <a href="community.html" class="bottom-nav-item">
             <span class="icon">👥</span>
@@ -537,21 +537,19 @@
     </div>
 
     <script>
-        // هيكل الحساب المتصل الحالي (محفوظ في قاعدة بيانات LocalStorage مع الحفاظ على التوافقية)
+        // هيكل الحساب المتصل الحالي مع الربط بـ localStorage المشترك للمنصة
         let currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user')) || {
-            name: "عماد (سائق ربع نقل)",
-            details: "سيارة ربع نقل - تجهيز حبال وصندوق",
-            role: "driver" // الخيارات: driver (سائق - محدود), supervisor (مشرف - أعلى), admin (مدير - كلي)
+            name: "عماد",
+            details: "سائق ربع نقل - تجهيز حبال وصندوق",
+            role: "driver" 
         };
 
-        // التأكد من وجود خاصية الصلاحية افتراضياً
         if (!currentAccount.role) currentAccount.role = "driver";
 
         function updateAccountUI() {
             document.getElementById('profileNameDisplay').innerText = currentAccount.name;
             document.getElementById('profileDetailsDisplay').innerText = currentAccount.details;
             
-            // تحديث شارة الصلاحية والبروفايل
             const badgeContainer = document.getElementById('userRoleBadgeContainer');
             let roleText = "سائق";
             let roleClass = "role-driver";
@@ -567,7 +565,6 @@
             badgeContainer.innerHTML = `<span class="role-badge ${roleClass}">${roleText}</span>`;
             document.getElementById('adminRoleDisplay').innerText = roleText;
 
-            // تطبيق الصلاحيات على الواجهة
             const adminControls = document.getElementById('adminOnlyControls');
             if (currentAccount.role === "admin") {
                 adminControls.style.display = "block";
@@ -576,7 +573,6 @@
                 adminControls.style.display = "none";
             }
 
-            // تحديث زر الصورة في شريط التنقل العلوي بصورة المستخدم المرفوعة فعلياً
             const savedAvatar = localStorage.getItem('driverAvatar_' + currentAccount.name);
             const navBtn = document.getElementById('navProfileBtn');
             if (savedAvatar) {
@@ -610,7 +606,6 @@
             if (newName) currentAccount.name = newName;
             if (newDetails) currentAccount.details = newDetails;
 
-            // إذا كان المستخدم مديراً، يسمح له بتغيير الصلاحيات أيضاً
             if (currentAccount.role === "admin") {
                 const selectedRole = document.getElementById('selectUserRole').value;
                 currentAccount.role = selectedRole;
@@ -618,7 +613,7 @@
 
             localStorage.setItem('na2la_logged_user', JSON.stringify(currentAccount));
             updateAccountUI();
-            alert("✔ تم تحديث بيانات وحفظ الحساب بنجاح في قاعدة البيانات!");
+            alert("✔ تم تحديث بيانات وحفظ الحساب بنجاح وتطبيقها في المنصة!");
         }
 
         function resetSystemData() {
@@ -628,25 +623,49 @@
             }
         }
 
-        // عرض الرحلات الخاصة بالحساب المسجل
+        // جلب الرحلات التفاعلية من المنصة (من قسم الشحن أو الرئيسية) وتصفيتها للسائق الحالي
         function renderDriverTrips() {
             const container = document.getElementById('driverTripsStream');
-            let trips = JSON.parse(localStorage.getItem('na2la_driver_trips_' + currentAccount.name)) || [];
+            
+            // محاولة جلب الرحلات من التخزين المشترك للنظام أو رحلات السائق الخاصة
+            let platformTrips = JSON.parse(localStorage.getItem('na2la_platform_trips')) || [];
+            let driverPersonalTrips = JSON.parse(localStorage.getItem('na2la_driver_trips_' + currentAccount.name)) || [];
+            
+            // دمج الرحلات للتفاعل مع المنصة
+            let allTrips = [...driverPersonalTrips, ...platformTrips.filter(t => t.assignedDriver === currentAccount.name || !t.assignedDriver)];
 
-            if (trips.length === 0) {
+            if (allTrips.length === 0) {
                 container.innerHTML = "<p style='color:#94a3b8; font-size:0.85rem;'>لا توجد رحلات مسجلة أو موجهة لك حالياً على المنصة.</p>";
                 return;
             }
 
-            container.innerHTML = trips.map(t => `
+            container.innerHTML = allTrips.map((t, index) => `
                 <div class="trip-item" style="border-right: 4px solid var(--primary-color);">
-                    <strong style="font-size:0.95rem; color:var(--primary-color);">خط السير: ${t.route}</strong>
-                    <p style="font-size:0.9rem; margin-top:5px;"><strong>النولون:</strong> ${t.price}</p>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="font-size:0.95rem; color:var(--primary-color);">خط السير: ${t.route || (t.from + ' إلى ' + t.to)}</strong>
+                        <span style="font-size:0.75rem; background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px;">${t.status || 'متاحة للتحميل'}</span>
+                    </div>
+                    <p style="font-size:0.9rem; margin-top:5px;"><strong>النولون / التكلفة:</strong> ${t.price || t.cost || 'تنسيق مباشر'} ج.م</p>
+                    <div style="margin-top:8px; display:flex; gap:8px;">
+                        <button class="btn btn-success" style="padding:4px 10px; font-size:0.8rem; width:auto;" onclick="acceptPlatformTrip(${index})">قبول وتنفيذ الرحلة</button>
+                    </div>
                 </div>
             `).join('');
         }
 
-        // رفع وتخزين صورة البروفايل لكل حساب بشكل مستقل
+        function acceptPlatformTrip(index) {
+            alert("✔ تم قبول الرحلة بنجاح وإضافتها لسجل رحلاتك النشطة.");
+            // حفظ الرحلة في سجل السائق النشط
+            let driverTrips = JSON.parse(localStorage.getItem('na2la_driver_trips_' + currentAccount.name)) || [];
+            driverTrips.push({
+                route: "رحلة من النظام رقم #" + (index + 1),
+                price: "حسب الاتفاق / المنصة",
+                date: new Date().toLocaleDateString('ar-EG')
+            });
+            localStorage.setItem('na2la_driver_trips_' + currentAccount.name, JSON.stringify(driverTrips));
+            renderDriverTrips();
+        }
+
         function uploadAvatar(e) {
             const file = e.target.files[0];
             if (file) {
@@ -657,13 +676,12 @@
                     avatarDiv.style.backgroundImage = `url('${avatarData}')`;
                     avatarDiv.innerText = '';
                     localStorage.setItem('driverAvatar_' + currentAccount.name, avatarData);
-                    updateAccountUI(); // لتحديث زر الصورة في الشريط العلوي فوراً
+                    updateAccountUI();
                 };
                 reader.readAsDataURL(file);
             }
         }
 
-        // رفع وتخزين صورة الغلاف
         function uploadCover(e) {
             const file = e.target.files[0];
             if (file) {
@@ -695,8 +713,12 @@
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     const mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+                    
+                    // تخزين الموقع المباشر في المنصة ليراها العملاء
+                    localStorage.setItem('na2la_live_location_' + currentAccount.name, JSON.stringify({lat, lon, time: new Date().toLocaleTimeString()}));
+
                     resultDiv.innerHTML = `
-                        <p style="color:green;">✔ تم تحديد الموقع بنجاح!</p>
+                        <p style="color:green;">✔ تم مشاركة موقعك المباشر مع المنصة بنجاح!</p>
                         <a href="${mapUrl}" target="_blank" style="color:#2563eb; font-weight:bold;">رابط موقعك المباشر على Google Maps</a>
                     `;
                 }, function(error) {
@@ -717,9 +739,9 @@
                 return;
             }
 
-            const dealText = `🚨 **عرض رحلة عودة (صندوق فارغ)**\nمن: ${from} إلى: ${to}\nالتفاصيل: ${discount}`;
+            const dealText = `🚨 **عرض رحلة عودة (صندوق فارغ)**\nمن: ${from} إلى: ${to}\nالتفاصيل: ${discount}\nللتواصل مع السائق: ${currentAccount.name}`;
             saveToCommunity(dealText, "");
-            alert("تم نشر عرض العودة بنجاح في مجتمع نقلة!");
+            alert("تم نشر عرض العودة بنجاح في مجتمع نقلة العام ليرى العملاء والسائقون!");
             document.getElementById('returnFrom').value = "";
             document.getElementById('returnTo').value = "";
         }
@@ -741,7 +763,7 @@
             document.getElementById('incomeInput').value = "";
             document.getElementById('expenseInput').value = "";
             
-            alert(`تم تسجيل الرحلة في تقاريرك. صافي ربح هذه الرحلة: ${profit} ج.م`);
+            alert(`تم تسجيل الرحلة في تقاريرك المالية بالمنصة. صافي ربح هذه الرحلة: ${profit} ج.م`);
             refreshAdminStats();
         }
 
@@ -765,6 +787,7 @@
             }
         }
 
+        // الربط التفاعلي العام مع صفحة المجتمع (community.html)
         function saveToCommunity(text, imgData) {
             const newPost = {
                 id: Date.now(),
@@ -846,4 +869,4 @@
       const analytics = getAnalytics(app);
     </script>
 </body>
-    </html>
+</html>
