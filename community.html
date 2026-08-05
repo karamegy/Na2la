@@ -185,7 +185,7 @@
             color: var(--secondary-text);
         }
 
-        .nav-links a, .nav-links button {
+        .nav-links button {
             text-decoration: none;
             background: var(--bg-color);
             color: var(--text-color);
@@ -549,7 +549,7 @@
             text-align: center;
         }
 
-        /* تنسيقات إدارة الأعضاء */
+        /* تنسيقات إدارة الأعضاء داخل لوحة المدير */
         .admin-member-card {
             background: var(--bg-color);
             border: 1px solid var(--border-color);
@@ -588,7 +588,7 @@
             flex-wrap: wrap;
         }
 
-        /* 🌟 تنسيق الصفحة المستقلة (Modal) التي تظهر فوق الصفحة الأم */
+        /* نافذة مستقلة (Modal) لوحة المدير */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -837,7 +837,7 @@
 
     </div>
 
-    <!-- 🛡️ نافذة مستقلة (Modal) تظهر فوق الصفحة الأم عند الضغط على زر لوحة المدير -->
+    <!-- 🛡️ نافذة لوحة المدير المستقلة (Modal) مع عرض وإدارة الأعضاء -->
     <div id="adminModalOverlay" class="modal-overlay">
         <div class="modal-container">
             <div class="modal-header">
@@ -845,7 +845,7 @@
                 <button class="close-modal-btn" onclick="closeAdminModal()">✕</button>
             </div>
             <div class="modal-body">
-                <p style="font-size: 13px; color: var(--secondary-text); margin-bottom: 15px;">التحكم الكامل في أعضاء الأسطول، تعيين الرتب والألقاب، وحذف أو إضافة أعضاء جدد:</p>
+                <p style="font-size: 13px; color: var(--secondary-text); margin-bottom: 15px;">التحكم الكامل في أعضاء الأسطول المسجلين، تعيين الرتب والألقاب، وحذف أو إضافة أعضاء جدد:</p>
                 
                 <div style="background: var(--bg-color); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 15px;">
                     <div style="font-weight: bold; font-size: 13px; margin-bottom: 8px; color: var(--primary-color);">➕ إضافة عضو جديد للأسطول</div>
@@ -865,20 +865,20 @@
                 </div>
 
                 <div style="font-weight: bold; font-size: 14px; margin-bottom: 10px; border-top: 1px solid var(--border-color); padding-top: 12px;">قائمة الأعضاء المسجلين حالياً:</div>
-                <div id="adminMembersList"></div>
+                <div id="adminMembersList">جاري تحميل الأعضاء من قاعدة البيانات...</div>
             </div>
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي الثابت (تم تعديل أيقونة المجتمع هنا للذهاب للصفحة السابقة) -->
+    <!-- شريط التنقل السفلي الثابت (تم تغيير اسم أيقونة المجتمع هنا لتصبح "نقله") -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="openAdminModal()">
             <span class="icon">🛡️</span>
             <span>لوحة المدير</span>
         </button>
         <button class="bottom-nav-item" onclick="history.back()">
-            <span class="icon">👥</span>
-            <span>المجتمع</span>
+            <span class="icon">🚚</span>
+            <span>نقله</span>
         </button>
         <button class="bottom-nav-item active" onclick="switchSection('feed', document.querySelectorAll('.sector-btn')[0])">
             <span class="icon">🚀</span>
@@ -890,7 +890,7 @@
         </button>
     </nav>
 
-    <!-- سكربت Firebase -->
+    <!-- سكربت Firebase المتصل بـ Viper TDS -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -1032,7 +1032,6 @@
             if(btn) btn.classList.add("active");
         }
 
-        /* دوال فتح وإغلاق صفحة لوحة المدير المستقلة (Modal) */
         function openAdminModal() {
             document.getElementById("adminModalOverlay").style.display = "flex";
         }
@@ -1041,7 +1040,7 @@
             document.getElementById("adminModalOverlay").style.display = "none";
         }
 
-        // إدارة الأعضاء والرتب
+        // إدارة أعضاء الأسطول عبر Firebase (Viper TDS)
         let cachedMembers = [];
 
         async function initMembersSync() {
@@ -1050,8 +1049,10 @@
                 return;
             }
             try {
-                const { collection, onSnapshot } = window.firebaseModules;
-                onSnapshot(collection(window.db, "viper_tds_members"), (snapshot) => {
+                const { collection, onSnapshot, query, orderBy } = window.firebaseModules;
+                const membersQuery = query(collection(window.db, "viper_tds_members"), orderBy("timestamp", "desc"));
+                
+                onSnapshot(membersQuery, (snapshot) => {
                     cachedMembers = [];
                     snapshot.forEach((docSnap) => {
                         cachedMembers.push({ id: docSnap.id, ...docSnap.data() });
@@ -1125,7 +1126,7 @@
                     const { collection, addDoc } = window.firebaseModules;
                     await addDoc(collection(window.db, "viper_tds_members"), newMember);
                 } else {
-                    cachedMembers.push({ id: 'loc_' + Date.now(), ...newMember });
+                    cachedMembers.unshift({ id: 'loc_' + Date.now(), ...newMember });
                     localStorage.setItem("viper_tds_members_local", JSON.stringify(cachedMembers));
                     loadAdminMembersUI(cachedMembers);
                 }
@@ -1170,7 +1171,7 @@
             }
         }
 
-        // رادار المنشورات
+        // رادار المنشورات وتزامن البيانات
         let cachedPosts = [];
 
         async function initRealtimeSync() {
@@ -1193,7 +1194,7 @@
                             author: "الكابتن عماد (قائد الأسطول)",
                             category: "حالات الطرق",
                             text: "شبكة الطرق ممتازة اليوم وطريق السخنة سالك تماماً. رحلة موفقة للجميع! 🚛✨",
-                            reactions: { "👍 إعجاب": 8, "❤️ قلب": 14 },
+                            reactions: { "👍 إعجاب": 8 },
                             comments: []
                         }];
                     }
