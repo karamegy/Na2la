@@ -148,7 +148,7 @@
             height: 30px;
             font-size: 13px;
             cursor: pointer;
-            display: none; /* مخفي افتراضياً ولا يظهر إلا للمدير المؤسس */
+            display: none;
             align-items: center;
             justify-content: center;
             box-shadow: var(--shadow-3d);
@@ -398,8 +398,8 @@
 </head>
 <body>
 
-<!-- مدخل ملف اللوجو المخفي لضمان رفع الملفات بكفاءة -->
-<input type="file" id="logoUploadInput" accept="image/*" style="display: none;" onchange="handleLogoChange(event)">
+<!-- مدخل ملف اللوجو المخفي مع إعدادات متوافقة مع أندرويد و Google Play WebView -->
+<input type="file" id="logoUploadInput" accept="image/*" capture="environment" style="display: none;" onchange="handleLogoChange(event)">
 
 <!-- شاشة حماية المنع: تظهر فقط للمستخدمين غير المخولين -->
 <div id="accessDeniedScreen" style="display: none; max-width: 500px; margin: 80px auto; background: var(--card-bg); border: 1px solid var(--danger-color); padding: 30px; border-radius: 16px; text-align: center; box-shadow: var(--shadow-3d);">
@@ -414,7 +414,7 @@
     
     <!-- 1. اللوجو في منتصف أعلى الصفحة مع إمكانية التعديل الحصرية للمدير المؤسس -->
     <div class="top-brand-container">
-        <img id="platformLogo" alt="لوجو منصة نقلة" class="na2la-brand-logo" title="شعار المنصة" style="display: none;">
+        <img id="platformLogo" alt="لوجو منصة نقلة" class="na2la-brand-logo" title="شعار المنصة" style="display: none;" onclick="triggerLogoUpload()">
         <div id="platformLogoPlaceholder" style="width: 85px; height: 85px; border-radius: 50%; border: 3px dashed var(--primary-color); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--secondary-text); background-color: var(--card-bg); cursor: pointer;" onclick="triggerLogoUpload()" title="انقر لرفع شعار المنصة">رفع اللوجو</div>
         <button id="changeLogoButton" class="change-logo-btn" title="تغيير صورة اللوجو" onclick="triggerLogoUpload()">✏️</button>
     </div>
@@ -537,7 +537,7 @@
     ];
 
     let currentThemeIndex = 0;
-    let isFounderAdmin = false; // متغير لتحديد ما إذا كان المستخدم الحالي هو المدير المؤسس
+    let isFounderAdmin = false;
 
     function openModal(modalId) {
         document.getElementById(modalId).style.display = 'flex';
@@ -586,30 +586,32 @@
             alert("عذراً، تغيير شعار المنصة متاح حصرياً للمدير المؤسس فقط!");
             return;
         }
-        document.getElementById('logoUploadInput').click();
+        const fileInput = document.getElementById('logoUploadInput');
+        fileInput.value = ""; // تفريغ الحقل لضمان استقبال نفس الملف مرتين إن أردت
+        fileInput.click();
     }
 
     function handleLogoChange(event) {
         if (!isFounderAdmin) return;
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64Image = e.target.result;
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64Image = e.target.result;
+            try {
+                // حفظ الشعار داخل قاعدة بيانات الـ LocalStorage الخاصة بفايبر إي دي إس
                 localStorage.setItem('db_viper_platform_logo', base64Image);
-                const logoEl = document.getElementById('platformLogo');
-                const placeholderEl = document.getElementById('platformLogoPlaceholder');
-                if (logoEl) {
-                    logoEl.src = base64Image;
-                    logoEl.style.display = "block";
-                }
-                if (placeholderEl) {
-                    placeholderEl.style.display = "none";
-                }
+                loadSavedLogo();
                 alert("تم تحديث وحفظ شعار المنصة في قاعدة بيانات فايبر إي دي إس بنجاح!");
-            };
-            reader.readAsDataURL(file);
-        }
+            } catch (err) {
+                alert("حجم الصورة كبير جداً لتخزينها محلياً، يرجى اختيار صورة أصغر حجماً.");
+            }
+        };
+        reader.onerror = function() {
+            alert("حدث خطأ أثناء قراءة ملف الصورة. حاول اختيار صورة أخرى.");
+        };
+        reader.readAsDataURL(file);
     }
 
     function loadSavedLogo() {
@@ -637,7 +639,6 @@
     function checkAdminAccess() {
         let activeUser = JSON.parse(localStorage.getItem('na2la_logged_user_haretg')) || { isAdmin: true, role: "المدير المؤسس" };
         
-        // التحقق من صلاحيات المدير المؤسس أو الإدارة العليا
         if (activeUser.isAdmin === true || activeUser.role === "المدير المؤسس" || activeUser.role === "مدير النظام") {
             isFounderAdmin = true;
             document.getElementById("opsMainContainer").style.display = "block";
@@ -645,11 +646,9 @@
             document.getElementById("accessDeniedScreen").style.display = "none";
             document.getElementById("driverCommunityWrapper").style.display = "block";
 
-            // إظهار زر تعديل اللوجو للمدير المؤسس فقط وتفعيل خاصية النقر عليه
             let logoImg = document.getElementById("platformLogo");
             let changeBtn = document.getElementById("changeLogoButton");
             if(logoImg) logoImg.classList.add("founder-editable");
-            if(logoImg) logoImg.onclick = triggerLogoUpload;
             if(changeBtn) changeBtn.style.display = "flex";
 
             loadSavedTheme();
