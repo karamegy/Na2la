@@ -116,7 +116,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.15);
         }
 
-        /* شريط التنقل السفلي الموزع بشكل متسع وكامل */
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -196,7 +195,6 @@
             padding: 0 15px;
         }
 
-        /* لوحة التحكم الموسعة للشاشة بالكامل */
         .admin-fullscreen-overlay {
             position: fixed;
             top: 0;
@@ -340,7 +338,7 @@
         }
 
         .accounts-list-dropdown {
-            max-height: 160px;
+            max-height: 180px;
             overflow-y: auto;
             margin-top: 10px;
             border: 1px solid var(--border-color);
@@ -652,7 +650,6 @@
         <div class="color-circle" style="background: #ea580c;" onclick="changeAppTheme('#ea580c')" title="برتقالي"></div>
     </div>
 
-    <!-- شريط التنقل السفلي المحدث (مع تصحيح وتوسيع الأيقونات وأسمائها بدقة) -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="toggleAdminPanel()">
             <span class="icon">🛡️</span>
@@ -672,7 +669,7 @@
         </button>
     </nav>
 
-    <!-- نافذة لوحة إدارة النظام والتحكم الموسعة (المدير) -->
+    <!-- لوحة إدارة النظام والتحكم الموسعة (المدير) -->
     <div id="adminPanelModal" class="admin-fullscreen-overlay" onclick="closeAdminPanelModal(event)">
         <div class="admin-fullscreen-card" id="adminPanelCard">
             <div class="admin-fullscreen-header">
@@ -693,8 +690,8 @@
                         <strong id="adminTotalPosts">0</strong>
                     </div>
                     <div class="admin-stat-card">
-                        <span>مزامنة السحابة</span>
-                        <strong style="color: #22c55e;">Firestore نشط</strong>
+                        <span>الأعضاء المسجلين</span>
+                        <strong id="adminTotalUsers">0</strong>
                     </div>
                     <div class="admin-stat-card">
                         <span>الحساب الحالي</span>
@@ -702,13 +699,17 @@
                     </div>
                 </div>
 
+                <!-- قسم إدارة ومتابعة جميع الأعضاء المسجلين تلقائياً -->
                 <div class="member-management-box" style="background: #1e293b; border-color: #334155; margin-top: 15px;">
-                    <h3 style="font-size: 0.95rem; margin-bottom: 6px; color: #38bdf8; border-bottom: none; padding-bottom: 0;">🔍 البحث عن الأعضاء، ترقيتهم، والتحكم في أوسمتهم وألقابهم</h3>
-                    <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px;">ابحث عن السائق لتعديل صلاحياته، ترقيته، أو تغيير لقبه:</p>
+                    <h3 style="font-size: 0.95rem; margin-bottom: 6px; color: #38bdf8; border-bottom: none; padding-bottom: 0;">👥 الأعضاء المسجلين على المنصة (تسجيل تلقائي)</h3>
+                    <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px;">جميع المستخدمين الذين سجلوا دخولهم يظهرون هنا للتحكم الكامل بصلاحياتهم وألقابهم:</p>
+                    
                     <div class="input-group" style="margin-bottom: 0;">
-                        <input type="text" id="platformAccountSearchInput" placeholder="ابحث عن اسم السائق أو الصلاحية..." oninput="filterPlatformAccounts()" style="background:#0f172a; color:white; border-color:#334155;">
+                        <input type="text" id="platformAccountSearchInput" placeholder="ابحث عن اسم العضو أو الرتبة..." oninput="filterPlatformAccounts()" style="background:#0f172a; color:white; border-color:#334155;">
                     </div>
-                    <div id="platformAccountsList" class="accounts-list-dropdown" style="background:#0f172a; border-color:#334155;"></div>
+                    <div id="platformAccountsList" class="accounts-list-dropdown" style="background:#0f172a; border-color:#334155;">
+                        <p style="text-align: center; color: #94a3b8; padding: 10px; font-size: 0.8rem;">جاري جلب الأعضاء من السحابة...</p>
+                    </div>
                 </div>
 
                 <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 12px;">
@@ -811,13 +812,37 @@
         const db = getFirestore(app);
 
         window.db = db;
+
+        // إدارة الحساب الحالي والتسجيل التلقائي في قاعدة البيانات
         window.currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user_haretg')) || {
-            name: "عماد",
-            details: "سائق ربع نقل - تجهيز حبال وصندوق",
-            badge: "🏆 المدير المؤسس - سائق محترف",
-            isAdmin: true,
+            name: "مستخدم_" + Math.floor(Math.random() * 9000 + 1000),
+            details: "سائق جديد - انضم حديثاً للمنصة",
+            badge: "🚗 عضو مسجل",
+            isAdmin: false,
             avatar: ""
         };
+
+        // دالة لتسجيل المستخدم تلقائياً في مجموعة "platform_users" في فايربيس
+        async function registerUserAutomaticallyInCloud() {
+            try {
+                const userRef = doc(db, "platform_users", window.currentAccount.name);
+                const userSnap = await getDoc(userRef);
+                if (!userSnap.exists()) {
+                    await setDoc(userRef, {
+                        name: window.currentAccount.name,
+                        role: window.currentAccount.isAdmin ? "مشرف النظام" : "عضو مسجل",
+                        badge: window.currentAccount.badge,
+                        details: window.currentAccount.details,
+                        isAdmin: window.currentAccount.isAdmin,
+                        avatar: window.currentAccount.avatar || "",
+                        lastActive: new Date()
+                    });
+                }
+                localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
+            } catch (e) {
+                console.error("خطأ في التسجيل التلقائي:", e);
+            }
+        }
 
         window.toggleAdminPanel = function() {
             const modal = document.getElementById('adminPanelModal');
@@ -863,7 +888,7 @@
             }
         }
 
-        window.openMemberProfile = function(name, role, badge, details, avatar, isOnline) {
+        window.openMemberProfile = function(name, role, badge, details, avatar, isAdmin) {
             const modal = document.getElementById('bottomSheetModal');
             const titleEl = document.getElementById('bottomSheetTitle');
             const contentEl = document.getElementById('bottomSheetDynamicContent');
@@ -872,7 +897,6 @@
 
             let avatarStyle = avatar ? `background-image: url('${avatar}');` : '';
             let avatarIcon = avatar ? '' : '👤';
-            let statusText = isOnline ? '<span style="color:#22c55e;">● متصل الآن</span>' : '<span style="color:#94a3b8;">● غير متصل</span>';
 
             let adminControls = '';
             if (window.currentAccount.isAdmin) {
@@ -899,7 +923,6 @@
                             <div style="width: 65px; height: 65px; border-radius: 50%; background: #dbeafe; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; font-size: 2rem; background-size: cover; background-position: center; border: 2px solid var(--primary-color); ${avatarStyle}">${avatarIcon}</div>
                             <h3 style="font-size: 1.1rem; margin-bottom: 4px;">${name}</h3>
                             <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 6px;">${role} - <span style="color:var(--primary-color);">${badge}</span></p>
-                            <p style="font-size: 0.8rem; margin-bottom: 12px;">حالة الاتصال: ${statusText}</p>
                         </div>
                         <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 10px;">
                             <button class="btn" style="flex: 1;" onclick="openPrivateChat('${name}')">💬 شات خاص</button>
@@ -916,17 +939,10 @@
             const newBadge = document.getElementById('editMemberBadgeInput').value.trim();
             const newRole = document.getElementById('editMemberRoleInput').value.trim();
             try {
-                const q = query(collection(db, "community_team"), where("name", "==", memberName));
-                const querySnapshot = await getDocs(q);
-                if(!querySnapshot.empty) {
-                    querySnapshot.forEach(async (d) => {
-                        await updateDoc(doc(db, "community_team", d.id), { badge: newBadge, role: newRole });
-                    });
-                    alert(`✔ تم تحديث ألقاب وصلاحيات "${memberName}" بنجاح سحابياً!`);
-                    closeBottomSheetDirect();
-                } else {
-                    alert("العضو غير مسجل في قائمة الفريق.");
-                }
+                const userRef = doc(db, "platform_users", memberName);
+                await updateDoc(userRef, { badge: newBadge, role: newRole });
+                alert(`✔ تم تحديث ألقاب وصلاحيات "${memberName}" بنجاح سحابياً!`);
+                closeBottomSheetDirect();
             } catch(e) {
                 alert("خطأ: " + e.message);
             }
@@ -1105,7 +1121,6 @@
 
             loadCommunityCoverFromCloud();
             loadGlobalLogoFromCloud();
-            window.renderPlatformAccountsDirectory();
         }
 
         async function loadCommunityCoverFromCloud() {
@@ -1128,24 +1143,42 @@
             }
         }
 
-        function getRegisteredPlatformAccounts() {
-            return [
-                { name: "عماد", role: "سائق ربع نقل", badge: "🏆 المدير المؤسس", avatar: "", isOnline: true, details: "سيارة ربع نقل" },
-                { name: "أحمد محمود", role: "مشرف النظام", badge: "⭐ مشرف عام", avatar: "", isOnline: true, details: "مراقب حركة النقل" }
-            ];
+        // جلب وعرض الأعضاء المسجلين تلقائياً في لوحة الإدارة بشكل لحظي من Firestore
+        let allCloudUsers = [];
+        function initRealtimePlatformUsers() {
+            onSnapshot(collection(db, "platform_users"), (snapshot) => {
+                allCloudUsers = [];
+                snapshot.forEach(doc => {
+                    allCloudUsers.push(doc.data());
+                });
+                document.getElementById('adminTotalUsers').innerText = allCloudUsers.length;
+                renderPlatformAccountsDirectory();
+            });
         }
 
         window.renderPlatformAccountsDirectory = function(filterText = "") {
             const container = document.getElementById('platformAccountsList');
             if(!container) return;
-            let accounts = getRegisteredPlatformAccounts();
-            if (filterText) accounts = accounts.filter(acc => acc.name.includes(filterText) || acc.role.includes(filterText));
+            let accounts = allCloudUsers;
+            if (filterText) {
+                accounts = accounts.filter(acc => acc.name.includes(filterText) || acc.role.includes(filterText));
+            }
+
+            if(accounts.length === 0) {
+                container.innerHTML = `<p style="text-align: center; color: #94a3b8; padding: 10px; font-size: 0.8rem;">لا توجد حسابات مسجلة حالياً.</p>`;
+                return;
+            }
 
             container.innerHTML = accounts.map(acc => {
                 return `
                     <div class="account-select-item" style="border-color:#334155;">
-                        <div><strong style="color:white;">${acc.name}</strong> <br><span style="color:#94a3b8; font-size:0.75rem;">(${acc.role})</span></div>
-                        <button class="btn btn-success" style="width: auto; padding: 4px 8px; font-size: 0.7rem;" onclick="addAccountToCommunityTeam('${acc.name}', '${acc.role}', '${acc.badge}', '${acc.avatar}', ${acc.isOnline}, '${acc.details}')">إضافة للجروب</button>
+                        <div>
+                            <strong style="color:white; cursor:pointer;" onclick="openMemberProfile('${acc.name}', '${acc.role}', '${acc.badge}', '${acc.details}', '${acc.avatar}', ${acc.isAdmin})">${acc.name}</strong> 
+                            <br><span style="color:#94a3b8; font-size:0.75rem;">(${acc.role} - ${acc.badge || 'بدون لقب'})</span>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-success" style="width: auto; padding: 4px 8px; font-size: 0.7rem;" onclick="openMemberProfile('${acc.name}', '${acc.role}', '${acc.badge}', '${acc.details}', '${acc.avatar}', ${acc.isAdmin})">⚙️ إدارة</button>
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1153,11 +1186,6 @@
 
         window.filterPlatformAccounts = function() {
             window.renderPlatformAccountsDirectory(document.getElementById('platformAccountSearchInput').value);
-        }
-
-        window.addAccountToCommunityTeam = async function(name, role, badge, avatar, isOnline, details) {
-            await addDoc(collection(db, "community_team"), { name, role, badge, avatar, isOnline, details });
-            alert(`✔ تمت إضافة "${name}" بنجاح!`);
         }
 
         window.refreshAdminStats = async function() {
@@ -1174,14 +1202,27 @@
             window.renderPlatformAccountsDirectory();
         }
 
-        window.saveActiveAccountProfile = function() {
+        window.saveActiveAccountProfile = async function() {
+            const oldName = window.currentAccount.name;
             window.currentAccount.name = document.getElementById('activeAccountName').value.trim() || window.currentAccount.name;
             window.currentAccount.details = document.getElementById('activeAccountDetails').value.trim();
             window.currentAccount.badge = document.getElementById('activeAccountBadge').value.trim();
             window.currentAccount.isAdmin = document.getElementById('activeAccountIsAdmin').checked;
+            
             localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
+            
+            // تحديث بيانات المستخدم في السحابة
+            await setDoc(doc(db, "platform_users", window.currentAccount.name), {
+                name: window.currentAccount.name,
+                role: window.currentAccount.isAdmin ? "مشرف النظام" : "عضو مسجل",
+                badge: window.currentAccount.badge,
+                details: window.currentAccount.details,
+                isAdmin: window.currentAccount.isAdmin,
+                avatar: window.currentAccount.avatar || ""
+            });
+
             window.updateAccountUI();
-            alert("✔ تم تحديث بيانات الحساب بنجاح!");
+            alert("✔ تم تحديث وحفظ بيانات الحساب بنجاح!");
         }
 
         window.clearAllCommunityDataFromCloud = async function() {
@@ -1270,10 +1311,10 @@
                     let commentsJson = JSON.stringify(p.comments || []).replace(/"/g, '&quot;');
                     return `
                         <div class="post-card">
-                            <div class="post-header">,
-                                <div class="post-avatar">🚛</div>
+                            <div class="post-header">
+                                <div class="post-avatar" onclick="openMemberProfile('${p.author}', 'سائق مجتمع', '${p.badge}', '', '${p.avatar}', false)">🚛</div>
                                 <div class="post-author-info">
-                                    <h4>${p.author} <span style="font-size:0.7rem; color:var(--primary-color);">(${p.badge})</span></h4>
+                                    <h4 onclick="openMemberProfile('${p.author}', 'سائق مجتمع', '${p.badge}', '', '${p.avatar}', false)">${p.author} <span style="font-size:0.7rem; color:var(--primary-color);">(${p.badge})</span></h4>
                                     <span>${p.time}</span>
                                 </div>
                             </div>
@@ -1297,8 +1338,10 @@
             });
         }
 
-        window.onload = function() {
+        window.onload = async function() {
+            await registerUserAutomaticallyInCloud();
             window.updateAccountUI();
+            initRealtimePlatformUsers();
             initRealtimeFeed();
         };
     </script>
