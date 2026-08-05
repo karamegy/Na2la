@@ -254,6 +254,17 @@
             font-size: 11px;
             font-weight: bold;
         }
+        
+        .btn-switch-user {
+            background-color: var(--warning-color);
+            color: #000;
+            border: none;
+            padding: 4px 9px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+        }
 
         .emergency-grid {
             display: grid;
@@ -398,7 +409,8 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات</p>
         </div>
-        <div class="admin-card" onclick="openModal('modalUsers')">
+        <!-- بطاقة إدارة الحسابات والصلاحيات (مخفية افتراضياً ولا تظهر إلا للمدير أو الحسابات المصرح لها) -->
+        <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
             <span class="icon">👥</span>
             <h3>حسابات وصلاحيات</h3>
             <p>التحكم بالأزرار والمستخدمين</p>
@@ -458,7 +470,7 @@
     </div>
 </div>
 
-<!-- نافذة إدارة حسابات المستخدمين مع البحث وزر السماح -->
+<!-- نافذة إدارة حسابات المستخدمين وصلاحيات الأزرار -->
 <div class="page-modal-overlay" id="modalUsers">
     <div class="page-modal-content">
         <button class="modal-close-btn" onclick="closeModal('modalUsers')">إغلاق ✕</button>
@@ -466,9 +478,10 @@
         <form id="userPermissionForm" onsubmit="registerPlatformUser(event)">
             <input type="text" id="userName" placeholder="اسم السائق أو المستخدم..." required>
             <input type="text" id="userEmail" placeholder="البريد أو رقم الهاتف..." required>
-            <div style="display: flex; gap: 15px; margin: 10px 0; font-size: 12px; align-items: center;">
+            <div style="display: flex; gap: 15px; margin: 10px 0; font-size: 12px; align-items: center; flex-wrap: wrap;">
                 <label><input type="checkbox" id="permProfile"> إظهار زر "حسابي"</label>
                 <label><input type="checkbox" id="permCommunity"> إظهار زر "المجتمع"</label>
+                <label><input type="checkbox" id="permAdminPanel"> إظهار زر "إدارة الحسابات"</label>
             </div>
             <button type="submit" class="btn-submit" style="background: var(--accent-color);">تسجيل مستخدم وإعطاء الصلاحيات سحابياً</button>
         </form>
@@ -496,7 +509,7 @@
     </div>
 </div>
 
-<!-- شريط التنقل السفلي المحدث (مخفي افتراضياً للمستخدمين ما لم يمنحهم المدير الصلاحية) -->
+<!-- شريط التنقل السفلي -->
 <nav class="bottom-nav-bar" id="bottomNavBar">
     <a href="driver-profile.html" class="bottom-nav-item" id="navProfileBtn" style="display: none;">
         <span>👤</span>
@@ -510,7 +523,8 @@
         <span>🚛</span>
         <span>الأسطول</span>
     </button>
-    <button class="bottom-nav-item active" style="color: var(--primary-color);" onclick="openModal('modalUsers')">
+    <!-- زر الإدارة في الشريط السفلي (مخفي افتراضياً ولا يظهر إلا للمصرح لهم) -->
+    <button class="bottom-nav-item" id="navAdminBtn" style="display: none; color: var(--primary-color);" onclick="openModal('modalUsers')">
         <span>🛡️</span>
         <span>إدارة الحسابات</span>
     </button>
@@ -535,7 +549,7 @@
     ];
 
     let currentThemeIndex = 0;
-    let globalUsersCache = []; // التخزين المؤقت لحسابات المستخدمين للبحث السريع
+    let globalUsersCache = []; 
 
     function openModal(modalId) {
         document.getElementById(modalId).classList.add('active');
@@ -646,7 +660,7 @@
             if(totalOut) totalOut.innerText = `إجمالي التقارير: ${total} ج.م`;
         });
 
-        // مزامنة حسابات المستخدمين وصلاحيات ظهور الأزرار مع التخزين المؤقت للبحث
+        // مزامنة حسابات المستخدمين والصلاحيات
         onSnapshot(collection(window.db, "viper_platform_users"), (snapshot) => {
             globalUsersCache = [];
             snapshot.forEach((docSnap) => {
@@ -666,20 +680,18 @@
             return;
         }
         users.forEach((user) => {
-            let isAllowed = user.showProfile && user.showCommunity;
             container.innerHTML += `
                 <div class="item-row">
                     <div>
                         <b>${user.name}</b> (${user.email})
                         <div class="permissions-box" style="margin-top:4px;">
                             <span style="color:${user.showProfile ? 'var(--accent-color)' : 'var(--danger-color)'};">حسابي: ${user.showProfile ? 'مفعل' : 'مخفي'}</span> | 
-                            <span style="color:${user.showCommunity ? 'var(--accent-color)' : 'var(--danger-color)'};">المجتمع: ${user.showCommunity ? 'مفعل' : 'مخفي'}</span>
+                            <span style="color:${user.showCommunity ? 'var(--accent-color)' : 'var(--danger-color)'};">المجتمع: ${user.showCommunity ? 'مفعل' : 'مخفي'}</span> |
+                            <span style="color:${user.showAdminPanel ? 'var(--primary-color)' : 'var(--danger-color)'};">الإدارة: ${user.showAdminPanel ? 'مفعل' : 'مخفي'}</span>
                         </div>
                     </div>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-allow" onclick="toggleAllowUser('${user.id}', ${user.showProfile}, ${user.showCommunity})">
-                            ${isAllowed ? 'إلغاء السماح' : 'سماح'}
-                        </button>
+                    <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-switch-user" onclick="switchCurrentUser('${user.email}')">تبديل</button>
                         <button class="btn-delete" onclick="deleteCloudItem('viper_platform_users', '${user.id}')">حذف</button>
                     </div>
                 </div>
@@ -699,15 +711,24 @@
         renderUsersList(filtered);
     }
 
-    // التحقق من صلاحيات الحساب الحالي لتحديد إظهار أو إخفاء أزرار القائمة السفلية
+    // دالة لتبديل الحساب الحالي واختبار الصلاحيات
+    function switchCurrentUser(identifier) {
+        localStorage.setItem('na2la_current_user_id', identifier);
+        updateCurrentInterfacePermissions();
+        alert("تم تبديل الحساب النشط إلى: " + identifier);
+    }
+
+    // التحقق من صلاحيات الحساب الحالي لإظهار أو إخفاء الأزرار ونافذة الإدارة
     function updateCurrentInterfacePermissions() {
         let currentIdentifier = localStorage.getItem('na2la_current_user_id') || "";
         let currentUser = globalUsersCache.find(u => u.email === currentIdentifier || u.name === currentIdentifier);
         
         let profileBtn = document.getElementById("navProfileBtn");
         let communityBtn = document.getElementById("navCommunityBtn");
+        let adminBtn = document.getElementById("navAdminBtn");
+        let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        // افتراضياً مخفية تماماً ما لم توجد صلاحية صريحة سحابياً
+        // الصلاحيات للمستخدم الحالي
         if (currentUser && currentUser.showProfile) {
             profileBtn.style.display = "flex";
         } else {
@@ -718,6 +739,15 @@
             communityBtn.style.display = "flex";
         } else {
             communityBtn.style.display = "none";
+        }
+
+        // إخفاء/إظهار زر وبطاقة الإدارة (لا تظهر إلا إذا كان الحساب مصرحاً له بـ showAdminPanel)
+        if (currentUser && currentUser.showAdminPanel) {
+            if(adminBtn) adminBtn.style.display = "flex";
+            if(cardAdminUsers) cardAdminUsers.style.display = "block";
+        } else {
+            if(adminBtn) adminBtn.style.display = "none";
+            if(cardAdminUsers) cardAdminUsers.style.display = "none";
         }
     }
 
@@ -754,20 +784,11 @@
         let email = document.getElementById("userEmail").value;
         let showProfile = document.getElementById("permProfile").checked;
         let showCommunity = document.getElementById("permCommunity").checked;
+        let showAdminPanel = document.getElementById("permAdminPanel").checked;
         
         const { collection, addDoc } = window.firebaseModules;
-        await addDoc(collection(window.db, "viper_platform_users"), { name, email, showProfile, showCommunity, timestamp: Date.now() });
+        await addDoc(collection(window.db, "viper_platform_users"), { name, email, showProfile, showCommunity, showAdminPanel, timestamp: Date.now() });
         document.getElementById("userPermissionForm").reset();
-    }
-
-    // زر السماح السريع لتعديل حالة الظهور للحساب عند البحث
-    async function toggleAllowUser(docId, currentProfile, currentCommunity) {
-        const { doc, updateDoc } = window.firebaseModules;
-        let newState = !(currentProfile && currentCommunity); // إذا كان مفعل يعطله، وإذا معطل يفعله بالكامل
-        await updateDoc(doc(window.db, "viper_platform_users", docId), {
-            showProfile: newState,
-            showCommunity: newState
-        });
     }
 
     async function deleteCloudItem(collectionName, docId) {
