@@ -8,7 +8,7 @@
     <!-- استدعاء مكتبات Firebase سحابياً (Firestore & App) لضمان ربط Viper TDS -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, deleteDoc, updateDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3IODdfzTZmXKJePDdgxhfyIY",
@@ -24,7 +24,7 @@
         const db = getFirestore(app);
 
         window.db = db;
-        window.firebaseModules = { collection, getDocs, deleteDoc, updateDoc, doc, onSnapshot };
+        window.firebaseModules = { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot };
         
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
@@ -335,7 +335,7 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات اليومية</p>
         </div>
-        <!-- بطاقة لوحة إدارة المدير - تظهر حصرياً للمدير فقط -->
+        <!-- بطاقة لوحة إدارة المدير - تظهر حصرياً للمدير أو الحسابات المصرح لها -->
         <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
             <span class="icon">🛡️</span>
             <h3>لوحة إدارة المدير</h3>
@@ -374,7 +374,7 @@
     <div class="page-modal-content">
         <button class="modal-close-btn" onclick="closeModal('modalUsers')">إغلاق ✕</button>
         <div style="margin-top: 35px; font-weight: bold; font-size: 16px; color: var(--primary-color);">🛡️ السائقون والحسابات (لوحة التحكم)</div>
-        <div style="font-size: 12px; color: var(--secondary-text); margin-bottom: 12px;">استعراض وبحث وحذف حسابات السائقين والحسابات المسجلة على المنصة.</div>
+        <div style="font-size: 12px; color: var(--secondary-text); margin-bottom: 12px;">استعراض وبحث وحذف حسابات السائقين والحسابات المسجلة على السحابة (Viper TDS).</div>
         
         <div style="display: flex; gap: 8px; margin-bottom: 10px;">
             <input type="text" id="searchUserInput" placeholder="🔍 ابحث بالاسم، رقم الهاتف، أو الرتبة..." oninput="filterUsersList()" style="margin: 0; flex: 1;">
@@ -442,7 +442,7 @@
 
 <!-- شريط التنقل السفلي -->
 <nav class="bottom-nav-bar" id="bottomNavBar">
-    <!-- أزرار حسابي والمجتمع مخفية تماماً عن الجميع باستثناء المدير الرئيسي -->
+    <!-- زرا حسابي والمجتمع - يظهران حصرياً للمدير أو الحسابات المخولة -->
     <a href="driver-profile.html" class="bottom-nav-item" id="navProfileBtn" style="display: none;">
         <span>👤</span>
         <span>حسابي</span>
@@ -455,7 +455,7 @@
         <span>🚛</span>
         <span>الأسطول</span>
     </button>
-    <!-- زر لوحة إدارة المدير السفلي - لا يظهر إلا للمدير الرئيسي حصرياً -->
+    <!-- زر لوحة إدارة المدير السفلي -->
     <button class="bottom-nav-item" id="navAdminBtn" style="display: none; color: var(--primary-color);" onclick="openModal('modalUsers')">
         <span>🛡️</span>
         <span>لوحة الإدارة</span>
@@ -477,19 +477,9 @@
     let globalUsersCache = []; 
 
     function openModal(modalId) {
-        // حماية إضافية ضد فتح لوحة الإدارة من قبل المستخدمين العاديين
         if (modalId === 'modalUsers') {
-            let currentIdentifier = localStorage.getItem('na2la_current_user_identifier') || "";
-            let isMasterAdmin = (currentIdentifier === 'ADMIN_MASTER_EMAD' || currentIdentifier === 'عماد' || currentIdentifier === 'Emad');
-            let currentUser = globalUsersCache.find(u => 
-                (u.phone && u.phone === currentIdentifier) || 
-                (u.name && u.name === currentIdentifier) || 
-                (u.email && u.email === currentIdentifier)
-            );
-            let isManagerRole = isMasterAdmin || (currentUser && (currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام' || currentUser.role === 'مشرف'));
-
-            if (!isManagerRole) {
-                alert("❌ عذراً، هذه اللوحة مخصصة للمدير فقط ولا يمكن للمستخدمين العاديين الدخول إليها.");
+            if (!checkManagerAuthorization()) {
+                alert("❌ عذراً، هذه اللوحة مخصصة للمدير وصلاحيات النظام فقط.");
                 return;
             }
             fetchUsersManual();
@@ -540,8 +530,23 @@
         }
 
         closeModal('modalUserLogin');
-        updateCurrentInterfacePermissions();
-        alert("✅ تم تفعيل الحساب وتحديث واجهة الاستخدام بنجاح!");
+        fetchUsersManual(); // إعادة جلب البيانات وتحديث الصلاحيات فوراً
+        alert("✅ تم تفعيل الحساب وتحديث الصلاحيات بنجاح!");
+    }
+
+    function checkManagerAuthorization() {
+        let currentIdentifier = localStorage.getItem('na2la_current_user_identifier') || "";
+        let isMasterAdmin = (currentIdentifier === 'ADMIN_MASTER_EMAD' || currentIdentifier === 'عماد' || currentIdentifier === 'Emad');
+        
+        let currentUser = globalUsersCache.find(u => 
+            (u.phone && u.phone === currentIdentifier) || 
+            (u.name && u.name === currentIdentifier) || 
+            (u.email && u.email === currentIdentifier) ||
+            (u.username && u.username === currentIdentifier)
+        );
+        
+        let isManagerRole = isMasterAdmin || (currentUser && (currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام' || currentUser.role === 'مشرف' || currentUser.role === 'مدير' || currentUser.isAdmin === true));
+        return isManagerRole;
     }
 
     async function fetchUsersManual() {
@@ -551,7 +556,7 @@
         }
         
         let container = document.getElementById("usersContainer");
-        container.innerHTML = "<div style='text-align:center; color:var(--warning-color); padding: 12px;'>جاري جلب السائقين والحسابات من مجموعة viper_platform_users...</div>";
+        if(container) container.innerHTML = "<div style='text-align:center; color:var(--warning-color); padding: 12px;'>جاري قراءة كافة الحسابات المتصلة من سحابية Viper TDS...</div>";
 
         try {
             const { collection, getDocs } = window.firebaseModules;
@@ -565,7 +570,7 @@
             renderUsersTable(globalUsersCache);
             updateCurrentInterfacePermissions();
         } catch (err) {
-            container.innerHTML = `<div style='text-align:center; color:var(--danger-color); padding: 12px;'>فشل جلب السجلات: ${err.message}<br><small>تأكد من صلاحيات القراءة في قاعدة بيانات Firebase Firestore</small></div>`;
+            if(container) container.innerHTML = `<div style='text-align:center; color:var(--danger-color); padding: 12px;'>فشل جلب السجلات: ${err.message}</div>`;
         }
     }
 
@@ -573,6 +578,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot } = window.firebaseModules;
 
+        // مزامنة الأسطول
         onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
             let container = document.getElementById("fleetContainer");
             if (!container) return;
@@ -587,6 +593,7 @@
             });
         });
 
+        // مزامنة الشحن
         onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
             let container = document.getElementById("logisticsContainer");
             if (!container) return;
@@ -601,6 +608,7 @@
             });
         });
 
+        // مزامنة المالية
         onSnapshot(collection(window.db, "viper_finance"), (snapshot) => {
             let container = document.getElementById("financeContainer");
             if (!container) return;
@@ -618,6 +626,7 @@
             if(totalOut) totalOut.innerText = `إجمالي الحركات المالية: ${total} ج.م`;
         });
 
+        // مزامنة مستخدمي المنصة وقراءة كل الحسابات المتصلة بالدقة
         onSnapshot(collection(window.db, "viper_platform_users"), (snapshot) => {
             globalUsersCache = [];
             snapshot.forEach((docSnap) => {
@@ -633,7 +642,7 @@
         if (!container) return;
         
         if (users.length === 0) {
-            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 15px;'>لا توجد حسابات سائقين مسجلة سحابياً في مجموعة (viper_platform_users).</div>";
+            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 15px;'>لا توجد حسابات مسجلة سحابياً في مجموعة (viper_platform_users).</div>";
             return;
         }
 
@@ -641,10 +650,10 @@
             <table class="users-table">
                 <thead>
                     <tr>
-                        <th>السائق / الاسم</th>
+                        <th>المستخدم / الاسم</th>
                         <th>الهاتف / البريد</th>
                         <th>الرتبة</th>
-                        <th>PIN</th>
+                        <th>كلمة المرور / PIN</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
@@ -652,7 +661,7 @@
         `;
 
         users.forEach((user) => {
-            let roleColor = (user.role === 'المؤسس' || user.role === 'مدير نظام') ? 'var(--warning-color)' : 'var(--text-color)';
+            let roleColor = (user.role === 'المؤسس' || user.role === 'مدير نظام' || user.role === 'مشرف') ? 'var(--warning-color)' : 'var(--text-color)';
             let userName = user.name || user.fullName || user.username || 'بدون اسم';
             let userPhone = user.phone || user.mobile || '-';
             let userEmail = user.email || '';
@@ -661,12 +670,12 @@
 
             html += `
                 <tr>
-                    <td><b>${userName}</b><br><small style="color:var(--secondary-text);">${user.badge || ''}</small></td>
+                    <td><b>${userName}</b></td>
                     <td>${userPhone}<br><small style="color:var(--secondary-text);">${userEmail}</small></td>
                     <td><span style="color: ${roleColor}; font-weight:bold;">${userRole}</span></td>
                     <td><code>${userPin}</code></td>
                     <td>
-                        <button class="btn-action-del" onclick="deleteCloudItem('viper_platform_users', '${user.id}')">حذف الحساب</button>
+                        <button class="btn-action-del" onclick="deleteCloudItem('viper_platform_users', '${user.id}')">حذف</button>
                     </td>
                 </tr>
             `;
@@ -687,9 +696,8 @@
             let phone = (u.phone || u.mobile || "").toLowerCase();
             let email = (u.email || "").toLowerCase();
             let role = (u.role || u.permission || "").toLowerCase();
-            let badge = (u.badge || "").toLowerCase();
             
-            return name.includes(query) || phone.includes(query) || email.includes(query) || role.includes(query) || badge.includes(query);
+            return name.includes(query) || phone.includes(query) || email.includes(query) || role.includes(query);
         });
         renderUsersTable(filtered);
     }
@@ -703,43 +711,39 @@
         let adminBtn = document.getElementById("navAdminBtn");
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        let isMasterAdmin = (currentIdentifier === 'ADMIN_MASTER_EMAD' || currentIdentifier === 'عماد' || currentIdentifier === 'Emad');
-        let currentUser = globalUsersCache.find(u => 
-            (u.phone && u.phone === currentIdentifier) || 
-            (u.name && u.name === currentIdentifier) || 
-            (u.email && u.email === currentIdentifier)
-        );
-        
-        let isManagerRole = isMasterAdmin || (currentUser && (currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام' || currentUser.role === 'مشرف'));
+        let isManager = checkManagerAuthorization();
+        let currentIdentifierClean = currentIdentifier.trim();
 
-        if (isMasterAdmin) {
+        if (currentIdentifierClean === 'ADMIN_MASTER_EMAD' || currentIdentifierClean === 'عماد' || currentIdentifierClean === 'Emad') {
             if(labelEl) labelEl.innerText = "المدير / المؤسس الرئيسي (صلاحيات كاملة)";
-        } else if (currentUser) {
-            let uName = currentUser.name || currentUser.fullName || currentIdentifier;
-            let uRole = currentUser.role || currentUser.permission || 'عضو';
-            if(labelEl) labelEl.innerText = uName + " (" + uRole + ")";
-        } else if (currentIdentifier) {
-            if(labelEl) labelEl.innerText = currentIdentifier;
         } else {
-            if(labelEl) labelEl.innerText = "زائر / مستخدم جديد (سائق)";
+            let currentUser = globalUsersCache.find(u => 
+                (u.phone && u.phone === currentIdentifierClean) || 
+                (u.name && u.name === currentIdentifierClean) || 
+                (u.email && u.email === currentIdentifierClean)
+            );
+            if (currentUser) {
+                let uName = currentUser.name || currentUser.fullName || currentIdentifierClean;
+                let uRole = currentUser.role || currentUser.permission || 'سائق';
+                if(labelEl) labelEl.innerText = uName + " (" + uRole + ")";
+            } else if (currentIdentifierClean) {
+                if(labelEl) labelEl.innerText = currentIdentifierClean;
+            } else {
+                if(labelEl) labelEl.innerText = "زائر / غير محدد";
+            }
         }
 
-        // 1. إظهار/إخفاء لوحة إدارة السائقين والحسابات (للمدير فقط)
-        if (isManagerRole || isMasterAdmin) {
+        // إظهار أو إخفاء الأزرار واللوحات حصرياً للمدير أو الحسابات المصرح لها بالتحكم
+        if (isManager) {
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
+            if(profileBtn) profileBtn.style.display = "flex";
+            if(communityBtn) profileBtn.style.display = "flex";
         } else {
             if(adminBtn) adminBtn.style.display = "none";
             if(cardAdminUsers) cardAdminUsers.style.display = "none";
-        }
-
-        // 2. إخفاء زري "حسابي" و "المجتمع" تماماً عن أي مستخدم عادي
-        if (isMasterAdmin) {
-            if (profileBtn) profileBtn.style.display = "flex";
-            if (communityBtn) profileBtn.style.display = "flex";
-        } else {
-            if (profileBtn) profileBtn.style.display = "none";
-            if (communityBtn) profileBtn.style.display = "none";
+            if(profileBtn) profileBtn.style.display = "none";
+            if(communityBtn) profileBtn.style.display = "none";
         }
     }
 
