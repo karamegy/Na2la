@@ -364,7 +364,7 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات اليومية</p>
         </div>
-        <!-- بطاقة إدارة الحسابات المتقدمة -->
+        <!-- بطاقة إدارة الحسابات المتقدمة - تظهر فقط للمدير/المؤسس -->
         <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
             <span class="icon">👥</span>
             <h3>إدارة الحسابات</h3>
@@ -393,6 +393,7 @@
         <form id="userPermissionForm" onsubmit="registerPlatformUser(event)">
             <input type="text" id="userName" placeholder="الاسم الرباعي للعضو..." required>
             <input type="text" id="userPhone" placeholder="رقم الهاتف / واتساب..." required>
+            <input type="email" id="userEmail" placeholder="البريد الإلكتروني (اختياري)...">
             <input type="text" id="userPin" placeholder="رمز الدخول السري (PIN)..." required>
             
             <select id="userRole" required>
@@ -420,7 +421,7 @@
         <div style="font-weight: bold; font-size: 15px; margin-bottom: 8px;">📋 سجل الحسابات الموثقة بقاعدة بيانات Viper TDS</div>
         <div style="font-size: 11px; color: var(--secondary-text); margin-bottom: 10px;">يتم مزامنة البيانات وتحديث الحسابات والترقيات لحظياً مع جميع الأجهزة.</div>
         
-        <input type="text" id="searchUserInput" placeholder="🔍 ابحث بالاسم، رقم الهاتف أو الرتبة..." oninput="filterUsersList()">
+        <input type="text" id="searchUserInput" placeholder="🔍 ابحث بالاسم، رقم الهاتف، البريد أو الرتبة..." oninput="filterUsersList()">
 
         <div class="data-display-box" id="usersContainer">جاري جلب السجلات السحابية...</div>
     </div>
@@ -495,6 +496,7 @@
         <span>🚛</span>
         <span>الأسطول</span>
     </button>
+    <!-- زر لوحة الإدارة السفلي - مخفي تماماً ولا يظهر إلا للمدير أو المؤسس -->
     <button class="bottom-nav-item" id="navAdminBtn" style="display: none; color: var(--primary-color);" onclick="openModal('modalUsers')">
         <span>🛡️</span>
         <span>لوحة الإدارة</span>
@@ -603,7 +605,7 @@
             if(totalOut) totalOut.innerText = `إجمالي الحركات المالية: ${total} ج.م`;
         });
 
-        // مزامنة المستخدمين والصلاحيات
+        // مزامنة المستخدمين والصلاحيات من فايبرباس وتحديث واجهة العرض والبحث
         onSnapshot(collection(window.db, "viper_platform_users"), (snapshot) => {
             globalUsersCache = [];
             snapshot.forEach((docSnap) => {
@@ -628,7 +630,7 @@
                 <thead>
                     <tr>
                         <th>الاسم</th>
-                        <th>الهاتف</th>
+                        <th>الهاتف / البريد</th>
                         <th>الرتبة</th>
                         <th>اللقب / الوسام</th>
                         <th>PIN</th>
@@ -643,7 +645,7 @@
             html += `
                 <tr>
                     <td><b>${user.name}</b></td>
-                    <td>${user.phone || '-'}</td>
+                    <td>${user.phone || '-'}<br><small style="color:var(--secondary-text);">${user.email || ''}</small></td>
                     <td><span class="role-badge" style="color: ${roleColor};">${user.role || 'سائق'}</span></td>
                     <td><span class="badge-pill">🏷️ ${user.badge || 'عضو نشط'}</span></td>
                     <td><code>${user.pin || '----'}</code></td>
@@ -668,6 +670,7 @@
         let filtered = globalUsersCache.filter(u => 
             (u.name && u.name.toLowerCase().includes(query)) || 
             (u.phone && u.phone.toLowerCase().includes(query)) ||
+            (u.email && u.email.toLowerCase().includes(query)) ||
             (u.role && u.role.toLowerCase().includes(query)) ||
             (u.badge && u.badge.toLowerCase().includes(query))
         );
@@ -676,7 +679,7 @@
 
     function updateCurrentInterfacePermissions() {
         let currentIdentifier = localStorage.getItem('na2la_current_user_id') || "";
-        let currentUser = globalUsersCache.find(u => u.phone === currentIdentifier || u.name === currentIdentifier || u.role === 'المؤسس');
+        let currentUser = globalUsersCache.find(u => u.phone === currentIdentifier || u.name === currentIdentifier || u.email === currentIdentifier);
         
         let profileBtn = document.getElementById("navProfileBtn");
         let communityBtn = document.getElementById("navCommunityBtn");
@@ -691,9 +694,10 @@
             communityBtn.style.display = "flex";
         }
 
-        let isFounderOrAdmin = !currentUser || currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام' || currentIdentifier === "";
+        // التحقق الصارم: زر الإدارة ولوحة الإدارة لا يظهران أبداً إلا لحسابات "المؤسس" أو "مدير نظام" فقط
+        let isAbsoluteAdmin = currentUser && (currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام');
 
-        if (isFounderOrAdmin) {
+        if (isAbsoluteAdmin) {
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
         } else {
@@ -706,6 +710,7 @@
         e.preventDefault();
         let name = document.getElementById("userName").value;
         let phone = document.getElementById("userPhone").value;
+        let email = document.getElementById("userEmail").value;
         let pin = document.getElementById("userPin").value;
         let role = document.getElementById("userRole").value;
         let badge = document.getElementById("userBadge").value;
@@ -714,7 +719,7 @@
         
         const { collection, addDoc } = window.firebaseModules;
         await addDoc(collection(window.db, "viper_platform_users"), { 
-            name, phone, pin, role, badge, showProfile, showCommunity, timestamp: Date.now() 
+            name, phone, email, pin, role, badge, showProfile, showCommunity, timestamp: Date.now() 
         });
         document.getElementById("userPermissionForm").reset();
         alert("✅ تمت إضافة وتسجيل العضو ورتبته بنجاح في قاعدة بيانات Viper TDS السحابية!");
