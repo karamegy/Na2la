@@ -8,7 +8,7 @@
     <!-- استدعاء مكتبات Firebase سحابياً (Firestore & App) لضمان ربط Viper TDS -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3IODdfzTZmXKJePDdgxhfyIY",
@@ -24,7 +24,7 @@
         const db = getFirestore(app);
 
         window.db = db;
-        window.firebaseModules = { collection, addDoc, getDocs, deleteDoc, doc, onSnapshot };
+        window.firebaseModules = { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot };
         
         window.dispatchEvent(new Event('firebase-ready'));
     </script>
@@ -144,7 +144,7 @@
             text-transform: uppercase;
         }
 
-        /* شبكة لوحة الإدارة الموسعة */
+        /* شبكة لوحة الإدارة الموسعة والشاملة */
         .admin-dashboard-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -222,7 +222,7 @@
             padding: 10px;
             margin-top: 10px;
             font-size: 13px;
-            max-height: 180px;
+            max-height: 220px;
             overflow-y: auto;
         }
 
@@ -230,7 +230,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 6px 0;
+            padding: 8px 0;
             border-bottom: 1px solid var(--border-color);
         }
         .item-row:last-child { border-bottom: none; }
@@ -265,6 +265,20 @@
             box-shadow: var(--shadow-3d);
         }
 
+        /* تنسيق جدول المستخدمين وصلاحيات الأزرار */
+        .permissions-box {
+            display: flex;
+            gap: 10px;
+            font-size: 11px;
+            align-items: center;
+        }
+        .permissions-box label {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+        }
+
         /* النوافذ المنبثقة (Modals) */
         .page-modal-overlay {
             position: fixed;
@@ -288,7 +302,7 @@
             background: var(--card-bg);
             border: 1px solid var(--border-color);
             width: 90%;
-            max-width: 500px;
+            max-width: 550px;
             max-height: 85vh;
             border-radius: 20px;
             padding: 20px;
@@ -378,10 +392,20 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات</p>
         </div>
+        <div class="admin-card" onclick="openModal('modalUsers')">
+            <span class="icon">👥</span>
+            <h3>حسابات وصلاحيات</h3>
+            <p>التحكم بالأزرار والمستخدمين</p>
+        </div>
         <div class="admin-card" onclick="openModal('modalEmergency')">
             <span class="icon">🚨</span>
             <h3>الطوارئ</h3>
             <p>بلاغات وغرفة العمليات</p>
+        </div>
+        <div class="admin-card" onclick="cycleNextTheme()">
+            <span class="icon">🎨</span>
+            <h3>الثيمات</h3>
+            <p>تغيير مظهر المنصة (<span id="themeCounterDisplayGrid">1</span>/10)</p>
         </div>
     </div>
 
@@ -428,6 +452,24 @@
     </div>
 </div>
 
+<!-- نافذة إدارة حسابات المستخدمين وصلاحيات الأزرار (حسابي / المجتمع) -->
+<div class="page-modal-overlay" id="modalUsers">
+    <div class="page-modal-content">
+        <button class="modal-close-btn" onclick="closeModal('modalUsers')">إغلاق ✕</button>
+        <div style="margin-top: 35px; font-weight: bold; font-size: 16px; color: var(--accent-color);">👥 إدارة حسابات المنصة وصلاحيات الأزرار</div>
+        <form id="userPermissionForm" onsubmit="registerPlatformUser(event)">
+            <input type="text" id="userName" placeholder="اسم السائق أو المستخدم..." required>
+            <input type="text" id="userEmail" placeholder="البريد أو رقم الهاتف..." required>
+            <div style="display: flex; gap: 15px; margin: 10px 0; font-size: 12px; align-items: center;">
+                <label><input type="checkbox" id="permProfile" checked> إظهار زر "حسابي"</label>
+                <label><input type="checkbox" id="permCommunity" checked> إظهار زر "المجتمع"</label>
+            </div>
+            <button type="submit" class="btn-submit" style="background: var(--accent-color);">تسجيل مستخدم وإعطاء الصلاحيات سحابياً</button>
+        </form>
+        <div class="data-display-box" id="usersContainer">جاري جلب الحسابات المسجلة وصلاحياتها...</div>
+    </div>
+</div>
+
 <div class="page-modal-overlay" id="modalEmergency">
     <div class="page-modal-content">
         <button class="modal-close-btn" onclick="closeModal('modalEmergency')">إغلاق ✕</button>
@@ -442,15 +484,15 @@
     </div>
 </div>
 
-<!-- شريط التنقل السفلي المحدث بالأسماء والأيقونات الحقيقية للمشروع -->
-<nav class="bottom-nav-bar">
-    <!-- 1. حسابي -->
-    <a href="driver-profile.html" class="bottom-nav-item">
+<!-- شريط التنقل السفلي المحدث الديناميكي وفق الصلاحيات -->
+<nav class="bottom-nav-bar" id="bottomNavBar">
+    <!-- 1. حسابي (يظهر أو يختفي حسب صلاحيات المستخدم المسجل) -->
+    <a href="driver-profile.html" class="bottom-nav-item" id="navProfileBtn">
         <span>👤</span>
         <span>حسابي</span>
     </a>
-    <!-- 2. المجتمع (يوجه إلى ملف driver-profile.html مباشرة بدون تقاطع) -->
-    <a href="driver-profile.html" class="bottom-nav-item" style="color: var(--accent-color);">
+    <!-- 2. المجتمع (يظهر أو يختفي حسب الصلاحيات) -->
+    <a href="driver-profile.html" class="bottom-nav-item" id="navCommunityBtn" style="color: var(--accent-color);">
         <span>👥</span>
         <span>المجتمع</span>
     </a>
@@ -460,9 +502,9 @@
         <span>الأسطول</span>
     </button>
     <!-- 4. لوحة الإدارة -->
-    <button class="bottom-nav-item active" style="color: var(--primary-color);">
+    <button class="bottom-nav-item active" style="color: var(--primary-color);" onclick="openModal('modalUsers')">
         <span>🛡️</span>
-        <span>لوحة الإدارة</span>
+        <span>إدارة الحسابات</span>
     </button>
     <!-- 5. تبديل الثيمات -->
     <button class="bottom-nav-item" onclick="cycleNextTheme()" style="color: var(--warning-color);">
@@ -507,6 +549,7 @@
 
         localStorage.setItem('db_viper_theme_index', currentThemeIndex);
         document.getElementById('themeCounterDisplay').innerText = currentThemeIndex + 1;
+        document.getElementById('themeCounterDisplayGrid').innerText = currentThemeIndex + 1;
     }
 
     function loadSavedTheme() {
@@ -518,6 +561,7 @@
                 document.documentElement.setAttribute('data-theme', selectedTheme.id);
             }
             document.getElementById('themeCounterDisplay').innerText = currentThemeIndex + 1;
+            document.getElementById('themeCounterDisplayGrid').innerText = currentThemeIndex + 1;
         }
     }
 
@@ -525,6 +569,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot } = window.firebaseModules;
 
+        // مزامنة الأسطول
         onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
             let container = document.getElementById("fleetContainer");
             if (!container) return;
@@ -545,6 +590,7 @@
             });
         });
 
+        // مزامنة الشحنات
         onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
             let container = document.getElementById("logisticsContainer");
             if (!container) return;
@@ -565,6 +611,7 @@
             });
         });
 
+        // مزامنة المالية
         onSnapshot(collection(window.db, "viper_finance"), (snapshot) => {
             let container = document.getElementById("financeContainer");
             if (!container) return;
@@ -589,6 +636,36 @@
             });
             let totalOut = document.getElementById("totalFinanceOutput");
             if(totalOut) totalOut.innerText = `إجمالي التقارير: ${total} ج.م`;
+        });
+
+        // مزامنة حسابات المستخدمين وصلاحيات ظهور الأزرار
+        onSnapshot(collection(window.db, "viper_platform_users"), (snapshot) => {
+            let container = document.getElementById("usersContainer");
+            if (!container) return;
+            container.innerHTML = "";
+            if (snapshot.empty) {
+                container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 5px;'>لا توجد حسابات مسجلة حالياً.</div>";
+                return;
+            }
+            snapshot.forEach((docSnap) => {
+                let user = docSnap.data();
+                let id = docSnap.id;
+                container.innerHTML += `
+                    <div class="item-row">
+                        <div>
+                            <b>${user.name}</b> (${user.email})
+                            <div class="permissions-box" style="margin-top:4px;">
+                                <span style="color:${user.showProfile ? 'var(--accent-color)' : 'var(--danger-color)'};">حسابي: ${user.showProfile ? 'مفعل' : 'مخفي'}</span> | 
+                                <span style="color:${user.showCommunity ? 'var(--accent-color)' : 'var(--danger-color)'};">المجتمع: ${user.showCommunity ? 'مفعل' : 'مخفي'}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn-delete" style="background:var(--warning-color); color:#000;" onclick="togglePermission('${id}', ${user.showProfile}, ${user.showCommunity})">تبديل</button>
+                            <button class="btn-delete" onclick="deleteCloudItem('viper_platform_users', '${id}')">حذف</button>
+                        </div>
+                    </div>
+                `;
+            });
         });
     }
 
@@ -617,6 +694,27 @@
         const { collection, addDoc } = window.firebaseModules;
         await addDoc(collection(window.db, "viper_finance"), { item, cost, timestamp: Date.now() });
         document.getElementById("financeForm").reset();
+    }
+
+    async function registerPlatformUser(e) {
+        e.preventDefault();
+        let name = document.getElementById("userName").value;
+        let email = document.getElementById("userEmail").value;
+        let showProfile = document.getElementById("permProfile").checked;
+        let showCommunity = document.getElementById("permCommunity").checked;
+        
+        const { collection, addDoc } = window.firebaseModules;
+        await addDoc(collection(window.db, "viper_platform_users"), { name, email, showProfile, showCommunity, timestamp: Date.now() });
+        document.getElementById("userPermissionForm").reset();
+    }
+
+    async function togglePermission(docId, currentProfile, currentCommunity) {
+        const { doc, updateDoc } = window.firebaseModules;
+        // تبديل عكسي للصلاحيات كاختصار إداري سريع
+        await updateDoc(doc(window.db, "viper_platform_users", docId), {
+            showProfile: !currentProfile,
+            showCommunity: !currentCommunity
+        });
     }
 
     async function deleteCloudItem(collectionName, docId) {
