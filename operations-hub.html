@@ -374,10 +374,10 @@
     <div class="page-modal-content" style="max-width: 450px;">
         <button class="modal-close-btn" onclick="closeModal('modalUserLogin')">إغلاق ✕</button>
         <div style="margin-top: 35px; font-weight: bold; font-size: 16px; color: var(--primary-color);">🔐 تسجيل الدخول للمنصة</div>
-        <p style="font-size: 12px; color: var(--secondary-text);">أدخل اسمك أو رقم هاتفك المسجل في قاعدة البيانات:</p>
+        <p style="font-size: 12px; color: var(--secondary-text);">أدخل اسمك أو رقم هاتفك (اكتب <b>عماد</b> أو <b>ADMIN_MASTER_EMAD</b> لدخول المدير الكامل):</p>
         
         <form onsubmit="setActiveUserSession(event)">
-            <input type="text" id="loginIdentifier" placeholder="أدخل اسمك أو رقم هاتفك المسجل..." required>
+            <input type="text" id="loginIdentifier" placeholder="أدخل اسمك أو رقم هاتفك..." required>
             <button type="submit" class="btn-submit">تفعيل الحساب على هذا الجهاز</button>
         </form>
     </div>
@@ -622,6 +622,9 @@
             });
             renderUsersTable(globalUsersCache);
             updateCurrentInterfacePermissions();
+        }, (error) => {
+            let container = document.getElementById("usersContainer");
+            if(container) container.innerHTML = `<div style='text-align:center; color:var(--danger-color); padding: 12px;'>خطأ في جلب بيانات الحسابات: ${error.message}</div>`;
         });
     }
 
@@ -630,7 +633,7 @@
         if (!container) return;
         
         if (users.length === 0) {
-            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 12px;'>لا توجد حسابات مسجلة بعد.</div>";
+            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 12px;'>لا توجد حسابات مسجلة بعد. أضف أول حساب من النموذج أعلاه.</div>";
             return;
         }
 
@@ -702,7 +705,7 @@
         let adminBtn = document.getElementById("navAdminBtn");
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        let isMasterAdmin = (currentIdentifier === 'ADMIN_MASTER_EMAD');
+        let isMasterAdmin = (currentIdentifier === 'ADMIN_MASTER_EMAD' || currentIdentifier === 'عماد' || currentIdentifier === 'Emad');
         let currentUser = globalUsersCache.find(u => u.phone === currentIdentifier || u.name === currentIdentifier || u.email === currentIdentifier);
         
         let isManagerRole = isMasterAdmin || (currentUser && (currentUser.role === 'المؤسس' || currentUser.role === 'مدير نظام'));
@@ -717,7 +720,7 @@
             if(labelEl) labelEl.innerText = "زائر / غير مسجل الدخول";
         }
 
-        // 1. إدارة ظهور لوحة الإدارة (للمدير الأساسي فقط)
+        // 1. إدارة ظهور لوحة الإدارة
         if (isManagerRole) {
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
@@ -726,7 +729,7 @@
             if(cardAdminUsers) cardAdminUsers.style.display = "none";
         }
 
-        // 2. إدارة ظهور زري "حسابي" و "المجتمع" بناءً على إعدادات الحساب السحابية بدقة
+        // 2. إدارة ظهور زري "حسابي" و "المجتمع"
         if (isMasterAdmin) {
             if (profileBtn) profileBtn.style.display = "flex";
             if (communityBtn) communityBtn.style.display = "flex";
@@ -734,7 +737,6 @@
             if (profileBtn) profileBtn.style.display = currentUser.showProfile === true ? "flex" : "none";
             if (communityBtn) communityBtn.style.display = currentUser.showCommunity === true ? "flex" : "none";
         } else {
-            // الحسابات غير المسجلة أو الجديدة تُحجب عنها الأزرار تماماً افتراضياً
             if (profileBtn) profileBtn.style.display = "none";
             if (communityBtn) communityBtn.style.display = "none";
         }
@@ -742,29 +744,37 @@
 
     async function registerPlatformUser(e) {
         e.preventDefault();
-        let name = document.getElementById("userName").value;
-        let phone = document.getElementById("userPhone").value;
-        let email = document.getElementById("userEmail").value;
-        let pin = document.getElementById("userPin").value;
+        let name = document.getElementById("userName").value.trim();
+        let phone = document.getElementById("userPhone").value.trim();
+        let email = document.getElementById("userEmail").value.trim();
+        let pin = document.getElementById("userPin").value.trim();
         let role = document.getElementById("userRole").value;
-        let badge = document.getElementById("userBadge").value;
+        let badge = document.getElementById("userBadge").value.trim();
         let showProfile = document.getElementById("permProfile").checked;
         let showCommunity = document.getElementById("permCommunity").checked;
         
-        const { collection, addDoc } = window.firebaseModules;
-        await addDoc(collection(window.db, "viper_platform_users"), { 
-            name, phone, email, pin, role, badge, showProfile, showCommunity, timestamp: Date.now() 
-        });
-        document.getElementById("userPermissionForm").reset();
-        alert("✅ تمت إضافة وتسجيل العضو وربطه بملف الفهرس وقاعدة البيانات سحابياً بنجاح!");
+        try {
+            const { collection, addDoc } = window.firebaseModules;
+            await addDoc(collection(window.db, "viper_platform_users"), { 
+                name, phone, email, pin, role, badge, showProfile, showCommunity, timestamp: Date.now() 
+            });
+            document.getElementById("userPermissionForm").reset();
+            alert("✅ تمت إضافة وتسجيل العضو وربطه بملف الفهرس وقاعدة البيانات سحابياً بنجاح!");
+        } catch (err) {
+            alert("❌ حدث خطأ أثناء الحفظ: " + err.message);
+        }
     }
 
     async function toggleUserButtonPermission(docId, permissionKey, currentValue) {
-        const { doc, updateDoc } = window.firebaseModules;
-        let updateData = {};
-        updateData[permissionKey] = !currentValue;
-        await updateDoc(doc(window.db, "viper_platform_users", docId), updateData);
-        alert("✅ تم تعديل صلاحية الزر لهذا الحساب بنجاح!");
+        try {
+            const { doc, updateDoc } = window.firebaseModules;
+            let updateData = {};
+            updateData[permissionKey] = !currentValue;
+            await updateDoc(doc(window.db, "viper_platform_users", docId), updateData);
+            alert("✅ تم تعديل صلاحية الزر لهذا الحساب بنجاح!");
+        } catch (err) {
+            alert("❌ خطأ في التحديث: " + err.message);
+        }
     }
 
     async function addFleetOperation(e) {
@@ -796,8 +806,12 @@
 
     async function deleteCloudItem(collectionName, docId) {
         if (confirm("هل أنت متأكد من الحذف النهائي لهذا السجل من سحابية Viper TDS؟")) {
-            const { doc, deleteDoc } = window.firebaseModules;
-            await deleteDoc(doc(window.db, collectionName, docId));
+            try {
+                const { doc, deleteDoc } = window.firebaseModules;
+                await deleteDoc(doc(window.db, collectionName, docId));
+            } catch (err) {
+                alert("❌ خطأ أثناء الحذف: " + err.message);
+            }
         }
     }
 
