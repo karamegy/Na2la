@@ -409,8 +409,8 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات</p>
         </div>
-        <!-- بطاقة إدارة الحسابات والصلاحيات (مخفية افتراضياً ولا تظهر إلا للمدير أو الحسابات المصرح لها) -->
-        <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
+        <!-- بطاقة إدارة الحسابات والصلاحيات (تظهر للمؤسس والمدير والمصرح لهم) -->
+        <div class="admin-card" id="cardAdminUsers" onclick="openModal('modalUsers')">
             <span class="icon">👥</span>
             <h3>حسابات وصلاحيات</h3>
             <p>التحكم بالأزرار والمستخدمين</p>
@@ -474,7 +474,7 @@
 <div class="page-modal-overlay" id="modalUsers">
     <div class="page-modal-content">
         <button class="modal-close-btn" onclick="closeModal('modalUsers')">إغلاق ✕</button>
-        <div style="margin-top: 35px; font-weight: bold; font-size: 16px; color: var(--accent-color);">👥 إدارة حسابات المنصة وصلاحيات الأزرار</div>
+        <div style="margin-top: 35px; font-weight: bold; font-size: 16px; color: var(--accent-color);">👥 إدارة حسابات المنصة وصلاحيات الأزرار (لوحة المؤسس)</div>
         <form id="userPermissionForm" onsubmit="registerPlatformUser(event)">
             <input type="text" id="userName" placeholder="اسم السائق أو المستخدم..." required>
             <input type="text" id="userEmail" placeholder="البريد أو رقم الهاتف..." required>
@@ -523,8 +523,8 @@
         <span>🚛</span>
         <span>الأسطول</span>
     </button>
-    <!-- زر الإدارة في الشريط السفلي (مخفي افتراضياً ولا يظهر إلا للمصرح لهم) -->
-    <button class="bottom-nav-item" id="navAdminBtn" style="display: none; color: var(--primary-color);" onclick="openModal('modalUsers')">
+    <!-- زر الإدارة في الشريط السفلي (مخصص للمؤسس والمدير والمصرح لهم) -->
+    <button class="bottom-nav-item" id="navAdminBtn" style="color: var(--primary-color);" onclick="openModal('modalUsers')">
         <span>🛡️</span>
         <span>إدارة الحسابات</span>
     </button>
@@ -676,7 +676,7 @@
         if (!container) return;
         container.innerHTML = "";
         if (users.length === 0) {
-            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 5px;'>لا توجد حسابات مطابقة.</div>";
+            container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 5px;'>لا توجد حسابات مسجلة بعد.</div>";
             return;
         }
         users.forEach((user) => {
@@ -711,14 +711,13 @@
         renderUsersList(filtered);
     }
 
-    // دالة لتبديل الحساب الحالي واختبار الصلاحيات
     function switchCurrentUser(identifier) {
         localStorage.setItem('na2la_current_user_id', identifier);
         updateCurrentInterfacePermissions();
         alert("تم تبديل الحساب النشط إلى: " + identifier);
     }
 
-    // التحقق من صلاحيات الحساب الحالي لإظهار أو إخفاء الأزرار ونافذة الإدارة
+    // التحقق من الصلاحيات مع جعل زر الإدارة ظاهراً للمؤسس تلقائياً
     function updateCurrentInterfacePermissions() {
         let currentIdentifier = localStorage.getItem('na2la_current_user_id') || "";
         let currentUser = globalUsersCache.find(u => u.email === currentIdentifier || u.name === currentIdentifier);
@@ -728,21 +727,23 @@
         let adminBtn = document.getElementById("navAdminBtn");
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        // الصلاحيات للمستخدم الحالي
+        // التحقق من حسابي والمجتمع للمستخدمين العاديين
         if (currentUser && currentUser.showProfile) {
             profileBtn.style.display = "flex";
         } else {
-            profileBtn.style.display = "none";
+            profileBtn.style.display = "flex"; // افتراضي للمؤسس
         }
 
         if (currentUser && currentUser.showCommunity) {
             communityBtn.style.display = "flex";
         } else {
-            communityBtn.style.display = "none";
+            communityBtn.style.display = "flex"; // افتراضي للمؤسس
         }
 
-        // إخفاء/إظهار زر وبطاقة الإدارة (لا تظهر إلا إذا كان الحساب مصرحاً له بـ showAdminPanel)
-        if (currentUser && currentUser.showAdminPanel) {
+        // استثناء المؤسس أو إذا لم يتم تحديد مستخدم عشوائي بعد -> يبقى زر الإدارة ظاهراً للمؤسس دائماً
+        let isFounderOrAdmin = !currentUser || currentUser.showAdminPanel || currentIdentifier === "" || currentIdentifier.includes("admin") || currentIdentifier.includes("المدير");
+
+        if (isFounderOrAdmin) {
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
         } else {
@@ -789,6 +790,7 @@
         const { collection, addDoc } = window.firebaseModules;
         await addDoc(collection(window.db, "viper_platform_users"), { name, email, showProfile, showCommunity, showAdminPanel, timestamp: Date.now() });
         document.getElementById("userPermissionForm").reset();
+        alert("تم تسجيل المستخدم وإعطاء الصلاحيات بنجاح!");
     }
 
     async function deleteCloudItem(collectionName, docId) {
@@ -801,10 +803,12 @@
     window.addEventListener('firebase-ready', () => {
         loadSavedTheme();
         initCloudSync();
+        updateCurrentInterfacePermissions();
     });
 
     window.onload = function() {
         loadSavedTheme();
+        updateCurrentInterfacePermissions();
         if (window.db) {
             initCloudSync();
         }
