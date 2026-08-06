@@ -83,7 +83,7 @@
             padding: 0 10px;
         }
 
-        /* بطاقات الإحصائيات السريعة */
+        /* إحصائيات سريعة */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -132,7 +132,7 @@
             gap: 6px;
         }
 
-        /* جدول السائقين المطور */
+        /* جدول السائقين */
         .drivers-table {
             width: 100%;
             border-collapse: collapse;
@@ -254,21 +254,21 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-title">إجمالي السائقين</div>
-                <div class="stat-number" id="totalDriversCount">2</div>
+                <div class="stat-number" id="totalDriversCount">0</div>
             </div>
             <div class="stat-card">
                 <div class="stat-title">المتاحين للعمل</div>
-                <div class="stat-number" id="availableDriversCount" style="color: var(--success-color);">1</div>
+                <div class="stat-number" id="availableDriversCount" style="color: var(--success-color);">0</div>
             </div>
             <div class="stat-card">
                 <div class="stat-title">في رحلات حالياً</div>
-                <div class="stat-number" id="busyDriversCount" style="color: var(--warning-color);">1</div>
+                <div class="stat-number" id="busyDriversCount" style="color: var(--warning-color);">0</div>
             </div>
         </div>
 
         <!-- جدول السائقين والسيارات المتاحة -->
         <div class="card-box">
-            <div class="card-title">📋 سجل السائقين والسيارات المتاحة</div>
+            <div class="card-title">📋 سجل السائقين والسيارات المتاحة (مباشر من القاعدة)</div>
             <table class="drivers-table">
                 <thead>
                     <tr>
@@ -279,30 +279,7 @@
                     </tr>
                 </thead>
                 <tbody id="driversTableBody">
-                    <tr>
-                        <td><b>عماد (المؤسس)</b></td>
-                        <td>ربع نقل (ربع طن)</td>
-                        <td><span class="status-badge status-available">🟢 متاح للعمل</span></td>
-                        <td>
-                            <div class="action-btns-cell">
-                                <button class="tbl-btn btn-toggle" onclick="toggleDriverStatus(this)">تبديل الحالة</button>
-                                <a href="tel:01000000000" class="tbl-btn btn-call">📞 اتصال</a>
-                                <button class="tbl-btn btn-delete" onclick="deleteDriver(this)">حذف</button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><b>محمد أحمد</b></td>
-                        <td>ربع نقل</td>
-                        <td><span class="status-badge status-busy">🚚 في رحلة حالياً</span></td>
-                        <td>
-                            <div class="action-btns-cell">
-                                <button class="tbl-btn btn-toggle" onclick="toggleDriverStatus(this)">تبديل الحالة</button>
-                                <a href="tel:01000000000" class="tbl-btn btn-call">📞 اتصال</a>
-                                <button class="tbl-btn btn-delete" onclick="deleteDriver(this)">حذف</button>
-                            </div>
-                        </td>
-                    </tr>
+                    <!-- سيتم جلب السائقين وعرضهم هنا تلقائياً لحظة بلحظة -->
                 </tbody>
             </table>
         </div>
@@ -326,42 +303,91 @@
         </div>
     </div>
 
-    <script>
-        function toggleTheme() {
+    <!-- كود التحكم والربط مع فايربيس -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            authDomain: "n2la-642d3.firebaseapp.com",
+            projectId: "n2la-642d3",
+            storageBucket: "n2la-642d3.firebasestorage.app",
+            messagingSenderId: "1085749997466",
+            appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+            measurementId: "G-KH4ZYFB8LC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // تبديل الثيم الليلي والنهاري
+        window.toggleTheme = function() {
             const body = document.body;
             const currentTheme = body.getAttribute("data-theme");
             const newTheme = currentTheme === "light" ? "dark" : "light";
             body.setAttribute("data-theme", newTheme);
             localStorage.setItem("drivers_theme", newTheme);
-        }
-
-        window.onload = function() {
-            const savedTheme = localStorage.getItem("drivers_theme") || "light";
-            document.body.setAttribute("data-theme", savedTheme);
-            updateStats();
         };
 
-        function updateStats() {
-            const rows = document.querySelectorAll("#driversTableBody tr");
-            let total = rows.length;
-            let available = 0;
-            let busy = 0;
+        // عند تحميل الصفحة
+        window.onload = function() {
+            const savedTheme = localStorage.getItem("drivers_theme") || "light";
+            bodyTheme(savedTheme);
+            listenToDrivers();
+        };
 
-            rows.forEach(row => {
-                const badge = row.querySelector(".status-badge");
-                if(badge.classList.contains("status-available")) {
-                    available++;
-                } else {
-                    busy++;
-                }
-            });
-
-            document.getElementById("totalDriversCount").innerText = total;
-            document.getElementById("availableDriversCount").innerText = available;
-            document.getElementById("busyDriversCount").innerText = busy;
+        function bodyTheme(theme) {
+            document.body.setAttribute("data-theme", theme);
         }
 
-        function addNewDriver() {
+        // الاستماع الفوري للتحديثات من قاعدة البيانات (drivers)
+        function listenToDrivers() {
+            const tbody = document.getElementById("driversTableBody");
+            
+            onSnapshot(collection(db, "drivers"), (snapshot) => {
+                tbody.innerHTML = "";
+                let total = 0;
+                let available = 0;
+                let busy = 0;
+
+                snapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    
+                    // تخطي مستند الاختبار إن وجد
+                    if (data.test) return;
+
+                    total++;
+                    const isAvailable = data.status === "available";
+                    if (isAvailable) available++; else busy++;
+
+                    const statusBadgeClass = isAvailable ? "status-badge status-available" : "status-badge status-busy";
+                    const statusText = isAvailable ? "🟢 متاح للعمل" : "🚚 في رحلة حالياً";
+
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><b>${escapeHtml(data.name || '')}</b></td>
+                        <td>${escapeHtml(data.car || '')}</td>
+                        <td><span class="${statusBadgeClass}">${statusText}</span></td>
+                        <td>
+                            <div class="action-btns-cell">
+                                <button class="tbl-btn btn-toggle" onclick="toggleDriverStatus('${docSnap.id}', '${data.status}')">تبديل الحالة</button>
+                                <a href="tel:${escapeHtml(data.phone || '01000000000')}" class="tbl-btn btn-call">📞 اتصال</a>
+                                <button class="tbl-btn btn-delete" onclick="deleteDriver('${docSnap.id}')">حذف</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                document.getElementById("totalDriversCount").innerText = total;
+                document.getElementById("availableDriversCount").innerText = available;
+                document.getElementById("busyDriversCount").innerText = busy;
+            });
+        }
+
+        // إضافة سائق جديد وحفظه في Firebase
+        window.addNewDriver = async function() {
             const name = document.getElementById("newDriverName").value;
             const car = document.getElementById("newDriverCar").value;
             const statusVal = document.getElementById("newDriverStatus").value;
@@ -371,73 +397,51 @@
                 return;
             }
 
-            const tbody = document.getElementById("driversTableBody");
-            const newRow = document.createElement("tr");
+            try {
+                await addDoc(collection(db, "drivers"), {
+                    name: name,
+                    car: car,
+                    status: statusVal,
+                    phone: "01000000000",
+                    createdAt: new Date().toISOString()
+                });
 
-            let badgeHTML = statusVal === "available" 
-                ? '<span class="status-badge status-available">🟢 متاح للعمل</span>' 
-                : '<span class="status-badge status-busy">🚚 في رحلة حالياً</span>';
-
-            newRow.innerHTML = `
-                <td><b>${escapeHtml(name)}</b></td>
-                <td>${escapeHtml(car)}</td>
-                <td>${badgeHTML}</td>
-                <td>
-                    <div class="action-btns-cell">
-                        <button class="tbl-btn btn-toggle" onclick="toggleDriverStatus(this)">تبديل الحالة</button>
-                        <a href="tel:01000000000" class="tbl-btn btn-call">📞 اتصال</a>
-                        <button class="tbl-btn btn-delete" onclick="deleteDriver(this)">حذف</button>
-                    </div>
-                </td>
-            `;
-
-            tbody.appendChild(newRow);
-            document.getElementById("newDriverName").value = "";
-            document.getElementById("newDriverCar").value = "";
-            updateStats();
-        }
-
-        function toggleDriverStatus(btn) {
-            const row = btn.closest("tr");
-            const badge = row.querySelector(".status-badge");
-            
-            if(badge.classList.contains("status-available")) {
-                badge.className = "status-badge status-busy";
-                badge.innerText = "🚚 في رحلة حالياً";
-            } else {
-                badge.className = "status-badge status-available";
-                badge.innerText = "🟢 متاح للعمل";
+                document.getElementById("newDriverName").value = "";
+                document.getElementById("newDriverCar").value = "";
+                alert("تم إضافة السائق بنجاح وإرساله لقاعدة البيانات!");
+            } catch (e) {
+                console.error("خطأ في الإضافة: ", e);
+                alert("حدث خطأ أثناء حفظ البيانات: " + e.message);
             }
-            updateStats();
-        }
+        };
 
-        function deleteDriver(btn) {
+        // تبديل حالة السائق وتحديثها في Firebase مباشرة
+        window.toggleDriverStatus = async function(docId, currentStatus) {
+            try {
+                const newStatus = currentStatus === "available" ? "busy" : "available";
+                await updateDoc(doc(db, "drivers", docId), {
+                    status: newStatus
+                });
+            } catch (e) {
+                console.error("خطأ في التحديث: ", e);
+            }
+        };
+
+        // حذف السائق من Firebase
+        window.deleteDriver = async function(docId) {
             if(confirm("هل أنت متأكد من حذف هذا السائق من الأسطول؟")) {
-                btn.closest("tr").remove();
-                updateStats();
+                try {
+                    await deleteDoc(doc(db, "drivers", docId));
+                } catch (e) {
+                    console.error("خطأ في الحذف: ", e);
+                }
             }
-        }
+        };
 
         function escapeHtml(text) {
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            if (!text) return '';
+            return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
-    </script>
-        <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-      import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
-        authDomain: "n2la-642d3.firebaseapp.com",
-        projectId: "n2la-642d3",
-        storageBucket: "n2la-642d3.firebasestorage.app",
-        messagingSenderId: "1085749997466",
-        appId: "1:1085749997466:web:13e5535dc6d2312397d423",
-        measurementId: "G-KH4ZYFB8LC"
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const analytics = getAnalytics(app);
     </script>
 
 </body>
