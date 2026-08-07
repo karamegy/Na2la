@@ -2780,14 +2780,147 @@
                   renderCRUDTable();
     } catch (e) {
         alert("فشل الحذف");
-    }
-  };
-</script>
-
+          }
+    };
 <!-- زر التجربة بتصميم أنيق -->
-<button onclick="saveDataToFirebase('shipments', { name: 'عميل تجريبي', phone: '01012345678', item: 'بضائع عامة', amount: 300 })" class="custom-save-btn">
+<button id="test-save-btn" class="custom-save-btn">
     تجربة القاعدة (شحنات)
 </button>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
+    authDomain: "n2la-642d3.firebaseapp.com",
+    projectId: "n2la-642d3",
+    storageBucket: "n2la-642d3.firebasestorage.app",
+    messagingSenderId: "1085749997466",
+    appId: "1:1085749997466:web:13e5539",
+    measurementId: "G-KH4ZYFB8LC"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  console.log("تم ربط قاعدة البيانات بنجاح");
+
+  window.renderCRUDTable = async function() {
+      const sectionElement = document.getElementById('crud-section-select');
+      if(!sectionElement) return;
+      const section = sectionElement.value;
+      const headers = document.getElementById('crud-table-headers');
+      const body = document.getElementById('crud-table-body');
+      
+      if(!headers || !body) return;
+      
+      headers.innerHTML = '';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;">جاري التحميل...</td></tr>';
+
+      try {
+          const querySnapshot = await getDocs(collection(db, section));
+          headers.innerHTML = '';
+          body.innerHTML = '';
+
+          let items = [];
+          querySnapshot.forEach((docSnap) => {
+              items.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          if (section === 'shipments') {
+              headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>العنوان</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>إدارة</th>';
+              items.forEach(s => {
+                  body.innerHTML += `<tr><td>${s.name || s.clientName || '-'}</td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td><td>${s.item || '-'}</td><td>${s.price || s.amount || 0} ج.م</td><td>${s.status || 'جديدة'}</td><td><button class="btn-danger btn-sm delete-btn" data-collection="shipments" data-id="${s.id}">حذف</button></td></tr>`;
+              });
+          } else if (section === 'drivers') {
+              headers.innerHTML = '<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>';
+              items.forEach(d => {
+                  body.innerHTML += `<tr><td><b>${d.name || '-'}</b></td><td>${d.phone || '-'}</td><td>${d.role || '-'}</td><td>${d.title || ''}</td><td><code>${d.pin || ''}</code></td><td><button class="btn-danger btn-sm delete-btn" data-collection="drivers" data-id="${d.id}">حذف</button></td></tr>`;
+              });
+          } else if (section === 'trucks') {
+              headers.innerHTML = '<th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت القادم</th><th>الرخصة</th>';
+              items.forEach(t => {
+                  body.innerHTML += `<tr><td>${t.truckNum || '-'}</td><td>${t.driverName || '-'}</td><td>${t.km || 0}</td><td>${t.nextOil || '-'}</td><td>${t.expiry || '-'}</td></tr>`;
+              });
+          } else if (section === 'customers') {
+              headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>المديونية</th>';
+              items.forEach(c => {
+                  body.innerHTML += `<tr><td>${c.name || '-'}</td><td>${c.phone || '-'}</td><td style="color:var(--danger);">${c.debt || 0} ج.م</td></tr>`;
+              });
+          } else if (section === 'treasury') {
+              headers.innerHTML = '<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th>';
+    }
+                        items.forEach(t => {
+                  body.innerHTML += `<tr><td>${t.type || '-'}</td><td>${t.amount || 0} ج.م</td><td>${t.desc || '-'}</td><td>${t.date || '-'}</td></tr>`;
+              });
+          } else if (section === 'expenses') {
+              headers.innerHTML = '<th>البيان</th><th>المبلغ</th><th>التاريخ</th>';
+              items.forEach(ex => {
+                  body.innerHTML += `<tr><td>${ex.title || '-'}</td><td>${ex.amount || 0} ج.م</td><td>${ex.date || '-'}</td></tr>`;
+              });
+          }
+
+          // تفعيل أزرار الحذف بعد تحميل الجدول
+          attachDeleteEvents();
+
+      } catch (e) {
+          console.error("خطأ في جلب البيانات: ", e);
+      }
+  };
+
+  // دالة الحفظ في فايربيس
+  async function saveDataToFirebase(collectionName, dataObj) {
+      try {
+          const docRef = await addDoc(collection(db, collectionName), { ...dataObj, createdAt: new Date().toISOString() });
+          localStorage.setItem('last_saved_id', docRef.id);
+          alert("تم الحفظ بنجاح! رقم الحفظ: " + docRef.id);
+          if (typeof window.renderCRUDTable === 'function') {
+              window.renderCRUDTable();
+          }
+      } catch (e) {
+          alert("خطأ: " + e.message);
+      }
+  }
+
+  // دالة الحذف من فايربيس
+  async function deleteFirebaseItem(collectionName, docId) {
+      if (confirm("هل أنت متأكد من الحذف؟")) {
+          try {
+              await deleteDoc(doc(db, collectionName, docId));
+              alert("تم الحذف بنجاح");
+              if (typeof window.renderCRUDTable === 'function') {
+                  window.renderCRUDTable();
+              }
+          } catch (e) {
+              alert("فشل الحذف: " + e.message);
+          }
+      }
+  }
+
+  // ربط زر التجربة برمجياً
+  const testBtn = document.getElementById('test-save-btn');
+  if (testBtn) {
+      testBtn.addEventListener('click', () => {
+          saveDataToFirebase('shipments', { 
+              name: 'عميل تجريبي', 
+              phone: '01012345678', 
+              item: 'بضائع عامة', 
+              amount: 300 
+          });
+      });
+  }
+
+  // دالة لربط أحداث الحذف للأعمدة المولدة ديناميكياً
+  function attachDeleteEvents() {
+      document.querySelectorAll('.delete-btn').forEach(button => {
+          button.addEventListener('click', (e) => {
+              const colName = e.target.getAttribute('data-collection');
+              const docId = e.target.getAttribute('data-id');
+              deleteFirebaseItem(colName, docId);
+          });
+      });
+  }
+</script>
 
 <style>
 .custom-save-btn {
