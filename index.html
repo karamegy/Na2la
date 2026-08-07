@@ -401,11 +401,7 @@
         <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
             <a href="operations-hub.html" class="btn-sm" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; text-decoration: none;">⚙️ العمليات</a>
             <a href="world.html" class="btn-sm" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; display: inline-block;">🌍 عالم جديد</a>
-            <button onclick="handleExportAndGetLastID()" class="btn-icon-export" title="تصدير البيانات وجلب آخر رقم حفظ">
-    <span id="export-icon">📦</span>
-    <span class="btn-tooltip">تصدير وتوثيق</span>
-            </button>
-
+            
             <div class="notification-badge-container">
                 <button type="button" onclick="openModal('chatNotificationsModal'); renderChatNotificationsInbox();" class="btn-sm" style="background: #10b981; color: white; font-weight: bold;">📬 إشعارات الرسائل</button>
                 <span id="global-chat-notif-badge" class="notif-count-badge">0</span>
@@ -2762,6 +2758,98 @@
               });
           } else if (section === 'trucks') {
               headers.innerHTML = '<th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت القادم</th><th>الرخصة</th>';
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // بيانات الاتصال الخاصة بك
+  const firebaseConfig = {
+    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
+    authDomain: "n2la-642d3.firebaseapp.com",
+    projectId: "n2la-642d3",
+    storageBucket: "n2la-642d3.firebasestorage.app",
+    messagingSenderId: "1085749997466",
+    appId: "1:1085749997466:web:13e5539",
+    measurementId: "G-KH4ZYFB8LC"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  console.log("تم ربط قاعدة البيانات بنجاح");
+
+  // ========================================================
+  // دالة التصدير اللحظي واليدوي لبيانات Firebase كاملة كملف JSON
+  // ========================================================
+  window.exportFirebaseDataManual = async function() {
+      const icon = document.getElementById('export-icon');
+      if(icon) icon.classList.add('spin-icon');
+
+      const collectionsToExport = ['shipments', 'drivers', 'trucks', 'customers', 'treasury', 'expenses'];
+      const backupData = {
+          exportDate: new Date().toISOString(),
+          data: {}
+      };
+
+      try {
+          for (const colName of collectionsToExport) {
+              const querySnapshot = await getDocs(collection(db, colName));
+              backupData.data[colName] = [];
+              querySnapshot.forEach((docSnap) => {
+                  backupData.data[colName].push({ id: docSnap.id, ...docSnap.data() });
+              });
+          }
+
+          // تحويل البيانات لملف JSON وتنزيله فوراً
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", dataStr);
+          downloadAnchor.setAttribute("download", `Firebase_Backup_${new Date().toISOString().slice(0,10)}.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+
+      } catch (e) {
+          console.error("خطأ أثناء التصدير: ", e.message);
+      } finally {
+          if(icon) icon.classList.remove('spin-icon');
+      }
+  };
+
+  // دالة جلب وعرض البيانات من فايربيس
+  window.renderCRUDTable = async function(sectionName) {
+      const sectionElement = document.getElementById('crud-section-select');
+      const section = sectionName || (sectionElement ? sectionElement.value : 'shipments');
+      
+      const headers = document.getElementById('crud-table-headers');
+      const body = document.getElementById('crud-table-body');
+      
+      if(!headers || !body) return;
+
+      headers.innerHTML = '';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;">جاري التحميل...</td></tr>';
+
+      try {
+          const querySnapshot = await getDocs(collection(db, section));
+          headers.innerHTML = '';
+          body.innerHTML = '';
+
+          let items = [];
+          querySnapshot.forEach((docSnap) => {
+              items.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          if (section === 'shipments') {
+              headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>العنوان</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>إدارة</th>';
+              items.forEach(s => {
+                  body.innerHTML += `<tr><td>${s.name || s.clientName || '-'}</td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td><td>${s.item || '-'}</td><td>${s.price || s.amount || 0} ج.م</td><td>${s.status || 'جديدة'}</td><td><button class="btn-danger btn-sm" onclick="deleteFirebaseItem('shipments', '${s.id}')">حذف</button></td></tr>`;
+              });
+          } else if (section === 'drivers') {
+              headers.innerHTML = '<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>';
+              items.forEach(d => {
+                  body.innerHTML += `<tr><td><b>${d.name || '-'}</b></td><td>${d.phone || '-'}</td><td>${d.role || '-'}</td><td>${d.title || ''}</td><td><code>${d.pin || ''}</code></td><td><button class="btn-danger btn-sm" onclick="deleteFirebaseItem('drivers', '${d.id}')">حذف</button></td></tr>`;
+              });
+          } else if (section === 'trucks') {
+              headers.innerHTML = '<th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت القادم</th><th>الرخصة</th>';
               items.forEach(t => {
                   body.innerHTML += `<tr><td>${t.truckNum || '-'}</td><td>${t.driverName || '-'}</td><td>${t.km || 0}</td><td>${t.nextOil || '-'}</td><td>${t.expiry || '-'}</td></tr>`;
               });
@@ -2786,14 +2874,15 @@
       }
   };
 
-  // دالة الحفظ
+  // دالة الحفظ السحابي (مع حفظ رقم المعرف تلقائياً في ذاكرة المتصفح)
   window.saveDataToFirebase = async function(collectionName, dataObj) {
       try {
           const docRef = await addDoc(collection(db, collectionName), { ...dataObj, createdAt: new Date().toISOString() });
-          alert("تم الحفظ بنجاح! رقم الحفظ: " + docRef.id);
-          renderCRUDTable();
+          localStorage.setItem('last_saved_id', docRef.id);
+          alert("تم الحفظ بنجاح سحابياً! رقم الحفظ: " + docRef.id);
+          renderCRUDTable(collectionName);
       } catch (e) {
-          alert("خطأ: " + e.message);
+          alert("خطأ في الحفظ: " + e.message);
       }
   };
 
@@ -2802,10 +2891,26 @@
       if (confirm("هل أنت متأكد من الحذف؟")) {
           try {
               await deleteDoc(doc(db, collectionName, docId));
-              renderCRUDTable();
+              renderCRUDTable(collectionName);
           } catch (e) {
               alert("فشل الحذف");
           }
+      }
+  };
+
+  // دالة الزر الموحد (تصدير الملف سحابياً + جلب وعرض آخر رقم حفظ مسجل)
+  window.handleExportAndGetLastID = async function() {
+      try {
+          if (typeof window.exportFirebaseDataManual === 'function') {
+              await window.exportFirebaseDataManual();
+          }
+
+          const lastId = localStorage.getItem('last_saved_id');
+          if (lastId) {
+              console.log("آخر رقم حفظ مسجل:", lastId);
+          }
+      } catch (error) {
+          console.error("حدث خطأ أثناء تنفيذ العملية:", error);
       }
   };
 </script>
