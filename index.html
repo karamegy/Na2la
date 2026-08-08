@@ -1687,6 +1687,99 @@
                     appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
                 }
             }
+async function saveShipmentHandler(e) {
+    if (e) e.preventDefault();
+    
+    const id = document.getElementById('edit-shipment-id').value;
+    const name = document.getElementById('ship-name').value.trim();
+    const phone = document.getElementById('ship-phone').value.trim();
+    const address = document.getElementById('ship-address').value.trim();
+    const item = document.getElementById('ship-item').value.trim();
+    const price = Number(document.getElementById('ship-price').value);
+    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
+    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+    const assignedDriver = document.getElementById('ship-assigned-driver').value;
+    
+    // قراءة الملف المرفوع مباشرة من حقل الإدخال لضمان عدم ضياعه
+    const fileInput = document.getElementById('ship-img');
+    let fileBase64 = uploadedImgBase64 || '';
+    
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+        try {
+            fileBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(fileInput.files[0]);
+            });
+        } catch (err) {
+            console.error("خطأ أثناء قراءة الملف:", err);
+        }
+    }
+
+    let sigData = '';
+    if (canvas && ctx) {
+        sigData = canvas.toDataURL();
+    }
+
+    if (id) {
+        let s = appData.shipments.find(item => item.id == id);
+        if (s) {
+            s.name = name; s.phone = phone; s.address = address; s.item = item;
+            s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
+            s.assignedDriver = assignedDriver;
+            if(currentGPS) s.gps = currentGPS;
+            if(fileBase64) s.img = fileBase64;
+            if(sigData && sigData.length > 100) s.signature = sigData;
+        }
+    } else {
+        appData.shipments.unshift({
+            id: Date.now(),
+            name, phone, address, item, price, fuelCost, extraCost,
+            assignedDriver: assignedDriver || 'بدون تعيين',
+            gps: currentGPS || '30.0444,31.2357',
+            img: fileBase64 || '',
+            signature: sigData || '',
+            status: 'قيد الانتظار',
+            date: new Date().toLocaleDateString('ar-EG')
+        });
+
+        // تسجيل إيراد تلقائي في الخزنة
+        appData.treasury.unshift({
+            id: Date.now(),
+            type: 'in',
+            amount: price,
+            desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+            date: new Date().toLocaleDateString('ar-EG')
+        });
+
+        // إضافة للديون / العملاء
+        let cust = (appData.customers || []).find(c => c.name === name);
+        if(cust) {
+            cust.debt = Number(cust.debt || 0) + price;
+        } else {
+            appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
+        }
+    }
+
+    let uploadedImgBase64 = '';
+
+// حدث يتم تنفيذه عند اختيار ملف جديد لرفع الصورة أو المستند
+document.addEventListener('DOMContentLoaded', () => {
+    const shipImgInput = document.getElementById('ship-img');
+    if (shipImgInput) {
+        shipImgInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    uploadedImgBase64 = e.target.result; // تخزين الملف بصيغة نصية لكي تستخدمه دالة الحفظ
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+});
 
             saveDataAll();
             document.getElementById('shipment-form').reset();
