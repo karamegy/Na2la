@@ -2405,42 +2405,73 @@ window.saveShipmentHandler = function(e) {
                 shipDriverSelect.value = currentVal;
             }
 
-            // جدول الشحنات الرئيسي
-            const shipList = document.getElementById('shipments-list');
-            if(shipList) {
-                shipList.innerHTML = '';
-                let list = appData.shipments || [];
-                if(currentUserRole === 'driver') {
-                    list = list.filter(s => s.assignedDriver === loggedInDriverName);
-                }
+            window.editShipment = function(id) {
+    if (!appData.shipments) return;
+    
+    // البحث عن الشحنة المراد تعديلها
+    const shipment = appData.shipments.find(s => s.id == id);
+    if (!shipment) return;
 
-                list.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(query))).forEach(s => {
-                    let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
-                    let tr = document.createElement('tr');
-                    
-                    let actionsHtml = `
-                        <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
-                        <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
-                    `;
-                    if(currentUserRole === 'admin' || currentUserRole === 'supervisor') {
-                        actionsHtml += `
-                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
-                        `;
-                    }
+    // تعبئة حقول النموذج بالبيانات الحالية
+    const editIdInput = document.getElementById('edit-shipment-id');
+    const nameInput = document.getElementById('ship-name');
+    const phoneInput = document.getElementById('ship-phone');
+    const addressInput = document.getElementById('ship-address');
+    const itemInput = document.getElementById('ship-item');
+    const priceInput = document.getElementById('ship-price');
+    const fuelInput = document.getElementById('ship-fuel-cost');
+    const extraInput = document.getElementById('ship-extra-cost');
+    const driverInput = document.getElementById('ship-assigned-driver');
+    const gpsStatus = document.getElementById('gps-status');
+    const imgInput = document.getElementById('ship-img');
 
-                    tr.innerHTML = `
-                        <td style="font-weight:bold;">${s.name}</td>
-                        <td>${s.item}</td>
-                        <td><span class="badge bg-transit">${s.assignedDriver || 'عام'}</span></td>
-                        <td style="font-weight:bold; color:var(--success);">${s.price} ج.م</td>
-                        <td style="font-weight:bold; color:var(--purple);">${profit} ج.م</td>
-                        <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
-                        <td>${actionsHtml}</td>
-                    `;
-                    shipList.appendChild(tr);
-                });
-            }
+    if (editIdInput) editIdInput.value = shipment.id;
+    if (nameInput) nameInput.value = shipment.name || '';
+    if (phoneInput) phoneInput.value = shipment.phone || '';
+    if (addressInput) addressInput.value = shipment.address || '';
+    if (itemInput) itemInput.value = shipment.item || '';
+    if (priceInput) priceInput.value = shipment.price || '';
+    if (fuelInput) fuelInput.value = shipment.fuelCost || '';
+    if (extraInput) extraInput.value = shipment.extraCost || '';
+    if (driverInput) driverInput.value = shipment.assignedDriver || '';
+
+    // تصفير ملف الصورة المختار لئلا يعلق ملف قديم، ويمكن إظهار تنبيه لوجود صورة سابقة
+    if (imgInput) {
+        imgInput.value = ''; // لا يمكن وضع قيمة لمدخل الملفات أمنياً
+        // اختياري: يمكنك إضافة عنصر تلميح بجانب حقل الصورة يوضح هل توجد صورة قديمة أم لا
+    }
+
+    // استرجاع بيانات الـ GPS المؤقتة إن وجدت
+    if (shipment.gps) {
+        window.currentGPSCoord = shipment.gps;
+        if (gpsStatus) gpsStatus.textContent = shipment.gps.lat ? 'تم استرجاع الموقع 📍' : '';
+    } else {
+        window.currentGPSCoord = null;
+        if (gpsStatus) gpsStatus.textContent = '';
+    }
+
+    // استرجاع التوقيع الرقمي على الـ Canvas إن وجد
+    const canvas = document.getElementById('signature-pad');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // تفريغ اللوحة أولاً
+        
+        if (shipment.signature) {
+            const img = new Image();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = shipment.signature;
+        }
+    }
+
+    // الانتقال بسلاسة إلى نموذج التعديل (أعلى الصفحة أو القسم الخاص به)
+    const formCard = document.getElementById('new-shipment-card');
+    if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
 
             // الإحصائيات
             let shipments = appData.shipments || [];
