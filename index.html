@@ -1762,6 +1762,104 @@ function completeShipmentSaving(id, name, phone, address, item, price, fuelCost,
             desc: `تحصيل أجرة شحنة: ${item} (${name})`,
             date: new Date().toLocaleDateString('ar-EG')
         }); 
+// دالة آمنة لحفظ الشحنة ومعالجة الصور والتوقيع دون تسبب أي انهيار للخروج من التطبيق
+function saveShipmentHandler(e) {
+    if (e && typeof e.preventDefault === 'function') {
+        e.preventDefault();
+    }
+
+    const id = document.getElementById('edit-shipment-id').value;
+    const name = document.getElementById('ship-name').value.trim();
+    const phone = document.getElementById('ship-phone').value.trim();
+    const address = document.getElementById('ship-address').value.trim();
+    const item = document.getElementById('ship-item').value.trim();
+    const price = Number(document.getElementById('ship-price').value) || 0;
+    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
+    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+    const assignedDriver = document.getElementById('ship-assigned-driver').value;
+
+    // التقاط التوقيع بطريقة آمنة
+    let sigData = '';
+    try {
+        if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
+            sigData = canvas.toDataURL();
+        }
+    } catch (err) {
+        console.log("تنبيه بخصوص التوقيع: ", err);
+    }
+
+    // التحقق من تهيئة بيانات التطبيق
+    if (!window.appData) window.appData = {};
+    if (!appData.shipments) appData.shipments = [];
+    if (!appData.treasury) appData.treasury = [];
+
+    // التعامل مع ملف الصورة المرفوعة (سواء من الاستديو أو الكاميرا) بأمان
+    const imgInput = document.getElementById('ship-img');
+    
+    if (imgInput && imgInput.files && imgInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(uploadEvent) {
+            let uploadedImgBase64 = uploadEvent.target.result;
+            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, uploadedImgBase64, sigData);
+        };
+        reader.onerror = function() {
+            // في حال حدث خطأ في قراءة الصورة، يتم الحفظ بدون صورة لتفادي انهيار التطبيق
+            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, '', sigData);
+        };
+        reader.readAsDataURL(imgInput.files[0]);
+    } else {
+        // الحفظ المباشر إذا لم يتم اختيار صورة جديدة
+        let existingImg = '';
+        if (id) {
+            let oldShipment = appData.shipments.find(item => item.id == id);
+            if (oldShipment) existingImg = oldShipment.img || '';
+        }
+        completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, existingImg, sigData);
+    }
+}
+
+// الدالة المسؤولة عن إتمام الحفظ وتحديث الواجهة
+function completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, imgData, sigData) {
+    if (id) {
+        let s = appData.shipments.find(item => item.id == id);
+        if (s) {
+            s.name = name; 
+            s.phone = phone; 
+            s.address = address; 
+            s.item = item;
+            s.price = price; 
+            s.fuelCost = fuelCost; 
+            s.extraCost = extraCost;
+            s.assignedDriver = assignedDriver;
+            if (imgData) s.img = imgData;
+            if (sigData && sigData.length > 100) s.signature = sigData;
+        }
+    } else {
+        appData.shipments.unshift({
+            id: Date.now(),
+            name, 
+            phone, 
+            address, 
+            item, 
+            price, 
+            fuelCost, 
+            extraCost,
+            assignedDriver: assignedDriver || 'بدون تعيين',
+            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
+            img: imgData || '',
+            signature: sigData || '',
+            status: 'قيد الانتظار',
+            date: new Date().toLocaleDateString('ar-EG')
+        });
+
+        // تسجيل إيراد تلقائي في الخزنة
+        appData.treasury.unshift({
+            id: Date.now(),
+            type: 'in',
+            amount: price,
+            desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+            date: new Date().toLocaleDateString('ar-EG')
+        }); 
     }
     
     // حفظ البيانات وتحديث واجهة المستخدم
@@ -1781,7 +1879,6 @@ function completeShipmentSaving(id, name, phone, address, item, price, fuelCost,
     
     alert('تم حفظ الرحلة وتحديث البيانات بنجاح! 💾');
 }
-
 
         function editShipment(id) {
             let s = appData.shipments.find(item => item.id == id);
