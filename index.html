@@ -532,7 +532,7 @@
         </div>
     </section>
 
-<!-- 2. الشحنات -->
+    <!-- 2. الشحنات -->
     <section id="shipments-tab" class="app-section">
         <div class="card" id="new-shipment-card">
             <h3 id="form-title-heading">تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)</h3>
@@ -561,7 +561,7 @@
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو الحمولة:</label>
-                    <input type="file" id="ship-img" accept="image/*">
+                    <input type="file" id="ship-img" accept="image/*" capture="environment">
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">توقيع المستلم الرقمي:</label>
@@ -592,7 +592,6 @@
             </div>
         </div>
     </section>
-
 
     <!-- 3. مساعد الذكاء الاصطناعي -->
     <section id="ai-mechanic-tab" class="app-section">
@@ -1632,28 +1631,72 @@
             alert('تم تسجيل حساب السائق بنجاح! يمكنك الدخول الآن برمز PIN الخاص بك 🚀');
         }
 
-        // 1. إضافة حدث قراءة الصورة فور اختيارها أو التقاطها من الكاميرا
-document.addEventListener("DOMContentLoaded", () => {
-    const imgFileInput = document.getElementById('ship-img');
-    if (imgFileInput) {
-        imgFileInput.addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(uploadEvent) {
-                    window.uploadedImgBase64 = uploadEvent.target.result;
-                    console.log("تم تحميل وتخزين الصورة بنجاح مؤقتاً");
-                };
-                reader.onerror = function(error) {
-                    console.error("خطأ في قراءة الصورة: ", error);
-                    alert("حدث خطأ أثناء قراءة ملف الصورة.");
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-    }
-});
+        function saveShipmentHandler(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-shipment-id').value;
+            const name = document.getElementById('ship-name').value.trim();
+            const phone = document.getElementById('ship-phone').value.trim();
+            const address = document.getElementById('ship-address').value.trim();
+            const item = document.getElementById('ship-item').value.trim();
+            const price = Number(document.getElementById('ship-price').value);
+            const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
+            const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+            const assignedDriver = document.getElementById('ship-assigned-driver').value;
 
+            let sigData = '';
+            if (canvas && ctx) {
+                sigData = canvas.toDataURL();
+            }
+
+            if (id) {
+                let s = appData.shipments.find(item => item.id == id);
+                if (s) {
+                    s.name = name; s.phone = phone; s.address = address; s.item = item;
+                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
+                    s.assignedDriver = assignedDriver;
+                    if(currentGPS) s.gps = currentGPS;
+                    if(uploadedImgBase64) s.img = uploadedImgBase64;
+                    if(sigData && sigData.length > 100) s.signature = sigData;
+                }
+            } else {
+                appData.shipments.unshift({
+                    id: Date.now(),
+                    name, phone, address, item, price, fuelCost, extraCost,
+                    assignedDriver: assignedDriver || 'بدون تعيين',
+                    gps: currentGPS || '30.0444,31.2357',
+                    img: uploadedImgBase64 || '',
+                    signature: sigData || '',
+                    status: 'قيد الانتظار',
+                    date: new Date().toLocaleDateString('ar-EG')
+                });
+
+                // تسجيل إيراد تلقائي في الخزنة
+                appData.treasury.unshift({
+                    id: Date.now(),
+                    type: 'in',
+                    amount: price,
+                    desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+                    date: new Date().toLocaleDateString('ar-EG')
+                });
+
+                // إضافة للديون / العملاء
+                let cust = (appData.customers || []).find(c => c.name === name);
+                if(cust) {
+                    cust.debt = Number(cust.debt || 0) + price;
+                } else {
+                    appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
+                }
+            }
+
+            saveDataAll();
+            document.getElementById('shipment-form').reset();
+            document.getElementById('edit-shipment-id').value = '';
+            clearSignature();
+            currentGPS = ''; uploadedImgBase64 = '';
+            document.getElementById('gps-status').innerText = '';
+            alert('تم حفظ الرحلة بنجاح سحابياً! 💾');
+            render();
+        }
 
         function editShipment(id) {
             let s = appData.shipments.find(item => item.id == id);
@@ -1689,208 +1732,71 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-window.saveShipmentHandler = function(e) {
+        function saveCashHandler(e) {
     if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
-
-    const editIdInput = document.getElementById('edit-shipment-id');
-    const nameInput = document.getElementById('ship-name');
-    const phoneInput = document.getElementById('ship-phone');
-    const addressInput = document.getElementById('ship-address');
-    const itemInput = document.getElementById('ship-item');
-    const priceInput = document.getElementById('ship-price');
-    const fuelInput = document.getElementById('ship-fuel-cost');
-    const extraInput = document.getElementById('ship-extra-cost');
-    const driverInput = document.getElementById('ship-assigned-driver');
-    const imgInput = document.getElementById('ship-img');
-
-    const editId = editIdInput ? editIdInput.value : '';
-    const name = nameInput ? nameInput.value.trim() : '';
-    const phone = phoneInput ? phoneInput.value.trim() : '';
-    const address = addressInput ? addressInput.value.trim() : '';
-    const item = itemInput ? itemInput.value.trim() : '';
-    const price = priceInput ? Number(priceInput.value) : 0;
-    const fuelCost = fuelInput ? Number(fuelInput.value) : 0;
-    const extraCost = extraInput ? Number(extraInput.value) : 0;
-    const assignedDriver = driverInput ? driverInput.value : '';
-
-    // التأكد من أن مصفوفة الشحنات موجودة
-    if (!appData.shipments) appData.shipments = [];
-
-    // الحصول على بيانات الموقع والـ GPS إذا تم تسجيلها مسبقاً عبر متغير عام أو خاصية
-    const gpsData = window.currentGPSCoord || { lat: '', lng: '' };
     
-    // الحصول على بيانات التوقيع الرقمي من الـ Canvas (إن وجدت دالة أو متغير مخصص لها)
-    let signatureData = '';
-    const canvas = document.getElementById('signature-pad');
-    if (canvas && typeof getSignatureData === 'function') {
-        signatureData = getSignatureData();
-    } else if (canvas) {
-        // طريقة افتراضية لأخذ صورة من الـ Canvas إذا لم تكن الدالة موجودة
-        signatureData = canvas.toDataURL(); 
-    }
+    const type = document.getElementById('cash-type').value;
+    const amount = Number(document.getElementById('cash-amount').value);
+    const desc = document.getElementById('cash-desc').value.trim();
 
-    // التعامل مع رفع الصورة وتحويلها إلى Base64 أو رابط مؤقت
-    const processShipmentData = (imageUrl = '') => {
-        const shipmentObj = {
-            id: editId ? Number(editId) : Date.now(),
-            name,
-            phone,
-            address,
-            item,
-            price,
-            fuelCost,
-            extraCost,
-            assignedDriver,
-            gps: gpsData,
-            image: imageUrl,
-            signature: signatureData,
-            status: 'معلقة',
-            date: new Date().toLocaleDateString('ar-EG')
-        };
+    // التأكد من أن مصفوفة الخزينة موجودة
+    if (!appData.treasury) appData.treasury = [];
 
-        if (editId) {
-            // تحديث رحلة موجودة
-            const index = appData.shipments.findIndex(s => s.id == editId);
-            if (index !== -1) {
-                appData.shipments[index] = { ...appData.shipments[index], ...shipmentObj };
-            }
-            if (editIdInput) editIdInput.value = '';
-        } else {
-            // إضافة رحلة جديدة في البداية
-            appData.shipments.unshift(shipmentObj);
-        }
+    appData.treasury.unshift({
+        id: Date.now(),
+        type: type,
+        amount: amount,
+        desc: desc,
+        date: new Date().toLocaleDateString('ar-EG')
+    });
 
-        // حفظ البيانات في التخزين المحلي أو النظام العام
-window.saveShipmentHandler = function(e) {
-    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
-
-    const editIdInput = document.getElementById('edit-shipment-id');
-    const nameInput = document.getElementById('ship-name');
-    const phoneInput = document.getElementById('ship-phone');
-    const addressInput = document.getElementById('ship-address');
-    const itemInput = document.getElementById('ship-item');
-    const priceInput = document.getElementById('ship-price');
-    const fuelInput = document.getElementById('ship-fuel-cost');
-    const extraInput = document.getElementById('ship-extra-cost');
-    const driverInput = document.getElementById('ship-assigned-driver');
-    const imgInput = document.getElementById('ship-img');
-
-    const editId = editIdInput ? editIdInput.value : '';
-    const name = nameInput ? nameInput.value.trim() : '';
-    const phone = phoneInput ? phoneInput.value.trim() : '';
-    const address = addressInput ? addressInput.value.trim() : '';
-    const item = itemInput ? itemInput.value.trim() : '';
-    const price = priceInput ? Number(priceInput.value) : 0;
-    const fuelCost = fuelInput ? Number(fuelInput.value) : 0;
-    const extraCost = extraInput ? Number(extraInput.value) : 0;
-    const assignedDriver = driverInput ? driverInput.value : '';
-
-    // التأكد من أن مصفوفة الشحنات موجودة
-    if (!appData.shipments) appData.shipments = [];
-
-    // الحصول على بيانات الموقع والـ GPS
-    const gpsData = window.currentGPSCoord || { lat: '', lng: '' };
+    if (typeof saveDataAll === 'function') saveDataAll();
     
-    // الحصول على بيانات التوقيع الرقمي من الـ Canvas
-    let signatureData = '';
-    const canvas = document.getElementById('signature-pad');
-    if (canvas && typeof getSignatureData === 'function') {
-        signatureData = getSignatureData();
-    } else if (canvas) {
-        signatureData = canvas.toDataURL(); 
-    }
-
-    // الدالة المسؤولة عن بناء الكائن وحفظه في المصفوفة والتخزين
-    const processShipmentData = (imageUrl = '') => {
-        // في حالة التعديل ولم يتم رفع صورة جديدة، نحتفظ بالصورة القديمة إن وجدت
-        let finalImage = imageUrl;
-        if (editId && !imageUrl) {
-            const existingShipment = appData.shipments.find(s => s.id == editId);
-            if (existingShipment) {
-                finalImage = existingShipment.image || '';
-            }
-        }
-
-        const shipmentObj = {
-            id: editId ? Number(editId) : Date.now(),
-            name,
-            phone,
-            address,
-            item,
-            price,
-            fuelCost,
-            extraCost,
-            assignedDriver,
-            gps: gpsData,
-            image: finalImage,
-            signature: signatureData,
-            status: 'معلقة',
-            date: new Date().toLocaleDateString('ar-EG')
-        };
-
-        if (editId) {
-            // تحديث رحلة موجودة
-            const index = appData.shipments.findIndex(s => s.id == editId);
-            if (index !== -1) {
-                appData.shipments[index] = { ...appData.shipments[index], ...shipmentObj };
-            }
-            if (editIdInput) editIdInput.value = '';
-        } else {
-            // إضافة رحلة جديدة في البداية
-            appData.shipments.unshift(shipmentObj);
-        }
-
-        // حفظ البيانات في التخزين المحلي
-        if (typeof saveDataAll === 'function') saveDataAll();
-
-        // إعادة ضبط النموذج
-        const form = document.getElementById('shipment-form');
-        if (form) form.reset();
-        
-        // مسح الـ GPS والتوقيع
-        if (window.currentGPSCoord) window.currentGPSCoord = null;
-        const gpsStatus = document.getElementById('gps-status');
-        if (gpsStatus) gpsStatus.textContent = '';
-        if (typeof clearSignature === 'function') {
-            clearSignature();
-        } else if (canvas) {
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-
-        alert('تم حفظ الرحلة وتوليد QR بنجاح! 💾');
-
-        // إعادة رسم الواجهة لتحديث الجدول
-        if (typeof render === 'function') {
-            render();
-        }
-    };
-
-    // قراءة ملف الصورة المرفوع (إن وُجد) أو تنفيذ الحفظ مباشرة
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            processShipmentData(e.target.result);
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else {
-        processShipmentData('');
+    const form = document.getElementById('cash-form');
+    if (form) form.reset();
+    
+    alert('تم تسجيل الحركة النقدية بنجاح! 💵');
+    
+    if (typeof render === 'function') {
+        render();
     }
 }
 
+        window.saveTruckHandler = function(e) {
+    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
+    
+    const numInput = document.getElementById('truck-num');
+    const driverInput = document.getElementById('driver-name');
+    const kmInput = document.getElementById('truck-km');
+    const nextOilInput = document.getElementById('truck-next-oil');
+    const expiryInput = document.getElementById('truck-expiry');
 
-    // قراءة ملف الصورة المرفوع (إن وُجد)
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            processShipmentData(e.target.result);
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else {
-        processShipmentData('');
+    const num = numInput ? numInput.value.trim() : '';
+    const driver = driverInput ? driverInput.value.trim() : '';
+    const km = kmInput ? Number(kmInput.value) : 0;
+    const nextOil = nextOilInput ? Number(nextOilInput.value) : 0;
+    const expiry = expiryInput ? expiryInput.value : '';
+
+    if (!appData.trucks) appData.trucks = [];
+
+    appData.trucks.unshift({
+        id: Date.now(),
+        num, driver, km, nextOil, expiry
+    });
+
+    if (typeof saveDataAll === 'function') saveDataAll();
+    
+    const form = document.getElementById('truck-form');
+    if (form) form.reset();
+    
+    if (numInput) numInput.value = "شيفروليه بيك اب (صندوق مغلق)";
+
+    alert('تم تسجيل المركبة بنجاح! 🚚');
+    
+    if (typeof render === 'function') {
+        render();
     }
 }
-
 
         window.saveDocHandler = function(e) {
     if (e) e.preventDefault();
@@ -2503,73 +2409,42 @@ window.saveShipmentHandler = function(e) {
                 shipDriverSelect.value = currentVal;
             }
 
-            window.editShipment = function(id) {
-    if (!appData.shipments) return;
-    
-    // البحث عن الشحنة المراد تعديلها
-    const shipment = appData.shipments.find(s => s.id == id);
-    if (!shipment) return;
+            // جدول الشحنات الرئيسي
+            const shipList = document.getElementById('shipments-list');
+            if(shipList) {
+                shipList.innerHTML = '';
+                let list = appData.shipments || [];
+                if(currentUserRole === 'driver') {
+                    list = list.filter(s => s.assignedDriver === loggedInDriverName);
+                }
 
-    // تعبئة حقول النموذج بالبيانات الحالية
-    const editIdInput = document.getElementById('edit-shipment-id');
-    const nameInput = document.getElementById('ship-name');
-    const phoneInput = document.getElementById('ship-phone');
-    const addressInput = document.getElementById('ship-address');
-    const itemInput = document.getElementById('ship-item');
-    const priceInput = document.getElementById('ship-price');
-    const fuelInput = document.getElementById('ship-fuel-cost');
-    const extraInput = document.getElementById('ship-extra-cost');
-    const driverInput = document.getElementById('ship-assigned-driver');
-    const gpsStatus = document.getElementById('gps-status');
-    const imgInput = document.getElementById('ship-img');
+                list.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(query))).forEach(s => {
+                    let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
+                    let tr = document.createElement('tr');
+                    
+                    let actionsHtml = `
+                        <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
+                        <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
+                    `;
+                    if(currentUserRole === 'admin' || currentUserRole === 'supervisor') {
+                        actionsHtml += `
+                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
+                        `;
+                    }
 
-    if (editIdInput) editIdInput.value = shipment.id;
-    if (nameInput) nameInput.value = shipment.name || '';
-    if (phoneInput) phoneInput.value = shipment.phone || '';
-    if (addressInput) addressInput.value = shipment.address || '';
-    if (itemInput) itemInput.value = shipment.item || '';
-    if (priceInput) priceInput.value = shipment.price || '';
-    if (fuelInput) fuelInput.value = shipment.fuelCost || '';
-    if (extraInput) extraInput.value = shipment.extraCost || '';
-    if (driverInput) driverInput.value = shipment.assignedDriver || '';
-
-    // تصفير ملف الصورة المختار لئلا يعلق ملف قديم، ويمكن إظهار تنبيه لوجود صورة سابقة
-    if (imgInput) {
-        imgInput.value = ''; // لا يمكن وضع قيمة لمدخل الملفات أمنياً
-        // اختياري: يمكنك إضافة عنصر تلميح بجانب حقل الصورة يوضح هل توجد صورة قديمة أم لا
-    }
-
-    // استرجاع بيانات الـ GPS المؤقتة إن وجدت
-    if (shipment.gps) {
-        window.currentGPSCoord = shipment.gps;
-        if (gpsStatus) gpsStatus.textContent = shipment.gps.lat ? 'تم استرجاع الموقع 📍' : '';
-    } else {
-        window.currentGPSCoord = null;
-        if (gpsStatus) gpsStatus.textContent = '';
-    }
-
-    // استرجاع التوقيع الرقمي على الـ Canvas إن وجد
-    const canvas = document.getElementById('signature-pad');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // تفريغ اللوحة أولاً
-        
-        if (shipment.signature) {
-            const img = new Image();
-            img.onload = function() {
-                ctx.drawImage(img, 0, 0);
-            };
-            img.src = shipment.signature;
-        }
-    }
-
-    // الانتقال بسلاسة إلى نموذج التعديل (أعلى الصفحة أو القسم الخاص به)
-    const formCard = document.getElementById('new-shipment-card');
-    if (formCard) {
-        formCard.scrollIntoView({ behavior: 'smooth' });
-    }
-}
-
+                    tr.innerHTML = `
+                        <td style="font-weight:bold;">${s.name}</td>
+                        <td>${s.item}</td>
+                        <td><span class="badge bg-transit">${s.assignedDriver || 'عام'}</span></td>
+                        <td style="font-weight:bold; color:var(--success);">${s.price} ج.م</td>
+                        <td style="font-weight:bold; color:var(--purple);">${profit} ج.م</td>
+                        <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
+                        <td>${actionsHtml}</td>
+                    `;
+                    shipList.appendChild(tr);
+                });
+            }
 
             // الإحصائيات
             let shipments = appData.shipments || [];
@@ -2919,187 +2794,8 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
                 });
             }
         }
-       // دالة مباشرة لقراءة الصورة وتخزينها
-function handleImageUpload(inputElement) {
-    const file = inputElement.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(uploadEvent) {
-            window.uploadedImgBase64 = uploadEvent.target.result;
-            console.log("تم تحميل وتخزين الصورة بنجاح مؤقتاً");
-        };
-        reader.onerror = function(error) {
-            console.error("خطأ في قراءة الصورة: ", error);
-            alert("حدث خطأ أثناء قراءة ملف الصورة.");
-        };
-        reader.readAsDataURL(file);
-    }
-}
+        
         </script>
-    <script type="module">
-    import { initializeApp } from "...";
-    import { getFirestore, collection, addDoc } from "...";
-    // ... باقي الـ imports الخاصة بك
-
-    // قم بلصق الدوال هنا مباشرة داخل الـ Module
-    window.uploadImageToFirebase = async function(file) {
-        // كود الرفع هنا...
-    };
-
-    window.saveShipmentHandler = async function(e) {
-        // كود الحفظ هنا...
-    };
-
-    const firebaseConfig = { ... };
-    // ...
-</script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
-    authDomain: "n2la-642d3.firebaseapp.com",
-    projectId: "n2la-642d3",
-    storageBucket: "n2la-642d3.firebasestorage.app",
-    messagingSenderId: "1085749997466",
-    appId: "1:1085749997466:web:13e5539",
-    measurementId: "G-KH4ZYFB8LC"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-  console.log("تم ربط قاعدة البيانات والـ Storage بنجاح");
-
-  // دالة رفع الصور إلى Firebase Storage لحل مشكلة امتلاء الذاكرة
-  window.uploadImageToFirebase = async function(file) {
-      if (!file) return '';
-      try {
-          const storageRef = ref(storage, 'shipments/' + Date.now() + '_' + file.name);
-          const snapshot = await uploadBytes(storageRef, file);
-          return await getDownloadURL(snapshot.ref);
-      } catch (error) {
-          console.error("خطأ في رفع الصورة:", error);
-          alert("فشل رفع الصورة للسحابة: " + error.message);
-          return '';
-      }
-  };
-
-  // دالة حفظ الرحلة المحدثة لتعمل مع زر الحفظ الأساسي
-  window.saveShipmentHandler = async function(e) {
-      if (e && typeof e.preventDefault === 'function') e.preventDefault();
-      
-      const form = document.getElementById('shipment-form');
-      const btn = form.querySelector('button[type="submit"]');
-      if(btn) btn.innerText = 'جاري الرفع والحفظ... ⏳';
-
-      const imgInput = document.getElementById('ship-img');
-      let finalImgUrl = '';
-
-      // رفع الصورة للسحابة بدلاً من تخزينها كـ Base64 تملأ الذاكرة
-      if (imgInput && imgInput.files && imgInput.files[0]) {
-          finalImgUrl = await window.uploadImageToFirebase(imgInput.files[0]);
-      }
-
-      const shipmentData = {
-          id: document.getElementById('edit-shipment-id').value || Date.now(),
-          name: document.getElementById('ship-name').value,
-          phone: document.getElementById('ship-phone').value,
-          address: document.getElementById('ship-address').value,
-          item: document.getElementById('ship-item').value,
-          price: Number(document.getElementById('ship-price').value),
-          fuelCost: Number(document.getElementById('ship-fuel-cost').value) || 0,
-          extraCost: Number(document.getElementById('ship-extra-cost').value) || 0,
-          assignedDriver: document.getElementById('ship-assigned-driver').value || 'عام',
-          img: finalImgUrl,
-          status: 'قيد الانتظار',
-          date: new Date().toLocaleDateString('ar-EG')
-      };
-
-      if (!window.appData) window.appData = { shipments: [], treasury: [], customers: [] };
-      appData.shipments.unshift(shipmentData);
-
-      if (typeof saveDataAll === 'function') {
-          saveDataAll();
-      } else {
-          localStorage.setItem('transportAppV60', JSON.stringify(appData));
-      }
-
-      form.reset();
-      if(btn) btn.innerText = 'حفظ الرحلة وتوليد QR 💾';
-      if (typeof render === 'function') render();
-      alert('تم حفظ الرحلة ورفع الصورة بنجاح للسحابة! 🚀');
-  };
-
-  // تجربة الحفظ السريع
-  document.addEventListener("DOMContentLoaded", () => {
-    const saveBtn = document.getElementById("testSaveBtn");
-    if (saveBtn) {
-      saveBtn.addEventListener("click", async () => {
-        try {
-          const docRef = await addDoc(collection(db, "orders"), {
-            clientName: "تجربة",
-            amount: 300,
-            createdAt: new Date().toISOString()
-          });
-          alert("تم الحفظ بنجاح! رقم المستند: " + docRef.id);
-        } catch (e) {
-          alert("خطأ فايربيس: " + e.message);
-        }
-      });
-    }
-  });
-</script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
-    authDomain: "n2la-642d3.firebaseapp.com",
-    projectId: "n2la-642d3",
-    storageBucket: "n2la-642d3.firebasestorage.app",
-    messagingSenderId: "1085749997466",
-    appId: "1:1085749997466:web:13e5539",
-    measurementId: "G-KH4ZYFB8LC"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-  console.log("تم ربط قاعدة البيانات والـ Storage بنجاح");
-
-  // دالة رفع الصور إلى Firebase Storage لحل مشكلة امتلاء الذاكرة
-  window.uploadImageToFirebase = async function(file) {
-      if (!file) return '';
-      try {
-          const storageRef = ref(storage, 'shipments/' + Date.now() + '_' + file.name);
-          const snapshot = await uploadBytes(storageRef, file);
-          return await getDownloadURL(snapshot.ref);
-      } catch (error) {
-          console.error("خطأ في رفع الصورة:", error);
-          alert("فشل رفع الصورة للسحابة: " + error.message);
-          return '';
-      }
-  };
-
-  // دالة حفظ الرحلة المحدثة لتعمل مع زر الحفظ الأساسي
-  window.saveShipmentHandler = async function(e) {
-      if (e && typeof e.preventDefault === 'function') e.preventDefault();
-      
-      const form = document.getElementById('shipment-form');
-      const btn = form.querySelector('button[type="submit"]');
-      if(btn) btn.innerText = 'جاري الرفع والحفظ... ⏳';
-
-      const imgInput = document.getElementById('ship-img');
-      let finalImgUrl = '';
-
-      // رفع الصورة للسحابة بدلاً من تخزينها كـ Base64 تملأ الذاكرة
-      if (imgInput && imgInput.files && imgInput.files[0]) {
-          finalImgUrl = await window.uploadImageToFirebase(imgInput.files[0]);
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
