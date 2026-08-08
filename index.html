@@ -1761,25 +1761,123 @@ window.saveShipmentHandler = function(e) {
         }
 
         // حفظ البيانات في التخزين المحلي أو النظام العام
+window.saveShipmentHandler = function(e) {
+    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
+
+    const editIdInput = document.getElementById('edit-shipment-id');
+    const nameInput = document.getElementById('ship-name');
+    const phoneInput = document.getElementById('ship-phone');
+    const addressInput = document.getElementById('ship-address');
+    const itemInput = document.getElementById('ship-item');
+    const priceInput = document.getElementById('ship-price');
+    const fuelInput = document.getElementById('ship-fuel-cost');
+    const extraInput = document.getElementById('ship-extra-cost');
+    const driverInput = document.getElementById('ship-assigned-driver');
+    const imgInput = document.getElementById('ship-img');
+
+    const editId = editIdInput ? editIdInput.value : '';
+    const name = nameInput ? nameInput.value.trim() : '';
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    const address = addressInput ? addressInput.value.trim() : '';
+    const item = itemInput ? itemInput.value.trim() : '';
+    const price = priceInput ? Number(priceInput.value) : 0;
+    const fuelCost = fuelInput ? Number(fuelInput.value) : 0;
+    const extraCost = extraInput ? Number(extraInput.value) : 0;
+    const assignedDriver = driverInput ? driverInput.value : '';
+
+    // التأكد من أن مصفوفة الشحنات موجودة
+    if (!appData.shipments) appData.shipments = [];
+
+    // الحصول على بيانات الموقع والـ GPS
+    const gpsData = window.currentGPSCoord || { lat: '', lng: '' };
+    
+    // الحصول على بيانات التوقيع الرقمي من الـ Canvas
+    let signatureData = '';
+    const canvas = document.getElementById('signature-pad');
+    if (canvas && typeof getSignatureData === 'function') {
+        signatureData = getSignatureData();
+    } else if (canvas) {
+        signatureData = canvas.toDataURL(); 
+    }
+
+    // الدالة المسؤولة عن بناء الكائن وحفظه في المصفوفة والتخزين
+    const processShipmentData = (imageUrl = '') => {
+        // في حالة التعديل ولم يتم رفع صورة جديدة، نحتفظ بالصورة القديمة إن وجدت
+        let finalImage = imageUrl;
+        if (editId && !imageUrl) {
+            const existingShipment = appData.shipments.find(s => s.id == editId);
+            if (existingShipment) {
+                finalImage = existingShipment.image || '';
+            }
+        }
+
+        const shipmentObj = {
+            id: editId ? Number(editId) : Date.now(),
+            name,
+            phone,
+            address,
+            item,
+            price,
+            fuelCost,
+            extraCost,
+            assignedDriver,
+            gps: gpsData,
+            image: finalImage,
+            signature: signatureData,
+            status: 'معلقة',
+            date: new Date().toLocaleDateString('ar-EG')
+        };
+
+        if (editId) {
+            // تحديث رحلة موجودة
+            const index = appData.shipments.findIndex(s => s.id == editId);
+            if (index !== -1) {
+                appData.shipments[index] = { ...appData.shipments[index], ...shipmentObj };
+            }
+            if (editIdInput) editIdInput.value = '';
+        } else {
+            // إضافة رحلة جديدة في البداية
+            appData.shipments.unshift(shipmentObj);
+        }
+
+        // حفظ البيانات في التخزين المحلي
         if (typeof saveDataAll === 'function') saveDataAll();
 
         // إعادة ضبط النموذج
         const form = document.getElementById('shipment-form');
         if (form) form.reset();
         
-        // مسح الـ GPS والتوقيع إن أمكن
+        // مسح الـ GPS والتوقيع
         if (window.currentGPSCoord) window.currentGPSCoord = null;
         const gpsStatus = document.getElementById('gps-status');
         if (gpsStatus) gpsStatus.textContent = '';
-        if (typeof clearSignature === 'function') clearSignature();
+        if (typeof clearSignature === 'function') {
+            clearSignature();
+        } else if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
 
         alert('تم حفظ الرحلة وتوليد QR بنجاح! 💾');
 
-        // إعادة رسم الواجهة
+        // إعادة رسم الواجهة لتحديث الجدول
         if (typeof render === 'function') {
             render();
         }
     };
+
+    // قراءة ملف الصورة المرفوع (إن وُجد) أو تنفيذ الحفظ مباشرة
+    if (imgInput && imgInput.files && imgInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            processShipmentData(e.target.result);
+        };
+        reader.readAsDataURL(imgInput.files[0]);
+    } else {
+        processShipmentData('');
+    }
+}
+
 
     // قراءة ملف الصورة المرفوع (إن وُجد)
     if (imgInput && imgInput.files && imgInput.files[0]) {
