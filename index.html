@@ -2718,15 +2718,51 @@ function exportInvoiceAsImage() {
 }
  
         function exportInvoiceAsPDF() {
-            const area = document.getElementById('print-area');
-            html2canvas(area).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                pdf.addImage(imgData, 'PNG', 10, 10, 190, 0);
-                pdf.save(`فاتورة-أسطورة-الطريق.pdf`);
-            });
+    if (isExporting) return; // استخدام نفس متغير الحماية لمنع التكرار
+    isExporting = true;
+
+    const area = document.getElementById('print-area');
+    if (!area) {
+        isExporting = false;
+        return;
+    }
+
+    // تقليل الإجهاد على الذاكرة وتسريع التصدير
+    html2canvas(area, { 
+        scale: window.devicePixelRatio > 1 ? window.devicePixelRatio : 1, 
+        useCORS: true,
+        logging: false
+    }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // حساب أبعاد الصورة لتناسب صفحة الـ A4 بشكل صحيح بدون مط أو تشوه
+        const imgWidth = 190; // العرض بالـ mm (ترك هامش 10 من كل جانب)
+        const pageHeight = 295; // ارتفاع صفحة A4 بالـ mm
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 10; // المسافة من الأعلى
+
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        // إذا كانت الفاتورة طويلة وتتجاوز صفحة واحدة، يتم إضافة صفحات تلقائياً
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
         }
+
+        // حفظ الملف (يعمل بكفاءة على المتصفحات والهواتف الحديثة)
+        pdf.save('فاتورة-أسطورة-الطريق.pdf');
+    }).catch(error => {
+        console.error("خطأ أثناء تصدير الـ PDF:", error);
+    }).finally(() => {
+        isExporting = false; // إعادة التفعيل بعد الانتهاء
+    });
+}
 
         function sendInvoiceWhatsApp() {
             const id = document.getElementById('invoice-select').value;
