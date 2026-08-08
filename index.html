@@ -2787,6 +2787,7 @@ function handleImageUpload(inputElement) {
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
@@ -2800,23 +2801,181 @@ function handleImageUpload(inputElement) {
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  console.log("تم ربط قاعدة البيانات بنجاح");
+  const storage = getStorage(app);
+  console.log("تم ربط قاعدة البيانات والـ Storage بنجاح");
 
-  // ربط الحدث بالزر مباشرة عبر الـ ID لضمان عدم تعليق الزر نهائياً
+  // دالة رفع الصور إلى Firebase Storage لحل مشكلة امتلاء الذاكرة
+  window.uploadImageToFirebase = async function(file) {
+      if (!file) return '';
+      try {
+          const storageRef = ref(storage, 'shipments/' + Date.now() + '_' + file.name);
+          const snapshot = await uploadBytes(storageRef, file);
+          return await getDownloadURL(snapshot.ref);
+      } catch (error) {
+          console.error("خطأ في رفع الصورة:", error);
+          alert("فشل رفع الصورة للسحابة: " + error.message);
+          return '';
+      }
+  };
+
+  // دالة حفظ الرحلة المحدثة لتعمل مع زر الحفظ الأساسي
+  window.saveShipmentHandler = async function(e) {
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      
+      const form = document.getElementById('shipment-form');
+      const btn = form.querySelector('button[type="submit"]');
+      if(btn) btn.innerText = 'جاري الرفع والحفظ... ⏳';
+
+      const imgInput = document.getElementById('ship-img');
+      let finalImgUrl = '';
+
+      // رفع الصورة للسحابة بدلاً من تخزينها كـ Base64 تملأ الذاكرة
+      if (imgInput && imgInput.files && imgInput.files[0]) {
+          finalImgUrl = await window.uploadImageToFirebase(imgInput.files[0]);
+      }
+
+      const shipmentData = {
+          id: document.getElementById('edit-shipment-id').value || Date.now(),
+          name: document.getElementById('ship-name').value,
+          phone: document.getElementById('ship-phone').value,
+          address: document.getElementById('ship-address').value,
+          item: document.getElementById('ship-item').value,
+          price: Number(document.getElementById('ship-price').value),
+          fuelCost: Number(document.getElementById('ship-fuel-cost').value) || 0,
+          extraCost: Number(document.getElementById('ship-extra-cost').value) || 0,
+          assignedDriver: document.getElementById('ship-assigned-driver').value || 'عام',
+          img: finalImgUrl,
+          status: 'قيد الانتظار',
+          date: new Date().toLocaleDateString('ar-EG')
+      };
+
+      if (!window.appData) window.appData = { shipments: [], treasury: [], customers: [] };
+      appData.shipments.unshift(shipmentData);
+
+      if (typeof saveDataAll === 'function') {
+          saveDataAll();
+      } else {
+          localStorage.setItem('transportAppV60', JSON.stringify(appData));
+      }
+
+      form.reset();
+      if(btn) btn.innerText = 'حفظ الرحلة وتوليد QR 💾';
+      if (typeof render === 'function') render();
+      alert('تم حفظ الرحلة ورفع الصورة بنجاح للسحابة! 🚀');
+  };
+
+  // تجربة الحفظ السريع
   document.addEventListener("DOMContentLoaded", () => {
     const saveBtn = document.getElementById("testSaveBtn");
     if (saveBtn) {
       saveBtn.addEventListener("click", async () => {
         try {
           const docRef = await addDoc(collection(db, "orders"), {
-            clientName: "إمعاد",
+            clientName: "تجربة",
             amount: 300,
             createdAt: new Date().toISOString()
           });
-          console.log("تم الحفظ برقم: ", docRef.id);
           alert("تم الحفظ بنجاح! رقم المستند: " + docRef.id);
         } catch (e) {
-          console.error("خطأ تفصيلي: ", e);
+          alert("خطأ فايربيس: " + e.message);
+        }
+      });
+    }
+  });
+</script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
+    authDomain: "n2la-642d3.firebaseapp.com",
+    projectId: "n2la-642d3",
+    storageBucket: "n2la-642d3.firebasestorage.app",
+    messagingSenderId: "1085749997466",
+    appId: "1:1085749997466:web:13e5539",
+    measurementId: "G-KH4ZYFB8LC"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  console.log("تم ربط قاعدة البيانات والـ Storage بنجاح");
+
+  // دالة رفع الصور إلى Firebase Storage لحل مشكلة امتلاء الذاكرة
+  window.uploadImageToFirebase = async function(file) {
+      if (!file) return '';
+      try {
+          const storageRef = ref(storage, 'shipments/' + Date.now() + '_' + file.name);
+          const snapshot = await uploadBytes(storageRef, file);
+          return await getDownloadURL(snapshot.ref);
+      } catch (error) {
+          console.error("خطأ في رفع الصورة:", error);
+          alert("فشل رفع الصورة للسحابة: " + error.message);
+          return '';
+      }
+  };
+
+  // دالة حفظ الرحلة المحدثة لتعمل مع زر الحفظ الأساسي
+  window.saveShipmentHandler = async function(e) {
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      
+      const form = document.getElementById('shipment-form');
+      const btn = form.querySelector('button[type="submit"]');
+      if(btn) btn.innerText = 'جاري الرفع والحفظ... ⏳';
+
+      const imgInput = document.getElementById('ship-img');
+      let finalImgUrl = '';
+
+      // رفع الصورة للسحابة بدلاً من تخزينها كـ Base64 تملأ الذاكرة
+      if (imgInput && imgInput.files && imgInput.files[0]) {
+          finalImgUrl = await window.uploadImageToFirebase(imgInput.files[0]);
+      }
+
+      const shipmentData = {
+          id: document.getElementById('edit-shipment-id').value || Date.now(),
+          name: document.getElementById('ship-name').value,
+          phone: document.getElementById('ship-phone').value,
+          address: document.getElementById('ship-address').value,
+          item: document.getElementById('ship-item').value,
+          price: Number(document.getElementById('ship-price').value),
+          fuelCost: Number(document.getElementById('ship-fuel-cost').value) || 0,
+          extraCost: Number(document.getElementById('ship-extra-cost').value) || 0,
+          assignedDriver: document.getElementById('ship-assigned-driver').value || 'عام',
+          img: finalImgUrl,
+          status: 'قيد الانتظار',
+          date: new Date().toLocaleDateString('ar-EG')
+      };
+
+      if (!window.appData) window.appData = { shipments: [], treasury: [], customers: [] };
+      appData.shipments.unshift(shipmentData);
+
+      if (typeof saveDataAll === 'function') {
+          saveDataAll();
+      } else {
+          localStorage.setItem('transportAppV60', JSON.stringify(appData));
+      }
+
+      form.reset();
+      if(btn) btn.innerText = 'حفظ الرحلة وتوليد QR 💾';
+      if (typeof render === 'function') render();
+      alert('تم حفظ الرحلة ورفع الصورة بنجاح للسحابة! 🚀');
+  };
+
+  // تجربة الحفظ السريع
+  document.addEventListener("DOMContentLoaded", () => {
+    const saveBtn = document.getElementById("testSaveBtn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        try {
+          const docRef = await addDoc(collection(db, "orders"), {
+            clientName: "تجربة",
+            amount: 300,
+            createdAt: new Date().toISOString()
+          });
+          alert("تم الحفظ بنجاح! رقم المستند: " + docRef.id);
+        } catch (e) {
           alert("خطأ فايربيس: " + e.message);
         }
       });
@@ -2824,34 +2983,4 @@ function handleImageUpload(inputElement) {
   });
 </script>
 
-<!-- زر التجربة بتصميم ثري دي أنيق مع إضافة الـ ID المطلوب -->
-<button id="testSaveBtn" class="custom-save-btn">
-    تجربة حفظ البيانات في القاعدة
-</button>
 
-<!-- تنسيقات الزر -->
-<style>
-.custom-save-btn {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: #fff;
-  font-size: 14px;
-  font-weight: bold;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  box-shadow: 0 4px 0 #15803d, 0 6px 10px rgba(0, 0, 0, 0.2);
-  transition: all 0.1s ease;
-  display: block;
-  width: auto;
-  margin: 10px auto;
-  text-align: center;
-}
-.custom-save-btn:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #15803d, 0 3px 6px rgba(0, 0, 0, 0.2);
-}
-</style>
-
-</body>
-</html>
