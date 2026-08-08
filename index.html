@@ -533,7 +533,7 @@
     </section>
 
     <!-- 2. الشحنات -->
-   <section id="shipments-tab" class="app-section">
+    <section id="shipments-tab" class="app-section">
         <div class="card" id="new-shipment-card">
             <h3 id="form-title-heading">تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)</h3>
             <form id="shipment-form" onsubmit="saveShipmentHandler(event);">
@@ -591,7 +591,7 @@
                 </table>
             </div>
         </div>
-   </section> 
+    </section>
 
     <!-- 3. مساعد الذكاء الاصطناعي -->
     <section id="ai-mechanic-tab" class="app-section">
@@ -1601,374 +1601,102 @@
             render();
         }
 
+        function registerNewDriverPublic() {
+            const name = document.getElementById('pub-drv-name').value.trim();
+            const phone = document.getElementById('pub-drv-phone').value.trim();
+            const pin = document.getElementById('pub-drv-pin').value.trim();
+
+            if(!appData.drivers) appData.drivers = [];
+            if(appData.drivers.some(d => d.pin === pin)) {
+                alert('رمز المرور هذا مستخدم بالفعل، اختر رمزاً آخر!');
+                return;
+            }
+
+            appData.drivers.push({
+                id: Date.now(),
+                name: name,
+                phone: phone,
+                pin: pin,
+                role: 'سائق',
+                title: 'سائق مستجد',
+                status: 'متاح 🟢',
+                avatar: '',
+                cover: '',
+                wallPosts: []
+            });
+
+            saveDataAll();
+            closeDriverRegister();
+            document.getElementById('public-driver-form').reset();
+            alert('تم تسجيل حساب السائق بنجاح! يمكنك الدخول الآن برمز PIN الخاص بك 🚀');
+        }
+
         function saveShipmentHandler(e) {
-    if (e && typeof e.preventDefault === 'function') {
-        e.preventDefault();
-    }
+            e.preventDefault();
+            const id = document.getElementById('edit-shipment-id').value;
+            const name = document.getElementById('ship-name').value.trim();
+            const phone = document.getElementById('ship-phone').value.trim();
+            const address = document.getElementById('ship-address').value.trim();
+            const item = document.getElementById('ship-item').value.trim();
+            const price = Number(document.getElementById('ship-price').value);
+            const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
+            const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+            const assignedDriver = document.getElementById('ship-assigned-driver').value;
 
-    const id = document.getElementById('edit-shipment-id').value;
-    const name = document.getElementById('ship-name').value.trim();
-    const phone = document.getElementById('ship-phone').value.trim();
-    const address = document.getElementById('ship-address').value.trim();
-    const item = document.getElementById('ship-item').value.trim();
-    const price = Number(document.getElementById('ship-price').value) || 0;
-    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
-    const assignedDriver = document.getElementById('ship-assigned-driver').value;
+            let sigData = '';
+            if (canvas && ctx) {
+                sigData = canvas.toDataURL();
+            }
 
-    let sigData = '';
-    if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
-        sigData = canvas.toDataURL();
-    }
+            if (id) {
+                let s = appData.shipments.find(item => item.id == id);
+                if (s) {
+                    s.name = name; s.phone = phone; s.address = address; s.item = item;
+                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
+                    s.assignedDriver = assignedDriver;
+                    if(currentGPS) s.gps = currentGPS;
+                    if(uploadedImgBase64) s.img = uploadedImgBase64;
+                    if(sigData && sigData.length > 100) s.signature = sigData;
+                }
+            } else {
+                appData.shipments.unshift({
+                    id: Date.now(),
+                    name, phone, address, item, price, fuelCost, extraCost,
+                    assignedDriver: assignedDriver || 'بدون تعيين',
+                    gps: currentGPS || '30.0444,31.2357',
+                    img: uploadedImgBase64 || '',
+                    signature: sigData || '',
+                    status: 'قيد الانتظار',
+                    date: new Date().toLocaleDateString('ar-EG')
+                });
 
-    // التأكد من تهيئة المصفوفات لتجنب الأخطاء
-    if (!window.appData) window.appData = {};
-    if (!appData.shipments) appData.shipments = [];
-    if (!appData.treasury) appData.treasury = [];
+                // تسجيل إيراد تلقائي في الخزنة
+                appData.treasury.unshift({
+                    id: Date.now(),
+                    type: 'in',
+                    amount: price,
+                    desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+                    date: new Date().toLocaleDateString('ar-EG')
+                });
 
-    if (id) {
-        let s = appData.shipments.find(item => item.id == id);
-        if (s) {
-            s.name = name; 
-            s.phone = phone; 
-            s.address = address; 
-            s.item = item;
-            s.price = price; 
-            s.fuelCost = fuelCost; 
-            s.extraCost = extraCost;
-            s.assignedDriver = assignedDriver;
-            
-            if (typeof currentGPS !== 'undefined' && currentGPS) s.gps = currentGPS;
-            if (typeof uploadedImgBase64 !== 'undefined' && uploadedImgBase64) s.img = uploadedImgBase64;
-            if (sigData && sigData.length > 100) s.signature = sigData;
+                // إضافة للديون / العملاء
+                let cust = (appData.customers || []).find(c => c.name === name);
+                if(cust) {
+                    cust.debt = Number(cust.debt || 0) + price;
+                } else {
+                    appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
+                }
+            }
+
+            saveDataAll();
+            document.getElementById('shipment-form').reset();
+            document.getElementById('edit-shipment-id').value = '';
+            clearSignature();
+            currentGPS = ''; uploadedImgBase64 = '';
+            document.getElementById('gps-status').innerText = '';
+            alert('تم حفظ الرحلة بنجاح سحابياً! 💾');
+            render();
         }
-    } else {
-        appData.shipments.unshift({
-            id: Date.now(),
-            name, 
-            phone, 
-            address, 
-            item, 
-            price, 
-            fuelCost, 
-            extraCost,
-            assignedDriver: assignedDriver || 'بدون تعيين',
-            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
-            img: (typeof uploadedImgBase64 !== 'undefined' && uploadedImgBase64) ? uploadedImgBase64 : '',
-            signature: sigData || '',
-            status: 'قيد الانتظار',
-            date: new Date().toLocaleDateString('ar-EG')
-        });
-
-        // تسجيل إيراد تلقائي في الخزنة
-        appData.treasury.unshift({
-            id: Date.now(),
-            type: 'in',
-// دالة آمنة لحفظ الشحنة ومعالجة الصور والتوقيع دون تسبب أي انهيار للخروج من التطبيق
-function saveShipmentHandler(e) {
-    if (e && typeof e.preventDefault === 'function') {
-        e.preventDefault();
-    }
-
-    const id = document.getElementById('edit-shipment-id').value;
-    const name = document.getElementById('ship-name').value.trim();
-    const phone = document.getElementById('ship-phone').value.trim();
-    const address = document.getElementById('ship-address').value.trim();
-    const item = document.getElementById('ship-item').value.trim();
-    const price = Number(document.getElementById('ship-price').value) || 0;
-    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
-    const assignedDriver = document.getElementById('ship-assigned-driver').value;
-
-    // التقاط التوقيع بطريقة آمنة
-    let sigData = '';
-    try {
-        if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
-            sigData = canvas.toDataURL();
-        }
-    } catch (err) {
-        console.log("تنبيه بخصوص التوقيع: ", err);
-    }
-
-    // التحقق من تهيئة بيانات التطبيق
-    if (!window.appData) window.appData = {};
-    if (!appData.shipments) appData.shipments = [];
-    if (!appData.treasury) appData.treasury = [];
-
-    // التعامل مع ملف الصورة المرفوعة (سواء من الاستديو أو الكاميرا) بأمان
-    const imgInput = document.getElementById('ship-img');
-    
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(uploadEvent) {
-            let uploadedImgBase64 = uploadEvent.target.result;
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, uploadedImgBase64, sigData);
-        };
-        reader.onerror = function() {
-            // في حال حدث خطأ في قراءة الصورة، يتم الحفظ بدون صورة لتفادي انهيار التطبيق
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, '', sigData);
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else {
-        // الحفظ المباشر إذا لم يتم اختيار صورة جديدة
-        let existingImg = '';
-        if (id) {
-            let oldShipment = appData.shipments.find(item => item.id == id);
-            if (oldShipment) existingImg = oldShipment.img || '';
-        }
-        completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, existingImg, sigData);
-    }
-}
-
-// الدالة المسؤولة عن إتمام الحفظ وتحديث الواجهة
-function completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, imgData, sigData) {
-    if (id) {
-        let s = appData.shipments.find(item => item.id == id);
-        if (s) {
-            s.name = name; 
-            s.phone = phone; 
-            s.address = address; 
-            s.item = item;
-            s.price = price; 
-            s.fuelCost = fuelCost; 
-            s.extraCost = extraCost;
-            s.assignedDriver = assignedDriver;
-            if (imgData) s.img = imgData;
-            if (sigData && sigData.length > 100) s.signature = sigData;
-        }
-    } else {
-        appData.shipments.unshift({
-            id: Date.now(),
-            name, 
-            phone, 
-            address, 
-            item, 
-            price, 
-            fuelCost, 
-            extraCost,
-            assignedDriver: assignedDriver || 'بدون تعيين',
-            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
-            img: imgData || '',
-            signature: sigData || '',
-            status: 'قيد الانتظار',
-            date: new Date().toLocaleDateString('ar-EG')
-        });
-
-        // تسجيل إيراد تلقائي في الخزنة
-        appData.treasury.unshift({
-            id: Date.now(),
-            type: 'in',
-            amount: price,
-            desc: `تحصيل أجرة شحنة: ${item} (${name})`,
-            date: new Date().toLocaleDateString('ar-EG')
-        }); 
-// دالة آمنة لحفظ الشحنة ومعالجة الصور والتوقيع دون تسبب أي انهيار للخروج من التطبيق
-function saveShipmentHandler(e) {
-    if (e && typeof e.preventDefault === 'function') {
-        e.preventDefault();
-    }
-
-    const id = document.getElementById('edit-shipment-id').value;
-    const name = document.getElementById('ship-name').value.trim();
-    const phone = document.getElementById('ship-phone').value.trim();
-    const address = document.getElementById('ship-address').value.trim();
-    const item = document.getElementById('ship-item').value.trim();
-    const price = Number(document.getElementById('ship-price').value) || 0;
-    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
-    const assignedDriver = document.getElementById('ship-assigned-driver').value;
-
-    // التقاط التوقيع بطريقة آمنة
-    let sigData = '';
-    try {
-        if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
-            sigData = canvas.toDataURL();
-        }
-    } catch (err) {
-        console.log("تنبيه بخصوص التوقيع: ", err);
-    }
-
-    // التحقق من تهيئة بيانات التطبيق
-    if (!window.appData) window.appData = {};
-    if (!appData.shipments) appData.shipments = [];
-    if (!appData.treasury) appData.treasury = [];
-
-    // التعامل مع ملف الصورة المرفوعة (سواء من الاستديو أو الكاميرا) بأمان
-    const imgInput = document.getElementById('ship-img');
-    
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(uploadEvent) {
-            let uploadedImgBase64 = uploadEvent.target.result;
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, uploadedImgBase64, sigData);
-        };
-        reader.onerror = function() {
-            // في حال حدث خطأ في قراءة الصورة، يتم الحفظ بدون صورة لتفادي انهيار التطبيق
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, '', sigData);
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else {
-        // الحفظ المباشر إذا لم يتم اختيار صورة جديدة
-        let existingImg = '';
-        if (id) {
-            let oldShipment = appData.shipments.find(item => item.id == id);
-            if (oldShipment) existingImg = oldShipment.img || '';
-        }
-        completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, existingImg, sigData);
-    }
-}
-
-// الدالة المسؤولة عن إتمام الحفظ وتحديث الواجهة
-function completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, imgData, sigData) {
-    if (id) {
-        let s = appData.shipments.find(item => item.id == id);
-        if (s) {
-            s.name = name; 
-            s.phone = phone; 
-            s.address = address; 
-            s.item = item;
-            s.price = price; 
-            s.fuelCost = fuelCost; 
-            s.extraCost = extraCost;
-            s.assignedDriver = assignedDriver;
-            if (imgData) s.img = imgData;
-            if (sigData && sigData.length > 100) s.signature = sigData;
-        }
-    } else {
-        appData.shipments.unshift({
-            id: Date.now(),
-            name, 
-            phone, 
-            address, 
-            item, 
-            price, 
-            fuelCost, 
-            extraCost,
-            assignedDriver: assignedDriver || 'بدون تعيين',
-            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
-            img: imgData || '',
-            signature: sigData || '',
-            status: 'قيد الانتظار',
-            date: new Date().toLocaleDateString('ar-EG')
-        });
-// دالة آمنة لحفظ الشحنة ومعالجة الصور والتوقيع دون تسبب أي انهيار للتطبيق
-function saveShipmentHandler(e) {
-    if (e && typeof e.preventDefault === 'function') {
-        e.preventDefault();
-    }
-
-    const id = document.getElementById('edit-shipment-id').value;
-    const name = document.getElementById('ship-name').value.trim();
-    const phone = document.getElementById('ship-phone').value.trim();
-    const address = document.getElementById('ship-address').value.trim();
-    const item = document.getElementById('ship-item').value.trim();
-    const price = Number(document.getElementById('ship-price').value) || 0;
-    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
-    const assignedDriver = document.getElementById('ship-assigned-driver').value;
-
-    // التقاط التوقيع بطريقة آمنة
-    let sigData = '';
-    try {
-        if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
-            sigData = canvas.toDataURL();
-        }
-    } catch (err) {
-        console.log("تنبيه بخصوص التوقيع: ", err);
-    }
-
-    // التحقق من تهيئة بيانات التطبيق
-    if (!window.appData) window.appData = {};
-    if (!appData.shipments) appData.shipments = [];
-    if (!appData.treasury) appData.treasury = [];
-
-    // التعامل مع ملف الصورة المرفوعة (سواء من الاستديو أو الكاميرا) بأمان
-    const imgInput = document.getElementById('ship-img');
-    
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(uploadEvent) {
-            let uploadedImgBase64 = uploadEvent.target.result;
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, uploadedImgBase64, sigData);
-        };
-        reader.onerror = function() {
-            // في حال حدث خطأ في قراءة الصورة، يتم الحفظ بدون صورة لتفادي انهيار التطبيق
-            completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, '', sigData);
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else {
-        // الحفظ المباشر إذا لم يتم اختيار صورة جديدة
-        let existingImg = '';
-        if (id) {
-            let oldShipment = appData.shipments.find(item => item.id == id);
-            if (oldShipment) existingImg = oldShipment.img || '';
-        }
-        completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, existingImg, sigData);
-    }
-}
-
-// الدالة المسؤولة عن إتمام الحفظ وتحديث الواجهة
-function completeShipmentSaving(id, name, phone, address, item, price, fuelCost, extraCost, assignedDriver, imgData, sigData) {
-    if (id) {
-        let s = appData.shipments.find(item => item.id == id);
-        if (s) {
-            s.name = name; 
-            s.phone = phone; 
-            s.address = address; 
-            s.item = item;
-            s.price = price; 
-            s.fuelCost = fuelCost; 
-            s.extraCost = extraCost;
-            s.assignedDriver = assignedDriver;
-            if (imgData) s.img = imgData;
-            if (sigData && sigData.length > 100) s.signature = sigData;
-        }
-    } else {
-        appData.shipments.unshift({
-            id: Date.now(),
-            name, 
-            phone, 
-            address, 
-            item, 
-            price, 
-            fuelCost, 
-            extraCost,
-            assignedDriver: assignedDriver || 'بدون تعيين',
-            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
-            img: imgData || '',
-            signature: sigData || '',
-            status: 'قيد الانتظار',
-            date: new Date().toLocaleDateString('ar-EG')
-        });
-
-        // تسجيل إيراد تلقائي في الخزنة
-        appData.treasury.unshift({
-            id: Date.now(),
-            type: 'in',
-            amount: price,
-            desc: `تحصيل أجرة شحنة: ${item} (${name})`,
-            date: new Date().toLocaleDateString('ar-EG')
-        }); 
-    }
-    
-    // حفظ البيانات وتحديث واجهة المستخدم
-    if (typeof saveDataAll === 'function') {
-        saveDataAll();
-    } else {
-        localStorage.setItem('transportAppV60', JSON.stringify(appData));
-    }
-
-    if (typeof render === 'function') {
-        render();
-    }
-
-    // إعادة تعيين النموذج بعد الحفظ الناجح
-    const form = document.getElementById('shipment-form');
-    if (form) form.reset();
-    
-    alert('تم حفظ الرحلة وتحديث البيانات بنجاح! 💾');
-}
-
 
         function editShipment(id) {
             let s = appData.shipments.find(item => item.id == id);
@@ -2928,45 +2656,40 @@ if (docsList) {
         }
 
         function openInvoiceStandalone() {
-    const id = document.getElementById('invoice-select').value;
-    if(!id) { alert('اختر فاتورة أولاً!'); return; }
-    let s = appData.shipments.find(item => item.id == id);
-    if(s) {
-        let win = window.open('', '_blank');
-        win.document.write(`
-            <html dir="rtl" lang="ar">
-            <head>
-                <title>فاتورة رقم #${s.id} - أسطورة الطريق</title>
-                <style>
-                    body { font-family: sans-serif; padding: 20px; background: #fff; color: #0f172a; }
-                    .inv-card { border: 2px solid #2563eb; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
-                    h2 { text-align: center; color: #2563eb; margin-bottom: 5px; }
-                    p { font-size: 14px; margin: 6px 0; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
-                </style>
-            </head>
-            <body>
-                <div class="inv-card">
-                    <h2>🐎 أسطورة الطريق - فاتورة رقم #${s.id}</h2>
-                    <p><strong>اسم العميل:</strong> ${s.name}</p>
-                    <p><strong>رقم الهاتف:</strong> ${s.phone || '-'}</p>
-                    <p><strong>عنوان التوصيل:</strong> ${s.address}</p>
-                    <p><strong>وصف الحمولة:</strong> ${s.item}</p>
-                    <p><strong>الأجرة المتفق عليها:</strong> ${s.price} ج.م</p>
-                    <p><strong>تكلفة الوقود:</strong> ${s.fuelCost || 0} ج.م</p>
-                    <p><strong>تكاليف إضافية:</strong> ${s.extraCost || 0} ج.م</p>
-                    <p><strong>السائق المسؤول:</strong> ${s.assignedDriver || 'عام'}</p>
-                    <p><strong>حالة الرحلة:</strong> ${s.status}</p>
-                    <p><strong>تاريخ الشحنة:</strong> ${s.date}</p>
-                    ${s.img ? `<div style="margin-top:15px;"><small>صورة الشحنة:</small><br><img src="${s.img}" style="max-height:100px; border-radius:6px;"/></div>` : ''}
-                    ${s.signature ? `<div style="margin-top:15px;"><small>توقيع المستلم:</small><br><img src="${s.signature}" style="height:50px;"/></div>` : ''}
-                    <button onclick="window.print()" style="margin-top:15px; background:#2563eb; color:#fff; padding:10px 20px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🖨️ طباعة الفاتورة الرسمية</button>
-                </div>
-            </body>
-            </html>
-        `);
-    }
-}
-
+            const id = document.getElementById('invoice-select').value;
+            if(!id) { alert('اختر فاتورة أولاً!'); return; }
+            let s = appData.shipments.find(item => item.id == id);
+            if(s) {
+                let win = window.open('', '_blank');
+                win.document.write(`
+                    <html dir="rtl" lang="ar">
+                    <head>
+                        <title>فاتورة رقم #${s.id} - أسطورة الطريق</title>
+                        <style>
+                            body { font-family: sans-serif; padding: 20px; background: #fff; color: #0f172a; }
+                            .inv-card { border: 2px solid #2563eb; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
+                            h2 { text-align: center; color: #2563eb; margin-bottom: 5px; }
+                            p { font-size: 14px; margin: 6px 0; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="inv-card">
+                            <h2>🐎 أسطورة الطريق - فاتورة رقم #${s.id}</h2>
+                            <p><strong>اسم العميل:</strong> ${s.name}</p>
+                            <p><strong>رقم الهاتف:</strong> ${s.phone || '-'}</p>
+                            <p><strong>عنوان التوصيل:</strong> ${s.address}</p>
+                            <p><strong>وصف الحمولة:</strong> ${s.item}</p>
+                            <p><strong>الأجرة المتفق عليها:</strong> ${s.price} ج.م</p>
+                            <p><strong>السائق المسؤول:</strong> ${s.assignedDriver || 'عام'}</p>
+                            <p><strong>حالة الرحلة:</strong> ${s.status}</p>
+                            ${s.signature ? `<div style="margin-top:15px;"><small>توقيع المستلم:</small><br><img src="${s.signature}" style="height:50px;"/></div>` : ''}
+                            <button onclick="window.print()" style="margin-top:15px; background:#2563eb; color:#fff; padding:10px 20px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🖨️ طباعة الفاتورة الرسمية</button>
+                        </div>
+                    </body>
+                    </html>
+                `);
+            }
+        }
 
         function exportInvoiceAsImage() {
             const area = document.getElementById('print-area');
@@ -3144,4 +2867,3 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
 
 </body>
 </html>
-
