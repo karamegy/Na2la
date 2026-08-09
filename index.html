@@ -2252,27 +2252,65 @@
         }
 
         function renderDriversMonitor() {
-            const list = document.getElementById('drivers-monitor-list');
-            if(!list) return;
-            list.innerHTML = '';
+    const list = document.getElementById('drivers-monitor-list');
+    if(!list) return;
+    list.innerHTML = '';
 
-            let drivers = appData.drivers || [];
-            drivers.forEach(d => {
-                let row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight:bold;">${d.name}</td>
-                    <td>${d.phone}</td>
-                    <td><span class="badge bg-transit">${d.role}</span></td>
-                    <td style="color:var(--accent); font-weight:bold;">${d.title || 'سائق'}</td>
-                    <td><span class="badge bg-delivered">${d.status}</span></td>
-                    <td>
-                        <button type="button" class="btn-main btn-sm" onclick="promoteDriverTitle(${d.id})">🏆 ترقية الوسام/اللقب</button>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔐 كلمة السر</button>
-                    </td>
-                `;
-                list.appendChild(row);
-            });
-        }
+    let drivers = appData.drivers || [];
+    if (drivers.length === 0) {
+        list.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:15px; opacity:0.7;">لا توجد حسابات مسجلة حالياً</td></tr>`;
+        return;
+    }
+
+    drivers.forEach(d => {
+        // قائمة منسدلة حديثة لاختيار الرتبة أو الصلاحية
+        let roleSelectHtml = `<select id="mon-role-${d.id}" style="font-size:10px; padding:5px; border-radius:4px; font-weight:bold; background:var(--bg); color:var(--text-color);">`;
+        ['سائق', 'مشرف', 'مدير مساعد', 'مدير نظام'].forEach(r => {
+            let selected = (d.role === r) ? 'selected' : '';
+            roleSelectHtml += `<option value="${r}" ${selected}>${r}</option>`;
+        });
+        roleSelectHtml += `</select>`;
+
+        // قائمة منسدلة لاختيار اللقب الاحترافي / الوسام
+        let titleSelectHtml = `<select id="mon-title-${d.id}" style="font-size:10px; padding:5px; border-radius:4px; background:var(--bg); color:var(--text-color);">`;
+        driverTitlesList.forEach(t => {
+            let selected = (d.title === t) ? 'selected' : '';
+            titleSelectHtml += `<option value="${t}" ${selected}>${t}</option>`;
+        });
+        titleSelectHtml += `</select>`;
+
+        let row = document.createElement('tr');
+        row.innerHTML = `
+            <td style="font-weight:bold; vertical-align:middle;">${d.name}</td>
+            <td style="vertical-align:middle; direction:ltr;">${d.phone}</td>
+            <td style="vertical-align:middle;">${roleSelectHtml}</td>
+            <td style="vertical-align:middle;">${titleSelectHtml}</td>
+            <td style="vertical-align:middle;"><span class="badge ${d.status.includes('🟢') ? 'bg-delivered' : 'bg-pending'}">${d.status}</span></td>
+            <td style="vertical-align:middle; display:flex; gap:4px; flex-wrap:wrap;">
+                <button type="button" class="btn-success btn-sm" onclick="updateDriverMonitorInfo(${d.id})" style="font-size:9px; padding:5px 8px;">حفظ 💾</button>
+                <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})" style="font-size:9px; padding:5px 8px;">🔐 PIN</button>
+                ${currentUserRole === 'admin' && d.name !== 'المدير' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount(${d.id})" style="font-size:9px; padding:5px 8px;">حذف 🗑️</button>` : ''}
+            </td>
+        `;
+        list.appendChild(row);
+    });
+}
+
+function updateDriverMonitorInfo(driverId) {
+    let driver = (appData.drivers || []).find(d => d.id === driverId);
+    if (driver) {
+        const newRole = document.getElementById(`mon-role-${driverId}`).value;
+        const newTitle = document.getElementById(`mon-title-${driverId}`).value;
+        
+        driver.role = newRole;
+        driver.title = newTitle;
+        
+        saveDataAll();
+        renderDriversMonitor();
+        alert(`تم تحديث بيانات وتعيينات الحساب (${driver.name}) بنجاح! 🚀`);
+    }
+}
+
 
         function promoteDriverTitle(id) {
             let d = appData.drivers.find(item => item.id === id);
