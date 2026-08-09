@@ -1798,41 +1798,48 @@
     }
 }
 
-window.saveDocHandler = function(e) {
-    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
+        window.saveDocHandler = function(e) {
+    if (e) e.preventDefault();
     
     const titleInput = document.getElementById('doc-title');
     const fileInput = document.getElementById('doc-file');
     
-    const title = titleInput ? titleInput.value.trim() : '';
+    const title = titleInput ? titleInput.value.trim() : 'مستند بدون عنوان';
     
     if (fileInput && fileInput.files && fileInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            if (!appData.docs) appData.docs = [];
-            
-            appData.docs.unshift({
-                id: Date.now(),
-                title: title,
-                src: evt.target.result
-            });
-            
-            if (typeof saveDataAll === 'function') saveDataAll();
-            
-            const docForm = document.getElementById('doc-form');
-            if (docForm) docForm.reset();
-            
-            alert('تم رفع المستند لمكتبة الأسطول بنجاح! 📂');
-            
-            if (typeof render === 'function') {
-                render();
-            }
-        };
-        reader.readAsDataURL(fileInput.files[0]);
+        const file = fileInput.files[0];
+        
+        if (!appData.docs) appData.docs = [];
+        
+        // استخدام اسم الملف أو رابط مؤقت لتجنب مشاكل الـ FileReader في الهواتف
+        appData.docs.unshift({
+            id: Date.now(),
+            title: title,
+            src: URL.createObjectURL(file), // طريقة أسرع وأمن للمتصفحات والهواتف
+            fileName: file.name,
+            date: new Date().toLocaleDateString('ar-EG')
+        });
+        
+        if (typeof saveDataAll === 'function') {
+            saveDataAll();
+        } else {
+            localStorage.setItem('transportAppV60', JSON.stringify(appData));
+        }
+        
+        const docForm = document.getElementById('doc-form');
+        if (docForm) docForm.reset();
+        
+        alert('تم رفع المستند لمكتبة الأسطول بنجاح! 📂');
+        
+        if (typeof render === 'function') {
+            render();
+        } else if (typeof renderDocs === 'function') {
+            renderDocs();
+        }
     } else {
         alert('الرجاء اختيار ملف مرفق صالح.');
     }
-}
+};
 
         function saveExpenseHandler(e) {
             const title = document.getElementById('exp-title').value.trim();
@@ -2469,44 +2476,80 @@ window.saveDocHandler = function(e) {
                 });
             }
 
-                        // الشاحنات والأسطول
-            const trucksList = document.getElementById('trucks-list');
-            if(trucksList) {
-                trucksList.innerHTML = '';
-                (appData.trucks || []).forEach(t => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="font-weight:bold;">${t.num}</td>
-                        <td>${t.driver}</td>
-                        <td>${t.km} KM</td>
-                        <td style="color:var(--warning); font-weight:bold;">${t.nextOil} KM</td>
-                        <td>${t.expiry}</td>
-                    `;
-                    trucksList.appendChild(tr);
-                });
-            }
+            // 1. الشاحنات والأسطول
+const trucksList = document.getElementById('trucks-list');
+if(trucksList) {
+    trucksList.innerHTML = '';
+    (appData.trucks || []).forEach(t => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:bold;">${t.num}</td>
+            <td>${t.driver}</td>
+            <td>${t.km} KM</td>
+            <td style="color:var(--warning); font-weight:bold;">${t.nextOil} KM</td>
+            <td>${t.expiry}</td>
+        `;
+        trucksList.appendChild(tr);
+    });
+}
 
-            // وثائق الأسطول (تم تصحيح خاصية التنسيق هنا)
-            const docsList = document.getElementById('docs-list');
-            if(docsList) {
-                docsList.innerHTML = '';
-                (appData.docs || []).forEach(d => {
-                    let item = document.createElement('div');
-                    item.style.background = 'var(--bg)';
-                    item.style.padding = '6px';
-                    item.style.borderRadius = '6px';
-                    item.style.display = 'flex';
-                    item.style.justifyContent = 'space-between'; // تم التعديل لتجنب توقف الكود
-                    item.style.alignItems = 'center';
-                    item.style.border = '1px solid var(--border-color)';
-                    item.innerHTML = `
-                        <span style="font-size:11px; font-weight:bold;">📄 ${d.title}</span>
-                        <button type="button" class="btn-main btn-sm" onclick="viewMedia('${d.src}', 'image')">معاينة المستند 👁️</button>
-                    `;
-                    docsList.appendChild(item);
-                });
-            }
-
+// 2. وثائق الأسطول (تم ربط الحذف برمجياً لضمان الاستجابة الفورية)
+const docsList = document.getElementById('docs-list');
+if (docsList) {
+    docsList.innerHTML = '';
+    let docs = appData.docs || [];
+    
+    if (docs.length === 0) {
+        docsList.innerHTML = `<p style="font-size:10px; opacity:0.7; text-align:center;">لا توجد مستندات مرفوعة حالياً في المكتبة.</p>`;
+    } else {
+        docs.forEach(doc => {
+            let div = document.createElement('div');
+            div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:4px;";
+            
+            div.innerHTML = `
+                <span style="font-size:11px; font-weight:bold;">📁 ${doc.title}</span>
+                <div style="display:flex; gap:4px;">
+                    <button type="button" class="btn-sm btn-main view-doc-btn">عرض 🔍</button>
+                    <button type="button" class="btn-sm btn-danger delete-doc-btn" data-id="${doc.id}">حذف ✕</button>
+                </div>
+            `;
+            
+            // ربط زر العرض برمجياً
+            div.querySelector('.view-doc-btn').addEventListener('click', function() {
+                if (typeof viewMedia === 'function') {
+                    viewMedia(doc.src, 'image');
+                }
+            });
+            
+            // ربط زر الحذف برمجياً لتجنب أي خطأ في النطاق العام
+            div.querySelector('.delete-doc-btn').addEventListener('click', function() {
+                if (confirm('هل أنت متأكد من حذف هذا المستند نهائياً؟')) {
+                    const targetId = String(this.getAttribute('data-id'));
+                    
+                    // حذف العنصر من مصفوفة البيانات
+                    appData.docs = (appData.docs || []).filter(d => String(d.id) !== targetId);
+                    
+                    // حفظ التحديثات (سحابياً أو محلياً)
+                    if (typeof saveDataAll === 'function') {
+                        saveDataAll();
+                    } else {
+                        localStorage.setItem('transportAppV60', JSON.stringify(appData));
+                    }
+                    
+                    // إعادة رسم الواجهة فوراً ليختفي المستند
+                    if (typeof render === 'function') {
+                        render();
+                    } else {
+                        location.reload(); // إعادة تحميل الصفحة كحل مضمون لتحديث الواجهة
+                    }
+                }
+            });
+            
+            docsList.appendChild(div);
+        });
+    }
+}
+            
             // المصروفات
             const expList = document.getElementById('expenses-list');
             if(expList) {
@@ -2751,7 +2794,8 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
                 });
             }
         }
-    </script>
+        
+        </script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -2769,63 +2813,57 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   console.log("تم ربط قاعدة البيانات بنجاح");
-  
-  // دالة الحفظ في فايربيس
-  window.saveDataToFirebase = async function(collectionName, dataObj) {
-      try {
-          const docRef = await addDoc(collection(db, collectionName), {
-              ...dataObj,
-              createdAt: new Date().toISOString()
+
+  // ربط الحدث بالزر مباشرة عبر الـ ID لضمان عدم تعليق الزر نهائياً
+  document.addEventListener("DOMContentLoaded", () => {
+    const saveBtn = document.getElementById("testSaveBtn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", async () => {
+        try {
+          const docRef = await addDoc(collection(db, "orders"), {
+            clientName: "إمعاد",
+            amount: 300,
+            createdAt: new Date().toISOString()
           });
           console.log("تم الحفظ برقم: ", docRef.id);
           alert("تم الحفظ بنجاح! رقم المستند: " + docRef.id);
-      } catch (e) {
+        } catch (e) {
           console.error("خطأ تفصيلي: ", e);
           alert("خطأ فايربيس: " + e.message);
-      }
-  };
-    window.addEventListener('DOMContentLoaded', () => {
-    if (typeof render === 'function') {
-        render();
+        }
+      });
     }
-});
+  });
 </script>
 
-<!-- زر التجربة بتصميم 3D محسن ومتناسق الحجم -->
-<button onclick="saveDataToFirebase('orders', { clientName: 'إمعاد', amount: 300 })" class="custom-save-btn">
+<!-- زر التجربة بتصميم ثري دي أنيق مع إضافة الـ ID المطلوب -->
+<button id="testSaveBtn" class="custom-save-btn">
     تجربة حفظ البيانات في القاعدة
 </button>
 
+<!-- تنسيقات الزر -->
 <style>
 .custom-save-btn {
   background: linear-gradient(135deg, #22c55e, #16a34a);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: bold;
-  padding: 12px 24px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
-  /* تأثير الـ 3D البارز */
-  box-shadow: 0 6px 0 #15803d, 0 8px 15px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 0 #15803d, 0 6px 10px rgba(0, 0, 0, 0.2);
   transition: all 0.1s ease;
   display: block;
-  width: fit-content;
-  min-width: 220px;
-  margin: 15px auto;
+  width: auto;
+  margin: 10px auto;
   text-align: center;
 }
-
-.custom-save-btn:hover {
-  background: linear-gradient(135deg, #16a34a, #15803d);
-}
-
 .custom-save-btn:active {
-  /* حركة الضغط للأسفل لإعطاء تأثير الضغط الحقيقي للزر الثلاثي الأبعاد */
-  transform: translateY(4px);
-  box-shadow: 0 2px 0 #15803d, 0 4px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #15803d, 0 3px 6px rgba(0, 0, 0, 0.2);
 }
 </style>
 
 </body>
-</html>
+    </html>
