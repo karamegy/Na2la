@@ -1,4 +1,4 @@
-const CACHE_NAME = 'na2la-hub-v1';
+const CACHE_NAME = 'na2la-hub-v2';
 const assetsToCache = [
   './index.html',
   './manifest.json'
@@ -11,9 +11,10 @@ self.addEventListener('install', (e) => {
       return cache.addAll(assetsToCache);
     })
   );
+  self.skipWaiting(); // اجبار الخدمة الجديدة على التفعيل فوراً
 });
 
-// تفعيل الخدمة
+// تفعيل الخدمة وحذف التخزين القديم
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keyList) => {
@@ -24,7 +25,7 @@ self.addEventListener('activate', (e) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim()) // السيطرة على الصفحة المفتوحة فوراً
   );
 });
 
