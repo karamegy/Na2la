@@ -677,27 +677,65 @@
         </div>
     </section>
 
-    <!-- 7. مراقبة السائقين والألقاب -->
-    <section id="drivers-monitor-tab" class="app-section">
-        <div class="card" style="border: 2px solid var(--warning);">
-            <h3 style="color: var(--warning);">👁️ لوحة مراقبة وتعيين المديرين والمشرفين والسائقين وإدارة الأوسمة والألقاب</h3>
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>الاسم</th>
-                            <th>رقم الهاتف</th>
-                            <th>الرتبة / الصلاحية</th>
-                            <th>اللقب الاحترافي / الوسام</th>
-                            <th>الحالة التشغيلية</th>
-                            <th>التحكم والترقية</th>
-                        </tr>
-                    </thead>
-                    <tbody id="drivers-monitor-list"></tbody>
-                </table>
-            </div>
+    <!-- 7. مراقبة السائقين وإدارة الصلاحيات والألقاب الكاملة -->
+<section id="drivers-monitor-tab" class="app-section">
+    <div class="card" style="border: 2px solid var(--warning); padding: 20px; border-radius: 12px; background: #fff;">
+        <h3 style="color: var(--warning); margin-bottom: 15px;">👁️ لوحة التحكم الشاملة (الإدارة، المشرفين، والسائقين)</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px;">تحكم كامل في ترقية وتخفيض الرتب، تعيين الألقاب الاحترافية، وتعديل حالة التشغيل لكل مستخدم.</p>
+        <div class="table-responsive">
+            <table style="width: 100%; border-collapse: collapse; text-align: right;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #eee; background: #f9f9f9;">
+                        <th style="padding: 12px;">الاسم</th>
+                        <th style="padding: 12px;">رقم الهاتف</th>
+                        <th style="padding: 12px;">الرتبة الحالية</th>
+                        <th style="padding: 12px;">اللقب / الوسام</th>
+                        <th style="padding: 12px;">الحالة</th>
+                        <th style="padding: 12px; text-align: center;">إجراءات التحكم والترقية</th>
+                    </tr>
+                </thead>
+                <tbody id="drivers-monitor-list"></tbody>
+            </table>
         </div>
-    </section>
+    </div>
+</section>
+
+<!-- نافذة منبثقة (Modal) لتعديل وتحديث بيانات السائق والتحكم الكامل -->
+<div id="edit-driver-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+    <div style="background:#fff; padding:25px; border-radius:12px; width:90%; max-width:500px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <h3 style="margin-bottom: 15px; color: #333;">⚙️ لوحة التحكم بالسائق والترقية</h3>
+        <input type="hidden" id="edit-driver-id">
+        
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; margin-bottom: 5px; font-weight:bold;">الرتبة / الصلاحية:</label>
+            <select id="edit-driver-role" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                <option value="سائق معتمد">سائق معتمد</option>
+                <option value="مشرف ميداني">مشرف ميداني</option>
+                <option value="مدير نظام">مدير نظام</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; margin-bottom: 5px; font-weight:bold;">اللقب الاحترافي / الوسام:</label>
+            <input type="text" id="edit-driver-title" placeholder="مثال: كابتن محترف، سهم الطريق..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="display:block; margin-bottom: 5px; font-weight:bold;">الحالة التشغيلية:</label>
+            <select id="edit-driver-status" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px;">
+                <option value="متاح 🟢">متاح 🟢</option>
+                <option value="في رحلة 🚚">في رحلة 🚚</option>
+                <option value="موقوف مؤقتاً 🔴">موقوف مؤقتاً 🔴</option>
+            </select>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button type="button" onclick="closeEditDriverModal()" style="padding:10px 20px; background:#ccc; border:none; border-radius:6px; cursor:pointer;">إلغاء</button>
+            <button type="button" onclick="updateDriverFullControl()" style="padding:10px 20px; background:var(--warning, #ff9800); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">حفظ التغييرات</button>
+        </div>
+    </div>
+</div>
+
 
     <!-- 8. الخزنة -->
     <section id="treasury-tab" class="app-section">
@@ -1859,35 +1897,60 @@
             render();
         }
 
-        function saveNewDriverHandler(e) {
-            const name = document.getElementById('drv-fullname').value.trim();
-            const phone = document.getElementById('drv-phone').value.trim();
-            const pin = document.getElementById('drv-pin').value.trim();
-            const role = document.getElementById('drv-role-select').value;
+        // إضافة سائق جديد وحفظه في سحاب Firebase مباشرة
+function saveNewDriverHandler(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('drv-fullname').value.trim();
+    const phone = document.getElementById('drv-phone').value.trim();
+    const pin = document.getElementById('drv-pin').value.trim();
+    const role = document.getElementById('drv-role-select').value;
 
-            if (appData.drivers.some(d => d.pin === pin)) {
-                alert('رمز المرور هذا مستخدم بالفعل للحساب آخر، يرجى تعيين رمز آخر!');
-                return;
-            }
+    if (!name || !phone || !pin) {
+        alert('الرجاء إكمال جميع الحقول المطلوبة!');
+        return;
+    }
 
-            appData.drivers.push({
-                id: Date.now(),
-                name: name,
-                phone: phone,
-                pin: pin,
-                role: role,
-                title: role === 'مدير نظام' ? 'مدير عام' : 'سائق معتمد',
-                status: 'متاح 🟢',
-                avatar: '',
-                cover: '',
-                wallPosts: []
-            });
+    // التحقق من قاعدة البيانات السحابية (appData.drivers)
+    if (appData.drivers && appData.drivers.some(d => d.pin === pin)) {
+        alert('رمز المرور هذا مستخدم بالفعل لحساب آخر، يرجى تعيين رمز آخر!');
+        return;
+    }
 
-            saveDataAll();
+    const newDriver = {
+        id: Date.now(),
+        name: name,
+        phone: phone,
+        pin: pin,
+        role: role,
+        title: role === 'مدير نظام' ? 'مدير عام' : (role === 'مشرف ميداني' ? 'مشرف محترف' : 'سائق معتمد'),
+        status: 'متاح 🟢',
+        avatar: '',
+        cover: '',
+        wallPosts: []
+    };
+
+    if (!appData.drivers) appData.drivers = [];
+    appData.drivers.push(newDriver);
+
+    // ☁️ حفظ البيانات سحابياً (تأكد من مطابقة مسار قاعدة البيانات لديك، مثل firebase.database().ref('appData').set(appData))
+    if (typeof database !== 'undefined') {
+        database.ref('appData').set(appData).then(() => {
             document.getElementById('driver-profile-form').reset();
-            alert('تم إنشاء الحساب وتعيين الصلاحية بنجاح! 🚀');
-            render();
-        }
+            alert('تم إنشاء الحساب وحفظه سحابياً بنجاح! 🚀');
+        }).catch((error) => {
+            console.error("خطأ في الحفظ السحابي: ", error);
+            alert('حدث خطأ أثناء الحفظ السحابي، يرجى التحقق من الاتصال.');
+        });
+    } else {
+        // احتياطي في حال استخدام localStorage بجانب السحاب
+        saveDataAll();
+        document.getElementById('driver-profile-form').reset();
+        alert('تم إنشاء الحساب بنجاح! 🚀');
+    }
+    
+    render();
+}
+
 
         function runAIMechanicAnalysis() {
             const fault = document.getElementById('ai-fault-select').value;
