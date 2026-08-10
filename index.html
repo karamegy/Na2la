@@ -1929,70 +1929,84 @@
             }
         }
 
-    
-    function savePublicPostHandler(e) {
-    if(e) e.preventDefault();
-    
+    async function savePublicPostHandler(e) {
+    if (e) e.preventDefault();
+
     const titleInput = document.getElementById('post-title');
     const descInput = document.getElementById('post-desc');
-    const imgInput = document.getElementById('vis-img');
+    const imgInput = document.getElementById('post-images');
     const videoInput = document.getElementById('post-videos');
 
-    if (!titleInput || !descInput) return;
+    const title = titleInput ? titleInput.value.trim() : '';
+    const desc = descInput ? descInput.value.trim() : '';
 
-    let filesList = [];
+    if (!title || !desc) {
+        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
+        return;
+    }
 
-    const processAndSave = (finalFiles) => {
-        if (!window.appData) window.appData = {};
-        if (!window.appData.posts) window.appData.posts = [];
-
-        let newPost = {
-            id: Date.now(),
-            title: titleInput.value.trim(),
-            desc: descInput.value.trim(),
-            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'غير معروف',
-            date: new Date().toLocaleString(),
-            files: finalFiles
-        };
-
-        window.appData.posts.unshift(newPost);
-
-        // تفريغ الحقول
-        titleInput.value = '';
-        descInput.value = '';
-        if(imgInput) imgInput.value = '';
-        if(videoInput) videoInput.value = '';
-
-        // حفظ البيانات وتحديث العرض بالشكل القديم والأساسي
-        if(typeof savedataAll === 'function') savedataAll();
-        if(typeof renderPublicPosts === 'function') renderPublicPosts();
+    let files = [];
+    
+    // دالة مساعدة لقراءة الملفات باستخدام Promise لضمان الأمان التام
+    const readFileAsync = (file, type) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                files.push({ type: type, src: event.target.result });
+                resolve();
+            };
+            reader.readAsDataURL(file);
+        });
     };
 
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(imgEvent) {
-            filesList.push({ type: 'image', src: imgEvent.target.result });
-            if (videoInput && videoInput.files && videoInput.files[0]) {
-                let vidReader = new FileReader();
-                vidReader.onload = function(vidEvent) {
-                    filesList.push({ type: 'video', src: vidEvent.target.result });
-                    processAndSave(filesList);
-                };
-                vidReader.readAsDataURL(videoInput.files[0]);
-            } else {
-                processAndSave(filesList);
-            }
-        };
-        reader.readAsDataURL(imgInput.files[0]);
-    } else if (videoInput && videoInput.files && videoInput.files[0]) {
-        let vidReader = new FileReader();
-        vidReader.onload = function(vidEvent) {
-            filesList.push({ type: 'video', src: vidEvent.target.result });
-            processAndSave(filesList);
-        };
-        vidReader.readAsDataURL(videoInput.files[0]);
-    } else {
-        processAndSave([]);
+    try {
+        // جمع كل مهام قراءة الصور والفيديوهات
+        let promises = [];
+
+        if (imgInput && imgInput.files) {
+            Array.from(imgInput.files).forEach(f => {
+                promises.push(readFileAsync(f, 'image'));
+            });
+        }
+
+        if (videoInput && videoInput.files) {
+            Array.from(videoInput.files).forEach(f => {
+                promises.push(readFileAsync(f, 'video'));
+            });
+        }
+
+        // الانتظار حتى يتم الانتهاء من قراءة كافة الملفات تماماً
+        await Promise.all(promises);
+
+        // التأكد من وجود كائن البيانات العام
+        if (typeof appData === 'undefined') window.appData = {};
+        if (!appData.posts) appData.posts = [];
+
+        // إضافة المنشور الجديد
+        appData.posts.unshift({
+            id: Date.now(),
+            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
+            title: title,
+            desc: desc,
+            files: files,
+            date: new Date().toLocaleString('ar-EG')
+        });
+
+        // الحفظ الشامل وتحديث الواجهة
+        if (typeof saveDataAll === 'function') saveDataAll();
+        
+        const form = document.getElementById('public-post-form');
+        if (form) form.reset();
+
+        alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
+
+        if (typeof renderPublicPosts === 'function') {
+            renderPublicPosts();
+        }
+
+    } catch (error) {
+        console.error("خطأ أثناء قراءة الملفات:", error);
+        alert('حدث خطأ أثناء معالجة الملفات المرفوعة.');
     }
 }
 
