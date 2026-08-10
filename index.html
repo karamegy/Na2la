@@ -2516,30 +2516,57 @@ function updateDriverListInfo(driverId) {
                 });
                 shipDriverSelect.value = currentVal;
             }
+//جدول الشحن الرئيسي
+            function renderShipments() {
+    const shipList = document.getElementById('shipments-list');
+    if (shipList) {
+        shipList.innerHTML = '';
+        let list = appData.shipments || [];
+        
+        // التحقق من صلاحيات السائق
+        if (typeof currentUserRole !== 'undefined' && currentUserRole === 'driver') {
+            list = list.filter(s => s.assignedDriver === loggedInDriverName);
+        }
 
-            // جدول الشحنات الرئيسي
-            const shipList = document.getElementById('shipments-list');
-            if(shipList) {
-                shipList.innerHTML = '';
-                let list = appData.shipments || [];
-                if(currentUserRole === 'driver') {
-                    list = list.filter(s => s.assignedDriver === loggedInDriverName);
-                }
+        // متغير البحث (إن وجد)
+        const searchQuery = typeof query !== 'undefined' && query ? query.toLowerCase() : '';
 
-                list.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(query))).forEach(s => {
-                    let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
-                    let tr = document.createElement('tr');
-                    
-                    let actionsHtml = `
-                        <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
-                        <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
-                    `;
-                    if(currentUserRole === 'admin' || currentUserRole === 'supervisor') {
-                        actionsHtml += `
-                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
-                        `;
-                    }
+        list.filter(s => 
+            (s.name && s.name.toLowerCase().includes(searchQuery)) || 
+            (s.item && s.item.toLowerCase().includes(searchQuery)) || 
+            (s.assignedDriver && s.assignedDriver.toLowerCase().includes(searchQuery))
+        ).forEach(s => {
+            // حساب الربح أو الصافي بناءً على الأسعار والتكاليف المدخلة
+            let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
+            let tr = document.createElement('tr');
+            
+            let actionsHtml = `
+                <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
+                <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
+            `;
+            
+            // إضافة أزرار التعديل والحذف للمدير أو المشرف فقط
+            if (typeof currentUserRole !== 'undefined' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) {
+                actionsHtml += `
+                    <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
+                    <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
+                `;
+            }
+
+            tr.innerHTML = `
+                <td>${s.name || ''} / ${s.item || ''}</td>
+                <td>${s.assignedDriver || 'بدون تعيين'}</td>
+                <td><span class="badge bg-warning">المدير</span></td>
+                <td class="${profit < 0 ? 'text-danger' : 'text-success'}">${profit} ج.م</td>
+                <td><span class="badge bg-success">${s.status || 'قيد الانتظار'}</span></td>
+                <td><div class="action-buttons">${actionsHtml}</div></td>
+            `;
+            
+            shipList.appendChild(tr);
+        });
+    }
+}
+
 
                     tr.innerHTML = `
                         <td style="font-weight:bold;">${s.name}</td>
