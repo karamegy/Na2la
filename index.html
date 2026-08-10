@@ -1997,30 +1997,80 @@
         }
     };
 
-    if (totalFiles === 0) {
-        finalizeAndSave();
+function savePublicPostHandler(e) {
+    const title = document.getElementById('post-title').value.trim();
+    const desc = document.getElementById('post-desc').value.trim();
+
+    if (!title || !desc) {
+        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
         return;
     }
 
-    // قراءة الملفات وتحويلها
-    filesList.forEach(item => {
+    // التأكد من أن مصفوفة المنشورات موجودة
+    if (!appData.posts) appData.posts = [];
+
+    // استخدام متغير عام للملفات أو فحص حقول الإدخال تماماً مثل نظامك الناجح
+    // (بفرض أن لديك مصفوفة للملفات أو نأخذها من حقول الإدخال مباشرة)
+    let postFiles = [];
+    const imgInput = document.getElementById('vis-img');
+    const videoInput = document.getElementById('post-videos');
+
+    // إذا كنت تستخدم مصفوفة عامة للملفات مثل communityFilesArr يمكنك وضعها هنا، 
+    // وإذا كنت تستخدم حقول الرفع المباشر، سنقوم بجمعها كالتالي:
+    
+    // دالة مساعدة سريعة لقراءة الملف المرفوع إن وجد وتخزينه
+    const processAndSave = (filesArray) => {
+        appData.posts.unshift({
+            id: Date.now(),
+            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
+            title: title,
+            desc: desc,
+            files: filesArray,
+            date: new Date().toLocaleString('ar-EG')
+        });
+
+        // حفظ البيانات باستخدام دالتك الأصلية الموجودة في التطبيق
+        saveDataAll();
+
+        // إفراغ النموذج وإعادة العرض
+        document.getElementById('public-post-form').reset();
+        alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
+        
+        if (typeof renderPublicPosts === 'function') {
+            renderPublicPosts();
+        }
+    };
+
+    // معالجة الملفات في حال وجودها
+    let filesList = [];
+    if (imgInput && imgInput.files && imgInput.files[0]) {
         let reader = new FileReader();
         reader.onload = function(event) {
-            files.push({ type: item.type, src: event.target.result });
-            readCount++;
-            if (readCount === totalFiles) {
-                finalizeAndSave();
+            filesList.push({ type: 'image', src: event.target.result });
+            if (videoInput && videoInput.files && videoInput.files[0]) {
+                // لو فيه فيديو كمان نقراه
+                let vidReader = new FileReader();
+                vidReader.onload = function(vidEvent) {
+                    filesList.push({ type: 'video', src: vidEvent.target.result });
+                    processAndSave(filesList);
+                };
+                vidReader.readAsDataURL(videoInput.files[0]);
+            } else {
+                processAndSave(filesList);
             }
         };
-        reader.onerror = function(error) {
-            console.error("خطأ في قراءة الملف:", error);
-            readCount++;
-            if (readCount === totalFiles) {
-                finalizeAndSave();
-            }
+        reader.readAsDataURL(imgInput.files[0]);
+    } else if (videoInput && videoInput.files && videoInput.files[0]) {
+        let vidReader = new FileReader();
+        vidReader.onload = function(vidEvent) {
+            filesList.push({ type: 'video', src: vidEvent.target.result });
+            processAndSave(filesList);
         };
-        reader.readAsDataURL(item.file);
-    });
+        vidReader.readAsDataURL(videoInput.files[0]);
+    } else {
+        // لو مفيش ملفات، انشر النص فقط
+        processAndSave([]);
+    }
 }
 
         function renderPublicPosts() {
