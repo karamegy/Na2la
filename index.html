@@ -1929,81 +1929,73 @@
             }
         }
 
+    
     function savePublicPostHandler(e) {
-    if (e) e.preventDefault();
-
+    if(e) e.preventDefault();
+    
     const titleInput = document.getElementById('post-title');
     const descInput = document.getElementById('post-desc');
     const imgInput = document.getElementById('vis-img');
     const videoInput = document.getElementById('post-videos');
 
-    const titleVal = titleInput ? titleInput.value.trim() : '';
-    const descVal = descInput ? descInput.value.trim() : '';
+    if (!titleInput || !descInput) return;
 
-    if (!titleVal || !descVal) {
-        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
-        return;
-    }
+    let filesList = [];
 
-    if (!window.appData) window.appData = {};
-    if (!window.appData.posts) window.appData.posts = [];
+    const processAndSave = (finalFiles) => {
+        if (!window.appData) window.appData = {};
+        if (!window.appData.posts) window.appData.posts = [];
 
-    let postFiles = [];
-
-    // دالة إتمام الحفظ والتحديث
-    const finalizePost = (filesArray) => {
-        const newPost = {
+        let newPost = {
             id: Date.now(),
-            title: titleVal,
-            desc: descVal,
-            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
+            title: titleInput.value.trim(),
+            desc: descInput.value.trim(),
+            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'غير معروف',
             date: new Date().toLocaleString(),
-            files: filesArray
+            files: finalFiles
         };
 
-        // إضافة المنشور في بداية القائمة
         window.appData.posts.unshift(newPost);
 
-        // الحفظ السحابي والمحلي (يتوافق مع دوال الحفظ الشائعة لديك)
-        if (typeof savedataAll === 'function') {
-            savedataAll();
-        } else if (typeof saveAppData === 'function') {
-            saveAppData();
-        }
+        // تفريغ الحقول
+        titleInput.value = '';
+        descInput.value = '';
+        if(imgInput) imgInput.value = '';
+        if(videoInput) videoInput.value = '';
 
-        // تحديث عرض الإعلانات فورا في الواجهة
-        if (typeof renderPublicPosts === 'function') {
-            renderPublicPosts();
-        }
-
-        // تفريغ الحقول بعد النشر الناجح
-        if (titleInput) titleInput.value = '';
-        if (descInput) descInput.value = '';
-        if (imgInput) imgInput.value = '';
-        if (videoInput) videoInput.value = '';
-        
-        alert('تم نشر الإعلان بنجاح!');
+        // حفظ البيانات وتحديث العرض بالشكل القديم والأساسي
+        if(typeof savedataAll === 'function') savedataAll();
+        if(typeof renderPublicPosts === 'function') renderPublicPosts();
     };
 
-    // معالجة قراءة الملفات (صور أو فيديو)
     if (imgInput && imgInput.files && imgInput.files[0]) {
         let reader = new FileReader();
         reader.onload = function(imgEvent) {
-            postFiles.push({ type: 'image', src: imgEvent.target.result });
-            finalizePost(postFiles);
+            filesList.push({ type: 'image', src: imgEvent.target.result });
+            if (videoInput && videoInput.files && videoInput.files[0]) {
+                let vidReader = new FileReader();
+                vidReader.onload = function(vidEvent) {
+                    filesList.push({ type: 'video', src: vidEvent.target.result });
+                    processAndSave(filesList);
+                };
+                vidReader.readAsDataURL(videoInput.files[0]);
+            } else {
+                processAndSave(filesList);
+            }
         };
         reader.readAsDataURL(imgInput.files[0]);
     } else if (videoInput && videoInput.files && videoInput.files[0]) {
         let vidReader = new FileReader();
         vidReader.onload = function(vidEvent) {
-            postFiles.push({ type: 'video', src: vidEvent.target.result });
-            finalizePost(postFiles);
+            filesList.push({ type: 'video', src: vidEvent.target.result });
+            processAndSave(filesList);
         };
         vidReader.readAsDataURL(videoInput.files[0]);
     } else {
-        finalizePost([]);
+        processAndSave([]);
     }
 }
+
        
         function renderPublicPosts() {
     const feed = document.getElementById('public-posts-feed');
