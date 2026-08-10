@@ -1986,22 +1986,78 @@ function savePublicPostHandler(e) {
                     filesList.push({ type: 'video', src: vidEvent.target.result });
                     processAndSave(filesList);
                 };
+function savePublicPostHandler(e) {
+    if (e) e.preventDefault();
+
+    // التقاط حقول العنوان والوصف والملفات باستخدام المعرفات الصحيحة من الـ HTML
+    const titleInput = document.getElementById('post-title');
+    const descInput = document.getElementById('post-desc');
+    const imgInput = document.getElementById('vis-img');
+    const videoInput = document.getElementById('post-videos');
+
+    const titleVal = titleInput ? titleInput.value.trim() : '';
+    const descVal = descInput ? descInput.value.trim() : '';
+
+    if (!titleVal || !descVal) {
+        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
+        return;
+    }
+
+    if (!window.appData) window.appData = {};
+    if (!window.appData.posts) window.appData.posts = [];
+
+    let postFiles = [];
+
+    const saveToAppData = (filesArray) => {
+        const newPost = {
+            id: Date.now(),
+            title: titleVal,
+            desc: descVal,
+            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
+            date: new Date().toLocaleString(),
+            files: filesArray
+        };
+
+        window.appData.posts.unshift(newPost);
+        
+        // الحفظ السحابي والمحلي وتحديث العرض
+        if (typeof savedataAll === 'function') savedataAll();
+        if (typeof renderPublicPosts === 'function') renderPublicPosts();
+
+        // تفريغ الحقول بعد النشر الناجح
+        if (titleInput) titleInput.value = '';
+        if (descInput) descInput.value = '';
+        if (imgInput) imgInput.value = '';
+        if (videoInput) videoInput.value = '';
+    };
+
+    // معالجة قراءة الصور والفيديوهات
+    if (imgInput && imgInput.files && imgInput.files[0]) {
+        let reader = new FileReader();
+        reader.onload = function(imgEvent) {
+            postFiles.push({ type: 'image', src: imgEvent.target.result });
+            
+            if (videoInput && videoInput.files && videoInput.files[0]) {
+                let vidReader = new FileReader();
+                vidReader.onload = function(vidEvent) {
+                    postFiles.push({ type: 'video', src: vidEvent.target.result });
+                    saveToAppData(postFiles);
+                };
                 vidReader.readAsDataURL(videoInput.files[0]);
             } else {
-                processAndSave(filesList);
+                saveToAppData(postFiles);
             }
         };
         reader.readAsDataURL(imgInput.files[0]);
     } else if (videoInput && videoInput.files && videoInput.files[0]) {
         let vidReader = new FileReader();
         vidReader.onload = function(vidEvent) {
-            filesList.push({ type: 'video', src: vidEvent.target.result });
-            processAndSave(filesList);
+            postFiles.push({ type: 'video', src: vidEvent.target.result });
+            saveToAppData(postFiles);
         };
         vidReader.readAsDataURL(videoInput.files[0]);
     } else {
-        // لو مفيش ملفات، انشر النص فقط
-        processAndSave([]);
+        saveToAppData([]);
     }
 }
        
