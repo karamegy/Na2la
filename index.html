@@ -1899,54 +1899,62 @@ window.saveDocHandler = function(e) {
             }
         }
 
-        function savePublicPostHandler(e) {
-            const title = document.getElementById('post-title').value.trim();
-            const desc = document.getElementById('post-desc').value.trim();
-            const imgInput = document.getElementById('post-images');
-            const videoInput = document.getElementById('post-videos');
+        async function savePublicPostHandler(e) {
+    const title = document.getElementById('post-title').value.trim();
+    const desc = document.getElementById('post-desc').value.trim();
+    const imgInput = document.getElementById('post-images');
+    const videoInput = document.getElementById('post-videos');
 
-            let files = [];
-            let readCount = 0;
-            let totalFiles = (imgInput.files ? imgInput.files.length : 0) + (videoInput.files ? videoInput.files.length : 0);
+    // جمع كافة الملفات المختارة (الصور والفيديوهات)
+    const allFiles = [...(imgInput.files || []), ...(videoInput.files || [])];
+    let uploadedFiles = [];
 
-            const pushAndSave = () => {
-                if (readCount === totalFiles) {
-                    appData.posts.unshift({
-                        id: Date.now(),
-                        author: loggedInDriverName,
-                        title: title,
-                        desc: desc,
-                        files: files,
-                        date: new Date().toLocaleString('ar-EG')
-                    });
-                    saveDataAll();
-                    document.getElementById('public-post-form').reset();
-                    alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
-                    renderPublicPosts();
-                }
-            };
-
-            if (totalFiles === 0) {
-                pushAndSave();
-                return;
-            }
-
-            if (imgInput.files) {
-                Array.from(imgInput.files).forEach(f => {
-                    let r = new FileReader();
-                    r.onload = (e) => { files.push({ type: 'image', src: e.target.result }); readCount++; pushAndSave(); };
-                    r.readAsDataURL(f);
-                });
-            }
-
-            if (videoInput.files) {
-                Array.from(videoInput.files).forEach(f => {
-                    let r = new FileReader();
-                    r.onload = (e) => { files.push({ type: 'video', src: e.target.result }); readCount++; pushAndSave(); };
-                    r.readAsDataURL(f);
-                });
-            }
+    try {
+        if (allFiles.length > 0) {
+            alert('جاري رفع الصور والفيديوهات إلى سحابة فايربيس، يرجى الانتظار...');
         }
+
+        // رفع كل ملف إلى Firebase Storage
+        for (const file of allFiles) {
+            const storageRef = firebase.storage().ref(`posts_media/${Date.now()}_${file.name}`);
+            const snapshot = await storageRef.put(file);
+            const downloadURL = await snapshot.ref.getDownloadURL();
+
+            uploadedFiles.push({
+                name: file.name,
+                type: file.type,
+                url: downloadURL // رابط السحابة الحقيقي للصور/الفيديو
+            });
+        }
+
+        // إضافة المنشور مع ملفاته إلى مصفوفة البيانات
+        appData.posts.unshift({
+            id: Date.now(),
+            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
+            title: title,
+            desc: desc,
+            files: uploadedFiles,
+            date: new Date().toLocaleString('ar-EG')
+        });
+
+        // حفظ البيانات وتحديث واجهة التطبيق
+        if (typeof saveDataAll === 'function') {
+            saveDataAll();
+        }
+
+        document.getElementById('public-post-form').reset();
+        alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
+
+        if (typeof renderPublicPosts === 'function') {
+            renderPublicPosts();
+        }
+
+    } catch (error) {
+        console.error("خطأ أثناء الرفع إلى فايربيس:", error);
+        alert('حدث خطأ أثناء رفع الملفات للسحابة. تأكد من اتصال الإنترنت.');
+    }
+}
+
 
         function renderPublicPosts() {
             const feed = document.getElementById('public-posts-feed');
