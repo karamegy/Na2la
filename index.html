@@ -1930,67 +1930,96 @@
         }
 
         function savePublicPostHandler(e) {
-    const title = document.getElementById('post-title').value.trim();
-    const desc = document.getElementById('post-desc').value.trim();
-    
+    const titleInput = document.getElementById('post-title');
+    const descInput = document.getElementById('post-desc');
     const imgInput = document.getElementById('vis-img');
     const videoInput = document.getElementById('post-videos');
 
+    if (!titleInput || !descInput) {
+        alert('حقول الإدخال غير موجودة!');
+        return;
+    }
+
+    const title = titleInput.value.trim();
+    const desc = descInput.value.trim();
+
     let files = [];
-    let readCount = 0;
-    
-    // جمع كافة الملفات المطلوبة للرفع (صورة + فيديو)
     let filesList = [];
+
+    // تجميع الملفات الموجودة
     if (imgInput && imgInput.files && imgInput.files[0]) {
         filesList.push({ file: imgInput.files[0], type: 'image' });
     }
     if (videoInput && videoInput.files && videoInput.files[0]) {
-        filesList.push({ file: videoInput.files[0], type: 'video' });
+        let vidFile = videoInput.files[0];
+        // تنبيه إذا كان الفيديو أكبر من 5 ميجابايت لكي لا يمتلئ التخزين المحلي
+        if (vidFile.size > 5 * 1024 * 1024) {
+            alert('حجم الفيديو كبير جداً (أكبر من 5MB)، قد يفشل الحفظ في الذاكرة المحلية.');
+        }
+        filesList.push({ file: vidFile, type: 'video' });
     }
 
     let totalFiles = filesList.length;
+    let readCount = 0;
 
-    const pushAndSave = () => {
-        if (readCount === totalFiles) {
+    const finalizeAndSave = () => {
+        try {
             if (!window.appData) window.appData = {};
             if (!window.appData.posts) window.appData.posts = [];
 
-            appData.posts.unshift({
+            const newPost = {
                 id: Date.now(),
                 author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
                 title: title,
                 desc: desc,
-                files: files,
+                files: files, // التأكد من إدراج مصفوفة الملفات هنا
                 date: new Date().toLocaleString('ar-EG')
-            });
+            };
+
+            window.appData.posts.unshift(newPost);
             
-            if (typeof saveDataAll === 'function') saveDataAll();
-            
+            // محاولة الحفظ مع التقاط خطأ امتلاء الذاكرة
+            if (typeof saveDataAll === 'function') {
+                saveDataAll();
+            } else {
+                localStorage.setItem('appData', JSON.stringify(window.appData));
+            }
+
             document.getElementById('public-post-form').reset();
-            alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
+            alert('تم نشر الإعلان مع الملفات بنجاح! 🚀');
             
-            if (typeof renderPublicPosts === 'function') renderPublicPosts();
+            if (typeof renderPublicPosts === 'function') {
+                renderPublicPosts();
+            }
+        } catch (err) {
+            console.error("خطأ أثناء حفظ البيانات في التخزين المحلي:", err);
+            alert('فشل الحفظ: ربما حجم الملفات (خاصة الفيديو) أكبر من المساحة المسموحة في المتصفح (LocalStorage).');
         }
     };
 
     if (totalFiles === 0) {
-        pushAndSave();
+        finalizeAndSave();
         return;
     }
 
-    // قراءة الملفات وتحويلها إلى DataURL لتظهر مباشرة
+    // قراءة الملفات وتحويلها
     filesList.forEach(item => {
-        let r = new FileReader();
-        r.onload = function(eventReader) {
-            files.push({ type: item.type, src: eventReader.target.result });
+        let reader = new FileReader();
+        reader.onload = function(event) {
+            files.push({ type: item.type, src: event.target.result });
             readCount++;
-            pushAndSave();
+            if (readCount === totalFiles) {
+                finalizeAndSave();
+            }
         };
-        r.onerror = function() {
-            readCount++; // تخطي الملف في حال حدوث خطأ لكي لا يتوقف التطبيق
-            pushAndSave();
+        reader.onerror = function(error) {
+            console.error("خطأ في قراءة الملف:", error);
+            readCount++;
+            if (readCount === totalFiles) {
+                finalizeAndSave();
+            }
         };
-        r.readAsDataURL(item.file);
+        reader.readAsDataURL(item.file);
     });
 }
 
