@@ -1927,14 +1927,7 @@
         }
 
     
-    function savePublicPostHandler(e) {
-    if (e) e.preventDefault();
     
-    const title = document.getElementById('post-title').value.trim();
-    const desc = document.getElementById('post-desc').value.trim();
-    const imgInput = document.getElementById('post-images');
-    const videoInput = document.getElementById('post-videos');
-
     let files = [];
     let readCount = 0;
     let totalFiles = (imgInput.files ? imgInput.files.length : 0) + (videoInput.files ? videoInput.files.length : 0);
@@ -2006,51 +1999,16 @@
 
             let posts = appData.posts || [];
             if(posts.length === 0) {
-                feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
-                return;
-            }
-
-            posts.forEach(p => {
-                let mediaHtml = '';
-                if(p.files && p.files.length > 0) {
-                    mediaHtml += `<div class="load-post-media">`;
-                    p.files.forEach(f => {
-                        if(f.type === 'video') {
-                            mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                        } else {
-                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
-                        }
-                    });
-                    mediaHtml += `</div>`;
-                }
-
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف الإعلان</button>` : '';
-
-                let card = document.createElement('div');
-                card.className = 'load-post-card';
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <h4 style="font-size:12px; color:var(--accent);">${p.title}</h4>
-                        <span style="font-size:9px; opacity:0.7;">${p.date}</span>
-                    </div>
-                    <p style="font-size:11px; opacity:0.9; margin-bottom:4px;">الناشر: <strong>${p.author}</strong></p>
-                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
-                    ${mediaHtml}
-                    <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
-                        <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">💬 تواصل مع الناشر</button>
-                        ${deleteBtn}
-                    </div>
-                `;
-                feed.appendChild(card);
-            });
-        }
-        
+// حفظ البيانات محلياً وفي السحابة بشكل آمن
 function saveDataAll() {
+    if (!window.appData) window.appData = {};
+    
     // 1. الحفظ المحلي
     try {
         localStorage.setItem('n2la_app_data', JSON.stringify(window.appData));
     } catch (e) {
-        console.error("Local storage error:", e);
+        console.error("Local storage error (قد تكون المساحة ممتلئة بسبب حجم الصور):", e);
+        alert("تنبيه: حجم الصور كبير جداً، قد لا يتم حفظها بشكل صحيح محلياً.");
     }
 
     // 2. الحفظ السحابي في Firebase
@@ -2065,41 +2023,177 @@ function saveDataAll() {
     }
 }
 
-// استرجاع البيانات عند تحميل الصفحة (خارج دالة saveDataAll وبعيداً عن الدوال الأخرى)
+// استرجاع البيانات ومزامنتها لحظياً عند فتح التطبيق
 window.addEventListener('DOMContentLoaded', () => {
+    // محاولة الاسترجاع المحلي أولاً لسرعة ظهور العرض
+    try {
+        const localData = localStorage.getItem('n2la_app_data');
+        if (localData) {
+            window.appData = JSON.parse(localData);
+            if (typeof renderPublicPosts === 'function') renderPublicPosts();
+        }
+    } else {
+        window.appData = { posts: [] };
+    }
+
+    // مزامنة حية من Firebase لضمان عدم اختفاء المنشورات أبداً ولتحديثها بين المستخدمين
     if (typeof firebase !== 'undefined' && firebase.database) {
-        firebase.database().ref('appData').once('value').then((snapshot) => {
+        firebase.database().ref('appData').on('value', (snapshot) => {
             if (snapshot.exists()) {
                 window.appData = snapshot.val();
+                if (!window.appData.posts) window.appData.posts = [];
                 if (typeof renderPublicPosts === 'function') {
                     renderPublicPosts();
                 }
             }
-        }).catch((error) => {
-            console.error("خطأ في استرجاع البيانات:", error);
+        }, (error) => {
+            console.error("خطأ في مزامنة البيانات:", error);
         });
     }
 });
 
-        
-window.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase !== 'undefined') {
-        firebase.database().ref('appData').once('value').then((snapshot) => {
-            if (snapshot.exists()) {
-                window.appData = snapshot.val();
-                if (typeof renderPublicPosts === 'function') renderPublicPosts();
-            }
-        });
+// دالة نشر الرحلات والإعلانات العامة مع معالجة سليمة للملفات والمدخلات
+function savePublicPostHandler(e) {
+    if (e) e.preventDefault();
+    
+    const titleInput = document.getElementById('post-title');
+    const descInput = document.getElementById('post-desc');
+    const imgInput = document.getElementById('post-images');
+    const videoInput = document.getElementById('post-videos');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    const desc = descInput ? descInput.value.trim() : '';
+    
+    if (!desc && !title) {
+        alert('الرجاء كتابة محتوى النشر أو العنوان على الأقل.');
+        return;
     }
-});
+
+    let files = [];
+    const imgFiles = imgInput && imgInput.files ? Array.from(imgInput.files) : [];
+    const videoFiles = videoInput && videoInput.files ? Array.from(videoInput.files) : [];
+    let totalFiles = imgFiles.length + videoFiles.length;
+    let readCount = 0;
+
+    const finalizeAndSave = () => {
+        if (!window.appData) window.appData = {};
+        if (!window.appData.posts) window.appData.posts = [];
+
+        window.appData.posts.unshift({
+            id: Date.now(),
+            author: typeof loggedInDriverName !== 'undefined' && loggedInDriverName ? loggedInDriverName : 'مدير النظام',
+            title: title || 'إعلان عام',
+            desc: desc,
+            files: files,
+            date: new Date().toLocaleString('ar-EG')
+        });
         
-        function deletePublicPost(id) {
-            if(confirm('هل أنت متأكد من حذف هذا الإعلان؟')) {
-                appData.posts = appData.posts.filter(p => p.id !== id);
-                saveDataAll();
-                renderPublicPosts();
+        // حفظ التغييرات محلياً وفي السحابة
+        saveDataAll();
+        
+        // تصفير النماذج والحقول تماماً لضمان اختفاء أسماء الملفات
+        const form = document.getElementById('public-post-form');
+        if (form) form.reset();
+        if (imgInput) imgInput.value = '';
+        if (videoInput) videoInput.value = '';
+
+        alert('تم النشر بنجاح! 🚀');
+        renderPublicPosts();
+    };
+
+    if (totalFiles === 0) {
+        finalizeAndSave();
+        return;
+    }
+
+    // دمج قراءة الصور والفيديوهات بآمان
+    const processFile = (file, type) => {
+        let r = new FileReader();
+        r.onload = function(evt) {
+            files.push({ type: type, src: evt.target.result });
+            readCount++;
+            if (readCount === totalFiles) {
+                finalizeAndSave();
             }
+        };
+        r.onerror = function() {
+            readCount++;
+            if (readCount === totalFiles) {
+                finalizeAndSave();
+            }
+        };
+        r.readAsDataURL(file);
+    };
+
+    imgFiles.forEach(f => processFile(f, 'image'));
+    videoFiles.forEach(f => processFile(f, 'video'));
+}
+
+// دالة العرض المحدثة لمنشورات اللوحة العامة أو الحائط
+function renderPublicPosts() {
+    const feed = document.getElementById('public-posts-feed');
+    if (!feed) return;
+    feed.innerHTML = '';
+
+    if (!window.appData) window.appData = {};
+    let posts = window.appData.posts || [];
+    
+    if (posts.length === 0) {
+        feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
+        return;
+    }
+
+    posts.forEach(p => {
+        let mediaHtml = '';
+        if (p.files && p.files.length > 0) {
+            mediaHtml += `<div class="load-post-media" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px;">`;
+            p.files.forEach(f => {
+                if (f.type === 'video') {
+                    mediaHtml += `<video src="${f.src}" controls style="max-width:100%; height:120px; border-radius:4px;" onclick="viewMedia('${f.src}', 'video')"></video>`;
+                } else {
+                    mediaHtml += `<img src="${f.src}" style="max-width:100px; height:100px; object-fit:cover; border-radius:4px; cursor:pointer;" onclick="viewMedia('${f.src}', 'image')">`;
+                }
+            });
+            mediaHtml += `</div>`;
         }
+
+        let canDelete = (typeof currentUserRole !== 'undefined' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) || 
+                        (typeof loggedInDriverName !== 'undefined' && p.author === loggedInDriverName);
+                        
+        let deleteBtn = canDelete ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف</button>` : '';
+
+        let card = document.createElement('div');
+        card.className = 'load-post-card';
+        card.style.cssText = "background:var(--card-bg, #fff); border:1px solid var(--border-color, #ddd); padding:10px; border-radius:8px; margin-bottom:8px;";
+        
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <h4 style="font-size:12px; color:var(--accent); margin:0;">${p.title || ''}</h4>
+                <span style="font-size:9px; opacity:0.7;">${p.date || ''}</span>
+            </div>
+            <p style="font-size:11px; opacity:0.9; margin-bottom:4px;">الناشر: <strong>${p.author || 'غير معروف'}</strong></p>
+            <p style="font-size:11px; line-height:1.4; word-break:break-word; margin-bottom:6px;">${p.desc || ''}</p>
+            ${mediaHtml}
+            <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">💬 تواصل مع الناشر</button>
+                ${deleteBtn}
+            </div>
+        `;
+        feed.appendChild(card);
+    });
+}
+
+// دالة الحذف الآمن للمنشور
+function deletePublicPost(id) {
+    if (confirm('هل أنت متأكد من حذف هذا الإعلان نهائياً؟')) {
+        if (window.appData && window.appData.posts) {
+            window.appData.posts = window.appData.posts.filter(p => p.id !== id);
+            saveDataAll();
+            renderPublicPosts();
+        }
+    }
+}
+
 
         function selectChatRoom(target) {
             currentChatTarget = target;
