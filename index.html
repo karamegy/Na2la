@@ -1929,73 +1929,67 @@
             }
         }
 
-        function savePublicPostHandler(e) {
-    const titleInput = document.getElementById('post-title');
-    const descInput = document.getElementById('post-desc');
-    const imgInput = document.getElementById('vis-img');
-    const videoInput = document.getElementById('post-videos');
+        function renderPublicPosts() {
+    const feed = document.getElementById('public-posts-feed');
+    if(!feed) return;
+    feed.innerHTML = '';
 
-    if (!titleInput || !descInput) {
-        alert('حقول الإدخال غير موجودة!');
+    // التحقق الآمن من وجود البيانات
+    let posts = (window.appData && window.appData.posts) ? window.appData.posts : [];
+    
+    if(posts.length === 0) {
+        feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
         return;
     }
 
-    const title = titleInput.value.trim();
-    const desc = descInput.value.trim();
-
-    let files = [];
-    let filesList = [];
-
-    // تجميع الملفات الموجودة
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        filesList.push({ file: imgInput.files[0], type: 'image' });
-    }
-    if (videoInput && videoInput.files && videoInput.files[0]) {
-        let vidFile = videoInput.files[0];
-        // تنبيه إذا كان الفيديو أكبر من 5 ميجابايت لكي لا يمتلئ التخزين المحلي
-        if (vidFile.size > 5 * 1024 * 1024) {
-            alert('حجم الفيديو كبير جداً (أكبر من 5MB)، قد يفشل الحفظ في الذاكرة المحلية.');
-        }
-        filesList.push({ file: vidFile, type: 'video' });
-    }
-
-    let totalFiles = filesList.length;
-    let readCount = 0;
-
-    const finalizeAndSave = () => {
-        try {
-            if (!window.appData) window.appData = {};
-            if (!window.appData.posts) window.appData.posts = [];
-
-            const newPost = {
-                id: Date.now(),
-                author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
-                title: title,
-                desc: desc,
-                files: files, // التأكد من إدراج مصفوفة الملفات هنا
-                date: new Date().toLocaleString('ar-EG')
-            };
-
-            window.appData.posts.unshift(newPost);
+    posts.forEach((p, postIndex) => {
+        let mediaHtml = '';
+        if(p.files && p.files.length > 0) {
+            mediaHtml += `<div class="load-post-media" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;">`;
             
-            // محاولة الحفظ مع التقاط خطأ امتلاء الذاكرة
-            if (typeof saveDataAll === 'function') {
-                saveDataAll();
-            } else {
-                localStorage.setItem('appData', JSON.stringify(window.appData));
-            }
-
-            document.getElementById('public-post-form').reset();
-            alert('تم نشر الإعلان مع الملفات بنجاح! 🚀');
-            
-            if (typeof renderPublicPosts === 'function') {
-                renderPublicPosts();
-            }
-        } catch (err) {
-            console.error("خطأ أثناء حفظ البيانات في التخزين المحلي:", err);
-            alert('فشل الحفظ: ربما حجم الملفات (خاصة الفيديو) أكبر من المساحة المسموحة في المتصفح (LocalStorage).');
+            p.files.forEach((f, fileIndex) => {
+                if(f.type === 'video') {
+                    // إضافة controls للتحكم بالفيديو، وإزالة onclick الضخمة
+                    mediaHtml += `<video src="${f.src}" controls preload="metadata" style="max-width:100%; max-height:220px; border-radius:6px; background:#000; outline:none;"></video>`;
+                } else {
+                    // عرض الصورة بشكل سليم
+                    mediaHtml += `<img src="${f.src}" style="max-width:100%; max-height:220px; border-radius:6px; object-fit:cover; border:1px solid #eee;">`;
+                }
+            });
+            mediaHtml += `</div>`;
         }
-    };
+
+        // التأكد من أن المتغيرات العامة (Role, Name) متوفرة
+        let currentRole = typeof currentUserRole !== 'undefined' ? currentUserRole : 'user';
+        let currentName = typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : '';
+
+        let deleteBtn = (currentRole === 'admin' || currentRole === 'supervisor' || p.author === currentName) 
+            ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})" style="padding: 4px 8px; font-size:10px;">حذف الإعلان</button>` 
+            : '';
+
+        let card = document.createElement('div');
+        card.className = 'load-post-card';
+        card.style.cssText = "background:#fff; border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;";
+        
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <h4 style="font-size:13px; margin:0; color:var(--purple, #6a1b9a); font-weight:bold;">${p.title}</h4>
+                <span style="font-size:9px; opacity:0.7; color:#666;">${p.date}</span>
+            </div>
+            <p style="font-size:11px; color:#444; margin-bottom:6px;">الناشر: <strong>${p.author || 'غير معروف'}</strong></p>
+            <p style="font-size:12px; line-height:1.5; color:#222; margin-bottom:8px; white-space:pre-line;">${p.desc}</p>
+            
+            ${mediaHtml}
+            
+            <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; gap:5px;">
+                <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));" style="padding: 5px 10px; font-size:10px;">💬 تواصل مع الناشر</button>
+                ${deleteBtn}
+            </div>
+        `;
+        
+        feed.appendChild(card);
+    });
+        }
 
 function savePublicPostHandler(e) {
     const title = document.getElementById('post-title').value.trim();
