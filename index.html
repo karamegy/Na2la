@@ -612,30 +612,35 @@
     </section>
 
     <!-- 4. لوحة الرحلات العامة -->
-    <section id="public-feed-tab" class="app-section">
-        <div class="card" style="border: 2px solid var(--purple);">
-            <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
-            <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
-                <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
-                <form id="public-post-form" onsubmit="event.preventDefault(); savePublicPostHandler(event);">
-                    <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
-                    <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                        <div style="margin-top: 6px;">
-                    <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
-                    <input type="file" id="vis-img" accept="image/*" onchange="handleImageUpload(event)">
-                        </div>
-                            <div>
-                            <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
-                            <input type="file" id="post-videos" accept="video/*">
-                        </div>
+<section id="public-feed-tab" class="app-section">
+    <div class="card" style="border: 2px solid var(--purple);">
+        <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
+        <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
+            <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
+            
+            <form id="public-post-form" onsubmit="event.preventDefault(); savePublicPostHandler(event);">
+                <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
+                <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                    <div style="margin-top: 6px;">
+                        <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
+                        <!-- تم إزالة onchange الخاطئة هنا ليعمل FileReader بشكل موحد عند النشر -->
+                        <input type="file" id="vis-img" accept="image/*">
                     </div>
-                    <button type="submit" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
-                </form>
-            </div>
-            <div id="public-posts-feed"></div>
+                    <div>
+                        <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
+                        <input type="file" id="post-videos" accept="video/*">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
+            </form>
         </div>
-    </section>
+        <div id="public-posts-feed"></div>
+    </div>
+</section>
+
 
     <!-- 5. غرفة المحادثة والتواصل الفوري -->
     <section id="chat-tab" class="app-section">
@@ -1928,18 +1933,25 @@
     const title = document.getElementById('post-title').value.trim();
     const desc = document.getElementById('post-desc').value.trim();
     
-    // التصحيح هنا: استخدام 'vis-img' بدلاً من 'post-images' ليتطابق مع الـ HTML
     const imgInput = document.getElementById('vis-img');
     const videoInput = document.getElementById('post-videos');
 
     let files = [];
     let readCount = 0;
-    let totalFiles = (imgInput && imgInput.files ? imgInput.files.length : 0) + 
-                     (videoInput && videoInput.files ? videoInput.files.length : 0);
+    
+    // جمع كافة الملفات المطلوبة للرفع (صورة + فيديو)
+    let filesList = [];
+    if (imgInput && imgInput.files && imgInput.files[0]) {
+        filesList.push({ file: imgInput.files[0], type: 'image' });
+    }
+    if (videoInput && videoInput.files && videoInput.files[0]) {
+        filesList.push({ file: videoInput.files[0], type: 'video' });
+    }
+
+    let totalFiles = filesList.length;
 
     const pushAndSave = () => {
         if (readCount === totalFiles) {
-            // التأكد من تهيئة appData.posts إذا لم تكن موجودة
             if (!window.appData) window.appData = {};
             if (!window.appData.posts) window.appData.posts = [];
 
@@ -1966,29 +1978,20 @@
         return;
     }
 
-    if (imgInput && imgInput.files) {
-        Array.from(imgInput.files).forEach(f => {
-            let r = new FileReader();
-            r.onload = (eventReader) => { 
-                files.push({ type: 'image', src: eventReader.target.result }); 
-                readCount++; 
-                pushAndSave(); 
-            };
-            r.readAsDataURL(f);
-        });
-    }
-
-    if (videoInput && videoInput.files) {
-        Array.from(videoInput.files).forEach(f => {
-            let r = new FileReader();
-            r.onload = (eventReader) => { 
-                files.push({ type: 'video', src: eventReader.target.result }); 
-                readCount++; 
-                pushAndSave(); 
-            };
-            r.readAsDataURL(f);
-        });
-    }
+    // قراءة الملفات وتحويلها إلى DataURL لتظهر مباشرة
+    filesList.forEach(item => {
+        let r = new FileReader();
+        r.onload = function(eventReader) {
+            files.push({ type: item.type, src: eventReader.target.result });
+            readCount++;
+            pushAndSave();
+        };
+        r.onerror = function() {
+            readCount++; // تخطي الملف في حال حدوث خطأ لكي لا يتوقف التطبيق
+            pushAndSave();
+        };
+        r.readAsDataURL(item.file);
+    });
 }
 
         function renderPublicPosts() {
