@@ -611,35 +611,32 @@
         </div>
     </section>
 
+
     <!-- 4. لوحة الرحلات العامة -->
-<section id="public-feed-tab" class="app-section">
-    <div class="card" style="border: 2px solid var(--purple);">
-        <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
-        <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
-            <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
-            
-            <form id="public-post-form" onsubmit="event.preventDefault(); savePublicPostHandler(event);">
-                <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
-                <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <div style="margin-top: 6px;">
-                        <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
-                        <!-- تم إزالة onchange الخاطئة هنا ليعمل FileReader بشكل موحد عند النشر -->
-                        <input type="file" id="vis-img" accept="image/*">
+    <section id="public-feed-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--purple);">
+            <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
+            <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
+                <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
+                <form id="public-post-form" onsubmit="event.preventDefault(); savePublicPostHandler(event);">
+                    <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
+                    <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                        <div>
+                            <label style="font-size:9px; font-weight:bold;">📷 رفع صور:</label>
+                            <input type="file" id="post-images" accept="image/*" multiple>
+                        </div>
+                        <div>
+                            <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
+                            <input type="file" id="post-videos" accept="video/*">
+                        </div>
                     </div>
-                    <div>
-                        <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
-                        <input type="file" id="post-videos" accept="video/*">
-                    </div>
-                </div>
-                
-                <button type="submit" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
-            </form>
+                    <button type="submit" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
+                </form>
+            </div>
+            <div id="public-posts-feed"></div>
         </div>
-        <div id="public-posts-feed"></div>
-    </div>
-</section>
+    </section>
 
 
     <!-- 5. غرفة المحادثة والتواصل الفوري -->
@@ -1930,107 +1927,100 @@
         }
 
     
-    iffunction savePublicPostHandler(e) {
-    if (e) e.preventDefault();
+    function savePublicPostHandler(e) {
+            const title = document.getElementById('post-title').value.trim();
+            const desc = document.getElementById('post-desc').value.trim();
+            const imgInput = document.getElementById('post-images');
+            const videoInput = document.getElementById('post-videos');
 
-    const titleInput = document.getElementById('post-title');
-    const descInput = document.getElementById('post-desc');
-    const imgInput = document.getElementById('post-images');
-    const videoInput = document.getElementById('post-videos');
+            let files = [];
+            let readCount = 0;
+            let totalFiles = (imgInput.files ? imgInput.files.length : 0) + (videoInput.files ? videoInput.files.length : 0);
 
-    const title = titleInput ? titleInput.value.trim() : '';
-    const desc = descInput ? descInput.value.trim() : '';
-
-    if (!title || !desc) {
-        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
-        return;
-    }
-
-    if (!window.appData) window.appData = {};
-    if (!appData.posts) appData.posts = [];
-
-    // النشر المباشر والآمن لمنع ظهور خطأ الملفات
-    appData.posts.unshift({
-        id: Date.now(),
-        author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
-        title: title,
-        desc: desc,
-        files: [],
-        date: new Date().toLocaleString('ar-EG')
-    });
-
-    if (typeof saveDataAll === 'function') saveDataAll();
-
-    if (titleInput) titleInput.value = '';
-    if (descInput) descInput.value = '';
-    if (imgInput) imgInput.value = '';
-    if (videoInput) videoInput.value = '';
-
-    alert('تم نشر الرحلة بنجاح!');
-
-    if (typeof renderPublicPosts === 'function') {
-        renderPublicPosts();
-    }
-}
-
-        
-        function renderPublicPosts() {
-    const feed = document.getElementById('public-posts-feed');
-    if (!feed) return;
-    feed.innerHTML = '';
-
-    let posts = (window.appData && window.appData.posts) ? window.appData.posts : [];
-
-    if (posts.length === 0) {
-        feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
-        return;
-    }
-
-    posts.forEach((p) => {
-        let mediaHtml = '';
-        if (p.files && p.files.length > 0) {
-            mediaHtml += `<div class="load-post-media" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;">`;
-            p.files.forEach((f) => {
-                if (f.type === 'video') {
-                    mediaHtml += `<video src="${f.src}" controls preload="metadata" style="max-width:100%; max-height:220px; border-radius:6px; background:#000; outline:none;"></video>`;
-                } else {
-                    mediaHtml += `<img src="${f.src}" style="max-width:100%; max-height:220px; border-radius:6px; object-fit:cover; border:1px solid #eee;">`;
+            const pushAndSave = () => {
+                if (readCount === totalFiles) {
+                    appData.posts.unshift({
+                        id: Date.now(),
+                        author: loggedInDriverName,
+                        title: title,
+                        desc: desc,
+                        files: files,
+                        date: new Date().toLocaleString('ar-EG')
+                    });
+                    saveDataAll();
+                    document.getElementById('public-post-form').reset();
+                    alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
+                    renderPublicPosts();
                 }
-            });
-            mediaHtml += `</div>`;
+            };
+
+            if (totalFiles === 0) {
+                pushAndSave();
+                return;
+            }
+
+            if (imgInput.files) {
+                Array.from(imgInput.files).forEach(f => {
+                    let r = new FileReader();
+                    r.onload = (e) => { files.push({ type: 'image', src: e.target.result }); readCount++; pushAndSave(); };
+                    r.readAsDataURL(f);
+                });
+            }
+
+            if (videoInput.files) {
+                Array.from(videoInput.files).forEach(f => {
+                    let r = new FileReader();
+                    r.onload = (e) => { files.push({ type: 'video', src: e.target.result }); readCount++; pushAndSave(); };
+                    r.readAsDataURL(f);
+                });
+            }
         }
 
-        let currentRole = typeof currentUserRole !== 'undefined' ? currentUserRole : 'user';
-        let currentName = typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : '';
+        function renderPublicPosts() {
+            const feed = document.getElementById('public-posts-feed');
+            if(!feed) return;
+            feed.innerHTML = '';
 
-        let deleteBtn = (currentRole === 'admin' || currentRole === 'supervisor' || p.author === currentName) 
-            ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})" style="padding: 4px 8px; font-size:10px;">حذف الإعلان</button>` 
-            : '';
+            let posts = appData.posts || [];
+            if(posts.length === 0) {
+                feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
+                return;
+            }
 
-        let card = document.createElement('div');
-        card.className = 'load-post-card';
-        card.style.cssText = "background:#fff; border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;";
-        
-        card.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <h4 style="font-size:13px; margin:0; color:var(--purple, #6a1b9a); font-weight:bold;">${p.title || 'إعلان جديد'}</h4>
-                <span style="font-size:9px; opacity:0.7; color:#666;">${p.date || ''}</span>
-            </div>
-            <p style="font-size:11px; color:#444; margin-bottom:6px;">الناشر: <strong>${p.author || 'غير معروف'}</strong></p>
-            <p style="font-size:12px; line-height:1.5; color:#222; margin-bottom:8px; white-space:pre-line;">${p.desc || ''}</p>
-            
-            ${mediaHtml}
-            
-            <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; gap:5px;">
-                <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));" style="padding: 5px 10px; font-size:10px;">💬 تواصل مع الناشر</button>
-                ${deleteBtn}
-            </div>
-        `;
-        
-        feed.appendChild(card);
-    });
-}
+            posts.forEach(p => {
+                let mediaHtml = '';
+                if(p.files && p.files.length > 0) {
+                    mediaHtml += `<div class="load-post-media">`;
+                    p.files.forEach(f => {
+                        if(f.type === 'video') {
+                            mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
+                        } else {
+                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
+                        }
+                    });
+                    mediaHtml += `</div>`;
+                }
 
+                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف الإعلان</button>` : '';
+
+                let card = document.createElement('div');
+                card.className = 'load-post-card';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <h4 style="font-size:12px; color:var(--accent);">${p.title}</h4>
+                        <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                    </div>
+                    <p style="font-size:11px; opacity:0.9; margin-bottom:4px;">الناشر: <strong>${p.author}</strong></p>
+                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
+                    ${mediaHtml}
+                    <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
+                        <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">💬 تواصل مع الناشر</button>
+                        ${deleteBtn}
+                    </div>
+                `;
+                feed.appendChild(card);
+            });
+        }
         
 function saveDataAll() {
     // 1. الحفظ المحلي
