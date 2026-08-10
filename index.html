@@ -2024,50 +2024,66 @@
 }
 
         function renderPublicPosts() {
-            const feed = document.getElementById('public-posts-feed');
-            if(!feed) return;
-            feed.innerHTML = '';
+    const feed = document.getElementById('public-posts-feed');
+    if(!feed) return;
+    feed.innerHTML = '';
 
-            let posts = appData.posts || [];
-            if(posts.length === 0) {
-                feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
-                return;
-            }
+    // التحقق الآمن من وجود البيانات
+    let posts = (window.appData && window.appData.posts) ? window.appData.posts : [];
+    
+    if(posts.length === 0) {
+        feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
+        return;
+    }
 
-            posts.forEach(p => {
-                let mediaHtml = '';
-                if(p.files && p.files.length > 0) {
-                    mediaHtml += `<div class="load-post-media">`;
-                    p.files.forEach(f => {
-                        if(f.type === 'video') {
-                            mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                        } else {
-                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
-                        }
-                    });
-                    mediaHtml += `</div>`;
+    posts.forEach((p, postIndex) => {
+        let mediaHtml = '';
+        if(p.files && p.files.length > 0) {
+            mediaHtml += `<div class="load-post-media" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;">`;
+            
+            p.files.forEach((f, fileIndex) => {
+                if(f.type === 'video') {
+                    // إضافة controls للتحكم بالفيديو، وإزالة onclick الضخمة
+                    mediaHtml += `<video src="${f.src}" controls preload="metadata" style="max-width:100%; max-height:220px; border-radius:6px; background:#000; outline:none;"></video>`;
+                } else {
+                    // عرض الصورة بشكل سليم
+                    mediaHtml += `<img src="${f.src}" style="max-width:100%; max-height:220px; border-radius:6px; object-fit:cover; border:1px solid #eee;">`;
                 }
-
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف الإعلان</button>` : '';
-
-                let card = document.createElement('div');
-                card.className = 'load-post-card';
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <h4 style="font-size:12px; color:var(--accent);">${p.title}</h4>
-                        <span style="font-size:9px; opacity:0.7;">${p.date}</span>
-                    </div>
-                    <p style="font-size:11px; opacity:0.9; margin-bottom:4px;">الناشر: <strong>${p.author}</strong></p>
-                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
-                    ${mediaHtml}
-                    <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
-                        <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">💬 تواصل مع الناشر</button>
-                        ${deleteBtn}
-                    </div>
-                `;
-                feed.appendChild(card);
             });
+            mediaHtml += `</div>`;
         }
+
+        // التأكد من أن المتغيرات العامة (Role, Name) متوفرة
+        let currentRole = typeof currentUserRole !== 'undefined' ? currentUserRole : 'user';
+        let currentName = typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : '';
+
+        let deleteBtn = (currentRole === 'admin' || currentRole === 'supervisor' || p.author === currentName) 
+            ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})" style="padding: 4px 8px; font-size:10px;">حذف الإعلان</button>` 
+            : '';
+
+        let card = document.createElement('div');
+        card.className = 'load-post-card';
+        card.style.cssText = "background:#fff; border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;";
+        
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <h4 style="font-size:13px; margin:0; color:var(--purple, #6a1b9a); font-weight:bold;">${p.title}</h4>
+                <span style="font-size:9px; opacity:0.7; color:#666;">${p.date}</span>
+            </div>
+            <p style="font-size:11px; color:#444; margin-bottom:6px;">الناشر: <strong>${p.author || 'غير معروف'}</strong></p>
+            <p style="font-size:12px; line-height:1.5; color:#222; margin-bottom:8px; white-space:pre-line;">${p.desc}</p>
+            
+            ${mediaHtml}
+            
+            <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; gap:5px;">
+                <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));" style="padding: 5px 10px; font-size:10px;">💬 تواصل مع الناشر</button>
+                ${deleteBtn}
+            </div>
+        `;
+        
+        feed.appendChild(card);
+    });
+}
 
         function deletePublicPost(id) {
             if(confirm('هل أنت متأكد من حذف هذا الإعلان؟')) {
