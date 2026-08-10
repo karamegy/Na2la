@@ -1929,67 +1929,9 @@
             }
         }
 
-function savePublicPostHandler(e) {
-    const title = document.getElementById('post-title').value.trim();
-    const desc = document.getElementById('post-desc').value.trim();
-
-    if (!title || !desc) {
-        alert('يرجى كتابة عنوان الرحلة والتفاصيل أولاً!');
-        return;
-    }
-
-    // التأكد من أن مصفوفة المنشورات موجودة
-    if (!appData.posts) appData.posts = [];
-
-    // استخدام متغير عام للملفات أو فحص حقول الإدخال تماماً مثل نظامك الناجح
-    // (بفرض أن لديك مصفوفة للملفات أو نأخذها من حقول الإدخال مباشرة)
-    let postFiles = [];
-    const imgInput = document.getElementById('vis-img');
-    const videoInput = document.getElementById('post-videos');
-
-    // إذا كنت تستخدم مصفوفة عامة للملفات مثل communityFilesArr يمكنك وضعها هنا، 
-    // وإذا كنت تستخدم حقول الرفع المباشر، سنقوم بجمعها كالتالي:
-    
-    // دالة مساعدة سريعة لقراءة الملف المرفوع إن وجد وتخزينه
-    const processAndSave = (filesArray) => {
-        appData.posts.unshift({
-            id: Date.now(),
-            author: typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : 'مدير النظام',
-            title: title,
-            desc: desc,
-            files: filesArray,
-            date: new Date().toLocaleString('ar-EG')
-        });
-
-        // حفظ البيانات باستخدام دالتك الأصلية الموجودة في التطبيق
-        saveDataAll();
-
-        // إفراغ النموذج وإعادة العرض
-        document.getElementById('public-post-form').reset();
-        alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
-        
-        if (typeof renderPublicPosts === 'function') {
-            renderPublicPosts();
-        }
-    };
-
-    // معالجة الملفات في حال وجودها
-    let filesList = [];
-    if (imgInput && imgInput.files && imgInput.files[0]) {
-        let reader = new FileReader();
-        reader.onload = function(event) {
-            filesList.push({ type: 'image', src: event.target.result });
-            if (videoInput && videoInput.files && videoInput.files[0]) {
-                // لو فيه فيديو كمان نقراه
-                let vidReader = new FileReader();
-                vidReader.onload = function(vidEvent) {
-                    filesList.push({ type: 'video', src: vidEvent.target.result });
-                    processAndSave(filesList);
-                };
-function savePublicPostHandler(e) {
+    function savePublicPostHandler(e) {
     if (e) e.preventDefault();
 
-    // التقاط حقول العنوان والوصف والملفات باستخدام المعرفات الصحيحة من الـ HTML
     const titleInput = document.getElementById('post-title');
     const descInput = document.getElementById('post-desc');
     const imgInput = document.getElementById('vis-img');
@@ -2008,7 +1950,8 @@ function savePublicPostHandler(e) {
 
     let postFiles = [];
 
-    const saveToAppData = (filesArray) => {
+    // دالة إتمام الحفظ والتحديث
+    const finalizePost = (filesArray) => {
         const newPost = {
             id: Date.now(),
             title: titleVal,
@@ -2018,67 +1961,68 @@ function savePublicPostHandler(e) {
             files: filesArray
         };
 
+        // إضافة المنشور في بداية القائمة
         window.appData.posts.unshift(newPost);
-        
-        // الحفظ السحابي والمحلي وتحديث العرض
-        if (typeof savedataAll === 'function') savedataAll();
-        if (typeof renderPublicPosts === 'function') renderPublicPosts();
+
+        // الحفظ السحابي والمحلي (يتوافق مع دوال الحفظ الشائعة لديك)
+        if (typeof savedataAll === 'function') {
+            savedataAll();
+        } else if (typeof saveAppData === 'function') {
+            saveAppData();
+        }
+
+        // تحديث عرض الإعلانات فورا في الواجهة
+        if (typeof renderPublicPosts === 'function') {
+            renderPublicPosts();
+        }
 
         // تفريغ الحقول بعد النشر الناجح
         if (titleInput) titleInput.value = '';
         if (descInput) descInput.value = '';
         if (imgInput) imgInput.value = '';
         if (videoInput) videoInput.value = '';
+        
+        alert('تم نشر الإعلان بنجاح!');
     };
 
-    // معالجة قراءة الصور والفيديوهات
+    // معالجة قراءة الملفات (صور أو فيديو)
     if (imgInput && imgInput.files && imgInput.files[0]) {
         let reader = new FileReader();
         reader.onload = function(imgEvent) {
             postFiles.push({ type: 'image', src: imgEvent.target.result });
-            
-            if (videoInput && videoInput.files && videoInput.files[0]) {
-                let vidReader = new FileReader();
-                vidReader.onload = function(vidEvent) {
-                    postFiles.push({ type: 'video', src: vidEvent.target.result });
-                    saveToAppData(postFiles);
-                };
-                vidReader.readAsDataURL(videoInput.files[0]);
-            } else {
-                saveToAppData(postFiles);
-            }
+            finalizePost(postFiles);
         };
         reader.readAsDataURL(imgInput.files[0]);
     } else if (videoInput && videoInput.files && videoInput.files[0]) {
         let vidReader = new FileReader();
         vidReader.onload = function(vidEvent) {
             postFiles.push({ type: 'video', src: vidEvent.target.result });
-            saveToAppData(postFiles);
+            finalizePost(postFiles);
         };
         vidReader.readAsDataURL(videoInput.files[0]);
     } else {
-        saveToAppData([]);
+        finalizePost([]);
     }
 }
        
         function renderPublicPosts() {
     const feed = document.getElementById('public-posts-feed');
-    if(!feed) return;
+    if (!feed) return;
     feed.innerHTML = '';
 
     let posts = (window.appData && window.appData.posts) ? window.appData.posts : [];
-    
-    if(posts.length === 0) {
+
+    if (posts.length === 0) {
         feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
         return;
     }
 
     posts.forEach((p) => {
         let mediaHtml = '';
-        if(p.files && p.files.length > 0) {
+        if (p.files && p.files.length > 0) {
             mediaHtml += `<div class="load-post-media" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;">`;
             p.files.forEach((f) => {
-                if(f.type === 'video') {
+                if (f.type === 'video') {
                     mediaHtml += `<video src="${f.src}" controls preload="metadata" style="max-width:100%; max-height:220px; border-radius:6px; background:#000; outline:none;"></video>`;
                 } else {
                     mediaHtml += `<img src="${f.src}" style="max-width:100%; max-height:220px; border-radius:6px; object-fit:cover; border:1px solid #eee;">`;
@@ -2098,14 +2042,13 @@ function savePublicPostHandler(e) {
         card.className = 'load-post-card';
         card.style.cssText = "background:#fff; border:1px solid #ddd; padding:10px; border-radius:6px; margin-bottom:10px;";
         
-        // التأكد من عرض العنوان والوصف بشكل سليم تماماً ومنفصل
         card.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <h4 style="font-size:13px; margin:0; color:var(--purple, #6a1b9a); font-weight:bold;">${p.title || 'إعلان جديد'}</h4>
                 <span style="font-size:9px; opacity:0.7; color:#666;">${p.date || ''}</span>
             </div>
             <p style="font-size:11px; color:#444; margin-bottom:6px;">الناشر: <strong>${p.author || 'غير معروف'}</strong></p>
-            <p style="font-size:12px; line-height:1.5; color:#222; margin-bottom:8px; white-space:pre-line;">${p.desc || p.content || ''}</p>
+            <p style="font-size:12px; line-height:1.5; color:#222; margin-bottom:8px; white-space:pre-line;">${p.desc || ''}</p>
             
             ${mediaHtml}
             
