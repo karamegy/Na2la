@@ -1525,27 +1525,69 @@
         }
 
         function renderProfileDriverSearch() {
-            const query = document.getElementById('profile-driver-search-input').value.toLowerCase();
-            const container = document.getElementById('profile-driver-search-results');
-            container.innerHTML = '';
-            let drivers = appData.drivers || [];
-            let filtered = drivers.filter(d => d.name.toLowerCase().includes(query) || d.phone.includes(query));
-            
-            filtered.forEach(d => {
-                let avatarHtml = d.avatar ? `<img src="${d.avatar}">` : `<span>${d.name.charAt(0)}</span>`;
-                let item = document.createElement('div');
-                item.className = 'driver-card-item';
-                item.onclick = () => { viewingProfileName = d.name; renderMyAccount(); window.scrollTo({top: 0, behavior: 'smooth'}); };
-                item.innerHTML = `
-                    <div class="driver-card-avatar">${avatarHtml}</div>
-                    <div style="overflow:hidden;">
-                        <h4 style="font-size:11px; font-weight:bold; color:var(--text-color);">${d.name}</h4>
-                        <p style="font-size:9px; opacity:0.8;">${d.title || d.role} | ${d.phone}</p>
-                    </div>
-                `;
-                container.appendChild(item);
-            });
+    try {
+        const inputEl = document.getElementById('profile-driver-search-input');
+        const container = document.getElementById('profile-driver-search-results');
+        if (!inputEl || !container) return;
+
+        const query = inputEl.value.toLowerCase();
+        container.innerHTML = '';
+        let drivers = appData.drivers || [];
+        let filtered = drivers.filter(d => 
+            (d.name && d.name.toLowerCase().includes(query)) || 
+            (d.phone && d.phone.includes(query))
+        );
+        
+        filtered.forEach(d => {
+            let avatarHtml = d.avatar ? `<img src="${d.avatar}">` : `<span>${d.name ? d.name.charAt(0) : '?'}</span>`;
+            let item = document.createElement('div');
+            item.className = 'driver-card-item';
+            item.onclick = () => { 
+                viewingProfileName = d.name; 
+                if (typeof renderMyAccount === 'function') renderMyAccount(); 
+                window.scrollTo({top: 0, behavior: 'smooth'}); 
+            };
+            item.innerHTML = `
+                <div class="driver-card-avatar">${avatarHtml}</div>
+                <div style="overflow:hidden;">
+                    <h4 style="font-size:11px; font-weight:bold; color:var(--text-color);">${d.name || ''}</h4>
+                    <p style="font-size:9px; opacity:0.8;">${d.title || d.role || ''} | ${d.phone || ''}</p>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    } catch (err) {
+        console.error('Error in renderProfileDriverSearch:', err);
+    }
+}
+
+function saveMyProfileChanges() {
+    try {
+        if (typeof loggedInDriverName === 'undefined') return;
+        let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
+        if (drv) {
+            const nameEl = document.getElementById('my-edit-name');
+            const phoneEl = document.getElementById('my-edit-phone');
+            const titleEl = document.getElementById('my-edit-title');
+
+            if (nameEl) drv.name = nameEl.value.trim();
+            if (phoneEl) drv.phone = phoneEl.value.trim();
+            if (titleEl) drv.title = titleEl.value;
+
+            loggedInDriverName = drv.name;
+            localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+
+            if (typeof saveDataAll === 'function') saveDataAll();
+            if (typeof renderMyAccount === 'function') renderMyAccount();
+
+            alert('تم تحديث بروفايلك الشخصي بنجاح! 💾');
         }
+    } catch (err) {
+        console.error('Error in saveMyProfileChanges:', err);
+        alert('حدث خطأ أثناء حفظ بيانات البروفايل!');
+    }
+}
+
 
         function saveMyProfileChanges() {
             let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
@@ -1562,44 +1604,60 @@
         }
 
         function saveVisitorShipment(e) {
-            const name = document.getElementById('vis-name').value.trim();
-            const phone = document.getElementById('vis-phone').value.trim();
-            const address = document.getElementById('vis-address').value.trim();
-            const item = document.getElementById('vis-item').value.trim();
-            const price = Number(document.getElementById('vis-price').value);
+    if (e) e.preventDefault();
+    try {
+        const name = document.getElementById('vis-name')?.value.trim() || 'زائر';
+        const phone = document.getElementById('vis-phone')?.value.trim() || '';
+        const address = document.getElementById('vis-address')?.value.trim() || '';
+        const item = document.getElementById('vis-item')?.value.trim() || '';
+        const price = Number(document.getElementById('vis-price')?.value) || 0;
 
-            appData.shipments.unshift({
-                id: Date.now(),
-                name: name,
-                phone: phone,
-                address: address,
-                item: item,
-                price: price,
-                fuelCost: 0,
-                extraCost: 0,
-                assignedDriver: 'بدون تعيين',
-                gps: visitorGPS || '30.0444,31.2357',
-                img: visitorImgBase64 || '',
-                signature: '',
-                status: 'قيد الانتظار',
-                date: new Date().toLocaleDateString('ar-EG')
-            });
+        if (!appData.shipments) appData.shipments = [];
+        if (!appData.customers) appData.customers = [];
 
-            // إضافة العميل تلقائياً
-            let cust = (appData.customers || []).find(c => c.name === name);
-            if(cust) {
-                cust.debt = Number(cust.debt || 0) + price;
-            } else {
-                appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
-            }
+        appData.shipments.unshift({
+            id: Date.now(),
+            name: name,
+            phone: phone,
+            address: address,
+            item: item,
+            price: price,
+            fuelCost: 0,
+            extraCost: 0,
+            assignedDriver: 'بدون تعيين',
+            gps: (typeof visitorGPS !== 'undefined' && visitorGPS) ? visitorGPS : '30.0444,31.2357',
+            img: (typeof visitorImgBase64 !== 'undefined') ? visitorImgBase64 : '',
+            signature: '',
+            status: 'قيد الانتظار',
+            date: new Date().toLocaleDateString('ar-EG')
+        });
 
-            saveDataAll();
-            closeVisitorBooking();
-            document.getElementById('visitor-shipment-form').reset();
-            visitorGPS = ''; visitorImgBase64 = '';
-            alert('تم حجز الرحلة بنجاح وإرسالها للإدارة! 🚀');
-            render();
+        let cust = appData.customers.find(c => c.name === name);
+        if (cust) {
+            cust.debt = Number(cust.debt || 0) + price;
+        } else {
+            appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
         }
+
+        if (typeof saveDataAll === 'function') saveDataAll();
+        if (typeof closeVisitorBooking === 'function') closeVisitorBooking();
+
+        const visFormEl = document.getElementById('visitor-shipment-form');
+        if (visFormEl) visFormEl.reset();
+
+        if (typeof visitorGPS !== 'undefined') visitorGPS = '';
+        if (typeof visitorImgBase64 !== 'undefined') visitorImgBase64 = '';
+
+        alert('تم حجز الرحلة بنجاح وإرسالها للإدارة! 🚀');
+
+        if (typeof render === 'function') render();
+
+    } catch (err) {
+        console.error('Error in saveVisitorShipment:', err);
+        alert('حدث خطأ أثناء إرسال طلب الرحلة!');
+    }
+}
+
 
         function registerNewDriverPublic() {
             const name = document.getElementById('pub-drv-name').value.trim();
@@ -1703,25 +1761,92 @@ function saveShipmentHandler(e) {
     // استدعاء الحفظ المحلي والسحابي
     if (typeof saveDataAll === 'function') saveDataAll();
     if (typeof saveData === 'function') saveData();
+function saveShipmentHandler(e) {
+    if (e) e.preventDefault();
+    try {
+        const id = document.getElementById('edit-shipment-id')?.value;
+        const name = document.getElementById('ship-name')?.value.trim() || 'عميل غير مسمى';
+        const phone = document.getElementById('ship-phone')?.value.trim() || '';
+        const address = document.getElementById('ship-address')?.value.trim() || '';
+        const item = document.getElementById('ship-item')?.value.trim() || '';
+        const price = Number(document.getElementById('ship-price')?.value) || 0;
+        const fuelCost = Number(document.getElementById('ship-fuel-cost')?.value) || 0;
+        const extraCost = Number(document.getElementById('ship-extra-cost')?.value) || 0;
+        const assignedDriver = document.getElementById('ship-assigned-driver')?.value || 'بدون تعيين';
 
-    // إعادة ضبط عناصر النموذج والمتغيرات
-    document.getElementById('shipment-form').reset();
-    document.getElementById('edit-shipment-id').value = '';
-    
-    if (typeof clearSignature === 'function') clearSignature();
-    
-    if (typeof currentGPS !== 'undefined') currentGPS = '';
-    if (typeof uploadedImgBase64 !== 'undefined') uploadedImgBase64 = '';
-    
-    const gpsStatusEl = document.getElementById('gps-status');
-    if (gpsStatusEl) gpsStatusEl.innerText = '';
+        let sigData = '';
+        if (typeof canvas !== 'undefined' && canvas && typeof ctx !== 'undefined' && ctx) {
+            sigData = canvas.toDataURL();
+        }
 
-    alert('تم حفظ الرحلة بنجاح سحابياً! 💾');
+        if (!appData.shipments) appData.shipments = [];
+        if (!appData.treasury) appData.treasury = [];
+        if (!appData.customers) appData.customers = [];
 
-    // إعادة تحديث الواجهة
-    if (typeof renderAll === 'function') renderAll();
-    if (typeof render === 'function') render();
+        if (id) {
+            let s = appData.shipments.find(item => item.id == id);
+            if (s) {
+                s.name = name; s.phone = phone; s.address = address; s.item = item;
+                s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
+                s.assignedDriver = assignedDriver;
+                if (typeof currentGPS !== 'undefined' && currentGPS) s.gps = currentGPS;
+                if (typeof uploadedImgBase64 !== 'undefined' && uploadedImgBase64) s.img = uploadedImgBase64;
+                if (sigData && sigData.length > 1000) s.signature = sigData;
+            }
+        } else {
+            appData.shipments.unshift({
+                id: Date.now(),
+                name, phone, address, item, price, fuelCost, extraCost,
+                assignedDriver: assignedDriver,
+                gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
+                img: (typeof uploadedImgBase64 !== 'undefined') ? uploadedImgBase64 : '',
+                signature: (sigData && sigData.length > 1000) ? sigData : '',
+                status: 'قيد الانتظار',
+                date: new Date().toLocaleDateString('ar-EG')
+            });
+
+            appData.treasury.unshift({
+                id: Date.now(),
+                type: 'in',
+                amount: price,
+                desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+                date: new Date().toLocaleDateString('ar-EG')
+            });
+
+            let cust = appData.customers.find(c => c.name === name);
+            if (cust) {
+                cust.debt = Number(cust.debt || 0) + price;
+            } else {
+                appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
+            }
+        }
+
+        if (typeof saveDataAll === 'function') saveDataAll();
+        
+        const formEl = document.getElementById('shipment-form');
+        if (formEl) formEl.reset();
+        
+        const idEl = document.getElementById('edit-shipment-id');
+        if (idEl) idEl.value = '';
+
+        if (typeof clearSignature === 'function') clearSignature();
+        if (typeof currentGPS !== 'undefined') currentGPS = '';
+        if (typeof uploadedImgBase64 !== 'undefined') uploadedImgBase64 = '';
+
+        const gpsStatusEl = document.getElementById('gps-status');
+        if (gpsStatusEl) gpsStatusEl.innerText = '';
+
+        alert('تم حفظ الرحلة بنجاح! 💾');
+
+        if (typeof renderAll === 'function') renderAll();
+        else if (typeof render === 'function') render();
+
+    } catch (err) {
+        console.error('Error in saveShipmentHandler:', err);
+        alert('حدث خطأ أثناء حفظ الرحلة!');
+    }
 }
+
 
 
         function editShipment(id) {
