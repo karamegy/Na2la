@@ -2860,14 +2860,225 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
       });
     }
   });
-</script>
 
-<!-- زر التجربة بتصميم ثري دي أنيق مع إضافة الـ ID المطلوب -->
-<button id="testSaveBtn" class="custom-save-btn">
+        function renderCRUDTable() {
+            const section = document.getElementById('crud-section-select').value;
+            const headers = document.getElementById('crud-table-headers');
+            const body = document.getElementById('crud-table-body');
+            headers.innerHTML = '';
+            body.innerHTML = '';
+
+            if (section === 'shipments') {
+                headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>العنوان</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>إدارة</th>';
+                (appData.shipments || []).forEach(s => {
+                    body.innerHTML += `<tr><td>${s.name}</td><td>${s.phone || '-'}</td><td>${s.address}</td><td>${s.item}</td><td>${s.price} ج.م</td><td>${s.status}</td><td><button class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'drivers') {
+                headers.innerHTML = '<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>';
+                (appData.drivers || []).forEach(d => {
+                    body.innerHTML += `<tr><td><b>${d.name}</b></td><td>${d.phone}</td><td>${d.role}</td><td>${d.title || ''}</td><td><code>${d.pin}</code></td><td><button class="btn-danger btn-sm" onclick="deleteDriverAccount(${d.id})">حذف</button></td></tr>`;
+                });
+            } else if (section === 'trucks') {
+                headers.innerHTML = '<th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت القادم</th><th>الرخصة</th>';
+                (appData.trucks || []).forEach(t => {
+                    body.innerHTML += `<tr><td>${t.truckNum}</td><td>${t.driverName}</td><td>${t.km}</td><td>${t.nextOil}</td><td>${t.expiry}</td></tr>`;
+                });
+            } else if (section === 'customers') {
+                headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>المديونية</th>';
+                (appData.customers || []).forEach(c => {
+                    body.innerHTML += `<tr><td>${c.name}</td><td>${c.phone}</td><td style="color:var(--danger);">${c.debt} ج.م</td></tr>`;
+                });
+            } else if (section === 'treasury') {
+                headers.innerHTML = '<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th>';
+                (appData.treasury || []).forEach(t => {
+                    body.innerHTML += `<tr><td>${t.type}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`;
+                });
+            } else if (section === 'expenses') {
+                headers.innerHTML = '<th>البيان</th><th>المبلغ</th><th>التاريخ</th>';
+                (appData.expenses || []).forEach(ex => {
+                    body.innerHTML += `<tr><td>${ex.title}</td><td>${ex.amount} ج.م</td><td>${ex.date}</td></tr>`;
+                });
+            }
+        }
+        
+function renderProfileWallPosts(drv) {
+    const container = document.getElementById('profile-wall-posts-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    let posts = drv.wallPosts || [];
+    if (posts.length === 0) {
+        container.innerHTML = `<div class="card"><p style="text-align:center; opacity:0.7; font-size:11px;">لا توجد منشورات على بروفايل (${drv.name}) حتى الآن. كن أول من ينشر!</p></div>`;
+        return;
+    }
+
+    const canDelete = (typeof currentUserRole !== 'undefined' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) || (typeof loggedInDriverName !== 'undefined' && loggedInDriverName === drv.name);
+
+    posts.forEach(p => {
+        let filesHtml = '';
+        if (p.files && p.files.length > 0) {
+            p.files.forEach(f => {
+                if (f.type.startsWith('image/')) {
+                    filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'image')"/>`;
+                } else if (f.type.startsWith('video/')) {
+                    filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'video')"></video>`;
+                }
+            });
+        }
+
+        let formattedText = p.text.replace(/(#\d+|رحلة\s+\d+)/gi, function(match) {
+            let tripId = match.replace(/\D/g, '');
+            return `<a href="javascript:void(0)" onclick="openTripDetails('${tripId}')" style="color:var(--accent); font-weight:bold; text-decoration:underline;">${match}</a>`;
+        });
+
+        let deleteBtnHtml = canDelete ? 
+            `<button onclick="deleteProfileWallPost('${drv.name}', ${p.id})" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:12px; padding:0 4px;" title="حذف المنشور">🗑️</button>` : '';
+
+        container.innerHTML += `
+            <div class="community-feed-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; border-bottom:1px solid var(--border-color); padding-bottom:3px;">
+                    <span style="font-weight:bold; color:var(--accent);">✍️ بواسطة: ${p.author}</span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:8px; opacity:0.7;">${p.date}</span>
+                        ${deleteBtnHtml}
+                    </div>
+                </div>
+                <p style="font-size:11px; line-height:1.4; white-space: pre-wrap;">${formattedText}</p>
+                ${filesHtml}
+            </div>
+        `;
+    });
+                 }
+
+function publishPublicTrip() {
+    try {
+        const titleInput = document.getElementById('post-title');
+        const descInput = document.getElementById('post-desc');
+        
+        if (!titleInput || !descInput) {
+            alert('خطأ: حقول الإدخال غير موجودة!');
+            return;
+        }
+
+        const title = titleInput.value.trim();
+        const desc = descInput.value.trim();
+        
+        if (!title && !desc) {
+            alert('الرجاء كتابة العنوان أو التفاصيل للنشر!');
+            return;
+        }
+
+        // التأكد من وجود الكائن العام للبيانات
+        if (typeof window.appData === 'undefined') {
+            window.appData = {};
+        }
+        if (!window.appData.publicTrips || !Array.isArray(window.appData.publicTrips)) {
+            window.appData.publicTrips = [];
+        }
+
+        // إضافة المنشور الجديد للمصفوفة
+        window.appData.publicTrips.unshift({
+            id: Date.now(),
+            title: title,
+            desc: desc,
+            date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+        });
+
+        // حفظ البيانات إذا كانت الدالة موجودة
+        if (typeof saveDataAll === 'function') {
+            saveDataAll();
+        }
+
+        // تفريغ الحقول
+        titleInput.value = '';
+        descInput.value = '';
+        
+        const imgInput = document.getElementById('post-images');
+        const vidInput = document.getElementById('post-videos');
+        if (imgInput) imgInput.value = '';
+        if (vidInput) vidInput.value = '';
+
+        // تحديث وعرض المنشورات فوراً
+        if (typeof renderPublicTrips === 'function') {
+            renderPublicTrips();
+        } else if (typeof updatePublicTripsList === 'function') {
+            updatePublicTripsList();
+        }
+        
+        alert('تم نشر الرحلة بنجاح! 🚀');
+    } catch (error) {
+        console.error('خطأ أثناء النشر:', error);
+        alert('حدث خطأ غير متوقع، يراجع الـ Console.');
+    }
+}
+
+        
+function renderPublicTrips() {
+    const container = document.getElementById('public-posts-feed');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    let trips = appData.publicTrips || [];
+    if (trips.length === 0) {
+        container.innerHTML = '<p style="text-align:center; opacity:0.7; padding:12px; font-size:11px;">لا توجد رحلات أو إعلانات عامة حالياً.</p>';
+        return;
+    }
+
+    trips.forEach(t => {
+        container.innerHTML += `
+            <div class="card" style="margin-top:8px; border: 1px solid var(--border-color); padding: 8px; border-radius: 6px; background: var(--bg);">
+                <h4 style="color: var(--purple); margin-bottom: 4px; font-size: 12px;">📢 ${t.title}</h4>
+                <p style="font-size:11px; line-height:1.4; white-space: pre-wrap; margin-bottom: 4px;">${t.desc}</p>
+                <span style="font-size:8px; opacity:0.7;">${t.date}</span>
+            </div>
+        `;
+    });
+}
+// استدعاء دالة العرض تلقائياً لكي تظهر المنشورات فور فتح التطبيق
+if (typeof renderPublicTrips === 'function') {
+    renderPublicTrips();
+}
+
+        
+    </script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZm",
+    authDomain: "n2la-642d3.firebaseapp.com",
+    projectId: "n2la-642d3",
+    storageBucket: "n2la-642d3.firebasestorage.app",
+    messagingSenderId: "1085749997466",
+    appId: "1:1085749997466:web:13e5539",
+    measurementId: "G-KH4ZYFB8LC"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  console.log("تم ربط قاعدة البيانات بنجاح");
+  // دالة الحفظ التي سنستدعيها عند إضافة بيانات
+  // دالة الحفظ في فايربيس
+  window.saveDataToFirebase = async function(collectionName, dataObj) {
+      try {
+          const docRef = await addDoc(collection(db, collectionName), {
+              ...dataObj,
+              createdAt: new Date().toISOString()
+          });
+          console.log("تم الحفظ برقم: ", docRef.id);
+          alert("تم الحفظ بنجاح! رقم المستند: " + docRef.id);
+      } catch (e) {
+          console.error("خطأ تفصيلي: ", e);
+          alert("خطأ فايربيس: " + e.message);
+      }
+  };
+</script>
+<!-- زرار التجربة بتصميم ثري دي أنيق -->
+<button onclick="saveDataToFirebase('orders', { clientName: 'إمعاد', amount: 300 })" class="custom-save-btn">
     تجربة حفظ البيانات في القاعدة
 </button>
 
-<!-- تنسيقات الزر -->
 <style>
 .custom-save-btn {
   background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -2892,4 +3103,4 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
 </style>
 
 </body>
-    </html>
+</html>
