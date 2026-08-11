@@ -1409,65 +1409,71 @@ async function publishProfileWallPost() {
     alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
 }
 
-function renderProfileWallPosts(drv) {
-    const container = document.getElementById('profile-wall-posts-container');
-    if (!container) return;
-    container.innerHTML = '';
 
-    let posts = drv.wallPosts || [];
-    if (posts.length === 0) {
-        container.innerHTML = `<div class="card"><p style="text-align:center; opacity:0.7; font-size:11px;">لا توجد منشورات على بروفايل (${drv.name}) حتى الآن. كن أول من ينشر!</p></div>`;
+async function saveProfileWallPost(e, driverName) {
+    // 1. منع إعادة تحميل الصفحة أو الخروج منها
+    if (e) e.preventDefault();
+
+    const textInput = document.getElementById('profile-wall-text');
+    if (!textInput) return;
+    const text = textInput.value.trim();
+
+    // التحقق من وجود نص أو ملفات قبل النشر
+    if (!text && (!profileWallFilesArr || profileWallFilesArr.length === 0)) {
+        alert('يرجى كتابة نص أو إرفاق ملفات للنشر!');
         return;
     }
 
-    const canDelete = (typeof currentUserRole !== 'undefined' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) || (typeof loggedInDriverName !== 'undefined' && loggedInDriverName === drv.name);
-
-    posts.forEach(p => {
-        let filesHtml = '';
-        if (p.files && p.files.length > 0) {
-            p.files.forEach(f => {
-                if (f.type.startsWith('image/')) {
-                    filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'image')"/>`;
-                } else if (f.type.startsWith('video/')) {
-                    filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'video')"></video>`;
-                }
-            });
-        }
-
-        let formattedText = p.text.replace(/(#\d+|رحلة\s+\d+)/gi, function(match) {
-            let tripId = match.replace(/\D/g, '');
-            return `<a href="javascript:void(0)" onclick="openTripDetails('${tripId}')" style="color:var(--accent); font-weight:bold; text-decoration:underline;">${match}</a>`;
-        });
-
-        let deleteBtnHtml = canDelete ? 
-            `<button onclick="deleteProfileWallPost('${drv.name}', ${p.id})" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:12px; padding:0 4px;" title="حذف المنشور">🗑️</button>` : '';
-
-        container.innerHTML += `
-            <div class="community-feed-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; border-bottom:1px solid var(--border-color); padding-bottom:3px;">
-                    <span style="font-weight:bold; color:var(--accent);">✍️ بواسطة: ${p.author}</span>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:8px; opacity:0.7;">${p.date}</span>
-                        ${deleteBtnHtml}
-                    </div>
-                </div>
-                <p style="font-size:11px; line-height:1.4; white-space: pre-wrap;">${formattedText}</p>
-                ${filesHtml}
-            </div>
-        `;
-    });
-}
-
-function deleteProfileWallPost(driverName, postId) {
-    if (!confirm('هل أنت تأكد من رغبتك في حذف هذا المنشور؟')) return;
-
+    // البحث عن السائق المستهدف
     let drv = (appData.drivers || []).find(d => d.name === driverName);
-    if (!drv || !drv.wallPosts) return;
+    if (!drv) {
+        alert('لم يتم العثور على بيانات السائق!');
+        return;
+    }
 
-    drv.wallPosts = drv.wallPosts.filter(p => p.id !== postId);
+    if (!drv.wallPosts) drv.wallPosts = [];
 
+    // تحديد اسم الناشر (سائق مسجل أو الإدارة)
+    const authorName = (typeof loggedInDriverName !== 'undefined' && loggedInDriverName) 
+        ? loggedInDriverName 
+        : ((typeof currentUserRole !== 'undefined' && currentUserRole === 'admin') ? 'الإدارة' : driverName);
+
+    // إنشاء المنشور الجديد
+    const newPost = {
+        id: Date.now(),
+        author: authorName,
+        text: text,
+        files: profileWallFilesArr ? [...profileWallFilesArr] : [],
+        date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    // إضافة المنشور في بداية المصفوفة
+    drv.wallPosts.unshift(newPost);
+
+    // 2. حفظ البيانات نهائياً في التخزين/قاعدة البيانات
     saveDataAll();
+saveDataAll();
+
+    document.getElementById('profile-wall-text').value = '';
+    document.getElementById('profile-wall-media').value = '';
+    profileWallFilesArr = [];
+    document.getElementById('profile-wall-files-info').innerText = '';
+
     renderProfileWallPosts(drv);
+    alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
+    // 3. تفريغ الحقول وإعادة تعيين المتغيرات المؤقتة
+    textInput.value = '';
+    const mediaInput = document.getElementById('profile-wall-media');
+    if (mediaInput) mediaInput.value = '';
+    
+    profileWallFilesArr = [];
+    
+    const filesInfoEl = document.getElementById('profile-wall-files-info');
+    if (filesInfoEl) filesInfoEl.innerText = '';
+
+    // 4. إعادة رسم وتحديث بروفايل السائق وإظهار رسالة النجاح
+    renderProfileWallPosts(drv);
+    alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
 }
 
 
