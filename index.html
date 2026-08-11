@@ -2522,8 +2522,12 @@ let appData = JSON.parse(localStorage.getItem('transportAppV60')) || {
     customers: []
 };
 
-async function saveDataAll() {
+
+ async function saveDataAll() {
+    // حفظ محلياً لضمان السرعة والعمل بدون إنترنت
     localStorage.setItem('transportAppV60', JSON.stringify(appData));
+    
+    // حفظ سحابياً (Firebase)
     try {
         if (typeof db !== 'undefined' && typeof USER_ID !== 'undefined') {
             await db.collection('users').doc(USER_ID).set(appData, { merge: true });
@@ -2533,11 +2537,11 @@ async function saveDataAll() {
     }
 }
 
-// 2. دالة العرض الشاملة (معدلة لتظهر كل الشحنات بدون شروط معقدة)
+// 2. دالة العرض الشاملة (تشمل الشحنات، الشاحنات، والمستندات)
 function render() {
     const query = document.getElementById('global-search') ? document.getElementById('global-search').value.toLowerCase() : '';
     
-    // --- أولاً: تحديث قائمة اختيار السائق ---
+    // --- أولاً: تحديث قائمة اختيار السائق الشحنة ---
     const shipDriverSelect = document.getElementById('ship-assigned-driver');
     if(shipDriverSelect) {
         let currentVal = shipDriverSelect.value;
@@ -2545,52 +2549,47 @@ function render() {
         (appData.drivers || []).forEach(d => {
             let opt = document.createElement('option');
             opt.value = d.name;
-            opt.innerText = `${d.name} (${d.role || 'سائق'})`;
+            opt.innerText = `${d.name} (${d.role})`;
             shipDriverSelect.appendChild(opt);
         });
         shipDriverSelect.value = currentVal;
     }
 
-    // --- ثانياً: جدول الشحنات الرئيسي (عرض إجباري ومباشر لكل الشحنات) ---
+    // --- ثانياً: جدول الشحنات الرئيسي ---
     const shipList = document.getElementById('shipments-list');
     if(shipList) {
         shipList.innerHTML = '';
         let list = appData.shipments || [];
-        
-        console.log("الشحنات الحالية في النظام:", list); // للتأكد من وجود بيانات
-
-        if (list.length === 0) {
-            shipList.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:15px; color:#888; font-weight:bold;">لا توجد شحنات مسجلة حتى الآن</td></tr>`;
-        } else {
-            list.filter(s => {
-                let customerName = s.name || s.customerName || s.client || '';
-                let itemName = s.item || s.cargo || '';
-                let driverName = s.assignedDriver || '';
-                return customerName.toLowerCase().includes(query) || itemName.toLowerCase().includes(query) || driverName.toLowerCase().includes(query);
-            }).forEach(s => {
-                let profit = Number(s.price || s.fare || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
-                let tr = document.createElement('tr');
-                
-                let sId = s.id || '';
-                let actionsHtml = `
-                    <button type="button" class="btn-main btn-sm" onclick="showQRModal('${sId}')">QR</button>
-                    <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus('${sId}', 'مكتملة')">✔ تم</button>
-                    <button type="button" class="btn-warning btn-sm" onclick="editShipment('${sId}')">تعديل</button>
-                    <button type="button" class="btn-danger btn-sm" onclick="deleteShipment('${sId}')">حذف</button>
-                `;
-
-                tr.innerHTML = `
-                    <td style="font-weight:bold;">${s.name || s.customerName || 'عميل'}</td>
-                    <td>${s.item || s.cargo || 'بدون وصف'}</td>
-                    <td><span class="badge bg-transit">${s.assignedDriver || 'عام'}</span></td>
-                    <td style="font-weight:bold; color:var(--success);">${s.price || s.fare || 0} ج.م</td>
-                    <td style="font-weight:bold; color:var(--purple);">${profit} ج.م</td>
-                    <td><span class="badge bg-${(s.status === 'مكتملة') ? 'delivered' : 'pending'}">${s.status || 'قيد الانتظار'}</span></td>
-                    <td>${actionsHtml}</td>
-                `;
-                shipList.appendChild(tr);
-            });
+        if(typeof currentUserRole !== 'undefined' && currentUserRole === 'driver' && typeof loggedInDriverName !== 'undefined') {
+            list = list.filter(s => s.assignedDriver === loggedInDriverName);
         }
+
+        list.filter(s => (s.name || '').toLowerCase().includes(query) || (s.item || '').toLowerCase().includes(query) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(query))).forEach(s => {
+            let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
+            let tr = document.createElement('tr');
+            
+            let actionsHtml = `
+                <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
+                <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
+            `;
+            if(typeof currentUserRole === 'undefined' || currentUserRole === 'admin' || currentUserRole === 'supervisor') {
+                actionsHtml += `
+                    <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
+                    <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
+                `;
+            }
+
+            tr.innerHTML = `
+                <td style="font-weight:bold;">${s.name}</td>
+                <td>${s.item}</td>
+                <td><span class="badge bg-transit">${s.assignedDriver || 'عام'}</span></td>
+                <td style="font-weight:bold; color:var(--success);">${s.price} ج.م</td>
+                <td style="font-weight:bold; color:var(--purple);">${profit} ج.م</td>
+                <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
+                <td>${actionsHtml}</td>
+            `;
+            shipList.appendChild(tr);
+        });
     }
 
     // --- ثالثاً: الشاحنات والأسطول ---
@@ -2600,11 +2599,11 @@ function render() {
         (appData.trucks || []).forEach(t => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td style="font-weight:bold;">${t.num || ''}</td>
-                <td>${t.driver || ''}</td>
-                <td>${t.km || 0} KM</td>
-                <td style="color:var(--warning); font-weight:bold;">${t.nextOil || 0} KM</td>
-                <td>${t.expiry || ''}</td>
+                <td style="font-weight:bold;">${t.num}</td>
+                <td>${t.driver}</td>
+                <td>${t.km} KM</td>
+                <td style="color:var(--warning); font-weight:bold;">${t.nextOil} KM</td>
+                <td>${t.expiry}</td>
             `;
             trucksList.appendChild(tr);
         });
@@ -2615,12 +2614,14 @@ function render() {
     if (docsList) {
         docsList.innerHTML = '';
         let docs = appData.docs || [];
+        
         if (docs.length === 0) {
             docsList.innerHTML = `<p style="font-size:10px; opacity:0.7; text-align:center;">لا توجد مستندات مرفوعة حالياً في المكتبة.</p>`;
         } else {
             docs.forEach(doc => {
                 let div = document.createElement('div');
                 div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border:1px solid var(--border-color); border-radius:6px; margin-bottom:4px;";
+                
                 div.innerHTML = `
                     <span style="font-size:11px; font-weight:bold;">📁 ${doc.title}</span>
                     <div style="display:flex; gap:4px;">
@@ -2628,28 +2629,38 @@ function render() {
                         <button type="button" class="btn-sm btn-danger delete-doc-btn" data-id="${doc.id}">حذف ✕</button>
                     </div>
                 `;
-                div.querySelector('.view-doc-btn').addEventListener('click', () => {
-                    if (typeof viewMedia === 'function') viewMedia(doc.src, 'image');
-                });
-                div.querySelector('.delete-doc-btn').addEventListener('click', async () => {
-                    if (confirm('هل أنت متأكد من حذف هذا المستند نهائياً؟')) {
-                        appData.docs = (appData.docs || []).filter(d => String(d.id) !== String(doc.id));
-                        await saveDataAll();
-                        render();
+                
+                // ربط زر العرض
+                div.querySelector('.view-doc-btn').addEventListener('click', function() {
+                    if (typeof viewMedia === 'function') {
+                        viewMedia(doc.src, 'image');
                     }
                 });
+                
+                // ربط زر الحذف مع التحديث السحابي والمحلي
+                div.querySelector('.delete-doc-btn').addEventListener('click', async function() {
+                    if (confirm('هل أنت متأكد من حذف هذا المستند نهائياً؟')) {
+                        const targetId = String(this.getAttribute('data-id'));
+                        
+                        appData.docs = (appData.docs || []).filter(d => String(d.id) !== targetId);
+                        
+                        await saveDataAll(); // حفظ التغييرات سحابياً ومحلياً
+                        render(); // إعادة رسم الواجهة فوراً
+                    }
+                });
+                
                 docsList.appendChild(div);
             });
         }
     }
 }
 
-// 3. التشغيل التلقائي
+// 3. التشغيل التلقائي عند فتح التطبيق وجلب البيانات من السحابة إن وجدت
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         if (typeof db !== 'undefined' && typeof USER_ID !== 'undefined') {
             const docSnap = await db.collection('users').doc(USER_ID).get();
-            if (docSnap.exists && docSnap.data()) {
+            if (docSnap.exists) {
                 appData = docSnap.data();
                 localStorage.setItem('transportAppV60', JSON.stringify(appData));
             }
@@ -2658,8 +2669,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("العمل بالوضع المحلي حالياً");
     }
     render();
-});
-
+});      
     
             // المصروفات
             const expList = document.getElementById('expenses-list');
