@@ -591,31 +591,30 @@
     </section>
 
     <!-- 4. لوحة الرحلات العامة -->
-<section id="public-feed-tab" class="app-section">
-    <div class="card" style="border: 2px solid var(--purple);">
-        <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
-        <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
-            <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
-            <form id="public-post-form" onsubmit="event.preventDefault();">
-                <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
-                <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
-                    <div>
-                        <label style="font-size:9px; font-weight:bold;">📷 رفع صور:</label>
-                        <input type="file" id="post-images" accept="image/*" multiple>
+    <section id="public-feed-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--purple);">
+            <h3 style="color: var(--purple);">📢 لوحة الإعلانات ونشر الرحلات العامة</h3>
+            <div id="admin-post-form-card" style="background: var(--bg); padding: 8px; border-radius: 6px; margin-bottom: 10px; border: 1px dashed var(--border-color);">
+                <h4 style="font-size: 11px; margin-bottom: 5px;">➕ نشر رحلة أو إعلان جديد (للمدير والمشرف)</h4>
+                <form id="public-post-form" onsubmit="event.preventDefault();">
+                    <input type="text" id="post-title" required placeholder="عنوان الرحلة / الوجهة">
+                    <textarea id="post-desc" rows="2" required placeholder="تفاصيل الحمولة والشروط..."></textarea>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                        <div>
+                            <label style="font-size:9px; font-weight:bold;">📷 رفع صور:</label>
+                            <input type="file" id="post-images" accept="image/*" multiple>
+                        </div>
+                        <div>
+                            <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
+                            <input type="file" id="post-videos" accept="video/*">
+                        </div>
                     </div>
-                    <div>
-                        <label style="font-size:9px; font-weight:bold;">🎥 رفع فيديو:</label>
-                        <input type="file" id="post-videos" accept="video/*">
-                    </div>
-                </div>
-                <button type="button" onclick="publishPublicPost()" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
-            </form>
+                    <button type="submit" class="btn-success" style="padding: 7px; margin-top: 5px;">نشر في لوحة الرحلات العامة 🚀</button>
+                </form>
+            </div>
+            <div id="public-posts-feed"></div>
         </div>
-        <div id="public-posts-feed"></div>
-    </div>
-</section>
-
+    </section>
 
     <!-- 5. غرفة المحادثة والتواصل الفوري -->
     <section id="chat-tab" class="app-section">
@@ -1378,136 +1377,37 @@
 }
 
 async function publishProfileWallPost() {
-// دالة النشر في لوحة الرحلات العامة
-async function publishPublicPost() {
-    const titleInput = document.getElementById('post-title');
-    const descInput = document.getElementById('post-desc');
-    const imgInput = document.getElementById('post-images');
-    const vidInput = document.getElementById('post-videos');
-
-    const title = titleInput ? titleInput.value.trim() : '';
-    const desc = descInput ? descInput.value.trim() : '';
-
-    if (!title && !desc) {
-        alert('الرجاء إدخال عنوان أو تفاصيل للرحلة!');
+    const text = document.getElementById('profile-wall-text').value.trim();
+    if (!text && profileWallFilesArr.length === 0) {
+        alert('الرجاء كتابة نص أو إرفاق صورة/فيديو للنشر على الحائط!');
         return;
     }
 
-    let filesArr = [];
-
-    // معالجة الصور
-    if (imgInput && imgInput.files.length > 0) {
-        for (let i = 0; i < imgInput.files.length; i++) {
-            let b64 = await fileToBase64(imgInput.files[i]);
-            filesArr.push({ name: imgInput.files[i].name, type: imgInput.files[i].type, data: b64 });
-        }
-    }
-
-    // معالجة الفيديو
-    if (vidInput && vidInput.files.length > 0) {
-        let b64 = await fileToBase64(vidInput.files[0]);
-        filesArr.push({ name: vidInput.files[0].name, type: vidInput.files[0].type, data: b64 });
-    }
-
-    if (!appData.publicPosts) appData.publicPosts = [];
+    let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+    let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
+    if (!drv) return;
+    if (!drv.wallPosts) drv.wallPosts = [];
 
     const posterName = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `${loggedInDriverName} (الإدارة)` : loggedInDriverName;
 
-    appData.publicPosts.unshift({
+    drv.wallPosts.unshift({
         id: Date.now(),
         author: posterName,
-        title: title,
-        text: desc,
-        files: filesArr,
+        text: text,
+        files: profileWallFilesArr,
         date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
     });
 
     saveDataAll();
 
-    // تفريغ المدخلات
-    if (titleInput) titleInput.value = '';
-    if (descInput) descInput.value = '';
-    if (imgInput) imgInput.value = '';
-    if (vidInput) vidInput.value = '';
+    document.getElementById('profile-wall-text').value = '';
+    document.getElementById('profile-wall-media').value = '';
+    profileWallFilesArr = [];
+    document.getElementById('profile-wall-files-info').innerText = '';
 
-    renderPublicPosts();
-    alert('تم النشر في لوحة الرحلات العامة بنجاح! 🚀');
+    renderProfileWallPosts(drv);
+    alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
 }
-
-// دالة عرض المنشورات وتفعيل زر الحذف ورابط الرحلة
-function renderPublicPosts() {
-    const container = document.getElementById('public-posts-feed');
-    if (!container) return;
-    container.innerHTML = '';
-
-    let posts = appData.publicPosts || [];
-    if (posts.length === 0) {
-        container.innerHTML = `<div class="card"><p style="text-align:center; opacity:0.7; font-size:11px;">لا توجد رحلات أو إعلانات عامة حالياً.</p></div>`;
-        return;
-    }
-
-    const canDelete = currentUserRole === 'admin' || currentUserRole === 'supervisor';
-
-    posts.forEach(p => {
-        let filesHtml = '';
-        if (p.files && p.files.length > 0) {
-            p.files.forEach(f => {
-                if (f.type.startsWith('image/')) {
-                    filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'image')"/>`;
-                } else if (f.type.startsWith('video/')) {
-                    filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'video')"></video>`;
-                }
-            });
-        }
-
-        // تحويل رقم الرحلة لرابط تفاعلي
-        let formattedText = (p.text || '').replace(/(#\d+|رحلة\s+\d+)/gi, function(match) {
-            let tripId = match.replace(/\D/g, '');
-            return `<a href="javascript:void(0)" onclick="openTripDetails('${tripId}')" style="color:var(--accent); font-weight:bold; text-decoration:underline;">${match}</a>`;
-        });
-
-        // زر الحذف
-        let deleteBtnHtml = canDelete ? 
-            `<button onclick="deletePublicPost(${p.id})" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:12px; padding:0 4px;" title="حذف الإعلان">🗑️</button>` : '';
-
-        container.innerHTML += `
-            <div class="community-feed-card" style="margin-top:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; border-bottom:1px solid var(--border-color); padding-bottom:3px;">
-                    <span style="font-weight:bold; color:var(--accent);">📌 ${p.title}</span>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:8px; opacity:0.7;">${p.date}</span>
-                        ${deleteBtnHtml}
-                    </div>
-                </div>
-                <p style="font-size:11px; line-height:1.4; white-space: pre-wrap;">${formattedText}</p>
-                ${filesHtml}
-            </div>
-        `;
-    });
-}
-
-// دالة حذف منشور الرحلات العامة
-function deletePublicPost(postId) {
-    if (!confirm('هل أنت تأكد من رغبتك في حذف هذه الرحلة/الإعلان؟')) return;
-
-    if (appData.publicPosts) {
-        appData.publicPosts = appData.publicPosts.filter(p => p.id !== postId);
-    }
-
-    saveDataAll();
-            communityNotificationsCount++;
-            document.getElementById('community-notif-count').innerText = communityNotificationsCount;
-
-            document.getElementById('community-post-text').value = '';
-            document.getElementById('community-media-file').value = '';
-            document.getElementById('community-doc-file').value = '';
-            communityFilesArr = [];
-            document.getElementById('community-files-preview-info').innerText = '';
-            
-            renderCommunityPosts();
-            alert('تم نشر بوست في مجتمع السائقين بنجاح! 🚀');
-}
-
 
 function renderProfileWallPosts(drv) {
     const container = document.getElementById('profile-wall-posts-container');
@@ -1566,18 +1466,8 @@ function deleteProfileWallPost(driverName, postId) {
 
     drv.wallPosts = drv.wallPosts.filter(p => p.id !== postId);
 
-saveDataAll();
-            communityNotificationsCount++;
-            document.getElementById('community-notif-count').innerText = communityNotificationsCount;
-
-            document.getElementById('community-post-text').value = '';
-            document.getElementById('community-media-file').value = '';
-            document.getElementById('community-doc-file').value = '';
-            communityFilesArr = [];
-            document.getElementById('community-files-preview-info').innerText = '';
-            
-            renderCommunityPosts();
-            alert('تم نشر بوست في مجتمع السائقين بنجاح! 🚀');
+    saveDataAll();
+    renderProfileWallPosts(drv);
 }
 
 
@@ -1621,125 +1511,33 @@ saveDataAll();
         }
 
         async function publishCommunityPost() {
-        // دالة النشر في لوحة الرحلات العامة
-async function publishPublicPost() {
-    const titleInput = document.getElementById('post-title');
-    const descInput = document.getElementById('post-desc');
-    const imgInput = document.getElementById('post-images');
-    const vidInput = document.getElementById('post-videos');
+            const text = document.getElementById('community-post-text').value.trim();
+            if (!text && communityFilesArr.length === 0) {
+                alert('الرجاء كتابة نص أو إرفاق صورة/مستند للنشر!');
+                return;
+            }
 
-    const title = titleInput ? titleInput.value.trim() : '';
-    const desc = descInput ? descInput.value.trim() : '';
-
-    if (!title && !desc) {
-        alert('الرجاء إدخال عنوان أو تفاصيل للرحلة!');
-        return;
-    }
-
-    let filesArr = [];
-
-    // معالجة الصور
-    if (imgInput && imgInput.files.length > 0) {
-        for (let i = 0; i < imgInput.files.length; i++) {
-            let b64 = await fileToBase64(imgInput.files[i]);
-            filesArr.push({ name: imgInput.files[i].name, type: imgInput.files[i].type, data: b64 });
-        }
-    }
-
-    // معالجة الفيديو
-    if (vidInput && vidInput.files.length > 0) {
-        let b64 = await fileToBase64(vidInput.files[0]);
-        filesArr.push({ name: vidInput.files[0].name, type: vidInput.files[0].type, data: b64 });
-    }
-
-    if (!appData.publicPosts) appData.publicPosts = [];
-
-    const posterName = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `${loggedInDriverName} (الإدارة)` : loggedInDriverName;
-
-    appData.publicPosts.unshift({
-        id: Date.now(),
-        author: posterName,
-        title: title,
-        text: desc,
-        files: filesArr,
-        date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-    });
-
-    saveDataAll();
-
-    // تفريغ المدخلات
-    if (titleInput) titleInput.value = '';
-    if (descInput) descInput.value = '';
-    if (imgInput) imgInput.value = '';
-    if (vidInput) vidInput.value = '';
-
-    renderPublicPosts();
-    alert('تم النشر في لوحة الرحلات العامة بنجاح! 🚀');
-}
-
-// دالة عرض المنشورات وتفعيل زر الحذف ورابط الرحلة
-function renderPublicPosts() {
-    const container = document.getElementById('public-posts-feed');
-    if (!container) return;
-    container.innerHTML = '';
-
-    let posts = appData.publicPosts || [];
-    if (posts.length === 0) {
-        container.innerHTML = `<div class="card"><p style="text-align:center; opacity:0.7; font-size:11px;">لا توجد رحلات أو إعلانات عامة حالياً.</p></div>`;
-        return;
-    }
-
-    const canDelete = currentUserRole === 'admin' || currentUserRole === 'supervisor';
-
-    posts.forEach(p => {
-        let filesHtml = '';
-        if (p.files && p.files.length > 0) {
-            p.files.forEach(f => {
-                if (f.type.startsWith('image/')) {
-                    filesHtml += `<img src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'image')"/>`;
-                } else if (f.type.startsWith('video/')) {
-                    filesHtml += `<video controls src="${f.data}" style="max-width:100%; max-height:160px; border-radius:6px; margin-top:4px; display:block; cursor:pointer;" onclick="viewMedia('${f.data}', 'video')"></video>`;
-                }
+            const authorName = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `${loggedInDriverName} (الإدارة)` : loggedInDriverName;
+            
+            if (!appData.communityPosts) appData.communityPosts = [];
+            appData.communityPosts.unshift({
+                id: Date.now(), author: authorName, text: text, files: communityFilesArr,
+                date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             });
+
+            saveDataAll();
+            communityNotificationsCount++;
+            document.getElementById('community-notif-count').innerText = communityNotificationsCount;
+
+            document.getElementById('community-post-text').value = '';
+            document.getElementById('community-media-file').value = '';
+            document.getElementById('community-doc-file').value = '';
+            communityFilesArr = [];
+            document.getElementById('community-files-preview-info').innerText = '';
+            
+            renderCommunityPosts();
+            alert('تم نشر بوست في مجتمع السائقين بنجاح! 🚀');
         }
-
-        // تحويل رقم الرحلة لرابط تفاعلي
-        let formattedText = (p.text || '').replace(/(#\d+|رحلة\s+\d+)/gi, function(match) {
-            let tripId = match.replace(/\D/g, '');
-            return `<a href="javascript:void(0)" onclick="openTripDetails('${tripId}')" style="color:var(--accent); font-weight:bold; text-decoration:underline;">${match}</a>`;
-        });
-
-        // زر الحذف
-        let deleteBtnHtml = canDelete ? 
-            `<button onclick="deletePublicPost(${p.id})" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size:12px; padding:0 4px;" title="حذف الإعلان">🗑️</button>` : '';
-
-        container.innerHTML += `
-            <div class="community-feed-card" style="margin-top:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; border-bottom:1px solid var(--border-color); padding-bottom:3px;">
-                    <span style="font-weight:bold; color:var(--accent);">📌 ${p.title}</span>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:8px; opacity:0.7;">${p.date}</span>
-                        ${deleteBtnHtml}
-                    </div>
-                </div>
-                <p style="font-size:11px; line-height:1.4; white-space: pre-wrap;">${formattedText}</p>
-                ${filesHtml}
-            </div>
-        `;
-    });
-}
-
-// دالة حذف منشور الرحلات العامة
-function deletePublicPost(postId) {
-    if (!confirm('هل أنت تأكد من رغبتك في حذف هذه الرحلة/الإعلان؟')) return;
-
-    if (appData.publicPosts) {
-        appData.publicPosts = appData.publicPosts.filter(p => p.id !== postId);
-    }
-
-        saveDataAll();
-    renderProfileWallPosts(drv);
-}
 
         function renderCommunityPosts() {
             const container = document.getElementById('community-posts-container');
@@ -1781,7 +1579,6 @@ function deletePublicPost(postId) {
             });
         }
 
- 
         function showCommunityNotifications() {
             alert(`لديك (${communityNotificationsCount}) تنبيهات جديدة تفاعلية داخل مجتمع السائقين.`);
             communityNotificationsCount = 0;
@@ -2623,4 +2420,4 @@ function deletePublicPost(postId) {
 </style>
 
 </body>
-</html>
+                    </html>
