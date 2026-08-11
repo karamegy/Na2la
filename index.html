@@ -1376,38 +1376,73 @@
     document.getElementById('profile-wall-files-info').innerText = `تم إرفاق ${profileWallFilesArr.length} ملف/صور للنشر بنجاح ✅`;
 }
 
-async function publishProfileWallPost() {
-    const text = document.getElementById('profile-wall-text').value.trim();
-    if (!text && profileWallFilesArr.length === 0) {
-        alert('الرجاء كتابة نص أو إرفاق صورة/فيديو للنشر على الحائط!');
+// دالة النشر في لوحة الرحلات العامة (مع الربط بالبروفايل)
+async function publishPublicPost() {
+    const titleInput = document.getElementById('post-title');
+    const descInput = document.getElementById('post-desc');
+    const imgInput = document.getElementById('post-images');
+    const vidInput = document.getElementById('post-videos');
+
+    const title = titleInput ? titleInput.value.trim() : '';
+    const desc = descInput ? descInput.value.trim() : '';
+
+    if (!title && !desc) {
+        alert('الرجاء كتابة عنوان أو تفاصيل للرحلة!');
         return;
     }
 
-    let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-    let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
-    if (!drv) return;
-    if (!drv.wallPosts) drv.wallPosts = [];
+    let filesArr = [];
 
+    // قراءة الصور والفيديو
+    if (imgInput && imgInput.files.length > 0) {
+        for (let i = 0; i < imgInput.files.length; i++) {
+            let b64 = await fileToBase64(imgInput.files[i]);
+            filesArr.push({ name: imgInput.files[i].name, type: imgInput.files[i].type, data: b64 });
+        }
+    }
+    if (vidInput && vidInput.files.length > 0) {
+        let b64 = await fileToBase64(vidInput.files[0]);
+        filesArr.push({ name: vidInput.files[0].name, type: vidInput.files[0].type, data: b64 });
+    }
+
+    // 1. النشر في اللوحة العامة
+    if (!appData.publicPosts) appData.publicPosts = [];
     const posterName = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `${loggedInDriverName} (الإدارة)` : loggedInDriverName;
-
-    drv.wallPosts.unshift({
+    const postData = {
         id: Date.now(),
         author: posterName,
-        text: text,
-        files: profileWallFilesArr,
+        title: title,
+        text: desc,
+        files: filesArr,
         date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-    });
+    };
+
+    appData.publicPosts.unshift(postData);
+
+    // 2. الربط ببروفايل السائق (إذا كنت تتصفح بروفايل حالياً)
+    if (typeof viewingProfileName !== 'undefined' && viewingProfileName) {
+        let drv = (appData.drivers || []).find(d => d.name === viewingProfileName);
+        if (drv) {
+            if (!drv.wallPosts) drv.wallPosts = [];
+            // إضافة المنشور لجدار السائق أيضاً
+            drv.wallPosts.unshift(postData);
+            // تحديث واجهة البروفايل فوراً
+            renderProfileWallPosts(drv); 
+        }
+    }
 
     saveDataAll();
 
-    document.getElementById('profile-wall-text').value = '';
-    document.getElementById('profile-wall-media').value = '';
-    profileWallFilesArr = [];
-    document.getElementById('profile-wall-files-info').innerText = '';
+    // تفريغ المدخلات
+    if (titleInput) titleInput.value = '';
+    if (descInput) descInput.value = '';
+    if (imgInput) imgInput.value = '';
+    if (vidInput) vidInput.value = '';
 
-    renderProfileWallPosts(drv);
-    alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
+    renderPublicPosts();
+    alert('تم النشر بنجاح وربطه بالبروفايل! 🚀');
 }
+
 
 function renderProfileWallPosts(drv) {
     const container = document.getElementById('profile-wall-posts-container');
