@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - Global Transport Hub V60 PRO - النسخة المطورة</title>
+    <title>أسطورة الطريق - Global Transport Hub V60 PRO - النسخة المطورة الكاملة</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -38,7 +38,6 @@
             --border-color: #334155;
         }
 
-        /* ثيمات الألوان الإضافية */
         body.theme-emerald { --accent: #059669; --primary: #064e3b; --bg: #ecfdf5; }
         body.theme-amber { --accent: #d97706; --primary: #78350f; --bg: #fffbeb; }
         body.theme-purple { --accent: #7c3aed; --primary: #4c1d95; --bg: #f5f3ff; }
@@ -296,7 +295,7 @@
         </div>
     </div>
 
-    <!-- نوافذ منبثقة تفاعلية جديدة لعرض الشحنات والإيرادات والأرباح والخزينة والديون -->
+    <!-- نوافذ منبثقة تفاعلية لعرض الشحنات والإيرادات والأرباح والخزينة والديون -->
     <div id="statDetailModal" class="custom-modal">
         <div class="card" style="width: 100%; max-width: 550px; max-height: 85vh; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom: 2px solid var(--border-color); padding-bottom: 6px;">
@@ -428,7 +427,7 @@
 
     <input type="text" id="global-search" class="search-box" placeholder="🔍 بحث شامل في المنصة (السائقين، الشحنات، العملاء)..." onkeyup="render()">
 
-    <!-- شريط الإحصائيات مع تفعيل النقر لفتح الصفحات المنبثقة المتطورة -->
+    <!-- شريط الإحصائيات -->
     <div class="stats-grid" id="admin-stats">
         <div class="stat-card" onclick="openStatDetailModal('shipments')"><h4>الشحنات</h4><p id="stat-shipments">0</p></div>
         <div class="stat-card" style="border-right-color: var(--success);" onclick="openStatDetailModal('revenue')"><h4>الإيرادات</h4><p id="stat-revenue">0 ج.م</p></div>
@@ -437,7 +436,7 @@
         <div class="stat-card" style="border-right-color: var(--danger);" onclick="openStatDetailModal('debts')"><h4>الديون</h4><p id="stat-debts">0 ج.م</p></div>
     </div>
 
-    <!-- قسم "حسابي" وبروفايل التشغيل الاحترافي -->
+    <!-- قسم حسابي -->
     <section id="account-tab" class="app-section">
         <div class="gplus-profile-card">
             <div id="gplus-cover-banner-preview" class="gplus-cover-banner">
@@ -868,6 +867,7 @@
     </div>
 
     <script>
+        // إعدادات Firebase
         const firebaseConfig = {
             databaseURL: "https://na2la-default-rtdb.firebaseio.com/"
         };
@@ -925,7 +925,7 @@
             try { appData = JSON.parse(localSavedData); } catch(e) { console.error(e); }
         }
 
-        // إدماج سحابي ومحلي متصل مباشرة وبدون فقدان بيانات
+        // الربط المباشر بـ Firebase Realtime Database
         db.ref('transportAppV60').on('value', (snapshot) => {
             const serverData = snapshot.val();
             if (serverData) {
@@ -1577,27 +1577,19 @@
                 price: price,
                 fuelCost: 0,
                 extraCost: 0,
-                assignedDriver: 'بدون تعيين',
-                gps: visitorGPS || '30.0444,31.2357',
-                img: visitorImgBase64 || '',
-                signature: '',
-                status: 'قيد الانتظار',
+                status: 'في الانتظار',
+                assignedDriver: '',
+                gps: visitorGPS,
+                img: visitorImgBase64,
+                sig: '',
                 date: new Date().toLocaleDateString('ar-EG')
             });
 
-            // إضافة العميل تلقائياً
-            let cust = (appData.customers || []).find(c => c.name === name);
-            if(cust) {
-                cust.debt = Number(cust.debt || 0) + price;
-            } else {
-                appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
-            }
-
             saveDataAll();
             closeVisitorBooking();
+            alert('تم تقديم طلبك بنجاح وسيتواصل معك فريق الإدارة وسائقينا فوراً! 🚀');
             document.getElementById('visitor-shipment-form').reset();
             visitorGPS = ''; visitorImgBase64 = '';
-            alert('تم حجز الرحلة بنجاح وإرسالها للإدارة! 🚀');
             render();
         }
 
@@ -1607,8 +1599,9 @@
             const pin = document.getElementById('pub-drv-pin').value.trim();
 
             if(!appData.drivers) appData.drivers = [];
-            if(appData.drivers.some(d => d.pin === pin)) {
-                alert('رمز المرور هذا مستخدم بالفعل، اختر رمزاً آخر!');
+            let exists = appData.drivers.find(d => d.phone === phone || d.name === name);
+            if(exists) {
+                alert('هذا الحساب أو الهاتف مسجل بالفعل بالنظام!');
                 return;
             }
 
@@ -1627,366 +1620,308 @@
 
             saveDataAll();
             closeDriverRegister();
+            alert('تم تسجيل حسابك بنجاح! يمكنك الآن الدخول بـ PIN الخاص بك.');
             document.getElementById('public-driver-form').reset();
-            alert('تم تسجيل حساب السائق بنجاح! يمكنك الدخول الآن برمز PIN الخاص بك 🚀');
+            render();
         }
 
         function saveShipmentHandler(e) {
             e.preventDefault();
-            const id = document.getElementById('edit-shipment-id').value;
+            const editId = document.getElementById('edit-shipment-id').value;
             const name = document.getElementById('ship-name').value.trim();
             const phone = document.getElementById('ship-phone').value.trim();
             const address = document.getElementById('ship-address').value.trim();
             const item = document.getElementById('ship-item').value.trim();
             const price = Number(document.getElementById('ship-price').value);
-            const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-            const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+            const fuelCost = Number(document.getElementById('ship-fuel-cost').value || 0);
+            const extraCost = Number(document.getElementById('ship-extra-cost').value || 0);
             const assignedDriver = document.getElementById('ship-assigned-driver').value;
+            const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            let sigData = '';
-            if (canvas && ctx) {
-                sigData = canvas.toDataURL();
-            }
-
-            if (id) {
-                let s = appData.shipments.find(item => item.id == id);
-                if (s) {
-                    s.name = name; s.phone = phone; s.address = address; s.item = item;
-                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
-                    s.assignedDriver = assignedDriver;
-                    if(currentGPS) s.gps = currentGPS;
-                    if(uploadedImgBase64) s.img = uploadedImgBase64;
-                    if(sigData && sigData.length > 100) s.signature = sigData;
+            if (editId) {
+                let index = appData.shipments.findIndex(s => s.id == editId);
+                if (index !== -1) {
+                    appData.shipments[index] = {
+                        ...appData.shipments[index],
+                        name, phone, address, item, price, fuelCost, extraCost, assignedDriver,
+                        gps: currentGPS || appData.shipments[index].gps,
+                        img: uploadedImgBase64 || appData.shipments[index].img,
+                        sig: sigData !== '' ? sigData : appData.shipments[index].sig
+                    };
                 }
+                document.getElementById('edit-shipment-id').value = '';
+                document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)';
             } else {
                 appData.shipments.unshift({
-                    id: Date.now(),
-                    name, phone, address, item, price, fuelCost, extraCost,
-                    assignedDriver: assignedDriver || 'بدون تعيين',
-                    gps: currentGPS || '30.0444,31.2357',
-                    img: uploadedImgBase64 || '',
-                    signature: sigData || '',
-                    status: 'قيد الانتظار',
-                    date: new Date().toLocaleDateString('ar-EG')
+                    id: Date.now(), name, phone, address, item, price, fuelCost, extraCost,
+                    assignedDriver, status: 'في الانتظار', gps: currentGPS,
+                    img: uploadedImgBase64, sig: sigData, date: new Date().toLocaleDateString('ar-EG')
                 });
-
-                // تسجيل إيراد تلقائي في الخزنة
-                appData.treasury.unshift({
-                    id: Date.now(),
-                    type: 'in',
-                    amount: price,
-                    desc: `تحصيل أجرة شحنة: ${item} (${name})`,
-                    date: new Date().toLocaleDateString('ar-EG')
-                });
-
-                // إضافة للديون / العملاء
-                let cust = (appData.customers || []).find(c => c.name === name);
-                if(cust) {
-                    cust.debt = Number(cust.debt || 0) + price;
-                } else {
-                    appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
-                }
             }
 
             saveDataAll();
             document.getElementById('shipment-form').reset();
-            document.getElementById('edit-shipment-id').value = '';
             clearSignature();
             currentGPS = ''; uploadedImgBase64 = '';
             document.getElementById('gps-status').innerText = '';
-            alert('تم حفظ الرحلة بنجاح سحابياً! 💾');
             render();
+            alert('تم حفظ الرحلة والتحديث بنجاح! 💾');
         }
 
         function editShipment(id) {
-            let s = appData.shipments.find(item => item.id == id);
-            if(s) {
-                document.getElementById('edit-shipment-id').value = s.id;
-                document.getElementById('ship-name').value = s.name;
-                document.getElementById('ship-phone').value = s.phone || '';
-                document.getElementById('ship-address').value = s.address;
-                document.getElementById('ship-item').value = s.item;
-                document.getElementById('ship-price').value = s.price;
-                document.getElementById('ship-fuel-cost').value = s.fuelCost || '';
-                document.getElementById('ship-extra-cost').value = s.extraCost || '';
-                document.getElementById('ship-assigned-driver').value = s.assignedDriver || '';
-                switchTab('shipments-tab', document.querySelector('.sidebar-nav-list button:nth-child(3)'));
-                window.scrollTo({top: 0, behavior: 'smooth'});
-            }
-        }
-
-        function deleteShipment(id) {
-            if (confirm('هل أنت متأكد من حذف هذه الشحنة نهائياً؟')) {
-                appData.shipments = appData.shipments.filter(s => s.id != id);
-                saveDataAll();
-                render();
-            }
+            const s = appData.shipments.find(item => item.id === id);
+            if (!s) return;
+            document.getElementById('edit-shipment-id').value = s.id;
+            document.getElementById('ship-name').value = s.name;
+            document.getElementById('ship-phone').value = s.phone || '';
+            document.getElementById('ship-address').value = s.address;
+            document.getElementById('ship-item').value = s.item;
+            document.getElementById('ship-price').value = s.price;
+            document.getElementById('ship-fuel-cost').value = s.fuelCost || 0;
+            document.getElementById('ship-extra-cost').value = s.extraCost || 0;
+            document.getElementById('ship-assigned-driver').value = s.assignedDriver || '';
+            document.getElementById('form-title-heading').innerText = `تعديل بيانات الشحنة (#${s.id})`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function updateShipmentStatus(id, newStatus) {
-            let s = appData.shipments.find(item => item.id == id);
-            if(s) {
+            let s = appData.shipments.find(item => item.id === id);
+            if (s) {
                 s.status = newStatus;
                 saveDataAll();
                 render();
             }
         }
 
-        function saveCashHandler(e) {
-    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
-    
-    const type = document.getElementById('cash-type').value;
-    const amount = Number(document.getElementById('cash-amount').value);
-    const desc = document.getElementById('cash-desc').value.trim();
-
-    // التأكد من أن مصفوفة الخزينة موجودة
-    if (!appData.treasury) appData.treasury = [];
-
-    appData.treasury.unshift({
-        id: Date.now(),
-        type: type,
-        amount: amount,
-        desc: desc,
-        date: new Date().toLocaleDateString('ar-EG')
-    });
-
-    if (typeof saveDataAll === 'function') saveDataAll();
-    
-    const form = document.getElementById('cash-form');
-    if (form) form.reset();
-    
-    alert('تم تسجيل الحركة النقدية بنجاح! 💵');
-    
-    if (typeof render === 'function') {
-        render();
-    }
-}
-
-        window.saveTruckHandler = function(e) {
-    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
-    
-    const numInput = document.getElementById('truck-num');
-    const driverInput = document.getElementById('driver-name');
-    const kmInput = document.getElementById('truck-km');
-    const nextOilInput = document.getElementById('truck-next-oil');
-    const expiryInput = document.getElementById('truck-expiry');
-
-    const num = numInput ? numInput.value.trim() : '';
-    const driver = driverInput ? driverInput.value.trim() : '';
-    const km = kmInput ? Number(kmInput.value) : 0;
-    const nextOil = nextOilInput ? Number(nextOilInput.value) : 0;
-    const expiry = expiryInput ? expiryInput.value : '';
-
-    if (!appData.trucks) appData.trucks = [];
-
-    appData.trucks.unshift({
-        id: Date.now(),
-        num, driver, km, nextOil, expiry
-    });
-
-    if (typeof saveDataAll === 'function') saveDataAll();
-    
-    const form = document.getElementById('truck-form');
-    if (form) form.reset();
-    
-    if (numInput) numInput.value = "شيفروليه بيك اب (صندوق مغلق)";
-
-    alert('تم تسجيل المركبة بنجاح! 🚚');
-    
-    if (typeof render === 'function') {
-        render();
-    }
-}
-
-window.saveDocHandler = function(e) {
-    if (e) e.preventDefault(); // منع إعادة تحميل الصفحة
-    
-    const titleInput = document.getElementById('doc-title');
-    const fileInput = document.getElementById('doc-file');
-    
-    const title = titleInput ? titleInput.value.trim() : '';
-    
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            if (!appData.docs) appData.docs = [];
-            
-            appData.docs.unshift({
-                id: Date.now(),
-                title: title,
-                src: evt.target.result
-            });
-            
-            if (typeof saveDataAll === 'function') saveDataAll();
-            
-            const docForm = document.getElementById('doc-form');
-            if (docForm) docForm.reset();
-            
-            alert('تم رفع المستند لمكتبة الأسطول بنجاح! 📂');
-            
-            if (typeof render === 'function') {
+        function deleteShipment(id) {
+            if (currentUserRole !== 'admin') { alert('عذراً! صلاحية الحذف للمدير فقط'); return; }
+            if (confirm('هل أنت تأكد من حذف هذه الشحنة نهائياً؟')) {
+                appData.shipments = appData.shipments.filter(s => s.id !== id);
+                saveDataAll();
                 render();
             }
-        };
-        reader.readAsDataURL(fileInput.files[0]);
-    } else {
-        alert('الرجاء اختيار ملف مرفق صالح.');
-    }
-}
+        }
 
-        function saveExpenseHandler(e) {
-            const title = document.getElementById('exp-title').value.trim();
-            const amount = Number(document.getElementById('exp-amount').value);
-
-            appData.expenses.unshift({
-                id: Date.now(),
-                title: title,
-                amount: amount,
-                date: new Date().toLocaleDateString('ar-EG')
+        function renderDriverDropdownOptions() {
+            const select = document.getElementById('ship-assigned-driver');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- بدون تعيين (عام) --</option>';
+            (appData.drivers || []).forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.name;
+                opt.innerText = `${d.name} (${d.title || d.role})`;
+                select.appendChild(opt);
             });
+        }
 
-            saveDataAll();
-            document.getElementById('expense-form').reset();
-            alert('تم تسجيل المصروف التشغيلي بنجاح! ⛽');
-            render();
+        function renderDriversMonitor() {
+            const tbody = document.getElementById('drivers-monitor-list');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            (appData.drivers || []).forEach(d => {
+                let optionsTitle = driverTitlesList.map(t => `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`).join('');
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:bold;">${d.name}</td>
+                    <td>${d.phone}</td>
+                    <td><span class="badge" style="background:var(--accent);">${d.role || 'سائق'}</span></td>
+                    <td>
+                        <select onchange="updateDriverTitle(${d.id}, this.value)" style="font-size:10px; padding:2px; font-weight:bold;">
+                            ${optionsTitle}
+                        </select>
+                    </td>
+                    <td>
+                        <select onchange="updateDriverStatus(${d.id}, this.value)" style="font-size:10px; padding:2px;">
+                            <option value="متاح 🟢" ${d.status === 'متاح 🟢' ? 'selected' : ''}>متاح 🟢</option>
+                            <option value="في رحلة 🚛" ${d.status === 'في رحلة 🚛' ? 'selected' : ''}>في رحلة 🚛</option>
+                            <option value="مشغول 🔴" ${d.status === 'مشغول 🔴' ? 'selected' : ''}>مشغول 🔴</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔑 PIN</button>
+                        <button type="button" class="btn-main btn-sm" onclick="viewingProfileName='${d.name}'; switchTab('account-tab', document.querySelector('.sidebar-nav-list button:nth-child(2)'));">👁️ البروفايل</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateDriverTitle(id, newTitle) {
+            let drv = (appData.drivers || []).find(d => d.id === id);
+            if(drv) {
+                drv.title = newTitle;
+                saveDataAll();
+                alert(`تم تحديث لقب/وسام السائق (${drv.name}) إلى: ${newTitle} 🎖️`);
+                render();
+            }
+        }
+
+        function updateDriverStatus(id, newStatus) {
+            let drv = (appData.drivers || []).find(d => d.id === id);
+            if(drv) {
+                drv.status = newStatus;
+                saveDataAll();
+                render();
+            }
+        }
+
+        function renderDriversListTable() {
+            const tbody = document.getElementById('drivers-list-table');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            (appData.drivers || []).forEach(d => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:bold;">${d.name}</td>
+                    <td>${d.phone}</td>
+                    <td>
+                        <select onchange="updateDriverRoleByAdmin(${d.id}, this.value)" style="font-size:10px; padding:2px; font-weight:bold;">
+                            <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق عادي</option>
+                            <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
+                            <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
+                            <option value="مدير نظام" ${d.role === 'مدير نظام' ? 'selected' : ''}>مدير نظام</option>
+                        </select>
+                    </td>
+                    <td>${d.title || 'سائق'}</td>
+                    <td><code>${d.pin || '****'}</code></td>
+                    <td>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔑 تغيير PIN</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount(${d.id})">🗑️ حذف</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateDriverRoleByAdmin(id, newRole) {
+            if(currentUserRole !== 'admin') { alert('صلاحية تعديل الصلاحيات للمدير فقط!'); return; }
+            let drv = (appData.drivers || []).find(d => d.id === id);
+            if(drv) {
+                drv.role = newRole;
+                saveDataAll();
+                alert(`تم ترقية/تعديل صلاحيات (${drv.name}) إلى: ${newRole} 🚀`);
+                render();
+            }
+        }
+
+        function deleteDriverAccount(id) {
+            if(currentUserRole !== 'admin') { alert('صلاحية الحذف للمدير فقط!'); return; }
+            if(confirm('هل أنت تأكد من حذف هذا الحساب نهائياً من المنصة؟')) {
+                appData.drivers = appData.drivers.filter(d => d.id !== id);
+                saveDataAll();
+                render();
+            }
         }
 
         function saveNewDriverHandler(e) {
+            e.preventDefault();
             const name = document.getElementById('drv-fullname').value.trim();
             const phone = document.getElementById('drv-phone').value.trim();
             const pin = document.getElementById('drv-pin').value.trim();
             const role = document.getElementById('drv-role-select').value;
 
-            if (appData.drivers.some(d => d.pin === pin)) {
-                alert('رمز المرور هذا مستخدم بالفعل للحساب آخر، يرجى تعيين رمز آخر!');
-                return;
-            }
+            let exists = appData.drivers.find(d => d.name === name || d.phone === phone);
+            if(exists) { alert('هذا الاسم أو رقم الهاتف مسجل بالفعل!'); return; }
 
             appData.drivers.push({
-                id: Date.now(),
-                name: name,
-                phone: phone,
-                pin: pin,
-                role: role,
-                title: role === 'مدير نظام' ? 'مدير عام' : 'سائق معتمد',
-                status: 'متاح 🟢',
-                avatar: '',
-                cover: '',
-                wallPosts: []
+                id: Date.now(), name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', wallPosts: []
             });
-
             saveDataAll();
             document.getElementById('driver-profile-form').reset();
-            alert('تم إنشاء الحساب وتعيين الصلاحية بنجاح! 🚀');
+            alert('تم إنشاء الحساب وتعيين الصلاحيات بنجاح! 🚀');
             render();
         }
 
         function runAIMechanicAnalysis() {
             const fault = document.getElementById('ai-fault-select').value;
-            const resBox = document.getElementById('ai-result-box');
-            resBox.style.display = 'block';
+            const box = document.getElementById('ai-result-box');
+            box.style.display = 'block';
 
             if (fault === 'alt') {
-                resBox.innerHTML = `<b>⚡ التشخيص الموصى به (نظام شحن الدينامو والكهرباء):</b><br>1. قم بفحص سير الدينامو وتأكد من نسبة التوتر وانه غير مرتخي.<br>2. افحص كابلات البطارية والقطب الموجب والسالب لمنع الترسبات.<br>3. استخدم الأفوميتر لقياس الفولت أثناء تشغيل المحرك (يجب أن يكون بين 13.8V إلى 14.4V).`;
+                box.innerHTML = `<strong>🛠️ التشخيص:</strong> عطل في دينامو الشحن أو سير الدينامو أو تلف إحدى بلاطات الشحن.<br><strong>💡 الإجراء الموصى به:</strong> افحص سير الدينامو ورخاوته، وتأكد من سلامة كابلات البطارية وعدم وجود أملاح. التوجه لفني كهرباء لقياس الفولت بالآفو (يجب أن يكون بين 13.8 إلى 14.4 فولت أثناء الدوران).`;
             } else if (fault === 'clutch') {
-                resBox.innerHTML = `<b>⚙️ التشخيص الموصى به (نظام الفتيس والدبرياج):</b><br>1. افحص مستوى زيت باكم الفرامل والدبرياج فوق البدال وفي الخزنة.<br>2. تأكد من سلامة ماستر الدبرياج العلوي والسفلي وعدم وجود تسريب زيت.<br>3. إذا وجد صعوبة في تعشيق الغيارات، قد تحتاج لضبط واير/سلك الدبرياج أو تغيير ديسك وأسطوانة.`;
+                box.innerHTML = `<strong>🛠️ التشخيص:</strong> تلف ديسك واسطوانة الدبرياج أو نقص زيت طلمبة الدبرياج العلوي/السفلي.<br><strong>💡 الإجراء الموصى به:</strong> افحص مستوى زيت خزنة الدبرياج والتأكد من عدم وجود تسريب سفلي. إذا كانت دواسة الدبرياج طرية جداً فقد تحتاج لأخذ هواء (بليدنج) من الدورة.`;
             } else if (fault === 'heat') {
-                resBox.innerHTML = `<b>🔥 التشخيص الموصى به (نظام التبريد والحرارة):</b><br>1. قم بإيقاف المحرك فوراً ولا تفتح غطاء الرادياتير وهو ساخن.<br>2. افحص مستوى مياه التبريد في القربة بعد أن تبرد السيارة.<br>3. تأكد من دوران مروحة التبريد وسلامة الثرموستات وطلمبة المياه.`;
+                box.innerHTML = `<strong>🛠️ التشخيص:</strong> نقص مياه التبريد، تلف الترموستات، أو كتمة في الردياتير أو مراوح التبريد.<br><strong>💡 الإجراء الموصى به:</strong> توقف فوراً على جانب الطريق ولا تفتح غطاء الردياتير وهو ساخن! انتظر حتى يبرد المحرك وافحص تسريبات المياه وسير المروحة.`;
             } else if (fault === 'diesel') {
-                resBox.innerHTML = `<b>⛽ إرشادات خلط الوقود والزيوت:</b><br>1. يمنع خلط البنزين أو زيت الفرامل بالديزل كلياً في المحركات الحديثة لتجنب تلف الرشاشات وطلمبة الجاز.<br>2. استخدم إضافات منظفات دورة الوقود المعتمدة عند الحاجة لتنظيف الفواني.`;
+                box.innerHTML = `<strong>🛠️ التشخيص:</strong> الوقود يحتوي على شوائب أو مياه أو اختلاط بالزيوت.<br><strong>💡 الإجراء الموصى به:</strong> قم بتصريف وتصفية المياه من قاعدة فلتر الجاز (Trap)، وتغيير فلتر الوقود فوراً لحماية الرشاشات وطلمبة الجاز من التلف.`;
             } else if (fault === 'smoke') {
-                resBox.innerHTML = `<b>💨 التشخيص الموصى به (عوادم ودخان الشكمان):</b><br>1. الدخان الأسود: يشير لعدم اكتمال الاحتراق أو انسداد فلتر الهواء أو تلف الرشاشات.<br>2. الدخان الأبيض المستمر: يشير لحرق زيت محرك (تلف الشنابر أو جلد الصباب) أو تسريب مياه للسلندر.`;
+                box.innerHTML = `<strong>🛠️ التشخيص:</strong> الدخان الأبيض يعني انسداد الفلاتر أو تسريب مياه للغرف. الأسود يعني احتراق غير كامل للوقود (انسداد فلتر الهواء أو خراطيم التيربو).<br><strong>💡 الإجراء الموصى به:</strong> نظف أو استبدل فلتر الهواء، وافحص الرشاشات وحالة التيربو.`;
             }
         }
 
         function savePublicPostHandler(e) {
+            e.preventDefault();
             const title = document.getElementById('post-title').value.trim();
             const desc = document.getElementById('post-desc').value.trim();
-            const imgInput = document.getElementById('post-images');
-            const videoInput = document.getElementById('post-videos');
+            const imgFiles = document.getElementById('post-images').files;
+            const videoFiles = document.getElementById('post-videos').files;
 
-            let files = [];
-            let readCount = 0;
-            let totalFiles = (imgInput.files ? imgInput.files.length : 0) + (videoInput.files ? videoInput.files.length : 0);
+            let mediaArr = [];
+            let loaded = 0;
+            let total = imgFiles.length + videoFiles.length;
 
-            const pushAndSave = () => {
-                if (readCount === totalFiles) {
-                    appData.posts.unshift({
-                        id: Date.now(),
-                        author: loggedInDriverName,
-                        title: title,
-                        desc: desc,
-                        files: files,
-                        date: new Date().toLocaleString('ar-EG')
-                    });
-                    saveDataAll();
-                    document.getElementById('public-post-form').reset();
-                    alert('تم نشر الرحلة في اللوحة العامة بنجاح! 🚀');
-                    renderPublicPosts();
-                }
-            };
-
-            if (totalFiles === 0) {
-                pushAndSave();
+            if (total === 0) {
+                appData.posts.unshift({ id: Date.now(), title, desc, media: [], author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') });
+                saveDataAll(); renderPublicPosts(); document.getElementById('public-post-form').reset();
+                alert('تم نشر الإعلان بنجاح! 🚀');
                 return;
             }
 
-            if (imgInput.files) {
-                Array.from(imgInput.files).forEach(f => {
-                    let r = new FileReader();
-                    r.onload = (e) => { files.push({ type: 'image', src: e.target.result }); readCount++; pushAndSave(); };
-                    r.readAsDataURL(f);
-                });
-            }
+            const checkAndSave = () => {
+                if (loaded === total) {
+                    appData.posts.unshift({ id: Date.now(), title, desc, media: mediaArr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') });
+                    saveDataAll(); renderPublicPosts(); document.getElementById('public-post-form').reset();
+                    alert('تم نشر الإعلان بالوسائط بنجاح! 🚀');
+                }
+            };
 
-            if (videoInput.files) {
-                Array.from(videoInput.files).forEach(f => {
-                    let r = new FileReader();
-                    r.onload = (e) => { files.push({ type: 'video', src: e.target.result }); readCount++; pushAndSave(); };
-                    r.readAsDataURL(f);
-                });
+            for (let i = 0; i < imgFiles.length; i++) {
+                let reader = new FileReader();
+                reader.onload = (e) => { mediaArr.push({ type: 'image', src: e.target.result }); loaded++; checkAndSave(); };
+                reader.readAsDataURL(imgFiles[i]);
+            }
+            for (let i = 0; i < videoFiles.length; i++) {
+                let reader = new FileReader();
+                reader.onload = (e) => { mediaArr.push({ type: 'video', src: e.target.result }); loaded++; checkAndSave(); };
+                reader.readAsDataURL(videoFiles[i]);
             }
         }
 
         function renderPublicPosts() {
             const feed = document.getElementById('public-posts-feed');
-            if(!feed) return;
+            if (!feed) return;
             feed.innerHTML = '';
-
             let posts = appData.posts || [];
-            if(posts.length === 0) {
-                feed.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد إعلانات أو رحلات معلنة حالياً في اللوحة العامة.</p>`;
+            if (posts.length === 0) {
+                feed.innerHTML = `<p style="text-align:center; font-size:11px; opacity:0.8;">لا توجد إعلانات أو رحلات عامة حالياً.</p>`;
                 return;
             }
-
             posts.forEach(p => {
                 let mediaHtml = '';
-                if(p.files && p.files.length > 0) {
+                if (p.media && p.media.length > 0) {
                     mediaHtml += `<div class="load-post-media">`;
-                    p.files.forEach(f => {
-                        if(f.type === 'video') {
-                            mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                        } else {
-                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
-                        }
+                    p.media.forEach(m => {
+                        if (m.type === 'video') mediaHtml += `<video src="${m.src}" onclick="viewMedia('${m.src}', 'video')"></video>`;
+                        else mediaHtml += `<img src="${m.src}" onclick="viewMedia('${m.src}', 'image')"/>`;
                     });
                     mediaHtml += `</div>`;
                 }
 
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف الإعلان</button>` : '';
+                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف الإعلان</button>` : '';
 
                 let card = document.createElement('div');
                 card.className = 'load-post-card';
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <h4 style="font-size:12px; color:var(--accent);">${p.title}</h4>
-                        <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                        <h4 style="font-size:12px; color:var(--accent); margin:0;">📌 ${p.title}</h4>
+                        <span style="font-size:9px; opacity:0.7;">${p.date || ''} | الناشر: ${p.author || 'الإدارة'}</span>
                     </div>
-                    <p style="font-size:11px; opacity:0.9; margin-bottom:4px;">الناشر: <strong>${p.author}</strong></p>
                     <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
                     ${mediaHtml}
                     <div style="margin-top:6px; display:flex; justify-content:space-between; align-items:center;">
-                        <button type="button" class="btn-success btn-sm" onclick="selectChatRoom('${p.author}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">💬 تواصل مع الناشر</button>
+                        <button type="button" class="btn-success btn-sm" onclick="openVisitorBooking()">📦 طلب هذه الحمولة/الرحلة</button>
                         ${deleteBtn}
                     </div>
                 `;
@@ -1995,127 +1930,116 @@ window.saveDocHandler = function(e) {
         }
 
         function deletePublicPost(id) {
-            if(confirm('هل أنت متأكد من حذف هذا الإعلان؟')) {
+            if (confirm('هل أنت تأكد من حذف هذا المنشور؟')) {
                 appData.posts = appData.posts.filter(p => p.id !== id);
-                saveDataAll();
-                renderPublicPosts();
+                saveDataAll(); renderPublicPosts();
             }
-        }
-
-        function selectChatRoom(target) {
-            currentChatTarget = target;
-            const titleEl = document.getElementById('chat-current-room-title');
-            if(titleEl) {
-                titleEl.innerText = target === 'general' ? '💬 المحادثة العامة للأسطول' : `💬 محادثة خاصة مع: ${target}`;
-            }
-            renderChatMessages();
-            renderChatAccountsList();
         }
 
         function renderChatAccountsList() {
             const container = document.getElementById('chat-accounts-list-container');
             if(!container) return;
+            const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase();
             container.innerHTML = '';
 
-            const query = (document.getElementById('chat-search-input') ? document.getElementById('chat-search-input').value.toLowerCase() : '');
-            let drivers = appData.drivers || [];
-            
-            drivers.forEach(d => {
-                if(d.name !== loggedInDriverName && (d.name.toLowerCase().includes(query) || d.phone.includes(query))) {
-                    let item = document.createElement('div');
-                    item.className = `chat-account-item ${currentChatTarget === d.name ? 'active' : ''}`;
-                    item.onclick = () => selectChatRoom(d.name);
-                    item.innerHTML = `
-                        <span>👤 ${d.name} (${d.role})</span>
-                        <small style="font-size:8px; opacity:0.8;">${d.status}</small>
+            let accounts = (appData.drivers || []).filter(d => d.name !== loggedInDriverName);
+            accounts.forEach(acc => {
+                if(acc.name.toLowerCase().includes(query) || acc.phone.includes(query)) {
+                    let div = document.createElement('div');
+                    div.className = `chat-account-item ${currentChatTarget === acc.name ? 'active' : ''}`;
+                    div.onclick = () => selectChatRoom(acc.name);
+                    div.innerHTML = `
+                        <span>👤 ${acc.name}</span>
+                        <small style="font-size:8px; opacity:0.8;">${acc.role}</small>
                     `;
-                    container.appendChild(item);
+                    container.appendChild(div);
                 }
             });
         }
 
+        function selectChatRoom(targetName) {
+            currentChatTarget = targetName;
+            document.getElementById('chat-current-room-title').innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
+            renderChatAccountsList();
+            renderChatMessages();
+        }
+
         function sendChatMessage(e) {
             e.preventDefault();
-            const txtInput = document.getElementById('chat-input-text');
-            const txt = txtInput.value.trim();
-            if(!txt) return;
+            const input = document.getElementById('chat-input-text');
+            const msgText = input.value.trim();
+            if(!msgText) return;
 
             if(!appData.chat) appData.chat = [];
             appData.chat.push({
                 id: Date.now(),
                 sender: loggedInDriverName,
                 target: currentChatTarget,
-                text: txt,
+                text: msgText,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             });
 
             saveDataAll();
-            txtInput.value = '';
+            input.value = '';
             renderChatMessages();
         }
 
         function renderChatMessages() {
-            const list = document.getElementById('chat-messages-list');
-            if(!list) return;
-            list.innerHTML = '';
-
+            const box = document.getElementById('chat-messages-list');
+            if(!box) return;
+            box.innerHTML = '';
             let messages = appData.chat || [];
+
             let filtered = messages.filter(m => {
-                if (currentChatTarget === 'general') {
-                    return m.target === 'general';
-                } else {
-                    return (m.sender === loggedInDriverName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === loggedInDriverName);
-                }
+                if (currentChatTarget === 'general') return m.target === 'general' || !m.target;
+                return (m.sender === loggedInDriverName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === loggedInDriverName);
             });
 
             filtered.forEach(m => {
+                let div = document.createElement('div');
                 let isMe = m.sender === loggedInDriverName;
-                let bubble = document.createElement('div');
-                bubble.className = `chat-bubble ${isMe ? 'admin' : 'driver'}`;
-                bubble.innerHTML = `
-                    <div style="font-size:9px; opacity:0.8; margin-bottom:2px; font-weight:bold;">${m.sender}</div>
+                div.className = `chat-bubble ${isMe ? 'admin' : 'driver'}`;
+                div.innerHTML = `
+                    <div style="font-weight:bold; font-size:9px; margin-bottom:2px; opacity:0.9;">${m.sender}</div>
                     <div>${m.text}</div>
-                    <div style="font-size:8px; opacity:0.6; text-align:left; margin-top:2px;">${m.time}</div>
+                    <div style="font-size:7px; text-align:left; opacity:0.7; margin-top:2px;">${m.time}</div>
                 `;
-                list.appendChild(bubble);
+                box.appendChild(div);
             });
-            list.scrollTop = list.scrollHeight;
+            box.scrollTop = box.scrollHeight;
         }
 
         function renderChatNotificationsInbox() {
-            const inbox = document.getElementById('chat-notifications-inbox');
-            if(!inbox) return;
-            inbox.innerHTML = '';
-
+            const container = document.getElementById('chat-notifications-inbox');
+            if(!container) return;
+            container.innerHTML = '';
             let messages = appData.chat || [];
             let incoming = messages.filter(m => m.sender !== loggedInDriverName);
+
             if(incoming.length === 0) {
-                inbox.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px;">لا توجد رسائل جديدة في الوارد.</p>`;
+                container.innerHTML = `<p style="font-size:10px; text-align:center; opacity:0.8;">لا توجد رسائل واردة حالياً.</p>`;
                 return;
             }
 
             incoming.slice(-6).reverse().forEach(m => {
                 let div = document.createElement('div');
-                div.style.background = 'var(--bg)';
-                div.style.padding = '6px';
-                div.style.borderRadius = '6px';
-                div.style.border = '1px solid var(--border-color)';
+                div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:6px; border-radius:6px; font-size:10px;';
                 div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--accent); font-size:10px;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--accent);">
                         <span>من: ${m.sender}</span>
                         <span style="font-size:8px; opacity:0.7;">${m.time}</span>
                     </div>
-                    <p style="font-size:10px; margin-top:2px;">${m.text}</p>
-                    <button type="button" class="btn-main btn-sm" style="margin-top:4px;" onclick="selectChatRoom('${m.sender}'); closeModal('chatNotificationsModal'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)'));">الرد والذهاب للغرفة 💬</button>
+                    <p style="margin-top:2px;">${m.text}</p>
+                    <button type="button" class="btn-main btn-sm" style="margin-top:4px;" onclick="selectChatRoom('${m.sender}'); switchTab('chat-tab', document.querySelector('.sidebar-nav-list button:nth-child(6)')); closeModal('chatNotificationsModal');">فتح المحادثة 💬</button>
                 `;
-                inbox.appendChild(div);
+                container.appendChild(div);
             });
         }
 
         function sendQuickChatMessageFromModal() {
-            const text = document.getElementById('quick-notif-reply-text').value.trim();
+            const input = document.getElementById('quick-notif-reply-text');
+            const text = input.value.trim();
             if(!text) return;
-
             if(!appData.chat) appData.chat = [];
             appData.chat.push({
                 id: Date.now(),
@@ -2124,38 +2048,31 @@ window.saveDocHandler = function(e) {
                 text: text,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             });
-
             saveDataAll();
-            document.getElementById('quick-notif-reply-text').value = '';
-            closeModal('chatNotificationsModal');
-            alert('تم إرسال الرسالة السريعة بنجاح! ✈️');
-            renderChatMessages();
+            input.value = '';
+            alert('تم إرسال ردك السريع بنجاح! ✈️');
+            renderChatNotificationsInbox();
         }
 
         function previewCommunityFiles(input) {
             communityFilesArr = [];
             const info = document.getElementById('community-files-preview-info');
-            if (input.files && input.files.length > 0) {
-                info.innerText = `تم اختيار ${input.files.length} ملف/صور`;
-                for (let i = 0; i < input.files.length; i++) {
-                    const file = input.files[i];
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        communityFilesArr.push({ name: file.name, type: file.type.startsWith('video') ? 'video' : file.type.startsWith('image') ? 'image' : 'doc', src: e.target.result });
+            if(input.files && input.files.length > 0) {
+                info.innerText = `تم اختيار ${input.files.length} ملفات/صور`;
+                for(let i=0; i<input.files.length; i++) {
+                    let file = input.files[i];
+                    let reader = new FileReader();
+                    reader.onload = (e) => {
+                        communityFilesArr.push({ name: file.name, type: file.type.startsWith('video') ? 'video' : (file.type.startsWith('image') ? 'image' : 'doc'), src: e.target.result });
                     };
                     reader.readAsDataURL(file);
                 }
-            } else {
-                info.innerText = '';
-            }
+            } else { info.innerText = ''; }
         }
 
         function publishCommunityPost() {
             const text = document.getElementById('community-post-text').value.trim();
-            if(!text && communityFilesArr.length === 0) {
-                alert('يرجى كتابة نص أو إرفاق وسائط للتمكن من النشر!');
-                return;
-            }
+            if(!text && communityFilesArr.length === 0) { alert('الرجاء إدخال نص أو إرفاق ملفات للنشر!'); return; }
 
             if(!appData.communityPosts) appData.communityPosts = [];
             appData.communityPosts.unshift({
@@ -2163,6 +2080,8 @@ window.saveDocHandler = function(e) {
                 author: loggedInDriverName,
                 text: text,
                 files: [...communityFilesArr],
+                likes: 0,
+                comments: [],
                 date: new Date().toLocaleString('ar-EG')
             });
 
@@ -2171,16 +2090,17 @@ window.saveDocHandler = function(e) {
             communityFilesArr = [];
             document.getElementById('community-files-preview-info').innerText = '';
             renderCommunityPosts();
+            alert('تم نشر منشورك في مجتمع السائقين بنجاح! 🚀');
         }
 
         function renderCommunityPosts() {
             const container = document.getElementById('community-posts-container');
             if(!container) return;
             container.innerHTML = '';
-
             let posts = appData.communityPosts || [];
+
             if(posts.length === 0) {
-                container.innerHTML = `<p style="text-align:center; opacity:0.7; font-size:11px; padding:10px;">لا توجد منشورات في مجتمع السائقين حتى الآن. شارك أفكارك الآن!</p>`;
+                container.innerHTML = `<p style="font-size:10px; text-align:center; opacity:0.8;">لا توجد منشورات في المجتمع بعد. شارك زملائك الآن!</p>`;
                 return;
             }
 
@@ -2189,13 +2109,9 @@ window.saveDocHandler = function(e) {
                 if(p.files && p.files.length > 0) {
                     mediaHtml += `<div class="load-post-media">`;
                     p.files.forEach(f => {
-                        if(f.type === 'video') {
-                            mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                        } else if(f.type === 'image') {
-                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
-                        } else {
-                            mediaHtml += `<a href="${f.src}" download="${f.name}" style="font-size:10px; color:var(--accent); font-weight:bold; display:block; margin-top:4px;">📄 تحميل المستند: ${f.name}</a>`;
-                        }
+                        if(f.type === 'video') mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
+                        else if(f.type === 'image') mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')"/>`;
+                        else mediaHtml += `<a href="${f.src}" download="${f.name}" style="font-size:9px; color:var(--accent);">📄 ${f.name}</a>`;
                     });
                     mediaHtml += `</div>`;
                 }
@@ -2206,19 +2122,31 @@ window.saveDocHandler = function(e) {
                 card.className = 'community-feed-card';
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <strong style="font-size:11px; color:#0284c7;">👨‍✈️ ${p.author}</strong>
+                        <strong style="font-size:11px; color:var(--accent);">👨‍✈️ ${p.author}</strong>
                         <span style="font-size:8px; opacity:0.7;">${p.date}</span>
                     </div>
                     <p style="font-size:11px; line-height:1.4;">${p.text}</p>
                     ${mediaHtml}
-                    <div style="display:flex; justify-content:flex-end; margin-top:6px;">${deleteBtn}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; border-top:1px solid var(--border-color); padding-top:4px;">
+                        <button type="button" class="btn-sm" style="background:#e2e8f0; color:#334155;" onclick="likeCommunityPost(${p.id})">👍 إعجاب (${p.likes || 0})</button>
+                        ${deleteBtn}
+                    </div>
                 `;
                 container.appendChild(card);
             });
         }
 
+        function likeCommunityPost(id) {
+            let p = (appData.communityPosts || []).find(post => post.id === id);
+            if(p) {
+                p.likes = (p.likes || 0) + 1;
+                saveDataAll();
+                renderCommunityPosts();
+            }
+        }
+
         function deleteCommunityPost(id) {
-            if(confirm('هل أنت متأكد من حذف هذا المنشور؟')) {
+            if(confirm('هل أنت تأكد من حذف هذا المنشور؟')) {
                 appData.communityPosts = appData.communityPosts.filter(p => p.id !== id);
                 saveDataAll();
                 renderCommunityPosts();
@@ -2226,250 +2154,236 @@ window.saveDocHandler = function(e) {
         }
 
         function showCommunityNotifications() {
-            let count = (appData.communityPosts || []).length;
-            alert(`إجمالي المنشورات والتفاعلات في مجتمع السائقين: ${count} منشور 🔔`);
+            alert('لا توجد تنبيهات جديدة في المجتمع حالياً.');
         }
 
-        function renderDriversMonitor() {
-            const list = document.getElementById('drivers-monitor-list');
-            if(!list) return;
-            list.innerHTML = '';
+        function saveCashHandler(e) {
+            const type = document.getElementById('cash-type').value;
+            const amount = Number(document.getElementById('cash-amount').value);
+            const desc = document.getElementById('cash-desc').value.trim();
 
-            let drivers = appData.drivers || [];
-            drivers.forEach(d => {
-                let row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight:bold;">${d.name}</td>
-                    <td>${d.phone}</td>
-                    <td><span class="badge bg-transit">${d.role}</span></td>
-                    <td style="color:var(--accent); font-weight:bold;">${d.title || 'سائق'}</td>
-                    <td><span class="badge bg-delivered">${d.status}</span></td>
-                    <td>
-                        <button type="button" class="btn-main btn-sm" onclick="promoteDriverTitle(${d.id})">🏆 ترقية الوسام/اللقب</button>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔐 كلمة السر</button>
-                    </td>
+            if(!appData.treasury) appData.treasury = [];
+            appData.treasury.unshift({ id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') });
+            saveDataAll();
+            document.getElementById('cash-form').reset();
+            render();
+            alert('تم تسجيل الحركة النقدية بالخزينة بنجاح! 💵');
+        }
+
+        function saveTruckHandler(e) {
+            const num = document.getElementById('truck-num').value.trim();
+            const driver = document.getElementById('driver-name').value.trim();
+            const km = Number(document.getElementById('truck-km').value);
+            const nextOil = Number(document.getElementById('truck-next-oil').value);
+            const expiry = document.getElementById('truck-expiry').value;
+
+            if(!appData.trucks) appData.trucks = [];
+            appData.trucks.unshift({ id: Date.now(), num, driver, km, nextOil, expiry });
+            saveDataAll();
+            document.getElementById('truck-form').reset();
+            render();
+            alert('تم حفظ بيانات المركبة وجدولة الصيانة! 🚚');
+        }
+
+        function saveDocHandler(e) {
+            const title = document.getElementById('doc-title').value.trim();
+            const fileInput = document.getElementById('doc-file').files[0];
+            if (!fileInput) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                if(!appData.docs) appData.docs = [];
+                appData.docs.unshift({ id: Date.now(), title, src: evt.target.result });
+                saveDataAll();
+                document.getElementById('doc-form').reset();
+                renderDocsList();
+                alert('تم حفظ المستند في المكتبة! 📂');
+            };
+            reader.readAsDataURL(fileInput);
+        }
+
+        function renderDocsList() {
+            const container = document.getElementById('docs-list');
+            if(!container) return;
+            container.innerHTML = '';
+            (appData.docs || []).forEach(d => {
+                let div = document.createElement('div');
+                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:5px; border-radius:5px; border:1px solid var(--border-color); font-size:10px;';
+                div.innerHTML = `
+                    <span>📄 ${d.title}</span>
+                    <div>
+                        <button type="button" class="btn-main btn-sm" onclick="viewMedia('${d.src}', 'image')">معاينة</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteDoc(${d.id})">حذف</button>
+                    </div>
                 `;
-                list.appendChild(row);
+                container.appendChild(div);
             });
         }
 
-        function promoteDriverTitle(id) {
-            let d = appData.drivers.find(item => item.id === id);
-            if(d) {
-                let currentIdx = driverTitlesList.indexOf(d.title);
-                let nextTitle = driverTitlesList[(currentIdx + 1) % driverTitlesList.length];
-                d.title = nextTitle;
-                saveDataAll();
-                renderDriversMonitor();
-                alert(`تم منح السائق/المشرف (${d.name}) اللقب/الوسام الجديد: [${nextTitle}] 🏆`);
+        function deleteDoc(id) {
+            if(confirm('حذف المستند؟')) {
+                appData.docs = appData.docs.filter(d => d.id !== id);
+                saveDataAll(); renderDocsList();
             }
         }
 
-        function renderDriversListTable() {
-            const list = document.getElementById('drivers-list-table');
-            if(!list) return;
-            list.innerHTML = '';
+        function saveExpenseHandler(e) {
+            const title = document.getElementById('exp-title').value.trim();
+            const amount = Number(document.getElementById('exp-amount').value);
 
-            let drivers = appData.drivers || [];
-            drivers.forEach(d => {
-                let row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight:bold;">${d.name}</td>
-                    <td>${d.phone}</td>
-                    <td>${d.role}</td>
-                    <td style="color:var(--accent); font-weight:bold;">${d.title || 'سائق'}</td>
-                    <td style="font-weight:bold; letter-spacing:1px; color:var(--purple);">${d.pin || '****'}</td>
-                    <td>
-                        <button type="button" class="btn-main btn-sm" onclick="promoteDriverTitle(${d.id})">🏆 ترقية</button>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔑 PIN</button>
-                    </td>
-                `;
-                list.appendChild(row);
-            });
+            if(!appData.expenses) appData.expenses = [];
+            appData.expenses.unshift({ id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') });
+            saveDataAll();
+            document.getElementById('expense-form').reset();
+            render();
+            alert('تم تسجيل المصروف بنجاح! ⛽');
+        }
+
+        function payCustomerDebt(index) {
+            let cust = appData.customers[index];
+            if(!cust) return;
+            let pay = prompt(`المبلغ المراد تحصيله من العملاء (${cust.name}) المتبقي عليه (${cust.debt} ج.م):`);
+            if (pay && !isNaN(pay)) {
+                cust.debt = Math.max(0, Number(cust.debt) - Number(pay));
+                saveDataAll();
+                render();
+            }
         }
 
         function renderCRUDTable(forceSection) {
-            const secSelect = document.getElementById('crud-section-select');
-            if (forceSection && secSelect) { secSelect.value = forceSection; }
-            const section = secSelect ? secSelect.value : 'shipments';
-            const headers = document.getElementById('crud-table-headers');
-            const body = document.getElementById('crud-table-body');
-            if(!headers || !body) return;
+            const section = forceSection || document.getElementById('crud-section-select').value;
+            const headersRow = document.getElementById('crud-table-headers');
+            const tbody = document.getElementById('crud-table-body');
+            if(!headersRow || !tbody) return;
 
-            headers.innerHTML = ''; body.innerHTML = '';
+            headersRow.innerHTML = ''; tbody.innerHTML = '';
 
             if (section === 'shipments') {
-                headers.innerHTML = `<th>العميل</th><th>الحمولة</th><th>السائق</th><th>الأجرة</th><th>الحالة</th><th>التحكم والعمليات</th>`;
-                (appData.shipments || []).forEach(s => {
+                headersRow.innerHTML = `<th>#</th><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>السائق</th><th>الحالة</th><th>إجراءات</th>`;
+                (appData.shipments || []).forEach((s, idx) => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td>${idx + 1}</td>
                         <td>${s.name}</td>
                         <td>${s.item}</td>
-                        <td>${s.assignedDriver}</td>
                         <td>${s.price} ج.م</td>
-                        <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
+                        <td>${s.assignedDriver || 'عام'}</td>
+                        <td>${s.status}</td>
                         <td>
-                            <button type="button" class="btn-main btn-sm" onclick="editShipment(${s.id})">تعديل</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id}); switchTab('shipments-tab');">تعديل</button>
                             <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
                         </td>
                     `;
-                    body.appendChild(tr);
-                });
-            } else if (section === 'trucks') {
-                headers.innerHTML = `<th>المركبة</th><th>السائق</th><th>العداد KM</th><th>انتهاء الرخصة</th><th>حذف</th>`;
-                (appData.trucks || []).forEach(t => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${t.num}</td>
-                        <td>${t.driver}</td>
-                        <td>${t.km} KM</td>
-                        <td>${t.expiry}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.trucks = appData.trucks.filter(x=>x.id!==${t.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
-                    `;
-                    body.appendChild(tr);
-                });
-            } else if (section === 'drivers') {
-                headers.innerHTML = `<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>`;
-                (appData.drivers || []).forEach(d => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${d.name}</td>
-                        <td>${d.phone}</td>
-                        <td>${d.role}</td>
-                        <td>${d.title || '-'}</td>
-                        <td>${d.pin}</td>
-                        <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">PIN</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="if(confirm('حذف الحساب؟')){appData.drivers = appData.drivers.filter(x=>x.id!==${d.id}); saveDataAll(); renderCRUDTable();}">حذف</button>
-                        </td>
-                    `;
-                    body.appendChild(tr);
-                });
-            } else if (section === 'customers') {
-                headers.innerHTML = `<th>اسم العميل</th><th>الهاتف</th><th>المديونية</th><th>حذف</th>`;
-                (appData.customers || []).forEach(c => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${c.name}</td>
-                        <td>${c.phone || '-'}</td>
-                        <td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.customers = appData.customers.filter(x=>x.id!==${c.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
-                    `;
-                    body.appendChild(tr);
+                    tbody.appendChild(tr);
                 });
             } else if (section === 'treasury') {
-                headers.innerHTML = `<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>حذف</th>`;
-                (appData.treasury || []).forEach(t => {
+                headersRow.innerHTML = `<th>#</th><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراءات</th>`;
+                (appData.treasury || []).forEach((t, idx) => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td>${idx + 1}</td>
                         <td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
                         <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
-                        <td>${t.date || '-'}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.treasury = appData.treasury.filter(x=>x.id!==${t.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
+                        <td>${t.date}</td>
+                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.treasury.splice(${idx},1); saveDataAll(); renderCRUDTable('treasury');">حذف</button></td>
                     `;
-                    body.appendChild(tr);
+                    tbody.appendChild(tr);
                 });
             } else if (section === 'expenses') {
-                headers.innerHTML = `<th>بيان المصروف</th><th>المبلغ</th><th>التاريخ</th><th>حذف</th>`;
-                (appData.expenses || []).forEach(e => {
+                headersRow.innerHTML = `<th>#</th><th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th>`;
+                (appData.expenses || []).forEach((e, idx) => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td>${idx + 1}</td>
                         <td>${e.title}</td>
                         <td>${e.amount} ج.م</td>
-                        <td>${e.date || '-'}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.expenses = appData.expenses.filter(x=>x.id!==${e.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
+                        <td>${e.date}</td>
+                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.expenses.splice(${idx},1); saveDataAll(); renderCRUDTable('expenses');">حذف</button></td>
                     `;
-                    body.appendChild(tr);
+                    tbody.appendChild(tr);
                 });
             }
         }
 
         function render() {
-            const query = document.getElementById('global-search').value.toLowerCase();
+            renderDriverDropdownOptions();
             
-            // تحديث قائمة اختيار السائق الشحنة
-            const shipDriverSelect = document.getElementById('ship-assigned-driver');
-            if(shipDriverSelect) {
-                let currentVal = shipDriverSelect.value;
-                shipDriverSelect.innerHTML = `<option value="">-- بدون تعيين (عام) --</option>`;
-                (appData.drivers || []).forEach(d => {
-                    let opt = document.createElement('option');
-                    opt.value = d.name;
-                    opt.innerText = `${d.name} (${d.role})`;
-                    shipDriverSelect.appendChild(opt);
-                });
-                shipDriverSelect.value = currentVal;
-            }
-
-            // جدول الشحنات الرئيسي
-            const shipList = document.getElementById('shipments-list');
-            if(shipList) {
-                shipList.innerHTML = '';
-                let list = appData.shipments || [];
-                if(currentUserRole === 'driver') {
-                    list = list.filter(s => s.assignedDriver === loggedInDriverName);
-                }
-
-                list.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query) || (s.assignedDriver && s.assignedDriver.toLowerCase().includes(query))).forEach(s => {
-                    let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
-                    let tr = document.createElement('tr');
-                    
-                    let actionsHtml = `
-                        <button type="button" class="btn-main btn-sm" onclick="showQRModal('${s.id}')">QR</button>
-                        <button type="button" class="btn-success btn-sm" onclick="updateShipmentStatus(${s.id}, 'مكتملة')">✔ تم</button>
-                    `;
-                    if(currentUserRole === 'admin' || currentUserRole === 'supervisor') {
-                        actionsHtml += `
-                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
-                        `;
-                    }
-
-                    tr.innerHTML = `
-                        <td style="font-weight:bold;">${s.name}</td>
-                        <td>${s.item}</td>
-                        <td><span class="badge bg-transit">${s.assignedDriver || 'عام'}</span></td>
-                        <td style="font-weight:bold; color:var(--success);">${s.price} ج.م</td>
-                        <td style="font-weight:bold; color:var(--purple);">${profit} ج.م</td>
-                        <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
-                        <td>${actionsHtml}</td>
-                    `;
-                    shipList.appendChild(tr);
-                });
-            }
-
-            // الإحصائيات
+            // حساب وتحديث الأرقام الإحصائية
             let shipments = appData.shipments || [];
+            let totalShipments = shipments.length;
             let totalRevenue = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
             let totalExpenses = (appData.expenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-            let totalNetProfit = totalRevenue - totalExpenses;
+            let netProfit = totalRevenue - totalExpenses;
+            
             let totalCash = (appData.treasury || []).reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
             let totalDebts = (appData.customers || []).reduce((sum, c) => sum + Number(c.debt || 0), 0);
 
-            document.getElementById('stat-shipments').innerText = shipments.length;
-            document.getElementById('stat-revenue').innerText = `${totalRevenue} ج.م`;
-            document.getElementById('stat-net-profit').innerText = `${totalNetProfit} ج.م`;
-            document.getElementById('stat-cash').innerText = `${totalCash} ج.م`;
-            document.getElementById('stat-debts').innerText = `${totalDebts} ج.م`;
+            if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = totalShipments;
+            if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = `${totalRevenue} ج.م`;
+            if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = `${netProfit} ج.م`;
+            if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = `${totalCash} ج.م`;
+            if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = `${totalDebts} ج.م`;
 
-            // الخزنة
+            // عرض سجل الشحنات المباشر
+            const list = document.getElementById('shipments-list');
+            if (list) {
+                list.innerHTML = '';
+                const query = (document.getElementById('global-search')?.value || '').toLowerCase();
+                
+                let filtered = shipments.filter(s => {
+                    const matchesQuery = s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query) || (s.phone && s.phone.includes(query));
+                    if (currentUserRole === 'driver') {
+                        return matchesQuery && s.assignedDriver === loggedInDriverName;
+                    }
+                    return matchesQuery;
+                });
+
+                filtered.forEach(s => {
+                    let net = Number(s.price || 0) - Number(s.fuelCost || 0) - Number(s.extraCost || 0);
+                    let badgeClass = s.status === 'مكتملة' ? 'bg-delivered' : (s.status === 'في الطريق' ? 'bg-transit' : 'bg-pending');
+
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight:bold;">${s.name}</td>
+                        <td>${s.item}</td>
+                        <td>${s.assignedDriver || 'غير محدد'}</td>
+                        <td>${s.price} ج.م</td>
+                        <td style="color:var(--success); font-weight:bold;">${net} ج.م</td>
+                        <td>
+                            <select onchange="updateShipmentStatus(${s.id}, this.value)" class="badge ${badgeClass}" style="border:none;">
+                                <option value="في الانتظار" ${s.status === 'في الانتظار' ? 'selected' : ''}>في الانتظار</option>
+                                <option value="في الطريق" ${s.status === 'في الطريق' ? 'selected' : ''}>في الطريق</option>
+                                <option value="مكتملة" ${s.status === 'مكتملة' ? 'selected' : ''}>مكتملة</option>
+                            </select>
+                        </td>
+                        <td>
+                            <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">📱 QR</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>
+                            ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">🗑️</button>` : ''}
+                        </td>
+                    `;
+                    list.appendChild(tr);
+                });
+            }
+
+            // عرض سجل الخزنة
             const treasuryList = document.getElementById('treasury-list');
             if(treasuryList) {
                 treasuryList.innerHTML = '';
                 (appData.treasury || []).forEach(t => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="color:${t.type==='in'?'var(--success)':'var(--danger)'}; font-weight:bold;">${t.type==='in'?'إيداع (+)':'سحب (-)'}</td>
-                        <td style="font-weight:bold;">${t.amount} ج.م</td>
+                        <td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
+                        <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
-                        <td>${t.date || '-'}</td>
+                        <td>${t.date}</td>
                     `;
                     treasuryList.appendChild(tr);
                 });
             }
 
-                        // الشاحنات والأسطول
+            // عرض قائمة الأسطول
             const trucksList = document.getElementById('trucks-list');
             if(trucksList) {
                 trucksList.innerHTML = '';
@@ -2479,181 +2393,135 @@ window.saveDocHandler = function(e) {
                         <td style="font-weight:bold;">${t.num}</td>
                         <td>${t.driver}</td>
                         <td>${t.km} KM</td>
-                        <td style="color:var(--warning); font-weight:bold;">${t.nextOil} KM</td>
+                        <td>${t.nextOil} KM</td>
                         <td>${t.expiry}</td>
                     `;
                     trucksList.appendChild(tr);
                 });
             }
 
-            // وثائق الأسطول (تم تصحيح خاصية التنسيق هنا)
-            const docsList = document.getElementById('docs-list');
-            if(docsList) {
-                docsList.innerHTML = '';
-                (appData.docs || []).forEach(d => {
-                    let item = document.createElement('div');
-                    item.style.background = 'var(--bg)';
-                    item.style.padding = '6px';
-                    item.style.borderRadius = '6px';
-                    item.style.display = 'flex';
-                    item.style.justifyContent = 'space-between'; // تم التعديل لتجنب توقف الكود
-                    item.style.alignItems = 'center';
-                    item.style.border = '1px solid var(--border-color)';
-                    item.innerHTML = `
-                        <span style="font-size:11px; font-weight:bold;">📄 ${d.title}</span>
-                        <button type="button" class="btn-main btn-sm" onclick="viewMedia('${d.src}', 'image')">معاينة المستند 👁️</button>
-                    `;
-                    docsList.appendChild(item);
-                });
-            }
-
-            // المصروفات
+            // عرض سجل المصروفات
             const expList = document.getElementById('expenses-list');
             if(expList) {
                 expList.innerHTML = '';
                 (appData.expenses || []).forEach(e => {
                     let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="font-weight:bold;">${e.title}</td>
-                        <td style="color:var(--danger); font-weight:bold;">${e.amount} ج.م</td>
-                        <td>${e.date || '-'}</td>
-                    `;
+                    tr.innerHTML = `<td>${e.title}</td><td>${e.amount} ج.م</td><td>${e.date}</td>`;
                     expList.appendChild(tr);
                 });
             }
 
-            // العملاء والديون
+            // عرض ديون العملاء
             const custsList = document.getElementById('customers-list');
             if(custsList) {
                 custsList.innerHTML = '';
-                (appData.customers || []).forEach(c => {
+                (appData.customers || []).forEach((c, idx) => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td style="font-weight:bold;">${c.name}</td>
                         <td>${c.phone || '-'}</td>
-                        <td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td>
-                        <td><button type="button" class="btn-success btn-sm" onclick="payCustomerDebt(${c.id})">تحصيل مبلغ 💵</button></td>
+                        <td style="color:var(--danger); font-weight:bold;">${c.debt} ج.م</td>
+                        <td><button type="button" class="btn-success btn-sm" onclick="payCustomerDebt(${idx})">تحصيل 💵</button></td>
                     `;
                     custsList.appendChild(tr);
                 });
             }
+
+            renderDocsList();
         }
 
-        function payCustomerDebt(id) {
-            let cust = (appData.customers || []).find(c => c.id === id);
-            if(cust) {
-                let payAmt = prompt(`أدخل المبلغ المحصل من العميل (${cust.name}):`, cust.debt);
-                if(payAmt && !isNaN(payAmt)) {
-                    payAmt = Number(payAmt);
-                    cust.debt = Math.max(0, Number(cust.debt || 0) - payAmt);
-                    
-                    appData.treasury.unshift({
-                        id: Date.now(),
-                        type: 'in',
-                        amount: payAmt,
-                        desc: `تحصيل جزء من دين العميل: ${cust.name}`,
-                        date: new Date().toLocaleDateString('ar-EG')
-                    });
-
-                    saveDataAll();
-                    alert('تم تسديد وتحصيل المبلغ وتسجيله بالخزنة بنجاح! 💵');
-                    render();
-                }
-            }
-        }
-
-        function showQRModal(shipmentId) {
-            const modal = document.getElementById('qr-modal');
+        function showQR(id) {
+            const s = appData.shipments.find(item => item.id === id);
+            if (!s) return;
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
-            
-            let s = appData.shipments.find(item => item.id == shipmentId);
-            if(s) {
-                let qrData = `شحنة أسطورة الطريق\nالعميل: ${s.name}\nالحمولة: ${s.item}\nالأجرة: ${s.price} ج.م\nالحالة: ${s.status}`;
-                new QRCode(qrContainer, {
-                    text: qrData,
-                    width: 160,
-                    height: 160
-                });
-                modal.style.display = 'flex';
-            }
+            new QRCode(qrContainer, {
+                text: `https://karamegy.github.io/Na2la/?shipmentId=${s.id}`,
+                width: 160,
+                height: 160
+            });
+            document.getElementById('qr-modal').style.display = 'flex';
         }
         function closeQRModal() { document.getElementById('qr-modal').style.display = 'none'; }
 
         function updateInvoiceDropdown() {
             const select = document.getElementById('invoice-select');
-            if(!select) return;
-            select.innerHTML = '<option value="">-- اختر شحنة لمعاينة وطباعة الفاتورة --</option>';
-            (appData.shipments || []).forEach(s => {
-                let opt = document.createElement('option');
+            if (!select) return;
+            select.innerHTML = '';
+            let list = (currentUserRole === 'driver') ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            list.forEach(s => {
+                const opt = document.createElement('option');
                 opt.value = s.id;
-                opt.innerText = `فاتورة رقم #${s.id} - العميل: ${s.name} (${s.item})`;
+                opt.innerText = `فاتورة: ${s.name} - ${s.item} (${s.price} ج.م)`;
                 select.appendChild(opt);
             });
+            renderSelectedInvoice();
         }
 
         function renderSelectedInvoice() {
-            const id = document.getElementById('invoice-select').value;
-            let s = appData.shipments.find(item => item.id == id);
-            if(s) {
-                document.getElementById('inv-id').innerText = `#${s.id}`;
-                document.getElementById('inv-client').innerText = s.name;
-                document.getElementById('inv-phone').innerText = s.phone || '-';
-                document.getElementById('inv-address').innerText = s.address;
-                document.getElementById('inv-item').innerText = s.item;
-                document.getElementById('inv-price').innerText = s.price;
-                document.getElementById('inv-status').innerText = s.status;
+            const id = document.getElementById('invoice-select')?.value;
+            const s = (appData.shipments || []).find(item => item.id == id);
+            if (!s) return;
 
-                const imgContainer = document.getElementById('inv-img-preview');
-                imgContainer.innerHTML = s.img ? `<img src="${s.img}" style="max-width:180px; max-height:120px; border-radius:6px; border:1px solid #cbd5e1;"/>` : '';
+            document.getElementById('inv-id').innerText = s.id;
+            document.getElementById('inv-client').innerText = s.name;
+            document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
+            document.getElementById('inv-address').innerText = s.address;
+            document.getElementById('inv-item').innerText = s.item;
+            document.getElementById('inv-price').innerText = s.price;
+            document.getElementById('inv-status').innerText = s.status;
 
-                const sigContainer = document.getElementById('inv-sig-container');
-                sigContainer.innerHTML = s.signature ? `<label style="font-size:9px; font-weight:bold; display:block;">توقيع المستلم الرقمي:</label><img src="${s.signature}" style="max-height:50px; border-bottom:1px solid #333;"/>` : '';
-            }
+            const imgBox = document.getElementById('inv-img-preview');
+            imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:180px; border-radius:6px; border:1px solid #cbd5e1;"/>` : '';
+
+            const sigBox = document.getElementById('inv-sig-container');
+            sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم الرقمي:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
         }
 
         function openInvoiceStandalone() {
             const id = document.getElementById('invoice-select').value;
-            if(!id) { alert('اختر فاتورة أولاً!'); return; }
-            let s = appData.shipments.find(item => item.id == id);
-            if(s) {
-                let win = window.open('', '_blank');
-                win.document.write(`
-                    <html dir="rtl" lang="ar">
-                    <head>
-                        <title>فاتورة رقم #${s.id} - أسطورة الطريق</title>
-                        <style>
-                            body { font-family: sans-serif; padding: 20px; background: #fff; color: #0f172a; }
-                            .inv-card { border: 2px solid #2563eb; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
-                            h2 { text-align: center; color: #2563eb; margin-bottom: 5px; }
-                            p { font-size: 14px; margin: 6px 0; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="inv-card">
-                            <h2>🐎 أسطورة الطريق - فاتورة رقم #${s.id}</h2>
-                            <p><strong>اسم العميل:</strong> ${s.name}</p>
-                            <p><strong>رقم الهاتف:</strong> ${s.phone || '-'}</p>
-                            <p><strong>عنوان التوصيل:</strong> ${s.address}</p>
-                            <p><strong>وصف الحمولة:</strong> ${s.item}</p>
-                            <p><strong>الأجرة المتفق عليها:</strong> ${s.price} ج.م</p>
-                            <p><strong>السائق المسؤول:</strong> ${s.assignedDriver || 'عام'}</p>
-                            <p><strong>حالة الرحلة:</strong> ${s.status}</p>
-                            ${s.signature ? `<div style="margin-top:15px;"><small>توقيع المستلم:</small><br><img src="${s.signature}" style="height:50px;"/></div>` : ''}
-                            <button onclick="window.print()" style="margin-top:15px; background:#2563eb; color:#fff; padding:10px 20px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🖨️ طباعة الفاتورة الرسمية</button>
-                        </div>
-                    </body>
-                    </html>
-                `);
-            }
+            const s = appData.shipments.find(item => item.id == id);
+            if (!s) return;
+
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html lang="ar" dir="rtl">
+                <head>
+                    <title>فاتورة رقم #${s.id} - أسطورة الطريق</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 20px; direction: rtl; text-align: center; }
+                        .inv-card { border: 2px solid #2563eb; padding: 20px; border-radius: 10px; max-width: 500px; margin: 0 auto; }
+                        h2 { color: #0f172a; margin-bottom: 5px; }
+                        p { font-size: 14px; margin: 6px 0; text-align: right; }
+                        hr { border: 0; border-top: 1px solid #ccc; margin: 10px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="inv-card">
+                        <h2>🐎 أسطورة الطريق - Chevrolet Pickup</h2>
+                        <small>إذن تسليم واستلام شحنة رسمي</small>
+                        <hr>
+                        <p><strong>رقم الفاتورة:</strong> ${s.id}</p>
+                        <p><strong>اسم العميل:</strong> ${s.name}</p>
+                        <p><strong>الهاتف:</strong> ${s.phone || 'غير مسجل'}</p>
+                        <p><strong>عنوان التوصيل:</strong> ${s.address}</p>
+                        <p><strong>الحمولة:</strong> ${s.item}</p>
+                        <p><strong>الأجرة:</strong> ${s.price} ج.م</p>
+                        <p><strong>الحالة:</strong> ${s.status}</p>
+                        ${s.img ? `<div style="text-align:center; margin-top:10px;"><img src="${s.img}" style="max-width:200px; border-radius:6px;"/></div>` : ''}
+                        ${s.sig ? `<div style="text-align:left; margin-top:15px;"><p style="font-size:11px;">توقيع المستلم:</p><img src="${s.sig}" style="height:50px;"/></div>` : ''}
+                    </div>
+                </body>
+                </html>
+            `);
         }
 
         function exportInvoiceAsImage() {
             const area = document.getElementById('print-area');
             html2canvas(area).then(canvas => {
-                let link = document.createElement('a');
-                link.download = `فاتورة-أسطورة-الطريق.png`;
-                link.href = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `invoice-${Date.now()}.png`;
+                link.href = canvas.toDataURL();
                 link.click();
             });
         }
@@ -2665,95 +2533,41 @@ window.saveDocHandler = function(e) {
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 pdf.addImage(imgData, 'PNG', 10, 10, 190, 0);
-                pdf.save(`فاتورة-أسطورة-الطريق.pdf`);
+                pdf.save(`invoice-${Date.now()}.pdf`);
             });
         }
 
         function sendInvoiceWhatsApp() {
             const id = document.getElementById('invoice-select').value;
-            let s = appData.shipments.find(item => item.id == id);
-            if(s) {
-                let msg = `تفاصيل فاتورة أسطورة الطريق 🐎\nرقم الفاتورة: #${s.id}\nالعميل: ${s.name}\nالحمولة: ${s.item}\nالأجرة: ${s.price} ج.م\nالعنوان: ${s.address}\nالحالة: ${s.status}`;
-                let phone = s.phone ? s.phone.replace(/[^0-9]/g, '') : '';
-                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-            }
+            const s = appData.shipments.find(item => item.id == id);
+            if (!s) return;
+            const msg = `🧾 *فاتورة شحنة رسمية - أسطورة الطريق*\n\n*العميل:* ${s.name}\n*الحمولة:* ${s.item}\n*العنوان:* ${s.address}\n*الأجرة:* ${s.price} ج.م\n*الحالة:* ${s.status}\n\nشكراً لتعاملكم معنا! 🐎`;
+            window.open(`https://wa.me/${s.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
         function sendDailySummaryWhatsApp() {
-            let shipments = appData.shipments || [];
-            let totalRevenue = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
-            let msg = `📊 تقرير ملخص اليوم - أسطورة الطريق 🐎\nإجمالي الرحلات: ${shipments.length}\nإجمالي الإيرادات: ${totalRevenue} ج.م\nتاريخ التقرير: ${new Date().toLocaleDateString('ar-EG')}`;
+            let totalRev = appData.shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
+            let msg = `📊 *التقرير اليومي لأسطورة الطريق*\n\nعدد الشحنات: ${appData.shipments.length}\nإجمالي الإيرادات: ${totalRev} ج.م\nرصيد الخزينة الحالية: ${document.getElementById('stat-cash').innerText}\n\nتم استخراجه سحابياً ☁️⚡`;
             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
         function exportToExcel() {
-            let data = (appData.shipments || []).map(s => ({
-                "رقم الفاتورة": s.id,
-                "اسم العميل": s.name,
-                "الهاتف": s.phone,
-                "العنوان": s.address,
-                "الحمولة": s.item,
-                "الأجرة (ج.م)": s.price,
-                "السائق": s.assignedDriver,
-                "الحالة": s.status,
-                "التاريخ": s.date
-            }));
-            let worksheet = XLSX.utils.json_to_sheet(data);
-            let workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "الشحنات");
-            XLSX.writeFile(workbook, "تقرير_شحنات_أسطورة_الطريق.xlsx");
+            const ws = XLSX.utils.json_to_sheet(appData.shipments);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
+            XLSX.writeFile(wb, "na2la_data.xlsx");
         }
 
         function clearAll() {
-if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح كافة بيانات النظام؟')) {
+            if (currentUserRole !== 'admin') { alert('عذراً! هذه الصلاحية لمدير النظام فقط.'); return; }
+            if (confirm('تنبيه شديد الخطورة: هل أنت تأكد من مسح جميع البيانات بشكل كامل؟')) {
                 localStorage.removeItem('transportAppV60');
                 db.ref('transportAppV60').remove();
                 location.reload();
             }
         }
-
-        function renderCRUDTable() {
-            const section = document.getElementById('crud-section-select').value;
-            const headers = document.getElementById('crud-table-headers');
-            const body = document.getElementById('crud-table-body');
-            headers.innerHTML = '';
-            body.innerHTML = '';
-
-            if (section === 'shipments') {
-                headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>العنوان</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>إدارة</th>';
-                (appData.shipments || []).forEach(s => {
-                    body.innerHTML += `<tr><td>${s.name}</td><td>${s.phone || '-'}</td><td>${s.address}</td><td>${s.item}</td><td>${s.price} ج.م</td><td>${s.status}</td><td><button class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button></td></tr>`;
-                });
-            } else if (section === 'drivers') {
-                headers.innerHTML = '<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>';
-                (appData.drivers || []).forEach(d => {
-                    body.innerHTML += `<tr><td><b>${d.name}</b></td><td>${d.phone}</td><td>${d.role}</td><td>${d.title || ''}</td><td><code>${d.pin}</code></td><td><button class="btn-danger btn-sm" onclick="deleteDriverAccount(${d.id})">حذف</button></td></tr>`;
-                });
-            } else if (section === 'trucks') {
-                headers.innerHTML = '<th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت القادم</th><th>الرخصة</th>';
-                (appData.trucks || []).forEach(t => {
-                    body.innerHTML += `<tr><td>${t.truckNum}</td><td>${t.driverName}</td><td>${t.km}</td><td>${t.nextOil}</td><td>${t.expiry}</td></tr>`;
-                });
-            } else if (section === 'customers') {
-                headers.innerHTML = '<th>العميل</th><th>الهاتف</th><th>المديونية</th>';
-                (appData.customers || []).forEach(c => {
-                    body.innerHTML += `<tr><td>${c.name}</td><td>${c.phone}</td><td style="color:var(--danger);">${c.debt} ج.م</td></tr>`;
-                });
-            } else if (section === 'treasury') {
-                headers.innerHTML = '<th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th>';
-                (appData.treasury || []).forEach(t => {
-                    body.innerHTML += `<tr><td>${t.type}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date}</td></tr>`;
-                });
-            } else if (section === 'expenses') {
-                headers.innerHTML = '<th>البيان</th><th>المبلغ</th><th>التاريخ</th>';
-                (appData.expenses || []).forEach(ex => {
-                    body.innerHTML += `<tr><td>${ex.title}</td><td>${ex.amount} ج.م</td><td>${ex.date}</td></tr>`;
-                });
-            }
-        }
     </script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -2829,3 +2643,4 @@ if(confirm('⚠️ تحذير: هل أنت متأكد تماماً من مسح �
 
 </body>
 </html>
+
