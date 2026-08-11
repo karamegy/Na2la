@@ -1377,108 +1377,27 @@
 }
 
 async function publishProfileWallPost() {
-// 1. دالة إضافة منشور جديد إلى لوحة الرحلات العامة
-async function savePublicPostHandler(e) {
-    e.preventDefault();
-    const title = document.getElementById('post-title').value.trim();
-    const desc = document.getElementById('post-desc').value.trim();
-    const imgInput = document.getElementById('post-images');
-    const videoInput = document.getElementById('post-videos');
-
-    if (!title || !desc) {
-        alert('يرجى ملء كافة البيانات المطلوبة!');
+    const text = document.getElementById('profile-wall-text').value.trim();
+    if (!text && profileWallFilesArr.length === 0) {
+        alert('الرجاء كتابة نص أو إرفاق صورة/فيديو للنشر على الحائط!');
         return;
     }
 
-    let mediaArr = [];
+    let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+    let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
+    if (!drv) return;
+    if (!drv.wallPosts) drv.wallPosts = [];
 
-    // تحويل الصور المرفقة إلى Base64
-    if (imgInput && imgInput.files.length > 0) {
-        for (let i = 0; i < imgInput.files.length; i++) {
-            let b64 = await fileToBase64(imgInput.files[i]);
-            mediaArr.push({ type: 'image', data: b64 });
-        }
-    }
+    const posterName = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `${loggedInDriverName} (الإدارة)` : loggedInDriverName;
 
-    // تحويل الفيديوهات المرفقة إلى Base64
-    if (videoInput && videoInput.files.length > 0) {
-        for (let i = 0; i < videoInput.files.length; i++) {
-            let b64 = await fileToBase64(videoInput.files[i]);
-            mediaArr.push({ type: 'video', data: b64 });
-        }
-    }
-
-    if (!appData.posts) appData.posts = [];
-
-    const newPost = {
+    drv.wallPosts.unshift({
         id: Date.now(),
-        author: loggedInDriverName || 'الإدارة',
-        title: title,
-        desc: desc,
-        media: mediaArr,
+        author: posterName,
+        text: text,
+        files: profileWallFilesArr,
         date: new Date().toLocaleDateString('ar-EG') + ' ' + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-    };
-
-    appData.posts.unshift(newPost);
-    saveDataAll();
-
-    // إعادة ضبط الحقول
-    document.getElementById('public-post-form').reset();
-    renderPublicPosts();
-    alert('تم نشر الرحلة في لوحة الرحلات العامة بنجاح! 🚀');
-}
-
-// 2. دالة عرض واستعراض منشورات لوحة الرحلات العامة
-function renderPublicPosts() {
-    const container = document.getElementById('public-posts-feed');
-    if (!container) return;
-    container.innerHTML = '';
-
-    let posts = appData.posts || [];
-    if (posts.length === 0) {
-        container.innerHTML = '<p style="text-align:center; opacity:0.7; padding:12px;">لا توجد رحلات أو إعلانات معلنة حالياً.</p>';
-        return;
-    }
-
-    const canDelete = (currentUserRole === 'admin' || currentUserRole === 'supervisor');
-
-    posts.forEach(p => {
-        let mediaHtml = '';
-        if (p.media && p.media.length > 0) {
-            mediaHtml += '<div class="load-post-media">';
-            p.media.forEach(m => {
-                if (m.type === 'image') {
-                    mediaHtml += `<img src="${m.data}" onclick="viewMedia('${m.data}', 'image')"/>`;
-                } else if (m.type === 'video') {
-                    mediaHtml += `<video src="${m.data}" onclick="viewMedia('${m.data}', 'video')"></video>`;
-                }
-            });
-            mediaHtml += '</div>';
-        }
-
-        let deleteBtn = canDelete ? `<button onclick="deletePublicPost(${p.id})" class="btn-danger btn-sm" style="width:auto;">🗑️ حذف</button>` : '';
-
-        container.innerHTML += `
-            <div class="load-post-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <h4 style="color:var(--accent); font-size:12px;">📢 ${p.title}</h4>
-                    <span style="font-size:9px; opacity:0.7;">${p.date}</span>
-                </div>
-                <p style="font-size:11px; line-height:1.4; margin-bottom:6px;">${p.desc}</p>
-                ${mediaHtml}
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid var(--border-color); padding-top:4px;">
-                    <span style="font-size:9px; opacity:0.8;">الناشر: <b>${p.author}</b></span>
-                    ${deleteBtn}
-                </div>
-            </div>
-        `;
     });
-}
 
-// 3. دالة حذف المنشور من لوحة الرحلات
-function deletePublicPost(postId) {
-    if (!confirm('هل أنت تأكد من رغبتك في حذف هذه الرحلة من لوحة الإعلانات؟')) return;
-    appData.posts = (appData.posts || []).filter(p => p.id !== postId);
     saveDataAll();
 
     document.getElementById('profile-wall-text').value = '';
@@ -1489,18 +1408,6 @@ function deletePublicPost(postId) {
     renderProfileWallPosts(drv);
     alert('تم النشر على بروفايل السائق بنجاح بكل حرية! 🚀');
 }
-
-// 4. دالة مساعدة لتأمين تحويل الملفات إلى Base64
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-    });
-}
-
-    
 
 function renderProfileWallPosts(drv) {
     const container = document.getElementById('profile-wall-posts-container');
@@ -2513,4 +2420,4 @@ function deleteProfileWallPost(driverName, postId) {
 </style>
 
 </body>
-                </html>
+                    </html>
