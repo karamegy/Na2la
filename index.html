@@ -534,6 +534,8 @@
 
     <!-- 2. الشحنات -->
     <section id="shipments-tab" class="app-section">
+       <!-- 2. الشحنات -->
+    <section id="shipments-tab" class="app-section">
         <div class="card" id="new-shipment-card">
             <h3 id="form-title-heading">تسجيل رحلة جديدة (مزودة بالصور، التوقيع، والـ GPS)</h3>
             <form id="shipment-form" onsubmit="saveShipmentHandler(event);">
@@ -560,8 +562,9 @@
                     <span id="gps-status" style="font-size: 9px; opacity: 0.8;"></span>
                 </div>
                 <div>
-                    <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو الحمولة:</label>
-                    <input type="file" id="ship-img" accept="image/*" capture="environment">
+                    <label style="font-size:9px; font-weight:bold;">📷 رفع صورة المستند أو الحمولة:</label>
+                    <!-- تم إزالة capture="environment" ليكون مخصصاً لرفع الصور فقط -->
+                    <input type="file" id="ship-img" accept="image/*">
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">توقيع المستلم الرقمي:</label>
@@ -592,6 +595,7 @@
             </div>
         </div>
     </section>
+
 
     <!-- 3. مساعد الذكاء الاصطناعي -->
     <section id="ai-mechanic-tab" class="app-section">
@@ -2355,6 +2359,75 @@ window.saveDocHandler = function(e) {
                         <td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td>
                         <td><button type="button" class="btn-danger btn-sm" onclick="appData.customers = appData.customers.filter(x=>x.id!==${c.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
                     `;
+        function renderCRUDTable(forceSection) {
+            const secSelect = document.getElementById('crud-section-select');
+            if (forceSection && secSelect) { secSelect.value = forceSection; }
+            const section = secSelect ? secSelect.value : 'shipments';
+            const headers = document.getElementById('crud-table-headers');
+            const body = document.getElementById('crud-table-body');
+            if(!headers || !body) return;
+
+            headers.innerHTML = ''; body.innerHTML = '';
+
+            if (section === 'shipments') {
+                headers.innerHTML = `<th>العميل</th><th>الحمولة</th><th>السائق</th><th>الأجرة</th><th>صافي الربح</th><th>الحالة</th><th>التحكم والعمليات</th>`;
+                (appData.shipments || []).forEach(s => {
+                    let profit = Number(s.price || 0) - (Number(s.fuelCost || 0) + Number(s.extraCost || 0));
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${s.name}</td>
+                        <td>${s.item}</td>
+                        <td>${s.assignedDriver || 'عام'}</td>
+                        <td>${s.price} ج.م</td>
+                        <td style="color:var(--purple); font-weight:bold;">${profit} ج.م</td>
+                        <td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td>
+                        <td>
+                            <button type="button" class="btn-main btn-sm" onclick="editShipment(${s.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
+                        </td>
+                    `;
+                    body.appendChild(tr);
+                });
+            } else if (section === 'trucks') {
+                headers.innerHTML = `<th>المركبة</th><th>السائق</th><th>العداد KM</th><th>انتهاء الرخصة</th><th>حذف</th>`;
+                (appData.trucks || []).forEach(t => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${t.num}</td>
+                        <td>${t.driver}</td>
+                        <td>${t.km} KM</td>
+                        <td>${t.expiry}</td>
+                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.trucks = appData.trucks.filter(x=>x.id!==${t.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
+                    `;
+                    body.appendChild(tr);
+                });
+            } else if (section === 'drivers') {
+                headers.innerHTML = `<th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>الوسام</th><th>رمز PIN</th><th>إدارة</th>`;
+                (appData.drivers || []).forEach(d => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${d.name}</td>
+                        <td>${d.phone}</td>
+                        <td>${d.role}</td>
+                        <td>${d.title || '-'}</td>
+                        <td>${d.pin}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">PIN</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="if(confirm('حذف الحساب؟')){appData.drivers = appData.drivers.filter(x=>x.id!==${d.id}); saveDataAll(); renderCRUDTable();}">حذف</button>
+                        </td>
+                    `;
+                    body.appendChild(tr);
+                });
+            } else if (section === 'customers') {
+                headers.innerHTML = `<th>اسم العميل</th><th>الهاتف</th><th>المديونية</th><th>حذف</th>`;
+                (appData.customers || []).forEach(c => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${c.name}</td>
+                        <td>${c.phone || '-'}</td>
+                        <td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td>
+                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.customers = appData.customers.filter(x=>x.id!==${c.id}); saveDataAll(); renderCRUDTable();">حذف</button></td>
+                    `;
                     body.appendChild(tr);
                 });
             } else if (section === 'treasury') {
@@ -2438,6 +2511,8 @@ window.saveDocHandler = function(e) {
                     shipList.appendChild(tr);
                 });
             }
+        }
+
 
             // الإحصائيات
             let shipments = appData.shipments || [];
