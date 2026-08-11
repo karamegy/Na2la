@@ -1634,71 +1634,104 @@
         }
 
        function saveShipmentHandler(e) {
-            e.preventDefault();
-            const id = document.getElementById('edit-shipment-id').value;
-            const name = document.getElementById('ship-name').value.trim();
-            const phone = document.getElementById('ship-phone').value.trim();
-            const address = document.getElementById('ship-address').value.trim();
-            const item = document.getElementById('ship-item').value.trim();
-            const price = Number(document.getElementById('ship-price').value);
-            const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
-            const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
-            const assignedDriver = document.getElementById('ship-assigned-driver').value;
+    e.preventDefault();
+    const id = document.getElementById('edit-shipment-id').value;
+    const name = document.getElementById('ship-name').value.trim();
+    const phone = document.getElementById('ship-phone').value.trim();
+    const address = document.getElementById('ship-address').value.trim();
+    const item = document.getElementById('ship-item').value.trim();
+    const price = Number(document.getElementById('ship-price').value) || 0;
+    const fuelCost = Number(document.getElementById('ship-fuel-cost').value) || 0;
+    const extraCost = Number(document.getElementById('ship-extra-cost').value) || 0;
+    const assignedDriver = document.getElementById('ship-assigned-driver').value;
 
-            let sigData = '';
-            if (canvas && ctx) {
-                sigData = canvas.toDataURL();
-            }
+    let sigData = '';
+    if (typeof canvas !== 'undefined' && typeof ctx !== 'undefined' && canvas) {
+        sigData = canvas.toDataURL();
+    }
 
-            if (id) {
-                let s = appData.shipments.find(item => item.id == id);
-                if (s) {
-                    s.name = name; s.phone = phone; s.address = address; s.item = item;
-                    s.price = price; s.fuelCost = fuelCost; s.extraCost = extraCost;
-                    s.assignedDriver = assignedDriver;
-                    if(currentGPS) s.gps = currentGPS;
-                    if(uploadedImgBase64) s.img = uploadedImgBase64;
-                    if(sigData && sigData.length > 100) s.signature = sigData;
-                }
-            } else {
-                appData.shipments.unshift({
-                    id: Date.now(),
-                    name, phone, address, item, price, fuelCost, extraCost,
-                    assignedDriver: assignedDriver || 'بدون تعيين',
-                    gps: currentGPS || '30.0444,31.2357',
-                    img: uploadedImgBase64 || '',
-                    signature: sigData || '',
-                    status: 'قيد الانتظار',
-                    date: new Date().toLocaleDateString('ar-EG')
-                });
+    if (id) {
+        // تعديل شحنة موجودة مسبقاً
+        let s = (appData.shipments || []).find(item => String(item.id) === String(id));
+        if (s) {
+            s.name = name; 
+            s.phone = phone; 
+            s.address = address; 
+            s.item = item;
+            s.price = price; 
+            s.fuelCost = fuelCost; 
+            s.extraCost = extraCost;
+            s.assignedDriver = assignedDriver || 'بدون تعيين';
+            if (!s.status) s.status = 'قيد الانتظار'; // ضمان وجود حالة دائماً
+            if (typeof currentGPS !== 'undefined' && currentGPS) s.gps = currentGPS;
+            if (typeof uploadedImgBase64 !== 'undefined' && uploadedImgBase64) s.img = uploadedImgBase64;
+            if (sigData && sigData.length > 100) s.signature = sigData;
+        }
+    } else {
+        // إضافة شحنة جديدة تماماً وضمان ظهورها في الجدول فوراً
+        if (!appData.shipments) appData.shipments = [];
+        
+        appData.shipments.unshift({
+            id: Date.now(),
+            name: name,
+            phone: phone,
+            address: address,
+            item: item,
+            price: price,
+            fuelCost: fuelCost,
+            extraCost: extraCost,
+            assignedDriver: assignedDriver || 'بدون تعيين',
+            gps: (typeof currentGPS !== 'undefined' && currentGPS) ? currentGPS : '30.0444,31.2357',
+            img: (typeof uploadedImgBase64 !== 'undefined' && uploadedImgBase64) ? uploadedImgBase64 : '',
+            signature: sigData || '',
+            status: 'قيد الانتظار', // تعيين حالة افتراضية صريحة لكي يراها الجدول
+            date: new Date().toLocaleDateString('ar-EG')
+        });
 
-                // تسجيل إيراد تلقائي في الخزنة
-                appData.treasury.unshift({
-                    id: Date.now(),
-                    type: 'in',
-                    amount: price,
-                    desc: `تحصيل أجرة شحنة: ${item} (${name})`,
-                    date: new Date().toLocaleDateString('ar-EG')
-                });
+        // تسجيل إيراد تلقائي في الخزنة
+        if (!appData.treasury) appData.treasury = [];
+        appData.treasury.unshift({
+            id: Date.now(),
+            type: 'in',
+            amount: price,
+            desc: `تحصيل أجرة شحنة: ${item} (${name})`,
+            date: new Date().toLocaleDateString('ar-EG')
+        });
 
-                // إضافة للديون / العملاء
-                let cust = (appData.customers || []).find(c => c.name === name);
-                if(cust) {
-                    cust.debt = Number(cust.debt || 0) + price;
-                } else {
-                    appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
-                }
-            }
+        // إضافة للديون / العملاء
+        if (!appData.customers) appData.customers = [];
+        let cust = appData.customers.find(c => c.name === name);
+        if (cust) {
+            cust.debt = Number(cust.debt || 0) + price;
+        } else {
+            appData.customers.push({ id: Date.now(), name: name, phone: phone, debt: price });
+        }
+    }
 
-            saveDataAll();
-            document.getElementById('shipment-form').reset();
-            document.getElementById('edit-shipment-id').value = '';
-            clearSignature();
-            currentGPS = ''; uploadedImgBase64 = '';
-            document.getElementById('gps-status').innerText = '';
-            alert('تم حفظ الرحلة بنجاح سحابياً! 💾');
-            render();
-       } 
+    // الحفظ المקוّن والتحديث الفوري
+    saveDataAll();
+    
+    // إعادة تعيين النموذج وتنظيف المتغيرات المؤقتة
+    const form = document.getElementById('shipment-form');
+    if (form) form.reset();
+    
+    const editIdInput = document.getElementById('edit-shipment-id');
+    if (editIdInput) editIdInput.value = '';
+    
+    if (typeof clearSignature === 'function') clearSignature();
+    if (typeof currentGPS !== 'undefined') currentGPS = ''; 
+    if (typeof uploadedImgBase64 !== 'undefined') uploadedImgBase64 = '';
+    
+    const gpsStatus = document.getElementById('gps-status');
+    if (gpsStatus) gpsStatus.innerText = '';
+    
+    alert('تم حفظ الرحلة بنجاح وتحديث الجدول سحابياً ومحلياً! 💾');
+    
+    // استدعاء دالة العرض لإجبار الجدول على رسم الشحنة الجديدة فوراً
+    if (typeof render === 'function') {
+        render();
+    }
+}
 
         function editShipment(id) {
             let s = appData.shipments.find(item => item.id == id);
