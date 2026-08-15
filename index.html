@@ -2629,6 +2629,76 @@ if(custsList) {
                 location.reload();
             }
         }
+        // 1. دالة ضغط الصورة لحماية التطبيق من الانهيار (Out of Memory)
+function compressAndResizeImage(file, maxWidth = 800, quality = 0.6) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(event) {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = error => reject(error);
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
+// 2. دالة معالجة الصورة فور التقاطها وربطها بالفاتورة الحالية
+async function handleImageCapture(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        // ضغط الصورة لتفادي خروج التطبيق (Crash)
+        const optimizedDataUrl = await compressAndResizeImage(file, 800, 0.6);
+        
+        // جلب رقم الفاتورة المحددة حالياً من القائمة المنسدلة
+        const currentId = document.getElementById('invoice-select')?.value;
+        if (!currentId) {
+            alert('يرجى اختيار الفاتورة أولاً!');
+            return;
+        }
+
+        // البحث عن الشحنة وتحديثها بالصورة المضغوطة الآمنة
+        const shipment = (appData.shipments || []).find(item => item.id == currentId);
+        if (shipment) {
+            shipment.img = optimizedDataUrl;
+            
+            // حفظ البيانات في التخزين أو قاعدة البيانات الخاصة بك
+            if (typeof saveAppData === 'function') {
+                saveAppData();
+            } else if (typeof db !== 'undefined') {
+                db.ref('transportAppV60').set(appData);
+            }
+            
+            // تحديث العرض في الواجهة فوراً
+            renderSelectedInvoice();
+            alert('تم التقاط الصورة ورفعها بنجاح دون مشاكل في الذاكرة!');
+        }
+    } catch (error) {
+        console.error("خطأ في معالجة الصورة:", error);
+        alert('حدث خطأ أثناء معالجة الصورة، يرجى المحاولة مرة أخرى.');
+    }
+}
+
     </script>
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
