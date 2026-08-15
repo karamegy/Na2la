@@ -206,25 +206,16 @@
         .notif-count-badge { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border-radius: 50%; padding: 2px 5px; font-size: 8px; font-weight: bold; }
         .community-feed-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
 
-        .custom-save-btn {
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #fff;
-          font-size: 15px;
-          font-weight: bold;
-          padding: 12px 24px;
-          border: none;
-          border-radius: 10px;
-          cursor: pointer;
-          box-shadow: 0 6px 0 #15803d, 0 8px 15px rgba(0, 0, 0, 0.25);
-          transition: all 0.1s ease;
-          display: block;
-          width: fit-content;
-          min-width: 220px;
-          margin: 15px auto;
-          text-align: center;
+        .cloud-sync-status {
+            font-size: 9px;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--success);
+            display: inline-block;
+            margin-top: 4px;
         }
-        .custom-save-btn:hover { background: linear-gradient(135deg, #16a34a, #15803d); }
-        .custom-save-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #15803d, 0 4px 8px rgba(0, 0, 0, 0.2); }
     </style>
 </head>
 <body>
@@ -245,7 +236,7 @@
     </div>
 
     <div class="news-ticker">
-        <marquee scrollamount="5">🌟 تم ربط النظام بقاعدة بيانات فايرستور السحابية (Firestore) ومزامنة كافة المدخلات لحظياً بدون فقدان 🚀</marquee>
+        <marquee scrollamount="5">🌟 تم ربط المنصة بقاعدة بيانات فايرستور السحابية (Firestore) ومزامنة كافة المدخلات لحظياً بدون فقدان 🚀</marquee>
     </div>
 
     <!-- شاشة قفل النظام -->
@@ -886,15 +877,10 @@
         <button type="button" class="btn-danger" onclick="closeQRModal()" style="margin-top:12px; width:140px;">إغلاق</button>
     </div>
 
-    <!-- زر التجربة بتصميم 3D -->
-    <button onclick="saveDataToFirestore('orders', { clientName: 'إمعاد', amount: 300 })" class="custom-save-btn">
-        تجربة حفظ البيانات في القاعدة
-    </button>
-
-    <!-- السكربتات الموحدة للاتصال بـ Firestore والتحكم الكامل -->
+    <!-- السكربتات الموحدة للاتصال السحابي اللحظي بـ Firestore -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, onSnapshot, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -909,30 +895,37 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         window.db = db;
-        window.getDocs = getDocs;
-        window.collection = collection;
-        window.addDoc = addDoc;
-        window.onSnapshot = onSnapshot;
-        window.deleteDoc = deleteDoc;
-        window.doc = doc;
-        window.setDoc = setDoc;
 
-        console.log("تم ربط قاعدة البيانات Firestore بنجاح وبدون تعارض");
-
-        window.saveDataToFirestore = async function(collectionName, dataObj) {
+        // دالة حفظ ومزامنة حالة المنصة بالكامل في Firestore سحابياً
+        window.syncDataToCloud = async function(dataObj) {
             try {
-                const docRef = await addDoc(collection(db, collectionName), {
-                    ...dataObj,
-                    createdAt: new Date().toISOString()
-                });
-                alert("تم الحفظ بنجاح في Firestore! رقم المستند: " + docRef.id);
+                await setDoc(doc(db, "appStore", "mainState"), dataObj);
+                console.log("تم مزامنة البيانات سحابياً بنجاح ☁️⚡");
             } catch (e) {
-                console.error("خطأ فايربيس: ", e);
-                alert("خطأ فايربيس: " + e.message);
+                console.error("خطأ في المزامنة السحابية: ", e);
             }
         };
 
-        // دالة ضغط الصور لمنع الـ Crash في التخزين
+        // الاستماع للتحديثات اللحظية من السحابة لجميع الأجهزة المتصلة
+        window.initCloudSync = function(callback) {
+            onSnapshot(doc(db, "appStore", "mainState"), (docSnap) => {
+                if (docSnap.exists()) {
+                    const cloudData = docSnap.data();
+                    if (cloudData && typeof callback === 'function') {
+                        callback(cloudData);
+                    }
+                } else {
+                    // إذا لم تكن قاعدة البيانات تحتوي على بيانات بعد، قم برفع البيانات الافتراضية الحالية
+                    if (typeof appData !== 'undefined') {
+                        window.syncDataToCloud(appData);
+                    }
+                }
+            }, (error) => {
+                console.error("خطأ في الاستماع السحابي: ", error);
+            });
+        };
+
+        // دالة ضغط الصور لمنع تجاوز الحد الأقصى للتخزين
         window.compressImage = async function(dataUrl) {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -950,7 +943,6 @@
             });
         };
 
-        // تفعيل الجلب التلقائي والمستمعين اللحظيين عند التحميل
         window.addEventListener('DOMContentLoaded', () => {
             if (typeof initAppEngine === 'function') {
                 initAppEngine();
@@ -1012,6 +1004,19 @@
                 appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
             }
             
+            // تفعيل الاستماع السحابي المباشر من Firestore
+            if (window.initCloudSync) {
+                window.initCloudSync((cloudData) => {
+                    if (cloudData && cloudData.shipments) {
+                        appData = cloudData;
+                        localStorage.setItem('transportAppV60', JSON.stringify(appData));
+                        if (currentUserRole) {
+                            render();
+                        }
+                    }
+                });
+            }
+
             if (currentUserRole) {
                 document.getElementById('lock-screen').style.display = 'none';
                 setupNavigation();
@@ -1025,6 +1030,9 @@
 
         function saveDataAll() {
             localStorage.setItem('transportAppV60', JSON.stringify(appData));
+            if (window.syncDataToCloud) {
+                window.syncDataToCloud(appData);
+            }
             updateGlobalChatNotificationBadge();
         }
 
