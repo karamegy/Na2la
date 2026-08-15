@@ -295,8 +295,11 @@
                     <span id="vis-gps-status" style="font-size: 9px; opacity: 0.8; display:block; margin-top:2px;"></span>
                 </div>
                 <div style="margin-top: 6px;">
-                    <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
-                    <input type="file" id="vis-img" accept="image/*" capture="environment">
+                    <label style="font-size:9px; font-weight:bold;">📷 رفع أو اختيار صورة المستند أو البضاعة:</label>
+                    <input type="file" id="vis-img" accept="image/*" onchange="previewVisitorImage(this)">
+                    <div id="vis-img-preview-container" style="margin-top: 5px;">
+                        <img id="vis-img-preview" style="max-width: 100px; display: none; border: 1px solid var(--border-color); border-radius: 5px;">
+                    </div>
                 </div>
                 <button type="submit" class="btn-success" style="padding: 8px; margin-top: 8px;">حجز وإرسال تنبيه للإدارة 🚀</button>
             </form>
@@ -572,7 +575,10 @@
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو الحمولة:</label>
-                    <input type="file" id="ship-img" accept="image/*" capture="environment">
+                    <input type="file" id="ship-img" accept="image/*" onchange="previewShipmentImage(this)">
+                    <div id="ship-img-preview-container" style="margin-top: 5px;">
+                        <img id="ship-img-preview" style="max-width: 100px; display: none; border: 1px solid var(--border-color); border-radius: 5px;">
+                    </div>
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">توقيع المستلم الرقمي:</label>
@@ -915,7 +921,6 @@
                         callback(cloudData);
                     }
                 } else {
-                    // إذا لم تكن قاعدة البيانات تحتوي على بيانات بعد، قم برفع البيانات الافتراضية الحالية
                     if (typeof appData !== 'undefined') {
                         window.syncDataToCloud(appData);
                     }
@@ -1004,7 +1009,6 @@
                 appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
             }
             
-            // تفعيل الاستماع السحابي المباشر من Firestore
             if (window.initCloudSync) {
                 window.initCloudSync((cloudData) => {
                     if (cloudData && cloudData.shipments) {
@@ -1377,32 +1381,33 @@
             if(tabId === 'chat-tab') renderChatAccountsList();
         }
 
-        const shipImgInput = document.getElementById('ship-img');
-        if(shipImgInput) {
-            shipImgInput.addEventListener('change', async function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = async function(event) { 
-                        uploadedImgBase64 = await window.compressImage(event.target.result); 
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
+        // دوال اختيار ورفع الصور والمعاينة
+        async function previewVisitorImage(input) {
+            const preview = document.getElementById('vis-img-preview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    let compressed = await window.compressImage(e.target.result);
+                    preview.src = compressed;
+                    preview.style.display = 'block';
+                    visitorImgBase64 = compressed;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
         }
 
-        const visImgInput = document.getElementById('vis-img');
-        if(visImgInput) {
-            visImgInput.addEventListener('change', async function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = async function(event) { 
-                        visitorImgBase64 = await window.compressImage(event.target.result); 
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
+        async function previewShipmentImage(input) {
+            const preview = document.getElementById('ship-img-preview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    let compressed = await window.compressImage(e.target.result);
+                    preview.src = compressed;
+                    preview.style.display = 'block';
+                    uploadedImgBase64 = compressed;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
         }
 
         function renderMyAccount() {
@@ -1672,6 +1677,8 @@
             closeVisitorBooking();
             alert('تم تقديم طلبك بنجاح وسيتواصل معك فريق الإدارة وسائقينا فوراً! 🚀');
             document.getElementById('visitor-shipment-form').reset();
+            const preview = document.getElementById('vis-img-preview');
+            if(preview) { preview.src = ''; preview.style.display = 'none'; }
             visitorGPS = ''; visitorImgBase64 = '';
             render();
         }
@@ -1744,6 +1751,8 @@
 
             saveDataAll();
             document.getElementById('shipment-form').reset();
+            const preview = document.getElementById('ship-img-preview');
+            if(preview) { preview.src = ''; preview.style.display = 'none'; }
             clearSignature();
             currentGPS = ''; uploadedImgBase64 = '';
             document.getElementById('gps-status').innerText = '';
