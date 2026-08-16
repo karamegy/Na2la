@@ -688,20 +688,21 @@
         <div class="card">
             <h3>إدارة حركة النقدية والمقبوضات</h3>
             <form id="cash-form" onsubmit="event.preventDefault(); saveCashHandler(event);">
+                <input type="hidden" id="edit-cash-id" value="">
                 <select id="cash-type">
                     <option value="in">إيداع / تحصيل نقدي (+)</option>
                     <option value="out">سحب / مصروفات الخزنة (-)</option>
                 </select>
                 <input type="number" id="cash-amount" placeholder="المبلغ (ج.م)" required>
                 <input type="text" id="cash-desc" placeholder="البيان / السبب" required>
-                <button type="submit" class="btn-success">تسجيل حركة نقدية</button>
+                <button type="submit" class="btn-success" id="cash-submit-btn">تسجيل حركة نقدية</button>
             </form>
         </div>
         <div class="card">
             <h3>سجل حركة الخزنة</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead>
+                    <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
                     <tbody id="treasury-list"></tbody>
                 </table>
             </div>
@@ -774,15 +775,17 @@
         <div class="card">
             <h3>تسجيل المصروفات التشغيلية</h3>
             <form id="expense-form" onsubmit="event.preventDefault(); saveExpenseHandler(event);">
+                <input type="hidden" id="edit-expense-id" value="">
                 <input type="text" id="exp-title" placeholder="بيان المصروف" required>
                 <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
-                <button type="submit" class="btn-danger">تسجيل المصروف</button>
+                <button type="submit" class="btn-danger" id="exp-submit-btn">تسجيل المصروف</button>
             </form>
         </div>
         <div class="card">
+            <h3>سجل المصروفات</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                    <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
                     <tbody id="expenses-list"></tbody>
                 </table>
             </div>
@@ -846,7 +849,7 @@
     </div>
 
     <script>
-        // إعدادات Firebase المحدثة والصحيحة لمشروعك[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)
+        // إعدادات Firebase المحدثة والصحيحة لمشروعك
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -906,7 +909,6 @@
             chat: [], posts: [], communityPosts: [] 
         };
 
-        // الحل المضمون: جلب البيانات من سحابة Firestore أولاً لمنع ضياع أي بيانات عند مسح ملفات الارتباط الكوكيز
         db.collection('appStore').doc('mainState').get().then((doc) => {
             if (doc.exists && doc.data()) {
                 const serverData = doc.data();
@@ -936,7 +938,6 @@
             render();
         });
 
-        // المزامنة الحية اللحظية (Realtime listener) لضمان التحديث الآني بين الأجهزة
         db.collection('appStore').doc('mainState').onSnapshot((doc) => {
             if (doc.exists) {
                 const serverData = doc.data();
@@ -2151,17 +2152,100 @@
 
         function showCommunityNotifications() { alert('لا توجد تنبيهات جديدة.'); }
 
+        // إدارة الخزينة (إضافة وتعديل وحذف)
         function saveCashHandler(e) {
+            e.preventDefault();
+            const editId = document.getElementById('edit-cash-id').value;
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
             if(!appData.treasury) appData.treasury = [];
-            appData.treasury.unshift({ id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') });
+
+            if (editId) {
+                let index = appData.treasury.findIndex(t => t.id == editId);
+                if (index !== -1) {
+                    appData.treasury[index] = {
+                        ...appData.treasury[index],
+                        type, amount, desc
+                    };
+                }
+                document.getElementById('edit-cash-id').value = '';
+                document.getElementById('cash-submit-btn').innerText = 'تسجيل حركة نقدية';
+            } else {
+                appData.treasury.unshift({ id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') });
+            }
             saveDataAll();
             document.getElementById('cash-form').reset();
             render();
-            alert('تم تسجيل الحركة بالخزينة بنجاح! 💵');
+            alert('تم حفظ الحركة النقدية بنجاح! 💵');
+        }
+
+        function editTreasury(id) {
+            const t = (appData.treasury || []).find(item => item.id == id);
+            if (!t) return;
+            document.getElementById('edit-cash-id').value = t.id;
+            document.getElementById('cash-type').value = t.type;
+            document.getElementById('cash-amount').value = t.amount;
+            document.getElementById('cash-desc').value = t.desc;
+            document.getElementById('cash-submit-btn').innerText = 'تعديل الحركة النقدية 💾';
+            switchTab('treasury-tab');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteTreasury(id) {
+            if (confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) {
+                appData.treasury = (appData.treasury || []).filter(t => t.id != id);
+                saveDataAll();
+                render();
+            }
+        }
+
+        // إدارة المصروفات (إضافة وتعديل وحذف)
+        function saveExpenseHandler(e) {
+            e.preventDefault();
+            const editId = document.getElementById('edit-expense-id').value;
+            const title = document.getElementById('exp-title').value.trim();
+            const amount = Number(document.getElementById('exp-amount').value);
+
+            if(!appData.expenses) appData.expenses = [];
+
+            if (editId) {
+                let index = appData.expenses.findIndex(ex => ex.id == editId);
+                if (index !== -1) {
+                    appData.expenses[index] = {
+                        ...appData.expenses[index],
+                        title, amount
+                    };
+                }
+                document.getElementById('edit-expense-id').value = '';
+                document.getElementById('exp-submit-btn').innerText = 'تسجيل المصروف';
+            } else {
+                appData.expenses.unshift({ id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') });
+            }
+            saveDataAll();
+            document.getElementById('expense-form').reset();
+            render();
+            alert('تم حفظ المصروف بنجاح! ⛽');
+        }
+
+        function editExpense(id) {
+            const ex = (appData.expenses || []).find(item => item.id == id);
+            if (!ex) return;
+            document.getElementById('edit-expense-id').value = ex.id;
+            document.getElementById('exp-title').value = ex.title;
+            document.getElementById('exp-amount').value = ex.amount;
+            document.getElementById('exp-submit-btn').innerText = 'تعديل المصروف 💾';
+            switchTab('expenses-tab');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteExpense(id) {
+            if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+                appData.expenses = (appData.expenses || []).filter(ex => ex.id != id);
+                saveDataAll();
+                render();
+            }
         }
 
         function saveTruckHandler(e) {
@@ -2221,18 +2305,6 @@
             }
         }
 
-        function saveExpenseHandler(e) {
-            const title = document.getElementById('exp-title').value.trim();
-            const amount = Number(document.getElementById('exp-amount').value);
-
-            if(!appData.expenses) appData.expenses = [];
-            appData.expenses.unshift({ id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') });
-            saveDataAll();
-            document.getElementById('expense-form').reset();
-            render();
-            alert('تم تسجيل المصروف! ⛽');
-        }
-
         function payCustomerDebt(index) {
             let cust = appData.customers[index];
             if(!cust) return;
@@ -2279,8 +2351,11 @@
                         <td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
                         <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
-                        <td>${t.date}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.treasury.splice(${idx},1); saveDataAll(); renderCRUDTable('treasury');">حذف</button></td>
+                        <td>${t.date || '-'}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury(${t.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury(${t.id})">حذف</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2292,8 +2367,11 @@
                         <td>${idx + 1}</td>
                         <td>${e.title}</td>
                         <td>${e.amount} ج.م</td>
-                        <td>${e.date}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.expenses.splice(${idx},1); saveDataAll(); renderCRUDTable('expenses');">حذف</button></td>
+                        <td>${e.date || '-'}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2368,7 +2446,11 @@
                         <td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
                         <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
-                        <td>${t.date}</td>
+                        <td>${t.date || '-'}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury(${t.id})">✏️ تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury(${t.id})">🗑️ حذف</button>
+                        </td>
                     `;
                     treasuryList.appendChild(tr);
                 });
@@ -2395,7 +2477,15 @@
                 expList.innerHTML = '';
                 (appData.expenses || []).forEach(e => {
                     let tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${e.title}</td><td>${e.amount} ج.م</td><td>${e.date}</td>`;
+                    tr.innerHTML = `
+                        <td>${e.title}</td>
+                        <td>${e.amount} ج.م</td>
+                        <td>${e.date || '-'}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id})">✏️ تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">🗑️ حذف</button>
+                        </td>
+                    `;
                     expList.appendChild(tr);
                 });
             }
