@@ -457,32 +457,39 @@
         trucks: [],
         maintenanceLogs: [],
         chatMessages: [],
+        chat: [],
         centralBroadcasts: [],
         auditLogs: []
     };
 
     const localData = localStorage.getItem('transportAppV60');
     if (localData) {
-        try { appData = JSON.parse(localData); } catch(e) {}
+        try { 
+            let parsed = JSON.parse(localData);
+            if(parsed) appData = { ...appData, ...parsed };
+        } catch(e) {}
     }
 
-    // الاستماع الفوري لبيانات التطبيق الرئيسية من Firestore
+    // الاستماع الفوري لبيانات التطبيق الرئيسية مع حماية كاملة ومضمونة لمنع توقف واجهة العرض
     db.collection("appData").doc("mainState").onSnapshot((doc) => {
         if (doc.exists) {
-            let serverData = doc.data();
-            appData.shipments = serverData.shipments || [];
-            appData.consolidatedInvoices = serverData.consolidatedInvoices || [];
-            appData.treasury = serverData.treasury || [];
-            appData.expenses = serverData.expenses || [];
-            appData.customers = serverData.customers || [];
-            appData.drivers = serverData.drivers || [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق'}];
-            appData.communityPosts = serverData.communityPosts || [];
-            appData.posts = serverData.posts || [];
-            appData.trucks = serverData.trucks || [];
-            appData.maintenanceLogs = serverData.maintenanceLogs || [];
-            appData.centralBroadcasts = serverData.centralBroadcasts || [];
-            appData.auditLogs = serverData.auditLogs || [];
-            
+            let remoteData = doc.data() || {};
+            appData = {
+                shipments: remoteData.shipments || [],
+                consolidatedInvoices: remoteData.consolidatedInvoices || [],
+                treasury: remoteData.treasury || [],
+                expenses: remoteData.expenses || [],
+                customers: remoteData.customers || [],
+                drivers: remoteData.drivers || [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق'}],
+                communityPosts: remoteData.communityPosts || [],
+                posts: remoteData.posts || [],
+                trucks: remoteData.trucks || [],
+                maintenanceLogs: remoteData.maintenanceLogs || [],
+                chatMessages: remoteData.chatMessages || remoteData.chat || [],
+                chat: remoteData.chat || remoteData.chatMessages || [],
+                centralBroadcasts: remoteData.centralBroadcasts || [],
+                auditLogs: remoteData.auditLogs || []
+            };
             localStorage.setItem('transportAppV60', JSON.stringify(appData));
         } else {
             saveDataAll();
@@ -492,40 +499,17 @@
         updateRSSTicker();
     });
 
-    // استماع لحظي مستقل ومخصص للشات لضمان التزامن الفوري بين كافة الهواتف دون تضارب
-    db.collection("fleetChat").orderBy("createdAt", "asc").onSnapshot((snapshot) => {
-        appData.chatMessages = [];
-        snapshot.forEach((doc) => {
-            appData.chatMessages.push(doc.data());
-        });
-        if (currentSectionId === 'chat') {
-            refreshActiveSection();
-        }
-    });
-
     function saveDataAll() {
+        appData.chat = appData.chatMessages;
         localStorage.setItem('transportAppV60', JSON.stringify(appData));
-        db.collection("appData").doc("mainState").set({
-            shipments: appData.shipments,
-            consolidatedInvoices: appData.consolidatedInvoices,
-            treasury: appData.treasury,
-            expenses: appData.expenses,
-            customers: appData.customers,
-            drivers: appData.drivers,
-            communityPosts: appData.communityPosts,
-            posts: appData.posts,
-            trucks: appData.trucks,
-            maintenanceLogs: appData.maintenanceLogs,
-            centralBroadcasts: appData.centralBroadcasts,
-            auditLogs: appData.auditLogs
-        })
-        .then(() => {
-            renderStats();
-            refreshActiveSection();
-        })
-        .catch((error) => {
-            console.error("خطأ في حفظ البيانات سحابياً: ", error);
-        });
+        db.collection("appData").doc("mainState").set(appData)
+            .then(() => {
+                renderStats();
+                refreshActiveSection();
+            })
+            .catch((error) => {
+                console.error("خطأ في حفظ البيانات سحابياً: ", error);
+            });
     }
 
     let currentSectionId = 'pandaAdmin';
@@ -548,6 +532,20 @@
     }
 
     function appStateData() {
+        if(!appData) appData = {};
+        if(!appData.shipments) appData.shipments = [];
+        if(!appData.consolidatedInvoices) appData.consolidatedInvoices = [];
+        if(!appData.treasury) appData.treasury = [];
+        if(!appData.expenses) appData.expenses = [];
+        if(!appData.customers) appData.customers = [];
+        if(!appData.drivers) appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق'}];
+        if(!appData.communityPosts) appData.communityPosts = [];
+        if(!appData.posts) appData.posts = [];
+        if(!appData.trucks) appData.trucks = [];
+        if(!appData.maintenanceLogs) appData.maintenanceLogs = [];
+        if(!appData.chatMessages) appData.chatMessages = [];
+        if(!appData.centralBroadcasts) appData.centralBroadcasts = [];
+        if(!appData.auditLogs) appData.auditLogs = [];
         return appData;
     }
 
@@ -592,7 +590,7 @@
     function applyUserPermissionsUI() {
         let role = currentLoggedInUser ? currentLoggedInUser.role : 'سائق';
         
-        document.getElementById('header-username').innerText = currentLoggedInUser.name;
+        document.getElementById('header-username').innerText = currentLoggedInUser ? currentLoggedInUser.name : 'كرم حمدي';
         document.getElementById('header-role-badge').innerText = role === 'مدير نظام' ? '👑 الإدارة العليا - باندا' : `👨‍✈️ ${currentLoggedInUser.title || 'سائق'} - ${role}`;
 
         const adminStats = document.getElementById('admin-stats');
@@ -721,7 +719,6 @@
         let role = currentLoggedInUser ? currentLoggedInUser.role : 'سائق';
 
         if (role === 'سائق' && adminOnlySections.includes(sectionId)) {
-            showToast('عذراً، هذا القسم مخصص للإدارة العليا فقط!', 'warning');
             sectionId = 'shipments';
         }
 
@@ -1098,14 +1095,14 @@
         } else if (sectionId === 'chat') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💬 المحادثات الفورية للأسطول (${currentLoggedInUser ? currentLoggedInUser.name : 'زائر'})</span></h3>
+                    <h3><span>💬 المحادثات الفورية للأسطول</span></h3>
                     <div style="background:var(--bg-dark); height:180px; overflow-y:auto; padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;">
                         ${(data.chatMessages || []).map(m => `
                             <div style="background:var(--card-bg); padding:6px; border-radius:6px; border:1px solid var(--border-color);">
-                                <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--yellow-warning);">
+                                <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--text-muted);">
                                     <strong>${m.sender}</strong><span>${m.time}</span>
                                 </div>
-                                <p style="margin-top:2px; color:var(--text-main);">${m.text}</p>
+                                <p style="margin-top:2px;">${m.text}</p>
                             </div>
                         `).join('') || '<p style="text-align:center; font-size:9px; color:var(--text-muted);">لا توجد رسائل</p>'}
                     </div>
@@ -1529,29 +1526,23 @@
         showToast('تم نشر الإعلان بنجاح!');
     }
 
-    // إرسال الرسالة مباشرة إلى مجموعة الشات المستقلة في Firestore مع ربطها بحساب المستخدم النشط
     function sendChatMessage(e) {
         e.preventDefault();
         const text = document.getElementById('chat-input').value;
         if(!text) return;
-        
-        let userName = currentLoggedInUser ? currentLoggedInUser.name : 'سائق معتمد';
+        let userName = currentLoggedInUser ? currentLoggedInUser.name : 'سائق';
         const newMsg = {
             sender: userName,
             text: text,
-            time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
         };
-
-        db.collection("fleetChat").add(newMsg)
-            .then(() => {
-                document.getElementById('chat-input').value = '';
-                showToast('تم إرسال الرسالة بنجاح 🚀');
-            })
-            .catch((error) => {
-                console.error("خطأ في إرسال الرسالة: ", error);
-                showToast('فشل إرسال الرسالة!', 'error');
-            });
+        let data = appStateData();
+        if(!data.chatMessages) data.chatMessages = [];
+        data.chatMessages.push(newMsg);
+        data.chat = data.chatMessages;
+        saveDataAll();
+        document.getElementById('chat-input').value = '';
+        switchSection('chat');
     }
 
     function publishCommunityPost() {
