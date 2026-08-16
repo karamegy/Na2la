@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V89.2 PRO SYNC</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V89.3 PRO SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -135,7 +135,7 @@
 <div class="login-screen" id="lock-screen" style="display: none;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.2 PRO SYNC)</h3>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.3 PRO SYNC)</h3>
         <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً لحظياً عبر Firestore (appStore/mainState)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
@@ -442,14 +442,19 @@
     let appData = defaultInitialData;
     window.appData = appData;
 
-    // دالة جلب البيانات الذكية (تتحقق من مصفوفتي docs و shipments سحابياً ومحلياً)
+    // دالة دمج وجلب الشحنات الذكية الموحدة (تدمج docs و shipments بدون فقدان بيانات)
     function getAllShipments(dataObj) {
         if (!dataObj) return [];
         let d = dataObj.docs || [];
         let s = dataObj.shipments || [];
-        if (d.length > 0) return d;
-        if (s.length > 0) return s;
-        return d.length > 0 ? d : s;
+        let combinedMap = new Map();
+        [...s, ...d].forEach(item => {
+            if (item && (item.name || item.item)) {
+                let key = item.id || `${item.name}_${item.item}_${item.price}`;
+                combinedMap.set(key, item);
+            }
+        });
+        return Array.from(combinedMap.values());
     }
     window.getAllShipments = getAllShipments;
 
@@ -469,20 +474,27 @@
         return null;
     }
 
-    // المزامنة الحية اللحظية مع مستند المنصة الأم عبر Firestore
+    // المزامنة الحية اللحظية مع مستند المنصة الأم عبر Firestore (دمج شامل بدون فقدان)
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
         if (window._isSavingLocally) return;
 
         let remoteData = docSnap.exists ? docSnap.data() : null;
         let localData = getStoredLocalData();
 
-        let rawShipments = [];
-        if (remoteData) {
-            rawShipments = remoteData.docs?.length ? remoteData.docs : (remoteData.shipments || []);
-        }
-        if (rawShipments.length === 0 && localData) {
-            rawShipments = localData.docs?.length ? localData.docs : (localData.shipments || []);
-        }
+        let remoteDocs = remoteData?.docs || [];
+        let remoteShipments = remoteData?.shipments || [];
+        let localDocs = localData?.docs || [];
+        let localShipments = localData?.shipments || [];
+
+        let allRawShipments = [...remoteDocs, ...remoteShipments, ...localDocs, ...localShipments];
+        let uniqueShipmentsMap = new Map();
+        allRawShipments.forEach(item => {
+            if (item && (item.name || item.item)) {
+                let key = item.id || `${item.name}_${item.item}_${item.price}`;
+                uniqueShipmentsMap.set(key, item);
+            }
+        });
+        let rawShipments = Array.from(uniqueShipmentsMap.values());
 
         appData = {
             shipments: rawShipments,
@@ -512,7 +524,7 @@
     }, (error) => {
         let localData = getStoredLocalData();
         if (localData) {
-            let sList = localData.docs?.length ? localData.docs : (localData.shipments || []);
+            let sList = getAllShipments(localData);
             appData.shipments = sList;
             appData.docs = sList;
         } else {
@@ -793,7 +805,7 @@
         if (sectionId === 'overview') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.2)</span></h3>
+                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.3)</span></h3>
                     <p style="font-size:10px; margin-bottom:6px; opacity:0.8;">مرتبط مباشرة بغرفة باندا والمنصة الأم (Firestore) وجلب وتعديل البيانات يتم سحابياً لحظياً.</p>
                     ${role === 'مدير نظام' ? '<button class="btn-main" onclick="switchSection(\'pandaAdmin\')">الانتقال لمركز إدارة باندا العليا ➔</button>' : ''}
                 </div>
@@ -1937,7 +1949,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V89.2", 20, 20);
+        doc.text("Global Transport Hub - Waybill V89.3", 20, 20);
         doc.text(`Client: ${s.name}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address}`, 20, 50);
@@ -1953,7 +1965,7 @@
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v89_2.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v89_3.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
