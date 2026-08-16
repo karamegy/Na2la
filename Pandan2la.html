@@ -446,6 +446,7 @@
         drivers: [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق'}],
         communityPosts: [],
         posts: [],
+        wallPosts: [],
         trucks: [],
         maintenanceLogs: [],
         chat: [],
@@ -455,7 +456,7 @@
     };
     window.appData = appData;
 
-    // المزامنة اللحظية اتجاهين (Real-Time Two-Way Sync Listener)
+    // المزامنة اللحظية اتجاهين المتوافقة مع بنية فايربيس
     onSnapshot(doc(db, "appStore", "mainState"), (docSnap) => {
         if (docSnap.exists()) {
             let remoteData = docSnap.data() || {};
@@ -486,6 +487,7 @@
                 drivers: remoteData.drivers && remoteData.drivers.length > 0 ? remoteData.drivers : [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق'}],
                 communityPosts: remoteData.communityPosts || [],
                 posts: remoteData.posts || remoteData.wallPosts || [],
+                wallPosts: remoteData.posts || remoteData.wallPosts || [],
                 trucks: remoteData.trucks || [],
                 maintenanceLogs: remoteData.maintenanceLogs || [],
                 chat: remoteData.chat || [],
@@ -507,13 +509,15 @@
 
     window.saveDataAll = async function() {
         appData.docs = appData.shipments;
+        appData.wallPosts = appData.posts;
         localStorage.setItem('transportAppV87', JSON.stringify(appData));
         try {
             await setDoc(doc(db, "appStore", "mainState"), {
                 ...appData,
                 docs: appData.shipments,
                 shipments: appData.shipments,
-                wallPosts: appData.posts
+                wallPosts: appData.posts,
+                posts: appData.posts
             }, { merge: true });
             if(typeof renderStats === 'function') renderStats();
             if(typeof refreshActiveSection === 'function') refreshActiveSection();
@@ -553,7 +557,7 @@
     }
 
     function appStateData() {
-        if(!window.appData) window.appData = { shipments: [], docs: [], consolidatedInvoices: [], treasury: [], expenses: [], customers: [], drivers: [], communityPosts: [], posts: [], trucks: [], maintenanceLogs: [], chat: [], centralBroadcasts: [], auditLogs: [], files: [] };
+        if(!window.appData) window.appData = { shipments: [], docs: [], consolidatedInvoices: [], treasury: [], expenses: [], customers: [], drivers: [], communityPosts: [], posts: [], wallPosts: [], trucks: [], maintenanceLogs: [], chat: [], centralBroadcasts: [], auditLogs: [], files: [] };
         return window.appData;
     }
 
@@ -1486,6 +1490,7 @@
             if(data[key]) {
                 data[key].splice(index, 1);
                 if(key === 'shipments') data.docs = data.shipments;
+                if(key === 'posts') data.wallPosts = data.posts;
                 saveDataAll();
                 logAction(`حذف عنصر من ${key}`);
                 showToast('تم الحذف بنجاح');
@@ -1785,6 +1790,7 @@
         let data = appStateData();
         if(!data.posts) data.posts = [];
         data.posts.unshift(newPost);
+        data.wallPosts = data.posts;
         saveDataAll();
         document.getElementById('feed-text').value = '';
         switchSection('publicFeed');
