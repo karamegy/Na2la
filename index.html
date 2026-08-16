@@ -933,7 +933,7 @@
             messagingSenderId: "1085749997466",
             appId: "1:1085749997466:web:13e5535dc6d2312397d423",
             measurementId: "G-KH4ZYFB8LC"
-        };[span_1](start_span)[span_1](end_span)
+        };
         
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
@@ -1029,7 +1029,7 @@
                 if (serverData && serverData.shipments) {
                     appData = serverData;
                 }
-                if (!appData.drivers) {
+                if (!appData.drivers || appData.drivers.length === 0) {
                     appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
                 }
                 appData.drivers.forEach(d => { if(!d.wallPosts) d.wallPosts = []; });
@@ -1060,12 +1060,12 @@
 
         // المزامنة الحية (Realtime listener مع قفل حماية لمنع مسح التعديلات المحلية)
         db.collection('appStore').doc('mainState').onSnapshot((doc) => {
-            if (window._isSavingLocally) return; // منع التحديث الفوري أثناء الحفظ لمنع سباق البيانات واختفاء الشحنات
+            if (window._isSavingLocally) return; 
             if (doc.exists && !isInitialLoad) {
                 const serverData = doc.data();
                 if (serverData && serverData.shipments) {
                     appData = serverData;
-                    if (!appData.drivers) {
+                    if (!appData.drivers || appData.drivers.length === 0) {
                         appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
                     }
                     appData.drivers.forEach(d => { if(!d.wallPosts) d.wallPosts = []; });
@@ -1113,9 +1113,6 @@
                         alert("⚠️ حدث خطأ أثناء الحفظ السحابي: " + error.message);
                     }
                 });
-
-            updateGlobalChatNotificationBadge();
-            renderRSSTicker();
         }
 
         function updateRSSTickerText() {
@@ -1146,53 +1143,49 @@
         }
 
         function unlockApp() {
-    const enteredPin = document.getElementById('pin-input').value.trim();
-    
-    // تجاوز فوري ومؤكد للمدير بالرمز الافتراضي 01036 حتى لو كانت السحابة فارغة
-    if (enteredPin === '01036' || enteredPin === storedPin) {
-        currentUserRole = 'admin'; 
-        loggedInDriverName = 'المدير';
-        localStorage.setItem('current_user_role', currentUserRole);
-        localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-        viewingProfileName = null;
-        document.getElementById('lock-screen').style.display = 'none';
-        document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
-        
-        // التأكد من وجود هيكل السائقين افتراضياً لمنع الأخطاء
-        if (!appData.drivers || appData.drivers.length === 0) {
-            appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
-            saveDataAll();
+            const enteredPin = document.getElementById('pin-input').value.trim();
+            
+            if (enteredPin === '01036' || enteredPin === storedPin) {
+                currentUserRole = 'admin'; 
+                loggedInDriverName = 'المدير';
+                localStorage.setItem('current_user_role', currentUserRole);
+                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+                viewingProfileName = null;
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
+                
+                if (!appData.drivers || appData.drivers.length === 0) {
+                    appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
+                    saveDataAll();
+                }
+
+                setupNavigation();
+                setAdminUIMode();
+                render();
+                return;
+            }
+
+            let adminAccount = (appData.drivers || []).find(d => String(d.pin).trim() === enteredPin && (d.role === 'مدير نظام' || (d.title && d.title.includes('مدير')) || d.name === 'المدير'));
+            
+            if (adminAccount) {
+                currentUserRole = 'admin'; 
+                loggedInDriverName = adminAccount.name;
+                localStorage.setItem('current_user_role', currentUserRole);
+                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+                viewingProfileName = null;
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
+                setupNavigation();
+                setAdminUIMode();
+                render();
+            } else {
+                driverLogin();
+            }
         }
 
-        setupNavigation();
-        setAdminUIMode();
-        render();
-        return;
-    }
-
-    // البحث في الحسابات والسائقين المسجلين بالمقارنة النصية الدقيقة
-    let adminAccount = (appData.drivers || []).find(d => String(d.pin).trim() === enteredPin && (d.role === 'مدير نظام' || d.title.includes('مدير') || d.name === 'المدير'));
-    
-    if (adminAccount) {
-        currentUserRole = 'admin'; 
-        loggedInDriverName = adminAccount.name;
-        localStorage.setItem('current_user_role', currentUserRole);
-        localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-        viewingProfileName = null;
-        document.getElementById('lock-screen').style.display = 'none';
-        document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
-        setupNavigation();
-        setAdminUIMode();
-        render();
-    } else {
-        driverLogin();
-    }
-}
-
-
         function driverLogin() {
-            const pin = document.getElementById('pin-input').value;
-            const driver = (appData.drivers || []).find(d => d.pin === pin);
+            const pin = document.getElementById('pin-input').value.trim();
+            const driver = (appData.drivers || []).find(d => String(d.pin).trim() === pin);
             if (driver) {
                 viewingProfileName = null;
                 loggedInDriverName = driver.name;
@@ -1502,7 +1495,6 @@
             if(tabId === 'chat-tab') renderChatAccountsList();
         }
 
-        // معالجة وضغط صور الشحنات والزوار والوثائق باستخدام دالة الضغط لتجنب حد الـ 1 ميجابايت
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
