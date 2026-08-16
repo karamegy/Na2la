@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V89.1 PRO SYNC</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V89.2 PRO SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -135,7 +135,7 @@
 <div class="login-screen" id="lock-screen" style="display: none;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.1 PRO SYNC)</h3>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.2 PRO SYNC)</h3>
         <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً لحظياً عبر Firestore (appStore/mainState)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
@@ -369,7 +369,6 @@
     const db = firebase.firestore();
     window.db = db;
 
-    // قفل الحماية لمنع تعارض المزامنة أثناء التعديل أو الإضافة المحلية
     window._isSavingLocally = false;
 
     function playBeep(type = 'success') {
@@ -443,6 +442,17 @@
     let appData = defaultInitialData;
     window.appData = appData;
 
+    // دالة آمنة وموحدة لجلب الشحنات من أي مصفوفة (docs أو shipments) بغض النظر عن الأسبقية
+    function getAllShipments(dataObj) {
+        if (!dataObj) return [];
+        let d = dataObj.docs || [];
+        let s = dataObj.shipments || [];
+        if (d.length > 0) return d;
+        if (s.length > 0) return s;
+        return d.length > 0 ? d : s;
+    }
+    window.getAllShipments = getAllShipments;
+
     function getStoredLocalData() {
         const keys = ['transportAppV89', 'transportAppV88', 'transportAppV87', 'transportApp'];
         for (let k of keys) {
@@ -459,24 +469,19 @@
         return null;
     }
 
-    // المزامنة اللحظية الشاملة مع مستند المنصة الأم (appStore / mainState) مع احترام القفل المحلي
+    // المزامنة اللحظية الشاملة مع مستند المنصة الأم (appStore / mainState) مع دمج الشحنات بشكل موحد
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
-        if (window._isSavingLocally) return; // منع التحديث السحابي من مسح البيانات أثناء الحفظ الفوري
+        if (window._isSavingLocally) return;
 
         let remoteData = docSnap.exists ? docSnap.data() : null;
         let localData = getStoredLocalData();
 
         let rawShipments = [];
-        if (remoteData && remoteData.docs && remoteData.docs.length > 0) {
-            rawShipments = remoteData.docs;
-        } else if (remoteData && remoteData.shipments && remoteData.shipments.length > 0) {
-            rawShipments = remoteData.shipments;
-        } else if (localData && localData.docs && localData.docs.length > 0) {
-            rawShipments = localData.docs;
-        } else if (localData && localData.shipments && localData.shipments.length > 0) {
-            rawShipments = localData.shipments;
-        } else {
-            rawShipments = defaultInitialData.docs;
+        if (remoteData) {
+            rawShipments = remoteData.docs?.length ? remoteData.docs : (remoteData.shipments || []);
+        }
+        if (rawShipments.length === 0 && localData) {
+            rawShipments = localData.docs?.length ? localData.docs : (localData.shipments || []);
         }
 
         appData = {
@@ -506,9 +511,10 @@
         if(typeof updateRSSTicker === 'function') updateRSSTicker();
     }, (error) => {
         let localData = getStoredLocalData();
-        if (localData && (localData.docs?.length > 0 || localData.shipments?.length > 0)) {
-            appData.shipments = localData.docs || localData.shipments;
-            appData.docs = appData.shipments;
+        if (localData) {
+            let sList = localData.docs?.length ? localData.docs : (localData.shipments || []);
+            appData.shipments = sList;
+            appData.docs = sList;
         } else {
             appData = defaultInitialData;
         }
@@ -523,18 +529,20 @@
             showToast('عذراً، حساب السائق لا يمتلك صلاحية تعديل أو حفظ البيانات!', 'warning');
             return;
         }
-        appData.docs = appData.shipments;
-        appData.shipments = appData.shipments;
+        // توحيد الحفظ في الحقلين معا لمنع أي تضارب
+        let unifiedShipments = getAllShipments(appData);
+        appData.docs = unifiedShipments;
+        appData.shipments = unifiedShipments;
         appData.wallPosts = appData.posts;
+        
         localStorage.setItem('transportAppV89', JSON.stringify(appData));
         
-        // تفعيل قفل الحماية لمنع الـ onSnapshot من إعادة تعيين البيانات قبل اكتمال الرفع السحابي
         window._isSavingLocally = true;
 
         db.collection("appStore").doc("mainState").set({
             ...appData,
-            docs: appData.shipments,
-            shipments: appData.shipments,
+            docs: unifiedShipments,
+            shipments: unifiedShipments,
             wallPosts: appData.posts,
             posts: appData.posts
         }, { merge: true }).then(() => {
@@ -573,7 +581,8 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بغرفة باندا والمنصة الأم - إجمالي الشحنات: ${(data.shipments || []).length}</span>`];
+        let shipmentsList = getAllShipments(data);
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بغرفة باندا والمنصة الأم - إجمالي الشحنات: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -743,7 +752,7 @@
         if (role === 'سائق') return;
 
         let data = appStateData();
-        let shipments = data.shipments || data.docs || [];
+        let shipments = getAllShipments(data);
         let expenses = data.expenses || [];
         let treasury = data.treasury || [];
         let customers = data.customers || [];
@@ -780,12 +789,12 @@
         const content = document.getElementById('main-content');
         if(!content) return;
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         
         if (sectionId === 'overview') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.1)</span></h3>
+                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.2)</span></h3>
                     <p style="font-size:10px; margin-bottom:6px; opacity:0.8;">مرتبط مباشرة بغرفة باندا والمنصة الأم (Firestore) وجلب وتعديل البيانات يتم سحابياً لحظياً.</p>
                     ${role === 'مدير نظام' ? '<button class="btn-main" onclick="switchSection(\'pandaAdmin\')">الانتقال لمركز إدارة باندا العليا ➔</button>' : ''}
                 </div>
@@ -1331,7 +1340,7 @@
     function filterShipmentsTable() {
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         const tbody = document.getElementById('shipments-table-body');
         const role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         const filtered = shipmentsList.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query));
@@ -1379,7 +1388,7 @@
         const body = document.getElementById('stat-modal-body');
         modal.style.display = 'flex';
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
 
         if (type === 'shipments') {
             title.innerText = '📦 تفاصيل الشحنات والرحلات';
@@ -1415,7 +1424,7 @@
             return;
         }
         let data = appStateData();
-        let targetList = type === 'shipments' ? (data.shipments || data.docs) : data[type];
+        let targetList = type === 'shipments' ? getAllShipments(data) : data[type];
         let item = targetList ? targetList[index] : null;
         if(!item) return;
 
@@ -1449,7 +1458,7 @@
         let data = appStateData();
 
         if(type === 'shipments') {
-            let list = data.shipments || data.docs;
+            let list = getAllShipments(data);
             list[index].name = document.getElementById('edit-name').value;
             list[index].address = document.getElementById('edit-address').value;
             list[index].item = document.getElementById('edit-item').value;
@@ -1467,7 +1476,7 @@
         const clientName = document.getElementById('ci-client').value;
         const container = document.getElementById('ci-shipments-checkboxes');
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         if(!clientName) {
             container.innerHTML = '<p style="color:var(--text-muted); text-align:center;">اختر العميل أولاً لعرض شحناته</p>';
             return;
@@ -1510,7 +1519,7 @@
         totalAmount = Math.max(0, totalAmount - discount);
 
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         const matchedShipment = shipmentsList.find(s => s.name === clientName);
         if(matchedShipment) clientPhone = matchedShipment.phone || '';
 
@@ -1539,7 +1548,7 @@
         }
         if(confirm('هل أنت متأكد من الحذف؟')) {
             let data = appStateData();
-            let targetList = key === 'shipments' ? (data.shipments || data.docs) : data[key];
+            let targetList = key === 'shipments' ? getAllShipments(data) : data[key];
             if(targetList) {
                 targetList.splice(index, 1);
                 if(key === 'shipments') {
@@ -1598,7 +1607,7 @@
         const index = document.getElementById('track-shipment-select').value;
         const container = document.getElementById('tracking-timeline-view');
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         if(index === '') {
             container.innerHTML = '<p style="font-size:9px; text-align:center; color:var(--text-muted);">الرجاء اختيار شحنة لعرض الخط الزمني</p>';
             return;
@@ -1623,7 +1632,7 @@
     function updateShipmentMilestone(index) {
         const newMilestone = document.getElementById('next-milestone').value;
         let data = appStateData();
-        let list = data.shipments || data.docs || [];
+        let list = getAllShipments(data);
         list[index].milestone = newMilestone;
         data.shipments = list;
         data.docs = list;
@@ -1740,7 +1749,7 @@
             date: new Date().toLocaleDateString('ar-EG')
         };
         let data = appStateData();
-        let list = data.shipments || data.docs || [];
+        let list = getAllShipments(data);
         list.unshift(newShipment);
         data.shipments = list;
         data.docs = list;
@@ -1824,7 +1833,7 @@
             date: new Date().toLocaleDateString('ar-EG')
         };
         let data = appStateData();
-        let list = data.shipments || data.docs || [];
+        let list = getAllShipments(data);
         list.unshift(newShipment);
         data.shipments = list;
         data.docs = list;
@@ -1877,7 +1886,7 @@
         }).addTo(map);
 
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         shipmentsList.forEach(s => {
             if(s.gps) {
                 const coords = s.gps.split(',').map(Number);
@@ -1913,7 +1922,7 @@
 
     function showQR(index) {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         const s = shipmentsList[index];
         if(!s) return;
         const box = document.getElementById('qrcode');
@@ -1924,12 +1933,12 @@
 
     function exportInvoicePDF(index) {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         const s = shipmentsList[index];
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V89.1", 20, 20);
+        doc.text("Global Transport Hub - Waybill V89.2", 20, 20);
         doc.text(`Client: ${s.name}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address}`, 20, 50);
@@ -1941,17 +1950,17 @@
 
     function exportToExcel() {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v89_1.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v89_2.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
     function exportSummaryWhatsApp() {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = getAllShipments(data);
         let rev = shipmentsList.reduce((s, x) => s + Number(x.price || 0), 0);
         let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
