@@ -846,7 +846,7 @@
     </div>
 
     <script>
-        // إعدادات Firebase المحدثة والصحيحة لمشروعك
+        // إعدادات Firebase المحدثة والصحيحة لمشروعك[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -906,16 +906,41 @@
             chat: [], posts: [], communityPosts: [] 
         };
 
-        const localSavedData = localStorage.getItem('transportAppV88');
-        if (localSavedData) {
-            try { appData = JSON.parse(localSavedData); } catch(e) { console.error(e); }
-        }
+        // الحل المضمون: جلب البيانات من سحابة Firestore أولاً لمنع ضياع أي بيانات عند مسح ملفات الارتباط الكوكيز
+        db.collection('appStore').doc('mainState').get().then((doc) => {
+            if (doc.exists && doc.data()) {
+                const serverData = doc.data();
+                if (serverData && serverData.shipments) {
+                    appData = serverData;
+                }
+                if (!appData.drivers) {
+                    appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
+                }
+                appData.drivers.forEach(d => { if(!d.wallPosts) d.wallPosts = []; });
+                if (!appData.communityPosts) appData.communityPosts = [];
+                if (!appData.posts) appData.posts = [];
+                if (!appData.chat) appData.chat = [];
+                if (!appData.shipments) appData.shipments = [];
+                localStorage.setItem('transportAppV88', JSON.stringify(appData));
+            } else {
+                saveDataAll();
+            }
+            render();
+            updateGlobalChatNotificationBadge();
+        }).catch((error) => {
+            console.error("خطأ في جلب البيانات من Firestore:", error);
+            const localSavedData = localStorage.getItem('transportAppV88');
+            if (localSavedData) {
+                try { appData = JSON.parse(localSavedData); } catch(e) { console.error(e); }
+            }
+            render();
+        });
 
-        // تم تصحيح مسار Firestore ليتطابق مع مجموعة appStore ومستند mainState
+        // المزامنة الحية اللحظية (Realtime listener) لضمان التحديث الآني بين الأجهزة
         db.collection('appStore').doc('mainState').onSnapshot((doc) => {
             if (doc.exists) {
                 const serverData = doc.data();
-                if (serverData) {
+                if (serverData && serverData.shipments) {
                     appData = serverData;
                     if (!appData.drivers) {
                         appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
@@ -925,12 +950,10 @@
                     if (!appData.posts) appData.posts = [];
                     if (!appData.chat) appData.chat = [];
                     localStorage.setItem('transportAppV88', JSON.stringify(appData));
+                    render();
+                    updateGlobalChatNotificationBadge();
                 }
-            } else {
-                saveDataAll();
             }
-            render();
-            updateGlobalChatNotificationBadge();
         }, (error) => {
             console.error("خطأ في مزامنة Firestore:", error);
         });
@@ -2520,4 +2543,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
