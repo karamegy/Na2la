@@ -14,9 +14,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase 8.10.1 (Realtime Database & Firestore) -->
+    <!-- مكتبات Firebase 8.10.1 (Firestore & App) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <!-- إعدادات وتهيئة Firebase Analytics الحديثة (Modular SDK) -->
@@ -164,7 +163,7 @@
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
         <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V78 ULTRA PRO MAX)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً (Firebase Realtime DB)</p>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً (Cloud Firestore)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;">
         
@@ -299,7 +298,7 @@
             <p style="font-size: 9px; margin-bottom: 6px;">حالة الربط الفعال بين التطبيق والمنصة الأم:</p>
             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; font-size:9px; margin-bottom:6px;">
                 <p>🔗 رابط المنصة الأم: <a href="https://karamegy.github.io/Na2la/" target="_blank" style="color:var(--accent-main);">karamegy.github.io/Na2la</a></p>
-                <p style="margin-top:3px;">🟢 الحالة: متصل سحابياً ومحلياً بجلب مباشر من قاعدة البيانات الرئيسية (transportAppV60)</p>
+                <p style="margin-top:3px;">🟢 الحالة: متصل سحابياً ومحلياً بجلب مباشر من قاعدة البيانات الرئيسية (Cloud Firestore)</p>
             </div>
             <button class="btn-success" onclick="syncWithMotherPlatform()">فرض مزامنة فورية شاملة ⚡</button>
         </div>
@@ -421,14 +420,20 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // إعدادات الاتصال المباشر بقاعدة البيانات الرئيسية للمنصة الأم (Firebase Realtime DB)
+    // إعدادات الاتصال المباشر بقاعدة بيانات Cloud Firestore لضمان تزامن الرسائل والبيانات لحظياً
     const firebaseConfig = {
-        databaseURL: "https://na2la-default-rtdb.firebaseio.com/"
+        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+        authDomain: "n2la-642d3.firebaseapp.com",
+        projectId: "n2la-642d3",
+        storageBucket: "n2la-642d3.firebasestorage.app",
+        messagingSenderId: "1085749997466",
+        appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+        measurementId: "G-KH4ZYFB8LC"
     };
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
-    const db = firebase.database();
+    const db = firebase.firestore();
 
     const professionalTitles = [
         "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
@@ -439,7 +444,6 @@
         "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
     ];
 
-    // متغير لتخزين المستخدم الحالي المسجل دخوله وصلاحياته
     let currentLoggedInUser = null;
 
     let appData = {
@@ -454,6 +458,7 @@
         trucks: [],
         maintenanceLogs: [],
         chatMessages: [],
+        chat: [],
         centralBroadcasts: [],
         auditLogs: []
     };
@@ -463,15 +468,20 @@
         try { appData = JSON.parse(localData); } catch(e) {}
     }
 
-    // جلب ومزامنة البيانات مباشرة من المنصة الأم (Realtime Database)
-    db.ref('transportAppV60').on('value', (snapshot) => {
-        const serverData = snapshot.val();
-        if (serverData) {
-            appData = serverData;
+    // الاستماع الفوري للتحديثات اللحظية عبر Cloud Firestore (مجموعة appData، مستند mainState)
+    db.collection("appData").doc("mainState").onSnapshot((doc) => {
+        if (doc.exists) {
+            appData = doc.data();
             if(!appData.consolidatedInvoices) appData.consolidatedInvoices = [];
             if(!appData.centralBroadcasts) appData.centralBroadcasts = [];
             if(!appData.maintenanceLogs) appData.maintenanceLogs = [];
             if(!appData.auditLogs) appData.auditLogs = [];
+            // دمج وتوحيد حقول الشات لضمان التوافق مع قاعدة البيانات
+            if(!appData.chatMessages) appData.chatMessages = appData.chat || [];
+            if(!appData.chat) appData.chat = appData.chatMessages;
+            if(!appData.drivers) appData.drivers = [];
+            if(!appData.shipments) appData.shipments = [];
+            
             localStorage.setItem('transportAppV60', JSON.stringify(appData));
         } else {
             saveDataAll();
@@ -482,10 +492,16 @@
     });
 
     function saveDataAll() {
+        appData.chat = appData.chatMessages;
         localStorage.setItem('transportAppV60', JSON.stringify(appData));
-        db.ref('transportAppV60').set(appData);
-        renderStats();
-        refreshActiveSection();
+        db.collection("appData").doc("mainState").set(appData)
+            .then(() => {
+                renderStats();
+                refreshActiveSection();
+            })
+            .catch((error) => {
+                console.error("خطأ في حفظ البيانات سحابياً: ", error);
+            });
     }
 
     let currentSectionId = 'pandaAdmin';
@@ -552,7 +568,6 @@
     function applyUserPermissionsUI() {
         let role = currentLoggedInUser ? currentLoggedInUser.role : 'سائق';
         
-        // تحديث معلومات الهيدر
         document.getElementById('header-username').innerText = currentLoggedInUser.name;
         document.getElementById('header-role-badge').innerText = role === 'مدير نظام' ? '👑 الإدارة العليا - باندا' : `👨‍✈️ ${currentLoggedInUser.title || 'سائق'} - ${role}`;
 
@@ -560,7 +575,6 @@
         const adminModulesGrid = document.getElementById('admin-modules-grid');
 
         if (role === 'سائق') {
-            // إخفاء الإحصائيات المالية العليا ومربعات الإدارة عن السائقين
             if(adminStats) adminStats.style.display = 'none';
             if(adminModulesGrid) adminModulesGrid.style.display = 'none';
         } else {
@@ -682,7 +696,6 @@
     function switchSection(sectionId, el, isRefresh = false) {
         let role = currentLoggedInUser ? currentLoggedInUser.role : 'سائق';
 
-        // منع السائق من الدخول للأقسام الإدارية والمالية
         if (role === 'سائق' && adminOnlySections.includes(sectionId)) {
             showToast('عذراً، هذا القسم مخصص للإدارة العليا فقط!', 'warning');
             sectionId = 'shipments';
@@ -734,7 +747,7 @@
                         <p>👥 الحسابات المسجلة: <strong>${(data.drivers || []).length} مستخدم</strong></p>
                         <p>📦 الشحنات النشطة: <strong>${(data.shipments || []).length} شحنة</strong></p>
                         <p>📑 الفواتير المجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة الاتصال: <strong style="color:var(--green-success);">متصل بالمنصة الأم سحابياً (Realtime DB)</strong></p>
+                        <p>🟢 حالة الاتصال: <strong style="color:var(--green-success);">متصل بالمنصة الأم سحابياً (Cloud Firestore)</strong></p>
                     </div>
                 </div>
             `;
@@ -1114,7 +1127,7 @@
                     <h3><span>📡 مراقبة الاتصال بالمنصة الأم (Live)</span></h3>
                     <div style="background:var(--bg-dark); padding:8px; border-radius:6px; font-size:10px; margin-bottom:6px;">
                         <p>🔗 رابط المنصة الأم: <a href="https://karamegy.github.io/Na2la/" target="_blank" style="color:var(--accent-main);">karamegy.github.io/Na2la</a></p>
-                        <p style="margin-top:3px;">🟢 الحالة: متصل سحابياً بقاعدة البيانات الرئيسية (transportAppV60)</p>
+                        <p style="margin-top:3px;">🟢 الحالة: متصل سحابياً بقاعدة البيانات الرئيسية (Cloud Firestore)</p>
                         <p style="margin-top:3px;">📊 إجمالي الشحنات: ${(data.shipments || []).length}</p>
                     </div>
                     <button class="btn-main" onclick="syncWithMotherPlatform()">مزامنة فورية من المنصة الأم 🔄</button>
@@ -1505,6 +1518,7 @@
         let data = appStateData();
         if(!data.chatMessages) data.chatMessages = [];
         data.chatMessages.push(newMsg);
+        data.chat = data.chatMessages;
         saveDataAll();
         document.getElementById('chat-input').value = '';
         switchSection('chat');
