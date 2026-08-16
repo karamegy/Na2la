@@ -1146,24 +1146,49 @@
         }
 
         function unlockApp() {
-            const enteredPin = document.getElementById('pin-input').value;
-            let adminAccount = (appData.drivers || []).find(d => d.pin === enteredPin && (d.role === 'مدير نظام' || d.title.includes('مدير') || d.name === 'المدير'));
-            
-            if (enteredPin === storedPin || adminAccount) {
-                currentUserRole = 'admin'; 
-                loggedInDriverName = adminAccount ? adminAccount.name : 'المدير';
-                localStorage.setItem('current_user_role', currentUserRole);
-                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-                viewingProfileName = null;
-                document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
-                setupNavigation();
-                setAdminUIMode();
-                render();
-            } else {
-                driverLogin();
-            }
+    const enteredPin = document.getElementById('pin-input').value.trim();
+    
+    // تجاوز فوري ومؤكد للمدير بالرمز الافتراضي 01036 حتى لو كانت السحابة فارغة
+    if (enteredPin === '01036' || enteredPin === storedPin) {
+        currentUserRole = 'admin'; 
+        loggedInDriverName = 'المدير';
+        localStorage.setItem('current_user_role', currentUserRole);
+        localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+        viewingProfileName = null;
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
+        
+        // التأكد من وجود هيكل السائقين افتراضياً لمنع الأخطاء
+        if (!appData.drivers || appData.drivers.length === 0) {
+            appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}];
+            saveDataAll();
         }
+
+        setupNavigation();
+        setAdminUIMode();
+        render();
+        return;
+    }
+
+    // البحث في الحسابات والسائقين المسجلين بالمقارنة النصية الدقيقة
+    let adminAccount = (appData.drivers || []).find(d => String(d.pin).trim() === enteredPin && (d.role === 'مدير نظام' || d.title.includes('مدير') || d.name === 'المدير'));
+    
+    if (adminAccount) {
+        currentUserRole = 'admin'; 
+        loggedInDriverName = adminAccount.name;
+        localStorage.setItem('current_user_role', currentUserRole);
+        localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+        viewingProfileName = null;
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
+        setupNavigation();
+        setAdminUIMode();
+        render();
+    } else {
+        driverLogin();
+    }
+}
+
 
         function driverLogin() {
             const pin = document.getElementById('pin-input').value;
