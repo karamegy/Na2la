@@ -886,6 +886,7 @@
             <button type="button" class="btn-success" onclick="sendDailySummaryWhatsApp()" style="margin-bottom: 8px; padding: 10px;">📲 إرسال التقرير اليومي عبر واتساب</button>
             <button type="button" class="btn-main" onclick="exportToExcel()" style="margin-bottom: 8px; padding: 10px;">📊 تصدير البيانات إلى Excel</button>
             <button type="button" class="btn-warning" onclick="changeAdminPinPrompt()" style="margin-bottom: 8px; padding: 10px;">🔑 تغيير كلمة السر</button>
+            <button type="button" class="btn-warning" onclick="cleanCloudStorageBloat()" style="margin-bottom: 8px; padding: 10px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff;">🧹 تفريغ المساحة السحابية وإصلاح مشكلة 1 ميجابايت</button>
             <button type="button" class="btn-danger" onclick="clearAll()" style="padding: 10px;">⚠️ مسح كل البيانات</button>
         </div>
 
@@ -940,8 +941,8 @@
         }
         const db = firebase.firestore();
 
-        // --- دالة محسنة ومضغوطة للصور لمنع تجاوز حد 1 ميجابايت في Firestore ---
-        function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
+        // --- دالة ضغط الصور بشكل مكثف وآمن (لتجنب تجاوز 1 ميجابايت) ---
+        function compressImage(file, maxWidth = 300, maxHeight = 300, quality = 0.3, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -1098,13 +1099,29 @@
             renderRSSTicker();
         });
 
-        // --- دالة الحفظ السحابي المحصنة ضد تجاوز 1 ميجابايت ---
+        // --- دالة الحفظ السحابي المحصنة ضد تجاوز 1 ميجابايت (مع التقليم التلقائي) ---
         function saveDataAll() {
             window._isSavingLocally = true;
 
-            // تنظيف السجلات الزائدة تلقائياً لمنع امتلاء المستند
+            // تنظيف وتقليم السجلات والرسائل تلقائياً لمنع تجاوز حجم 1 ميجابايت
             if (appData.auditLogs && appData.auditLogs.length > 5) {
                 appData.auditLogs = appData.auditLogs.slice(0, 5);
+            }
+            if (appData.chat && appData.chat.length > 40) {
+                appData.chat = appData.chat.slice(-40);
+            }
+            if (appData.communityPosts && appData.communityPosts.length > 15) {
+                appData.communityPosts = appData.communityPosts.slice(0, 15);
+            }
+            if (appData.posts && appData.posts.length > 15) {
+                appData.posts = appData.posts.slice(0, 15);
+            }
+            if (appData.drivers) {
+                appData.drivers.forEach(d => {
+                    if (d.wallPosts && d.wallPosts.length > 10) {
+                        d.wallPosts = d.wallPosts.slice(0, 10);
+                    }
+                });
             }
 
             localStorage.setItem('transportAppV89', JSON.stringify(appData));
@@ -1117,11 +1134,32 @@
                     window._isSavingLocally = false;
                     console.error("خطأ في الحفظ السحابي:", error);
                     if (error.code === 'resource-exhausted' || error.message.includes('exceeds the maximum allowed size')) {
-                        alert("⚠️ تنبيه هام: حجم البيانات تجاوز الحد الأقصى للسحابة (1 ميجابايت). يرجى حذف بعض الملفات أو الصور القديمة!");
+                        alert("⚠️ تنبيه هام: حجم البيانات تجاوز الحد الأقصى للسحابة (1 ميجابايت). يرجى استخدام زر 'تفريغ المساحة السحابية' في قسم التقارير لحل المشكلة فوراً!");
                     } else {
                         alert("⚠️ حدث خطأ أثناء الحفظ السحابي: " + error.message);
                     }
                 });
+        }
+
+        // دالة طارئة لتفريغ المساحة وإصلاح مشكلة 1 ميجابايت بضغطة زر
+        function cleanCloudStorageBloat() {
+            if (confirm('هل تريد تفريغ المساحة وحذف الصور/الرسائل المؤقتة القديمة لتخفيف الحجم وإصلاح مشكلة الـ 1 ميجابايت؟ (لن يتم مسح الفواتير أو الشحنات الأساسية)')) {
+                appData.chat = [];
+                appData.posts = [];
+                appData.communityPosts = [];
+                appData.shipments.forEach(s => { if(s.img && s.img.length > 20000) s.img = ''; });
+                if(appData.drivers) {
+                    appData.drivers.forEach(d => {
+                        d.avatar = '';
+                        d.cover = '';
+                        d.wallPosts = [];
+                    });
+                }
+                saveDataAll().then(() => {
+                    alert('تم تفريغ المساحة السحابية بنجاح وأصبح النظام جاهزاً للعمل بكفاءة 🚀');
+                    location.reload();
+                });
+            }
         }
 
         function updateRSSTickerText() {
@@ -1507,7 +1545,7 @@
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 300, 300, 0.3, (compressedUrl) => {
                     uploadedImgBase64 = compressedUrl;
                 });
             }
@@ -1516,7 +1554,7 @@
         function handleVisitorImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 300, 300, 0.3, (compressedUrl) => {
                     visitorImgBase64 = compressedUrl;
                 });
             }
@@ -1525,7 +1563,7 @@
         function handleDocImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 300, 300, 0.3, (compressedUrl) => {
                     input.dataset.compressedSrc = compressedUrl;
                 });
             }
@@ -1773,7 +1811,7 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 300, 300, 0.4, (compressedUrl) => {
+                compressImage(file, 250, 250, 0.3, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.avatar = compressedUrl;
@@ -1787,7 +1825,7 @@
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 600, 300, 0.4, (compressedUrl) => {
+                compressImage(file, 500, 250, 0.3, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.cover = compressedUrl;
@@ -1815,7 +1853,7 @@
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 500, 500, 0.4, (compressedUrl) => {
+                        compressImage(file, 400, 400, 0.3, (compressedUrl) => {
                             profileWallFilesArr.push({ type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
@@ -2251,7 +2289,7 @@
             };
 
             for (let i = 0; i < imgFiles.length; i++) {
-                compressImage(imgFiles[i], 500, 500, 0.4, (compressedUrl) => {
+                compressImage(imgFiles[i], 400, 400, 0.3, (compressedUrl) => {
                     mediaArr.push({ type: 'image', src: compressedUrl });
                     loaded++; checkAndSave();
                 });
@@ -2434,7 +2472,7 @@
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 500, 500, 0.4, (compressedUrl) => {
+                        compressImage(file, 400, 400, 0.3, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
