@@ -940,8 +940,8 @@
         }
         const db = firebase.firestore();
 
-        // --- دالة ضغط وتصغير الصور لمنع تجاوز حد 1 ميجابايت في Firestore ---
-        function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7, callback) {
+        // --- دالة محسنة ومضغوطة للصور لمنع تجاوز حد 1 ميجابايت في Firestore ---
+        function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -1015,7 +1015,7 @@
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
             drivers: [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: '', wallPosts: []}], 
-            chat: [], posts: [], communityPosts: [], consolidatedInvoices: [],
+            chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], auditLogs: [],
             newsText: '🌟 تم ربط النظام سحابياً عبر Cloud Firestore لضمان المزامنة الفورية واسترجاع البيانات بكفاءة 🚀 مع دعم الفواتير المجمعة وثيمات الثري الدي الفاخرة ✨'
         };
 
@@ -1038,6 +1038,7 @@
                 if (!appData.chat) appData.chat = [];
                 if (!appData.shipments) appData.shipments = [];
                 if (!appData.consolidatedInvoices) appData.consolidatedInvoices = [];
+                if (!appData.auditLogs) appData.auditLogs = [];
                 if (!appData.newsText) appData.newsText = '🌟 تم ربط النظام سحابياً عبر Cloud Firestore لضمان المزامنة الفورية واسترجاع البيانات بكفاءة 🚀 مع دعم الفواتير المجمعة وثيمات الثري الدي الفاخرة ✨';
                 localStorage.setItem('transportAppV89', JSON.stringify(appData));
             } else {
@@ -1073,6 +1074,7 @@
                     if (!appData.posts) appData.posts = [];
                     if (!appData.chat) appData.chat = [];
                     if (!appData.consolidatedInvoices) appData.consolidatedInvoices = [];
+                    if (!appData.auditLogs) appData.auditLogs = [];
                     if (!appData.newsText) appData.newsText = '🌟 تم ربط النظام سحابياً عبر Cloud Firestore لضمان المزامنة الفورية واسترجاع البيانات بكفاءة 🚀 مع دعم الفواتير المجمعة وثيمات الثري الدي الفاخرة ✨';
                     localStorage.setItem('transportAppV89', JSON.stringify(appData));
                     render();
@@ -1096,8 +1098,15 @@
             renderRSSTicker();
         });
 
+        // --- دالة الحفظ السحابي المحصنة ضد تجاوز 1 ميجابايت ---
         function saveDataAll() {
             window._isSavingLocally = true;
+
+            // تنظيف السجلات الزائدة تلقائياً لمنع امتلاء المستند
+            if (appData.auditLogs && appData.auditLogs.length > 5) {
+                appData.auditLogs = appData.auditLogs.slice(0, 5);
+            }
+
             localStorage.setItem('transportAppV89', JSON.stringify(appData));
             return db.collection('appStore').doc('mainState').set(appData)
                 .then(() => {
@@ -1305,7 +1314,7 @@
 
             if (type === 'shipments') {
                 titleEl.innerText = '📦 تفاصيل الشحنات والرحلات المتطورة';
-                let html = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th></tr></thead><tbody>`;
+                let html = `<div class="table-responsive"><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
                     html += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td></tr>`;
                 });
@@ -1315,7 +1324,7 @@
                 titleEl.innerText = '💰 تفاصيل الإيرادات والمقبوضات';
                 let totalRev = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
                 let html = `<p style="margin-bottom:8px; font-weight:bold; color:var(--success);">إجمالي الإيرادات الكلية: ${totalRev} ج.م</p>`;
-                html += `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>`;
+                html += `<div class="table-responsive"><thead><tr><th>العميل</th><th>الحمولة</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
                     html += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td>${s.date || 'حالي'}</td></tr>`;
                 });
@@ -1338,7 +1347,7 @@
                 titleEl.innerText = '💵 حركة الخزينة النقدية التفصيلية';
                 let totalCash = treasury.reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
                 let html = `<p style="margin-bottom:8px; font-weight:bold;">رصيد الخزينة الحالي: <span style="color:var(--success);">${totalCash} ج.م</span></p>`;
-                html += `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead><tbody>`;
+                html += `<div class="table-responsive"><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead><tbody>`;
                 treasury.forEach(t => {
                     html += `<tr><td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date || '-'}</td></tr>`;
                 });
@@ -1348,7 +1357,7 @@
                 titleEl.innerText = '⚠️ حسابات العملاء والديون المستحقة';
                 let totalDebt = customers.reduce((sum, c) => sum + Number(c.debt || 0), 0);
                 let html = `<p style="margin-bottom:8px; font-weight:bold;">إجمالي الديون المعلقة: <span style="color:var(--danger);">${totalDebt} ج.م</span></p>`;
-                html += `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th></tr></thead><tbody>`;
+                html += `<div class="table-responsive"><thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th></tr></thead><tbody>`;
                 customers.forEach(c => {
                     html += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td></tr>`;
                 });
@@ -1498,7 +1507,7 @@
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     uploadedImgBase64 = compressedUrl;
                 });
             }
@@ -1507,7 +1516,7 @@
         function handleVisitorImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     visitorImgBase64 = compressedUrl;
                 });
             }
@@ -1516,7 +1525,7 @@
         function handleDocImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     input.dataset.compressedSrc = compressedUrl;
                 });
             }
@@ -1764,7 +1773,7 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 400, 400, 0.7, (compressedUrl) => {
+                compressImage(file, 300, 300, 0.4, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.avatar = compressedUrl;
@@ -1778,7 +1787,7 @@
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 400, 0.7, (compressedUrl) => {
+                compressImage(file, 600, 300, 0.4, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.cover = compressedUrl;
@@ -1806,7 +1815,7 @@
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                        compressImage(file, 500, 500, 0.4, (compressedUrl) => {
                             profileWallFilesArr.push({ type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
@@ -2242,7 +2251,7 @@
             };
 
             for (let i = 0; i < imgFiles.length; i++) {
-                compressImage(imgFiles[i], 800, 800, 0.7, (compressedUrl) => {
+                compressImage(imgFiles[i], 500, 500, 0.4, (compressedUrl) => {
                     mediaArr.push({ type: 'image', src: compressedUrl });
                     loaded++; checkAndSave();
                 });
@@ -2425,7 +2434,7 @@
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                        compressImage(file, 500, 500, 0.4, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
