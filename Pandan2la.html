@@ -370,7 +370,6 @@
 
     window._isSavingLocally = false;
 
-    // ضغط الصور الذكي لمنع تجاوز حد 1 ميجابايت في Firestore
     function compressImage(file, maxWidth = 600, maxHeight = 600, quality = 0.5, callback) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -497,7 +496,6 @@
         return null;
     }
 
-    // 1️⃣ المستمع الخاص بالحالة العامة للنظام
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
         if (window._isSavingLocally) return;
 
@@ -532,7 +530,7 @@
             wallPosts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
             trucks: remoteData?.trucks?.length ? remoteData.trucks : (localData?.trucks?.length ? localData.trucks : defaultInitialData.trucks),
             maintenanceLogs: remoteData?.maintenanceLogs?.length ? remoteData.maintenanceLogs : (localData?.maintenanceLogs?.length ? localData.maintenanceLogs : defaultInitialData.maintenanceLogs),
-            chat: appData.chat || [], // نحتفظ بالشات المستقل
+            chat: appData.chat || [],
             centralBroadcasts: remoteData?.centralBroadcasts?.length ? remoteData.centralBroadcasts : (localData?.centralBroadcasts?.length ? localData.centralBroadcasts : defaultInitialData.centralBroadcasts),
             auditLogs: remoteData?.auditLogs?.length ? remoteData.auditLogs : (localData?.auditLogs?.length ? localData.auditLogs : defaultInitialData.auditLogs),
             files: remoteData?.files || localData?.files || []
@@ -546,7 +544,6 @@
         if(typeof updateRSSTicker === 'function') updateRSSTicker();
     });
 
-    // 2️⃣ المستمع الخاص بالشات الحي المستقل (منع تفريغ الرسائل ومشاكل الأحجام)
     function initChatRealtimeListener() {
         db.collection("chatMessages").orderBy("createdAt", "asc").limitToLast(50).onSnapshot((snapshot) => {
             let messages = [];
@@ -584,7 +581,6 @@
         localStorage.setItem('transportAppV89', JSON.stringify(appData));
         window._isSavingLocally = true;
 
-        // الحفظ بدون إرسال مصفوفة الشات للمستند الرئيسي لحمايته
         const stateToSave = { ...appData };
         delete stateToSave.chat;
 
@@ -1077,7 +1073,7 @@
                         </select>
                         <button type="submit" class="btn-main">حفظ وتوليد بوليصة QR 💾</button>
                     </form>
-                ` : ''}
+                </div>` : ''}
                 <div class="card">
                     <h3><span>📋 قائمة الشحنات المتاحة ${role === 'سائق' ? '(للمتابعة فقط)' : ''}</span></h3>
                     <div style="margin-bottom:6px;">
@@ -1256,8 +1252,10 @@
                 <div class="card">
                     <h3><span>📢 لوحة الإعلانات والرحلات العامة</span></h3>
                     ${role !== 'سائق' ? `
-                    <textarea id="feed-text" placeholder="اكتب إعلان أو حالة طريق جديدة..." style="height: 50px;"></textarea>
-                    <button class="btn-main" onclick="publishFeedPost()" style="margin-bottom: 6px;">نشر إعلان 🚀</button>` : ''}
+                    <form onsubmit="publishFeedPost(); return false;">
+                        <textarea id="feed-text" placeholder="اكتب إعلان أو حالة طريق جديدة..." style="height: 50px;" required></textarea>
+                        <button type="submit" class="btn-main" style="margin-bottom: 6px;">نشر إعلان 🚀</button>
+                    </form>` : ''}
                     <div id="feed-container">
                         ${(data.posts || []).map((p, idx) => `
                             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; justify-content:space-between; align-items:center;">
@@ -1322,7 +1320,6 @@
         renderStats();
     }
 
-    // عرض وتحميل الشات من المجموعات المستقلة بشكل سليم
     function renderChatMessagesBox() {
         const box = document.getElementById('chat-messages-box');
         if(!box) return;
@@ -1349,7 +1346,6 @@
         }
     }
 
-    // إرسال الرسالة إلى Firestore في مجموعة مستقلة لمنع التمسح والحذف
     function sendChatMessage(e) {
         e.preventDefault();
         const textEl = document.getElementById('chat-input');
@@ -1388,6 +1384,68 @@
         } else {
             pushToFirestore(null, null);
         }
+    }
+
+    // دوال الحفظ المضافة حديثاً لمنع الأخطاء واختفاء المدخلات
+    function saveCustomer(e) {
+        e.preventDefault();
+        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        if (role !== 'مدير نظام') {
+            showToast('إضافة العملاء مخصصة لمدير النظام فقط!', 'warning');
+            return;
+        }
+        const newCust = {
+            id: Date.now(),
+            name: document.getElementById('cust-name').value,
+            phone: document.getElementById('cust-phone').value,
+            debt: Number(document.getElementById('cust-debt').value || 0)
+        };
+        let data = appStateData();
+        if(!data.customers) data.customers = [];
+        data.customers.unshift(newCust);
+        saveDataAll();
+        switchSection('customers');
+        showToast('تم حفظ العميل بنجاح! 💾');
+    }
+
+    function saveTruck(e) {
+        e.preventDefault();
+        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        if (role !== 'مدير نظام') {
+            showToast('إضافة المركبات مخصصة لمدير النظام فقط!', 'warning');
+            return;
+        }
+        const newTruck = {
+            id: Date.now(),
+            num: document.getElementById('tr-num').value,
+            driver: document.getElementById('tr-driver').value,
+            km: Number(document.getElementById('tr-km').value || 0)
+        };
+        let data = appStateData();
+        if(!data.trucks) data.trucks = [];
+        data.trucks.unshift(newTruck);
+        saveDataAll();
+        switchSection('fleet');
+        showToast('تم حفظ المركبة بالأسطول بنجاح! 🚚');
+    }
+
+    function publishFeedPost() {
+        const text = document.getElementById('feed-text').value;
+        if(!text) return;
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
+        const newPost = {
+            id: Date.now(),
+            user: userName,
+            text: text,
+            time: new Date().toLocaleTimeString('ar-EG')
+        };
+        let data = appStateData();
+        if(!data.posts) data.posts = [];
+        data.posts.unshift(newPost);
+        saveDataAll();
+        document.getElementById('feed-text').value = '';
+        switchSection('publicFeed');
+        showToast('تم نشر الإعلان بنجاح! 🚀');
     }
 
     function filterShipmentsTable() {
