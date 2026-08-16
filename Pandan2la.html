@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V89 PRO SYNC</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V89.1 PRO SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -135,7 +135,7 @@
 <div class="login-screen" id="lock-screen" style="display: none;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89 PRO SYNC)</h3>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.1 PRO SYNC)</h3>
         <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً لحظياً عبر Firestore (appStore/mainState)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
@@ -369,6 +369,9 @@
     const db = firebase.firestore();
     window.db = db;
 
+    // قفل الحماية لمنع تعارض المزامنة أثناء التعديل أو الإضافة المحلية
+    window._isSavingLocally = false;
+
     function playBeep(type = 'success') {
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -456,8 +459,10 @@
         return null;
     }
 
-    // المزامنة اللحظية الشاملة مع مستند المنصة الأم (appStore / mainState)
+    // المزامنة اللحظية الشاملة مع مستند المنصة الأم (appStore / mainState) مع احترام القفل المحلي
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
+        if (window._isSavingLocally) return; // منع التحديث السحابي من مسح البيانات أثناء الحفظ الفوري
+
         let remoteData = docSnap.exists ? docSnap.data() : null;
         let localData = getStoredLocalData();
 
@@ -523,6 +528,9 @@
         appData.wallPosts = appData.posts;
         localStorage.setItem('transportAppV89', JSON.stringify(appData));
         
+        // تفعيل قفل الحماية لمنع الـ onSnapshot من إعادة تعيين البيانات قبل اكتمال الرفع السحابي
+        window._isSavingLocally = true;
+
         db.collection("appStore").doc("mainState").set({
             ...appData,
             docs: appData.shipments,
@@ -530,10 +538,15 @@
             wallPosts: appData.posts,
             posts: appData.posts
         }, { merge: true }).then(() => {
+            setTimeout(() => {
+                window._isSavingLocally = false;
+            }, 1500);
+
             if(typeof renderStats === 'function') renderStats();
             if(typeof refreshActiveSection === 'function') refreshActiveSection();
             if(typeof updateRSSTicker === 'function') updateRSSTicker();
         }).catch((e) => {
+            window._isSavingLocally = false;
             console.error("خطأ أثناء الحفظ سحابياً:", e);
         });
     };
@@ -772,7 +785,7 @@
         if (sectionId === 'overview') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89)</span></h3>
+                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.1)</span></h3>
                     <p style="font-size:10px; margin-bottom:6px; opacity:0.8;">مرتبط مباشرة بغرفة باندا والمنصة الأم (Firestore) وجلب وتعديل البيانات يتم سحابياً لحظياً.</p>
                     ${role === 'مدير نظام' ? '<button class="btn-main" onclick="switchSection(\'pandaAdmin\')">الانتقال لمركز إدارة باندا العليا ➔</button>' : ''}
                 </div>
@@ -1916,7 +1929,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V89", 20, 20);
+        doc.text("Global Transport Hub - Waybill V89.1", 20, 20);
         doc.text(`Client: ${s.name}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address}`, 20, 50);
@@ -1932,7 +1945,7 @@
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v89.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v89_1.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
