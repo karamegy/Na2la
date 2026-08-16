@@ -718,8 +718,9 @@
     <!-- 8. الخزنة -->
     <section id="treasury-tab" class="app-section">
         <div class="card">
-            <h3>إدارة حركة النقدية والمقبوضات</h3>
+            <h3 id="treasury-form-title">إدارة حركة النقدية والمقبوضات</h3>
             <form id="cash-form" onsubmit="event.preventDefault(); saveCashHandler(event);">
+                <input type="hidden" id="edit-cash-id" value="">
                 <select id="cash-type">
                     <option value="in">إيداع / تحصيل نقدي (+)</option>
                     <option value="out">سحب / مصروفات الخزنة (-)</option>
@@ -730,10 +731,10 @@
             </form>
         </div>
         <div class="card">
-            <h3>سجل حركة الخزنة</h3>
+            <h3>سجل حركة الخزينة (تعديل وحذف مباشر)</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead>
+                    <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                     <tbody id="treasury-list"></tbody>
                 </table>
             </div>
@@ -743,8 +744,9 @@
     <!-- 9. الأسطول -->
     <section id="fleet-tab" class="app-section">
         <div class="card">
-            <h3>إضافة مركبة وجدولة الصيانة</h3>
+            <h3 id="truck-form-title">إضافة مركبة وجدولة الصيانة</h3>
             <form id="truck-form" onsubmit="event.preventDefault(); saveTruckHandler(event);">
+                <input type="hidden" id="edit-truck-id" value="">
                 <input type="text" id="truck-num" value="شيفروليه بيك اب (صندوق مغلق)" placeholder="رقم أو اسم السيارة/الشاحنة" required>
                 <input type="text" id="driver-name" placeholder="اسم السائق المسؤول" required>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
@@ -766,10 +768,10 @@
             <div id="docs-list" style="margin-top: 8px; display: grid; gap: 5px;"></div>
         </div>
         <div class="card">
-            <h3>حالة المركبات والتراخيص</h3>
+            <h3>حالة المركبات والتراخيص (تعديل وحذف)</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت</th><th>الرخصة</th></tr></thead>
+                    <thead><tr><th>المركبة</th><th>السائق</th><th>KM</th><th>الزيت</th><th>الرخصة</th><th>إجراءات</th></tr></thead>
                     <tbody id="trucks-list"></tbody>
                 </table>
             </div>
@@ -807,17 +809,19 @@
     <!-- 11. المصروفات -->
     <section id="expenses-tab" class="app-section">
         <div class="card">
-            <h3>تسجيل المصروفات التشغيلية</h3>
+            <h3 id="expense-form-title">تسجيل المصروفات التشغيلية</h3>
             <form id="expense-form" onsubmit="event.preventDefault(); saveExpenseHandler(event);">
+                <input type="hidden" id="edit-expense-id" value="">
                 <input type="text" id="exp-title" placeholder="بيان المصروف" required>
                 <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
                 <button type="submit" class="btn-danger">تسجيل المصروف</button>
             </form>
         </div>
         <div class="card">
+            <h3>سجل المصروفات (إمكانية التعديل والحذف الفوري)</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th></tr></thead>
+                    <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                     <tbody id="expenses-list"></tbody>
                 </table>
             </div>
@@ -830,7 +834,7 @@
             <h3>حسابات العملاء والديون</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th><th>تحصيل</th></tr></thead>
+                    <thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th><th>تحصيل وإدارة</th></tr></thead>
                     <tbody id="customers-list"></tbody>
                 </table>
             </div>
@@ -1786,7 +1790,7 @@
         }
 
         function deleteShipment(id) {
-            if (currentUserRole !== 'admin') { alert('عذراً! صلاحية الحذف للمدير فقط'); return; }
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') { alert('عذراً! صلاحيات الحذف للمدير أو المشرف فقط'); return; }
             if (confirm('هل أنت تأكد من حذف هذه الشحنة نهائياً؟')) {
                 appData.shipments = appData.shipments.filter(s => s.id !== id);
                 saveDataAll();
@@ -2234,20 +2238,55 @@
             alert('لا توجد تنبيهات جديدة في المجتمع حالياً.');
         }
 
+        // ==================== دوال إدارة الخزينة (حذف وتعديل) ====================
         function saveCashHandler(e) {
+            const editId = document.getElementById('edit-cash-id').value;
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
             if(!appData.treasury) appData.treasury = [];
-            appData.treasury.unshift({ id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') });
+
+            if (editId) {
+                let index = appData.treasury.findIndex(t => t.id == editId);
+                if (index !== -1) {
+                    appData.treasury[index] = { ...appData.treasury[index], type, amount, desc };
+                }
+                document.getElementById('edit-cash-id').value = '';
+                document.getElementById('treasury-form-title').innerText = 'إدارة حركة النقدية والمقبوضات';
+            } else {
+                appData.treasury.unshift({ id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') });
+            }
+
             saveDataAll();
             document.getElementById('cash-form').reset();
             render();
-            alert('تم تسجيل الحركة النقدية بالخزينة بنجاح! 💵');
+            alert('تم حفظ حركة الخزينة بنجاح! 💵');
         }
 
+        function editTreasuryItem(id) {
+            let t = (appData.treasury || []).find(item => item.id === id);
+            if (!t) return;
+            document.getElementById('edit-cash-id').value = t.id;
+            document.getElementById('cash-type').value = t.type;
+            document.getElementById('cash-amount').value = t.amount;
+            document.getElementById('cash-desc').value = t.desc;
+            document.getElementById('treasury-form-title').innerText = 'تعديل حركة الخزينة';
+            window.scrollTo({ top: document.getElementById('cash-form').offsetTop, behavior: 'smooth' });
+        }
+
+        function deleteTreasuryItem(id) {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') { alert('صلاحية الحذف للمدير أو المشرف فقط!'); return; }
+            if (confirm('هل أنت متأكد من حذف حركة الخزينة هذه؟')) {
+                appData.treasury = appData.treasury.filter(t => t.id !== id);
+                saveDataAll();
+                render();
+            }
+        }
+
+        // ==================== دوال إدارة الأسطول (حذف وتعديل) ====================
         function saveTruckHandler(e) {
+            const editId = document.getElementById('edit-truck-id').value;
             const num = document.getElementById('truck-num').value.trim();
             const driver = document.getElementById('driver-name').value.trim();
             const km = Number(document.getElementById('truck-km').value);
@@ -2255,11 +2294,44 @@
             const expiry = document.getElementById('truck-expiry').value;
 
             if(!appData.trucks) appData.trucks = [];
-            appData.trucks.unshift({ id: Date.now(), num, driver, km, nextOil, expiry });
+
+            if (editId) {
+                let index = appData.trucks.findIndex(t => t.id == editId);
+                if (index !== -1) {
+                    appData.trucks[index] = { ...appData.trucks[index], num, driver, km, nextOil, expiry };
+                }
+                document.getElementById('edit-truck-id').value = '';
+                document.getElementById('truck-form-title').innerText = 'إضافة مركبة وجدولة الصيانة';
+            } else {
+                appData.trucks.unshift({ id: Date.now(), num, driver, km, nextOil, expiry });
+            }
+
             saveDataAll();
             document.getElementById('truck-form').reset();
             render();
-            alert('تم حفظ بيانات المركبة وجدولة الصيانة! 🚚');
+            alert('تم حفظ بيانات المركبة بنجاح! 🚚');
+        }
+
+        function editTruck(id) {
+            let t = (appData.trucks || []).find(item => item.id === id);
+            if (!t) return;
+            document.getElementById('edit-truck-id').value = t.id;
+            document.getElementById('truck-num').value = t.num;
+            document.getElementById('driver-name').value = t.driver;
+            document.getElementById('truck-km').value = t.km;
+            document.getElementById('truck-next-oil').value = t.nextOil;
+            document.getElementById('truck-expiry').value = t.expiry;
+            document.getElementById('truck-form-title').innerText = 'تعديل بيانات المركبة';
+            window.scrollTo({ top: document.getElementById('truck-form').offsetTop, behavior: 'smooth' });
+        }
+
+        function deleteTruck(id) {
+            if (currentUserRole !== 'admin') { alert('صلاحية الحذف للمدير فقط!'); return; }
+            if (confirm('هل أنت متأكد من حذف هذه المركبة؟')) {
+                appData.trucks = appData.trucks.filter(t => t.id !== id);
+                saveDataAll();
+                render();
+            }
         }
 
         async function saveDocHandler(e) {
@@ -2305,16 +2377,48 @@
             }
         }
 
+        // ==================== دوال إدارة المصروفات (تعديل وحذف) ====================
         function saveExpenseHandler(e) {
+            const editId = document.getElementById('edit-expense-id').value;
             const title = document.getElementById('exp-title').value.trim();
             const amount = Number(document.getElementById('exp-amount').value);
 
             if(!appData.expenses) appData.expenses = [];
-            appData.expenses.unshift({ id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') });
+
+            if (editId) {
+                let index = appData.expenses.findIndex(item => item.id == editId);
+                if (index !== -1) {
+                    appData.expenses[index] = { ...appData.expenses[index], title, amount };
+                }
+                document.getElementById('edit-expense-id').value = '';
+                document.getElementById('expense-form-title').innerText = 'تسجيل المصروفات التشغيلية';
+            } else {
+                appData.expenses.unshift({ id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') });
+            }
+
             saveDataAll();
             document.getElementById('expense-form').reset();
             render();
-            alert('تم تسجيل المصروف بنجاح! ⛽');
+            alert('تم حفظ المصروف بنجاح! ⛽');
+        }
+
+        function editExpense(id) {
+            let exp = (appData.expenses || []).find(item => item.id === id);
+            if (!exp) return;
+            document.getElementById('edit-expense-id').value = exp.id;
+            document.getElementById('exp-title').value = exp.title;
+            document.getElementById('exp-amount').value = exp.amount;
+            document.getElementById('expense-form-title').innerText = 'تعديل المصروف التشغيلي';
+            window.scrollTo({ top: document.getElementById('expense-form').offsetTop, behavior: 'smooth' });
+        }
+
+        function deleteExpense(id) {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') { alert('صلاحية الحذف للمدير أو المشرف فقط!'); return; }
+            if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+                appData.expenses = appData.expenses.filter(item => item.id !== id);
+                saveDataAll();
+                render();
+            }
         }
 
         function payCustomerDebt(index) {
@@ -2364,7 +2468,10 @@
                         <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
                         <td>${t.date}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.treasury.splice(${idx},1); saveDataAll(); renderCRUDTable('treasury');">حذف</button></td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasuryItem(${t.id}); switchTab('treasury-tab');">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasuryItem(${t.id})">حذف</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2377,7 +2484,27 @@
                         <td>${e.title}</td>
                         <td>${e.amount} ج.م</td>
                         <td>${e.date}</td>
-                        <td><button type="button" class="btn-danger btn-sm" onclick="appData.expenses.splice(${idx},1); saveDataAll(); renderCRUDTable('expenses');">حذف</button></td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id}); switchTab('expenses-tab');">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else if (section === 'trucks') {
+                headersRow.innerHTML = `<th>#</th><th>المركبة</th><th>السائق</th><th>KM</th><th>الرخصة</th><th>إجراءات</th>`;
+                (appData.trucks || []).forEach((t, idx) => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${idx + 1}</td>
+                        <td>${t.num}</td>
+                        <td>${t.driver}</td>
+                        <td>${t.km}</td>
+                        <td>${t.expiry}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTruck(${t.id}); switchTab('fleet-tab');">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTruck(${t.id})">حذف</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -2436,7 +2563,7 @@
                         <td>
                             <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">📱 QR</button>
                             <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>
-                            ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">🗑️</button>` : ''}
+                            ${(currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">🗑️</button>` : ''}
                         </td>
                     `;
                     list.appendChild(tr);
@@ -2452,7 +2579,11 @@
                         <td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
                         <td>${t.amount} ج.م</td>
                         <td>${t.desc}</td>
-                        <td>${t.date}</td>
+                        <td>${t.date || '-'}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasuryItem(${t.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasuryItem(${t.id})">حذف</button>
+                        </td>
                     `;
                     treasuryList.appendChild(tr);
                 });
@@ -2469,6 +2600,10 @@
                         <td>${t.km} KM</td>
                         <td>${t.nextOil} KM</td>
                         <td>${t.expiry}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTruck(${t.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTruck(${t.id})">حذف</button>
+                        </td>
                     `;
                     trucksList.appendChild(tr);
                 });
@@ -2479,7 +2614,15 @@
                 expList.innerHTML = '';
                 (appData.expenses || []).forEach(e => {
                     let tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${e.title}</td><td>${e.amount} ج.م</td><td>${e.date}</td>`;
+                    tr.innerHTML = `
+                        <td>${e.title}</td>
+                        <td>${e.amount} ج.م</td>
+                        <td>${e.date}</td>
+                        <td>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id})">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button>
+                        </td>
+                    `;
                     expList.appendChild(tr);
                 });
             }
@@ -2639,4 +2782,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
