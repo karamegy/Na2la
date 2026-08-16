@@ -313,7 +313,7 @@
                 </div>
                 <div style="margin-top: 8px;">
                     <label style="font-size:9px; font-weight:bold;">📷 صورة المستند أو البضاعة:</label>
-                    <input type="file" id="vis-img" accept="image/*">
+                    <input type="file" id="vis-img" accept="image/*" onchange="handleVisitorImage(this)">
                 </div>
                 <button type="submit" class="btn-success" style="padding: 10px; margin-top: 10px;">حجز وإرسال تنبيه للإدارة 🚀</button>
             </form>
@@ -623,7 +623,7 @@
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">📷 رفع صورة المستند أو الحمولة (من الجهاز أو الكاميرا):</label>
-                    <input type="file" id="ship-img" accept="image/*">
+                    <input type="file" id="ship-img" accept="image/*" onchange="handleShipmentImage(this)">
                 </div>
                 <div>
                     <label style="font-size:9px; font-weight:bold;">توقيع المستلم الرقمي:</label>
@@ -797,7 +797,7 @@
             <h3>📂 مكتبة وثائق وعقود الأسطول</h3>
             <form id="doc-form" onsubmit="event.preventDefault(); saveDocHandler(event);">
                 <input type="text" id="doc-title" placeholder="اسم المستند" required>
-                <input type="file" id="doc-file" accept="image/*" required>
+                <input type="file" id="doc-file" accept="image/*" required onchange="handleDocImage(this)">
                 <button type="submit" class="btn-warning" style="padding: 10px;">حفظ المستند للمكتبة</button>
             </form>
             <div id="docs-list" style="margin-top: 10px; display: grid; gap: 6px;"></div>
@@ -940,6 +940,40 @@
         }
         const db = firebase.firestore();
 
+        // --- دالة ضغط وتصغير الصور لمنع تجاوز حد 1 ميجابايت في Firestore ---
+        function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7, callback) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function (event) {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    callback(compressedDataUrl);
+                };
+            };
+        }
+
         function toggleSidebar() {
             document.getElementById('sidebar-menu').classList.toggle('open');
             document.getElementById('sidebar-overlay').classList.toggle('open');
@@ -1061,18 +1095,15 @@
         });
 
         function saveDataAll() {
-            // حفظ النسخة المحلية أولاً لحماية البيانات من الضياع الفوري
             localStorage.setItem('transportAppV89', JSON.stringify(appData));
-            
-            // محاولة الحفظ في سحابة Firestore مع معالجة خطأ الحجم الأقصى (1MB)
             db.collection('appStore').doc('mainState').set(appData)
                 .then(() => {
-                    console.log("تم مزامنة وحفظ البيانات سحابياً بنجاح ☁️⚡");
+                    console.log("تم الحفظ سحابياً بنجاح ☁️");
                 })
                 .catch((error) => {
-                    console.error("خطأ في الاتصال أو الحفظ بـ Firestore:", error);
+                    console.error("خطأ في الحفظ السحابي:", error);
                     if (error.code === 'resource-exhausted' || error.message.includes('exceeds the maximum allowed size')) {
-                        alert("⚠️ تنبيه هام: حجم البيانات والأسطورة تجاوز الحد الأقصى للسحابة (1 ميجابايت) بسبب كثرة الصور والمرفقات. يرجى حذف بعض الملفات القديمة أو الصور الكبيرة لضمان مزامنة السحابة بنجاح!");
+                        alert("⚠️ تنبيه هام: حجم البيانات تجاوز الحد الأقصى للسحابة (1 ميجابايت). يرجى حذف بعض الملفات أو الصور القديمة!");
                     } else {
                         alert("⚠️ حدث خطأ أثناء الحفظ السحابي: " + error.message);
                     }
@@ -1082,7 +1113,6 @@
             renderRSSTicker();
         }
 
-        // --- وظائف التحكم في شريط RSS ---
         function updateRSSTickerText() {
             const txt = document.getElementById('rss-ticker-input').value.trim();
             if(!txt) { alert('الرجاء كتابة نص الشريط الإخباري الجديد!'); return; }
@@ -1099,7 +1129,6 @@
                 marquee.innerText = appData.newsText || '🌟 تم ربط النظام سحابياً عبر Cloud Firestore لتضمان المزامنة الفورية واسترجاع البيانات بكفاءة 🚀 مع دعم الفواتير المجمعة وثيمات الثري الدي الفاخرة ✨';
             }
         }
-        // ---------------------------------
 
         function updateGlobalChatNotificationBadge() {
             let messages = appData.chat || [];
@@ -1443,31 +1472,34 @@
             if(tabId === 'chat-tab') renderChatAccountsList();
         }
 
-        const shipImgInput = document.getElementById('ship-img');
-        if(shipImgInput) {
-            shipImgInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(event) { uploadedImgBase64 = event.target.result; };
-                    reader.readAsDataURL(file);
-                }
-            });
+        // معالجة وضغط صور الشحنات والزوار والوثائق باستخدام دالة الضغط لتجنب حد الـ 1 ميجابايت
+        function handleShipmentImage(input) {
+            const file = input.files[0];
+            if (file) {
+                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                    uploadedImgBase64 = compressedUrl;
+                });
+            }
         }
 
-        const visImgInput = document.getElementById('vis-img');
-        if(visImgInput) {
-            visImgInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(event) { visitorImgBase64 = event.target.result; };
-                    reader.readAsDataURL(file);
-                }
-            });
+        function handleVisitorImage(input) {
+            const file = input.files[0];
+            if (file) {
+                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                    visitorImgBase64 = compressedUrl;
+                });
+            }
         }
 
-        // --- وظائف التعديل والحذف للخزينة والمصروفات ---
+        function handleDocImage(input) {
+            const file = input.files[0];
+            if (file) {
+                compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                    input.dataset.compressedSrc = compressedUrl;
+                });
+            }
+        }
+
         function editTreasury(id) {
             let t = (appData.treasury || []).find(item => item.id === id);
             if(!t) return;
@@ -1509,9 +1541,7 @@
                 render();
             }
         }
-        // ----------------------------------------------
 
-        // --- وظائف قسم الفواتير المجمعة ---
         function renderConsolidatedInvoicesSection() {
             const container = document.getElementById('con-shipments-checkboxes');
             if(!container) return;
@@ -1644,7 +1674,6 @@
                 renderConsolidatedInvoicesTable();
             }
         }
-        // ------------------------------------------
 
         function renderMyAccount() {
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
@@ -1713,32 +1742,28 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
+                compressImage(file, 400, 400, 0.7, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
-                        drv.avatar = e.target.result;
+                        drv.avatar = compressedUrl;
                         saveDataAll();
                         renderMyAccount();
                     }
-                };
-                reader.readAsDataURL(file);
+                });
             }
         }
 
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
+                compressImage(file, 800, 400, 0.7, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
-                        drv.cover = e.target.result;
+                        drv.cover = compressedUrl;
                         saveDataAll();
                         renderMyAccount();
                     }
-                };
-                reader.readAsDataURL(file);
+                });
             }
         }
 
@@ -1746,14 +1771,25 @@
             profileWallFilesArr = [];
             const info = document.getElementById('profile-wall-files-info');
             if (input.files && input.files.length > 0) {
-                info.innerText = `تم اختيار ${input.files.length} ملف/صور`;
+                info.innerText = `جاري معالجة وضغط ${input.files.length} ملفات...`;
+                let processed = 0;
                 for (let i = 0; i < input.files.length; i++) {
                     const file = input.files[i];
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        profileWallFilesArr.push({ type: file.type.startsWith('video') ? 'video' : 'image', src: e.target.result });
-                    };
-                    reader.readAsDataURL(file);
+                    if (file.type.startsWith('video')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            profileWallFilesArr.push({ type: 'video', src: e.target.result });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                            profileWallFilesArr.push({ type: 'image', src: compressedUrl });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
+                        });
+                    }
                 }
             } else {
                 info.innerText = '';
@@ -2184,9 +2220,10 @@
             };
 
             for (let i = 0; i < imgFiles.length; i++) {
-                let reader = new FileReader();
-                reader.onload = (e) => { mediaArr.push({ type: 'image', src: e.target.result }); loaded++; checkAndSave(); };
-                reader.readAsDataURL(imgFiles[i]);
+                compressImage(imgFiles[i], 800, 800, 0.7, (compressedUrl) => {
+                    mediaArr.push({ type: 'image', src: compressedUrl });
+                    loaded++; checkAndSave();
+                });
             }
             for (let i = 0; i < videoFiles.length; i++) {
                 let reader = new FileReader();
@@ -2361,14 +2398,33 @@
             communityFilesArr = [];
             const info = document.getElementById('community-files-preview-info');
             if(input.files && input.files.length > 0) {
-                info.innerText = `تم اختيار ${input.files.length} ملفات/صور`;
+                info.innerText = `جاري معالجة وضغط ${input.files.length} ملفات...`;
+                let processed = 0;
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
-                    let reader = new FileReader();
-                    reader.onload = (e) => {
-                        communityFilesArr.push({ name: file.name, type: file.type.startsWith('video') ? 'video' : (file.type.startsWith('image') ? 'image' : 'doc'), src: e.target.result });
-                    };
-                    reader.readAsDataURL(file);
+                    if (file.type.startsWith('image')) {
+                        compressImage(file, 800, 800, 0.7, (compressedUrl) => {
+                            communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
+                        });
+                    } else if (file.type.startsWith('video')) {
+                        let reader = new FileReader();
+                        reader.onload = (e) => {
+                            communityFilesArr.push({ name: file.name, type: 'video', src: e.target.result });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        let reader = new FileReader();
+                        reader.onload = (e) => {
+                            communityFilesArr.push({ name: file.name, type: 'doc', src: e.target.result });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
+                        };
+                        reader.readAsDataURL(file);
+                    }
                 }
             } else { info.innerText = ''; }
         }
@@ -2488,19 +2544,18 @@
 
         function saveDocHandler(e) {
             const title = document.getElementById('doc-title').value.trim();
-            const fileInput = document.getElementById('doc-file').files[0];
-            if (!fileInput) return;
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                if(!appData.docs) appData.docs = [];
-                appData.docs.unshift({ id: Date.now(), title, src: evt.target.result });
-                saveDataAll();
-                document.getElementById('doc-form').reset();
-                renderDocsList();
-                alert('تم حفظ المستند! 📂');
-            };
-            reader.readAsDataURL(fileInput);
+            const fileInput = document.getElementById('doc-file');
+            const compressedSrc = fileInput.dataset.compressedSrc;
+            if (!compressedSrc) {
+                alert('الرجاء الانتظار قليلاً حتى يتم ضغط المستند!');
+                return;
+            }
+            if(!appData.docs) appData.docs = [];
+            appData.docs.unshift({ id: Date.now(), title, src: compressedSrc });
+            saveDataAll();
+            document.getElementById('doc-form').reset();
+            renderDocsList();
+            alert('تم حفظ المستند! 📂');
         }
 
         function renderDocsList() {
