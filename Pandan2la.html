@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V82 ULTRA PRO MAX</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V83 ULTRA SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -133,8 +133,8 @@
 <div class="login-screen" id="lock-screen">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V82 ULTRA PRO MAX)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً (Cloud Firestore - مزامنة ثنائية حقيقية 100%)</p>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V83 ULTRA SYNC)</h3>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً ومحلياً (مزامن فوري ثنائي الاتجاه 100%)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;">
         
@@ -315,7 +315,7 @@
             <div id="invoice-preview-card">
                 <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
                     <h2 style="font-size: 14px; color: #2563eb;">أسطورة الطريق & باندا</h2>
-                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V82)</p>
+                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V83)</p>
                 </div>
                 <div style="font-size: 10px; line-height: 1.6;">
                     <p><strong>رقم البوليصة:</strong> <span id="inv-id"></span></p>
@@ -371,7 +371,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكربت Firebase المتوافق تماماً مع الملف الأساسي (appStore/mainState) -->
+<!-- سكربت Firebase مع الجسر الشامل لدمج البيانات تلقائياً دون فقدان -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -457,23 +457,60 @@
     };
     window.appData = appData;
 
-    const localData = localStorage.getItem('transportAppV82');
-    if (localData) {
-        try { 
-            let parsed = JSON.parse(localData);
-            if(parsed) appData = { ...appData, ...parsed };
-        } catch(e) {}
+    // جسر دمج التخزين المحلي من كافة مفاتيح المنصة الأم المحتملة لضمان عدم ضياع أي شحنة
+    function loadAllLocalDataSources() {
+        const possibleKeys = ['transportAppV82', 'transportApp', 'n2la_data', 'docs', 'shipments'];
+        let aggregatedShipments = [];
+
+        possibleKeys.forEach(key => {
+            let val = localStorage.getItem(key);
+            if(val) {
+                try {
+                    let parsed = JSON.parse(val);
+                    if(Array.isArray(parsed)) {
+                        aggregatedShipments = aggregatedShipments.concat(parsed);
+                    } else if(parsed && typeof parsed === 'object') {
+                        let subList = parsed.shipments || parsed.docs || [];
+                        if(Array.isArray(subList)) {
+                            aggregatedShipments = aggregatedShipments.concat(subList);
+                        }
+                        appData = { ...appData, ...parsed };
+                    }
+                } catch(e) {}
+            }
+        });
+
+        if(aggregatedShipments.length > 0) {
+            // إزالة التكرار بناءً على الـ id أو الاسم والحمولة
+            let uniqueMap = new Map();
+            aggregatedShipments.forEach(s => {
+                let keyName = s.id || (s.name + '_' + s.item + '_' + s.price);
+                uniqueMap.set(keyName, s);
+            });
+            appData.shipments = Array.from(uniqueMap.values());
+            appData.docs = appData.shipments;
+        }
     }
 
-    // استماع فوري ولحظي ثنائي الاتجاه من مستند appStore/mainState (نفس الملف الأساسي)
+    loadAllLocalDataSources();
+
+    // الاستماع الفوري واللحظي السحابي مع دمج وتوحيد بيانات appStore/mainState
     onSnapshot(doc(db, "appStore", "mainState"), (docSnap) => {
         if (docSnap.exists()) {
             let remoteData = docSnap.data() || {};
-            let syncDocs = remoteData.shipments || remoteData.docs || [];
+            let remoteShipments = remoteData.shipments || remoteData.docs || [];
             
+            // دمج الشحنات السحابية مع المحلية لضمان ظهور كل الشحنات في المنصة الأم وفي باندا فوراً
+            let combinedShipments = [...remoteShipments, ...(appData.shipments || [])];
+            let uniqueMap = new Map();
+            combinedShipments.forEach(s => {
+                let keyName = s.id || (s.name + '_' + s.item + '_' + s.price);
+                uniqueMap.set(keyName, s);
+            });
+
             appData = {
-                shipments: syncDocs,
-                docs: syncDocs,
+                shipments: Array.from(uniqueMap.values()),
+                docs: Array.from(uniqueMap.values()),
                 consolidatedInvoices: remoteData.consolidatedInvoices || appData.consolidatedInvoices || [],
                 treasury: remoteData.treasury || appData.treasury || [],
                 expenses: remoteData.expenses || appData.expenses || [],
@@ -500,6 +537,7 @@
     });
 
     window.saveDataAll = async function() {
+        appData.docs = appData.shipments;
         localStorage.setItem('transportAppV82', JSON.stringify(appData));
         try {
             await setDoc(doc(db, "appStore", "mainState"), {
@@ -734,7 +772,7 @@
         if (sectionId === 'overview') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V82)</span></h3>
+                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V83)</span></h3>
                     <p style="font-size:10px; margin-bottom:6px; opacity:0.8;">مرتبط مباشرة بالمنصة الأم وجلب وتعديل البيانات يتم سحابياً لحظياً.</p>
                     <button class="btn-main" onclick="switchSection('pandaAdmin')">الانتقال لمركز إدارة باندا العليا ➔</button>
                 </div>
@@ -1768,7 +1806,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V82", 20, 20);
+        doc.text("Global Transport Hub - Waybill V83", 20, 20);
         doc.text(`Client: ${s.name}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address}`, 20, 50);
@@ -1784,18 +1822,19 @@
         const ws = XLSX.utils.json_to_sheet(data.shipments || []);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v82.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v83.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
     function exportSummaryWhatsApp() {
         let data = appStateData();
         let rev = (data.shipments || []).reduce((s, x) => s + Number(x.price || 0), 0);
-        let msg = `📊 *التقرير اليومي - نظام باندا العليا (V82)*\n\nإجمالي الشحنات: ${(data.shipments || []).length}\nإجمالي الإيرادات: ${rev} ج.م`;
+        let msg = `📊 *التقرير اليومي - نظام باندا العليا (V83)*\n\nإجمالي الشحنات: ${(data.shipments || []).length}\nإجمالي الإيرادات: ${rev} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     function syncWithMotherPlatform() {
+        window.saveDataAll();
         showToast('تمت مزامنة البيانات الثنائية مع المنصة الأم بنجاح! ⚡');
         closeModal('motherAppControlModal');
     }
