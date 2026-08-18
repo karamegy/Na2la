@@ -486,11 +486,20 @@
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.firestore();
 
-        let appData = { accounts: [], shipments: [], expenses: [], deferredInvoices: [], manualTreasury: 0, userAvatar: "", rssMessage: "مرحباً بكم في أسطورة الطريق V98 - مزامنة وتعديل وحذف فوري عبر Firestore" };
-        
-        let smsGatewayConfig = {
-            senderId: "Na2la",
-            apiKey: "API_KEY_MOCK_XYZ123"
+        let appData = { 
+            accounts: [], 
+            shipments: [], 
+            expenses: [], 
+            deferredInvoices: [], 
+            manualTreasury: 0, 
+            userAvatar: "", 
+            rssMessage: "مرحباً بكم في أسطورة الطريق V98 - مزامنة وتعديل وحذف فوري عبر Firestore",
+            smsConfig: {
+                senderId: "Test Sender",
+                apiKey: "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27",
+                na2laSenderId: "NA2la",
+                na2laApiKey: "702df05003075fb0a1436448fa7224420c5e8471408eae13bc6091b788e7a13f"
+            }
         };
 
         function togglePasswordVisibility() {
@@ -551,6 +560,9 @@
                     appData.manualTreasury = data.manualTreasury || 0;
                     appData.userAvatar = data.userAvatar || "";
                     appData.rssMessage = data.rssMessage || appData.rssMessage;
+                    if (data.smsConfig) {
+                        appData.smsConfig = data.smsConfig;
+                    }
                     
                     if(appData.rssMessage) document.getElementById("rssTickerText").innerText = appData.rssMessage;
                     updateProfileAvatarUI();
@@ -571,17 +583,30 @@
         }
 
         function openSmsSettingsModal() {
-            let sender = prompt("أدخل اسم المرسل المعتمد للـ SMS (Sender ID):", smsGatewayConfig.senderId);
-            if (sender !== null) {
-                smsGatewayConfig.senderId = sender.trim();
-                alert(`✅ تم تحديث اسم المرسل إلى: [${smsGatewayConfig.senderId}]`);
-            }
+            let currentSender = appData.smsConfig?.senderId || "Test Sender";
+            let currentKey = appData.smsConfig?.apiKey || "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27";
+
+            let sender = prompt(`أدخل اسم المرسل (النشط حالياً: Test Sender | قيد الانتظار: NA2la):\nاختر 'NA2la' فور قبولها أو استخدم 'Test Sender' للاختبار`, currentSender);
+            if (sender === null) return;
+            
+            let apiKey = prompt(`أدخل مفتاح التوكن (Token) للـ SMS:`, currentKey);
+            if (apiKey === null) return;
+
+            appData.smsConfig.senderId = sender.trim();
+            appData.smsConfig.apiKey = apiKey.trim();
+
+            saveDataAll();
+            alert(`✅ تم تحديث إعدادات الـ SMS بنجاح!\nالمرسل: [${appData.smsConfig.senderId}]`);
         }
 
         function sendClientSMSAPI(phone, desc, amount, typeText) {
             if (!phone || phone === "غير محدد") return alert("رقم هاتف العميل غير متوفر لهذه المعاملة.");
-            let smsBody = `[${smsGatewayConfig.senderId}] عزيزنا العميل، تم تسجيل ${desc} بقيمة ${Number(amount).toLocaleString()} ج.م (${typeText}). شكراً لتعاملكم معنا.`;
-            alert(`🚀 تم إرسال رسالة SMS عبر سحابة API بنجاح إلى الرقم (${phone})\n المرسل: [${smsGatewayConfig.senderId}]\n النص: "${smsBody}"`);
+            
+            let senderId = appData.smsConfig?.senderId || "Test Sender";
+            let apiKey = appData.smsConfig?.apiKey || "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27";
+
+            let smsBody = `[${senderId}] عزيزنا العميل، تم تسجيل ${desc} بقيمة ${Number(amount).toLocaleString()} ج.م (${typeText}). شكراً لتعاملكم معنا.`;
+            alert(`🚀 تم إرسال رسالة SMS عبر التوكن النشط بنجاح إلى الرقم (${phone})\n المرسل: [${senderId}]\n التوكن: ${apiKey.slice(0, 12)}...\n النص: "${smsBody}"`);
         }
 
         function calculateAdvancedDriverProfit() {
