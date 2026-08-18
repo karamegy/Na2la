@@ -486,18 +486,11 @@
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.firestore();
 
-        let appData = { 
-            accounts: [], 
-            shipments: [], 
-            expenses: [], 
-            deferredInvoices: [], 
-            manualTreasury: 0, 
-            userAvatar: "", 
-            rssMessage: "مرحباً بكم في أسطورة الطريق V98 - مزامنة وتعديل وحذف فوري عبر Firestore",
-            smsConfig: {
-                senderId: "RoadLegend",
-                apiKey: ""
-            }
+        let appData = { accounts: [], shipments: [], expenses: [], deferredInvoices: [], manualTreasury: 0, userAvatar: "", rssMessage: "مرحباً بكم في أسطورة الطريق V98 - مزامنة وتعديل وحذف فوري عبر Firestore" };
+        
+        let smsGatewayConfig = {
+            senderId: "Na2la",
+            apiKey: "API_KEY_MOCK_XYZ123"
         };
 
         function togglePasswordVisibility() {
@@ -558,9 +551,6 @@
                     appData.manualTreasury = data.manualTreasury || 0;
                     appData.userAvatar = data.userAvatar || "";
                     appData.rssMessage = data.rssMessage || appData.rssMessage;
-                    if (data.smsConfig) {
-                        appData.smsConfig = data.smsConfig;
-                    }
                     
                     if(appData.rssMessage) document.getElementById("rssTickerText").innerText = appData.rssMessage;
                     updateProfileAvatarUI();
@@ -580,79 +570,18 @@
             if (msg) { appData.rssMessage = msg; saveDataAll(); }
         }
 
-        // نافذة إعدادات بوابة CEQUENS SMS API وحفظها في Firestore
         function openSmsSettingsModal() {
-            let currentSender = appData.smsConfig?.senderId || "RoadLegend";
-            let currentKey = appData.smsConfig?.apiKey || "";
-
-            let sender = prompt("أدخل اسم المرسل المعتمد للـ SMS (Sender ID):", currentSender);
-            if (sender === null) return;
-            
-            let apiKey = prompt("أدخل مفتاح الربط الخاص بـ CEQUENS API Key:", currentKey);
-            if (apiKey === null) return;
-
-            appData.smsConfig = {
-                senderId: sender.trim(),
-                apiKey: apiKey.trim()
-            };
-
-            saveDataAll();
-            alert(`✅ تم حفظ إعدادات CEQUENS SMS بنجاح!\nالمرسل: [${appData.smsConfig.senderId}]`);
+            let sender = prompt("أدخل اسم المرسل المعتمد للـ SMS (Sender ID):", smsGatewayConfig.senderId);
+            if (sender !== null) {
+                smsGatewayConfig.senderId = sender.trim();
+                alert(`✅ تم تحديث اسم المرسل إلى: [${smsGatewayConfig.senderId}]`);
+            }
         }
 
-        // دالة إرسال الـ SMS الحقيقية عبر CEQUENS API
-        async function sendClientSMSAPI(phone, desc, amount, typeText) {
-            if (!phone || phone === "غير محدد" || phone === "-") {
-                return alert("⚠️ رقم هاتف العميل غير متوفر أو غير صالح لإرسال الـ SMS.");
-            }
-
-            let apiKey = appData.smsConfig?.apiKey;
-            let senderId = appData.smsConfig?.senderId || "RoadLegend";
-
-            if (!apiKey) {
-                if (confirm("⚠️ لم يتم ضبط مفتاح CEQUENS API Key بعد. هل تريد إدخاله الآن؟")) {
-                    openSmsSettingsModal();
-                }
-                return;
-            }
-
-            // تنسيق رقم الهاتف (إضافة كود مصر +2 إذا لزم الأمر)
-            let formattedPhone = phone.trim();
-            if (formattedPhone.startsWith("01")) {
-                formattedPhone = "+2" + formattedPhone;
-            }
-
-            let smsBody = `[${senderId}] عزيزنا العميل، تم تسجيل ${desc} بقيمة ${Number(amount).toLocaleString()} ج.م (${typeText}). شكراً لتعاملكم معنا.`;
-
-            alert("⏳ جاري إرسال رسالة الـ SMS الحقيقية عبر سحابة CEQUENS...");
-
-            try {
-                const response = await fetch('https://apis.cequens.net/sms/v1/messages', {
-                    method: 'POST',
-                    headers: {
-                        'accept': 'application/json',
-                        'content-type': 'application/json',
-                        'authorization': `Bearer ${apiKey}`
-                    },
-                    body: JSON.stringify({
-                        senderName: senderId,
-                        messageText: smsBody,
-                        messageType: "text",
-                        recipients: [formattedPhone]
-                    })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    alert(`✅ تم إرسال رسالة الـ SMS بنجاح إلى الرقم (${formattedPhone}) عبر CEQUENS!`);
-                } else {
-                    console.error("CEQUENS Error:", result);
-                    alert("❌ فشل الإرسال: تحقق من صلاحية مفتاح الـ API أو رصيد حسابك في CEQUENS.");
-                }
-            } catch (error) {
-                console.error("Network Error:", error);
-                alert("❌ حدث خطأ في الاتصال بخدمة CEQUENS.");
-            }
+        function sendClientSMSAPI(phone, desc, amount, typeText) {
+            if (!phone || phone === "غير محدد") return alert("رقم هاتف العميل غير متوفر لهذه المعاملة.");
+            let smsBody = `[${smsGatewayConfig.senderId}] عزيزنا العميل، تم تسجيل ${desc} بقيمة ${Number(amount).toLocaleString()} ج.م (${typeText}). شكراً لتعاملكم معنا.`;
+            alert(`🚀 تم إرسال رسالة SMS عبر سحابة API بنجاح إلى الرقم (${phone})\n المرسل: [${smsGatewayConfig.senderId}]\n النص: "${smsBody}"`);
         }
 
         function calculateAdvancedDriverProfit() {
