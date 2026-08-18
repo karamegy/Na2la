@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>أسطورة الطريق (Na2la) V60 Pro - الإدارة المالية والحسابات الكبرى</title>
     
-    <!-- مكتبات Firebase الأساسية لـ Firestore والسحابة -->
+    <!-- مكتبات Firebase الأساسية لـ Firestore والسحابة (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
@@ -595,7 +595,7 @@
                         <h2 style="font-size: 18px; font-weight: 900; color: var(--primary-orange); display: flex; align-items: center; gap: 8px;">
                             🏛️ لوحة القيادة والملخص المالي الشامل
                         </h2>
-                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">ربط سحابي مباشر مع وثيقة mainState في Firestore.</p>
+                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">ربط سحابي مباشر مع وثيقة mainState ومجموعة shipments في Firestore.</p>
                     </div>
                     <div class="admin-exclusive-badge" id="permissionBadgeText">
                         🔒 إدارة كبرى (صلاحيات مركزية كاملة 🐼)
@@ -608,7 +608,7 @@
                         💡 تقرير الأداء المالي واللوجستي الذكي (Enterprise AI Advisor):
                     </div>
                     <div id="aiSuggestionText" style="color: var(--text-color); line-height: 1.6;">
-                        جاري قراءة وثيقة mainState ومزامنة الشحنات والعملاء وخطوط السائقين...
+                        جاري قراءة وثيقة mainState ومجموعة الشحنات والعملاء وخطوط السائقين...
                     </div>
                 </div>
 
@@ -837,7 +837,7 @@
         </div>
     </div>
 
-    <!-- تهيئة Firebase وجلب البيانات من Firestore (وثيقة mainState) -->
+    <!-- تهيئة Firebase وجلب البيانات من Firestore (وثيقة mainState ومجموعة shipments) -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -854,7 +854,7 @@
         }
         const db = firebase.firestore();
 
-        let appData = { accounts: [], docs: [], shipments: [], drivers: [], customers: [], manualTreasury: 0, rssMessage: "جاري مزامنة بيانات الشحنات، حركة الخزينة، والتقارير المالية عبر وثيقة mainState في Firestore..." };
+        let appData = { accounts: [], docs: [], shipments: [], drivers: [], customers: [], manualTreasury: 0, rssMessage: "جاري مزامنة بيانات الشحنات، حركة الخزينة، والتقارير المالية عبر سحابة Firestore..." };
         let loggedInAccount = null;
 
         let smsGatewayConfig = {
@@ -902,18 +902,16 @@
         }
 
         function fetchFirestoreData() {
+            // 1. الاستماع لوثيقة الحسابات والبيانات العامة (mainState)
             db.collection("artifacts").doc("mainState").onSnapshot((docSnap) => {
                 if (docSnap.exists) {
                     const data = docSnap.data();
-                    appData = {
-                        accounts: data.accounts || [],
-                        docs: data.docs || [],
-                        shipments: data.shipments || [],
-                        drivers: data.drivers || [],
-                        customers: data.customers || [],
-                        manualTreasury: data.manualTreasury || 0,
-                        rssMessage: data.rssMessage || "مرحباً بكم في نظام أسطورة الطريق المالي المعتمد..."
-                    };
+                    appData.accounts = data.accounts || [];
+                    appData.docs = data.docs || [];
+                    appData.drivers = data.drivers || [];
+                    appData.customers = data.customers || [];
+                    appData.manualTreasury = data.manualTreasury || 0;
+                    appData.rssMessage = data.rssMessage || appData.rssMessage;
                     if (appData.rssMessage) {
                         document.getElementById("rssTickerText").innerText = appData.rssMessage;
                     }
@@ -922,7 +920,28 @@
                 }
                 renderAccountsLedger();
             }, (error) => {
-                console.error("Firestore Error: ", error);
+                console.error("Firestore mainState Error: ", error);
+            });
+
+            // 2. الاستماع لمجموعة الشحنات المستقلة (shipments) لجلب الإيرادات والأعداد الحقيقية لحظياً
+            db.collection("shipments").onSnapshot((querySnapshot) => {
+                let fetchedShipments = [];
+                querySnapshot.forEach((doc) => {
+                    let d = doc.data();
+                    fetchedShipments.push({
+                        id: doc.id,
+                        name: d.name || d.customer || d.clientName || "عميل شحنة",
+                        phone: d.phone || d.pnone || d.clientPhone || "غير محدد",
+                        item: d.item || d.description || d.cargo || "نقل بضائع",
+                        price: Number(d.price || d.amount || d.total || 0),
+                        status: d.status || "مسجلة",
+                        date: d.date || new Date().toLocaleDateString()
+                    });
+                });
+                appData.shipments = fetchedShipments;
+                renderAccountsLedger();
+            }, (error) => {
+                console.log("مجموعة الشحنات غير مفعلة أو غير موجودة، جاري الاعتماد على البيانات العامة.");
             });
         }
 
@@ -1185,14 +1204,14 @@
                 visibleAccounts = accounts.filter(item => (item.accountOwner || "").toLowerCase() === loggedInAccount.toLowerCase());
                 if(document.getElementById("tableTitleText")) document.getElementById("tableTitleText").innerText = `📋 سجل المعاملات الخاص بحسابك (${loggedInAccount}):`;
             } else {
-                if(document.getElementById("tableTitleText")) document.getElementById("tableTitleText").innerText = `📋 سجل القيود المحاسبية وحركة الشحنات الكبرى (من وثيقة mainState):`;
+                if(document.getElementById("tableTitleText")) document.getElementById("tableTitleText").innerText = `📋 سجل القيود المحاسبية وحركة الشحنات الكبرى (من وثيقة mainState ومجموعة shipments):`;
             }
 
             let totalCredit = 0;
             let totalDebit = 0;
             let pendingCount = 0;
 
-            // حساب إيرادات جميع الشحنات
+            // حساب إيرادات جميع الشحنات من كلا المصدرين (docs و shipments)
             allShipments.forEach(sh => {
                 let shAmt = Number(sh.price || sh.amount || 0);
                 totalCredit += shAmt;
@@ -1208,7 +1227,7 @@
             let netBalance = totalCredit - totalDebit;
             let treasuryBalance = netBalance + (appData.manualTreasury || 0);
 
-            let aiMsg = `الوضع المالي مستقر. إجمالي الإيرادات والشحنات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
+            let aiMsg = `الوضع المالي مستقر. إجمالي الشحنات (${allShipments.length})، إيرادات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
             if (pendingCount > 0) {
                 aiMsg += ` ⚠️ توجد (${pendingCount}) فواتير أو قيود معلقة.`;
             } else {
@@ -1245,7 +1264,7 @@
 
             if (tbody) {
                 if (filtered.length === 0 && allShipments.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--secondary-text); padding: 20px;">لا توجد معاملات أو شحنات مسجلة حالياً في وثيقة mainState.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--secondary-text); padding: 20px;">لا توجد معاملات أو شحنات مسجلة حالياً في قاعدة البيانات.</td></tr>`;
                 } else {
                     let html = "";
                     
@@ -1256,7 +1275,7 @@
                                 <td><b style="color:var(--primary-orange);">${escapeHtml(sh.name || sh.customer || 'عميل شحنة')}</b></td>
                                 <td style="font-size:12px; color:var(--secondary-text);">${escapeHtml(sh.phone || sh.pnone || 'غير محدد')}</td>
                                 <td><b>شحنة لوجستية: ${escapeHtml(sh.item || sh.description || 'نقل بضائع')}</b></td>
-                                <td><span class="badge-invoice">📦 شحنة مستندة (Firestore)</span><br><b style="font-size:14px;">${Number(sh.price || sh.amount || 0).toLocaleString()} ج.م</b></td>
+                                <td><span class="badge-invoice">📦 شحنة سحابية (Firestore)</span><br><b style="font-size:14px;">${Number(sh.price || sh.amount || 0).toLocaleString()} ج.م</b></td>
                                 <td><span class="status-badge status-paid">${escapeHtml(sh.status || 'مسجلة')} ✅</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مستند سحابي</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مزامنة Firestore</span></td>
@@ -1369,23 +1388,6 @@
             if (!text) return "";
             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
-    </script>
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-      import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
-        authDomain: "n2la-642d3.firebaseapp.com",
-        projectId: "n2la-642d3",
-        storageBucket: "n2la-642d3.firebasestorage.app",
-        messagingSenderId: "1085749997466",
-        appId: "1:1085749997466:web:13e5535dc6d2312397d423",
-        measurementId: "G-KH4ZYFB8LC"
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const analytics = getAnalytics(app);
     </script>
 </body>
 </html>
