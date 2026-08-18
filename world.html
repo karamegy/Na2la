@@ -894,20 +894,37 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // 🔗 دالة الربط السحابي الموحد مع المنصة الأم ومجموعة الشحنات
+        // 🔗 دالة الربط السحابي الموحد والفحص التلقائي الشامل لجميع مصفوفات المنصة الأم
         function fetchFirestoreData() {
-            // 1. الاستماع لوثيقة المنصة الأم (artifacts/mainState)
+            // 1. الاستماع لوثيقة المنصة الأم (artifacts/mainState) مع فحص تلقائي لأي مصفوفة شحنات
             db.collection("artifacts").doc("mainState").onSnapshot((docSnap) => {
                 if (docSnap.exists) {
                     const data = docSnap.data();
                     appData.accounts = data.accounts || [];
                     appData.docs = data.docs || [];
-                    appData.shipments = data.shipments || [];
                     appData.drivers = data.drivers || [];
                     appData.customers = data.customers || [];
                     appData.auditLogs = data.auditLogs || [];
                     appData.manualTreasury = data.manualTreasury || 0;
                     appData.rssMessage = data.rssMessage || appData.rssMessage;
+
+                    // فحص ذكي وتلقائي لاستخراج الشحنات من أي حقل مصفوفة داخل mainState
+                    let foundShipments = [];
+                    if (Array.isArray(data.shipments)) {
+                        foundShipments = data.shipments;
+                    } else {
+                        for (let key in data) {
+                            if (Array.isArray(data[key])) {
+                                let arr = data[key];
+                                if (arr.length > 0 && (arr[0].name || arr[0].item || arr[0].price !== undefined || arr[0].pnone)) {
+                                    foundShipments = arr;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    appData.shipments = foundShipments;
+
                     if (appData.rssMessage) {
                         document.getElementById("rssTickerText").innerText = appData.rssMessage;
                     }
@@ -919,27 +936,27 @@
                 console.error("Firestore mainState Error: ", error);
             });
 
-            // 2. الاستماع للمجموعة المستقلة (shipments) للدمج الفوري
+            // 2. الاستماع للمجموعة المستقلة (shipments) للدمج الفوري المتفاعل
             db.collection("shipments").onSnapshot((querySnapshot) => {
                 let fetchedShipments = [];
                 querySnapshot.forEach((doc) => {
                     let d = doc.data();
                     fetchedShipments.push({
                         id: doc.id,
-                        name: d.name || d.customer || d.clientName || "عميل شحنة",
+                        name: d.name || d.customer || d.clientName || d.assignedDriver || "عميل شحنة",
                         phone: d.phone || d.pnone || d.clientPhone || "غير محدد",
                         item: d.item || d.description || d.cargo || "نقل بضائع",
-                        price: Number(d.price || d.amount || d.total || 0),
+                        price: Number(d.price || d.amount || d.total || d.extraCost || 0),
                         status: d.status || "مسجلة",
                         date: d.date || new Date().toLocaleDateString()
                     });
                 });
                 if (fetchedShipments.length > 0) {
-                    appData.shipments = fetchedShipments;
+                    appData.shipments = [...appData.shipments, ...fetchedShipments];
                 }
                 renderAccountsLedger();
             }, (error) => {
-                console.log("مجموعة الشحنات غير مفعلة أو يتم الاعتماد على وثيقة mainState.");
+                console.log("مجموعة الشحنات المستقلة غير مفعلة أو يتم الاعتماد على وثيقة mainState.");
             });
         }
 
@@ -1192,13 +1209,12 @@
             alert("📥 جاري توليد كشف الحساب الإداري الشامل والموثق بصيغة PDF...");
         }
 
-        // ميزة متطورة: تصدير القيود والشحنات إلى ملف CSV
         function exportAccountsToCSV() {
             let csvContent = "\uFEFFالتاريخ,الحساب أو العميل,الهاتف,البيان أو الشحنة,المبلغ,النوع,الحالة\n";
             
             let allShipments = [...(appData.docs || []), ...(appData.shipments || [])];
             allShipments.forEach(sh => {
-                csvContent += `"${sh.date || 'مزامنة'}","${sh.name || sh.customer || 'عميل'}","${sh.phone || 'غير محدد'}","شحنة: ${sh.item || 'نقل'}","${sh.price || sh.amount || 0}","إيراد شحنة","مسجل"\n`;
+                csvContent += `"${sh.date || 'مزامنة'}","${sh.name || sh.customer || 'عميل'}","${sh.phone || sh.pnone || 'غير محدد'}","شحنة: ${sh.item || 'نقل'}","${sh.price || sh.amount || 0}","إيراد شحنة","مسجل"\n`;
             });
 
             (appData.accounts || []).forEach(acc => {
@@ -1229,7 +1245,7 @@
             document.getElementById("expInvAmount").innerText = Number(item.amount).toLocaleString() + " ج.م";
         }
 
-        // 📋 دالة المعالجة والعرض الموحد للشحنات والحسابات مع المنصة الأم
+        // 📋 دالة المعالجة والعرض الموحد المتفاعل للشحنات والحسابات
         function renderAccountsLedger() {
             const tbody = document.getElementById("accountsTableBody");
             const expensesTbody = document.getElementById("expensesTableBody");
@@ -1239,18 +1255,25 @@
             let docs = appData.docs || [];
             let rawShipments = appData.shipments || [];
 
-            // دمج الشحنات والمستندات بدون تكرار
+            // دمج الشحنات والمستندات بمرونة تامة ودعم كافة مسميات الحقول (مثل pnone و price و extraCost)
             let shipmentsMap = new Map();
             [...docs, ...rawShipments].forEach(sh => {
-                let uniqueKey = sh.id || (sh.name + "_" + sh.date + "_" + (sh.price || sh.amount || 0));
+                let shName = sh.name || sh.customer || sh.clientName || sh.assignedDriver || "عميل شحنة";
+                let shPhone = sh.phone || sh.pnone || sh.clientPhone || "غير محدد";
+                let shItem = sh.item || sh.description || sh.cargo || "نقل بضائع";
+                let shPrice = Number(sh.price || sh.amount || sh.total || sh.extraCost || 0);
+                let shStatus = sh.status || "مسجلة";
+                let shDate = sh.date || new Date().toLocaleDateString();
+                let uniqueKey = sh.id || (shName + "_" + shDate + "_" + shPrice);
+
                 shipmentsMap.set(uniqueKey, {
                     id: sh.id || Date.now(),
-                    name: sh.name || sh.customer || sh.clientName || "عميل شحنة",
-                    phone: sh.phone || sh.pnone || sh.clientPhone || "غير محدد",
-                    item: sh.item || sh.description || sh.cargo || "نقل بضائع",
-                    price: Number(sh.price || sh.amount || sh.total || sh.extraCost || 0),
-                    status: sh.status || "مسجلة",
-                    date: sh.date || new Date().toLocaleDateString()
+                    name: shName,
+                    phone: shPhone,
+                    item: shItem,
+                    price: shPrice,
+                    status: shStatus,
+                    date: shDate
                 });
             });
             let allShipments = Array.from(shipmentsMap.values());
@@ -1268,7 +1291,7 @@
             let totalDebit = 0;
             let pendingCount = 0;
 
-            // احتساب الإيرادات من جميع الشحنات والمستندات الواردة من المنصة الأم
+            // احتساب إجمالي الإيرادات تلقائياً من جميع الشحنات المستخرجة
             allShipments.forEach(sh => {
                 totalCredit += Number(sh.price || 0);
             });
@@ -1283,7 +1306,7 @@
             let netBalance = totalCredit - totalDebit;
             let treasuryBalance = netBalance + (appData.manualTreasury || 0);
 
-            let aiMsg = `الوضع المالي مستقر. إجمالي الشحنات المرتبطة بالمنصة الأم (${allShipments.length})، إيرادات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
+            let aiMsg = `الوضع المالي متفاعل ولحظي. إجمالي الشحنات المرتبطة بالمنصة الأم (${allShipments.length})، إيرادات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
             if (pendingCount > 0) {
                 aiMsg += ` ⚠️ توجد (${pendingCount}) فواتير أو قيود معلقة.`;
             } else {
@@ -1324,12 +1347,12 @@
                 } else {
                     let html = "";
                     
-                    // عرض كافة الشحنات المستخرجة من المنصة الأم (mainState و shipments)
+                    // عرض كافة الشحنات المستخرجة من المنصة الأم والتفاعل معها
                     allShipments.forEach((sh) => {
                         let shPrice = Number(sh.price || 0);
                         html += `
                             <tr>
-                                <td>${escapeHtml(sh.date || 'عبر المنصة الأم')}</td>
+                                <td>${escapeHtml(sh.date)}</td>
                                 <td><b style="color:var(--primary-orange);">${escapeHtml(sh.name)}</b></td>
                                 <td style="font-size:12px; color:var(--secondary-text);">${escapeHtml(sh.phone)}</td>
                                 <td><b>شحنة المنصة الأم: ${escapeHtml(sh.item)}</b></td>
