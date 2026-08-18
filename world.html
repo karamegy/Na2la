@@ -78,7 +78,7 @@
             overflow-x: hidden;
         }
 
-        /* نافذة حماية تسجيل دخول المدير الإجباري (الأمان الصارم) */
+        /* نافذة حماية تسجيل دخول المدير الإجباري */
         #adminLoginOverlay {
             position: fixed;
             top: 0;
@@ -549,7 +549,7 @@
         </div>
     </div>
 
-    <!-- شريط RSS الإداري المتحرك والقابل للتحكم -->
+    <!-- شريط RSS الإداري المتحرك -->
     <div class="rss-ticker-bar">
         <div style="font-weight: 900; color: var(--primary-orange);">📡 إشعار RSS:</div>
         <div class="rss-content" id="rssTickerText">جاري مزامنة بيانات الشحنات، حركة الخزينة، والتقارير المالية لحظياً عبر سحابة Firestore...</div>
@@ -612,7 +612,7 @@
                     </div>
                 </div>
 
-                <!-- الملخص المالي الإحصائي الشامل (متطابق مع المنصة الفعلية) -->
+                <!-- الملخص المالي الإحصائي الشامل -->
                 <div class="financial-stats-grid">
                     <div class="stat-card shipments">
                         <div class="stat-title">إجمالي الشحنات 📦</div>
@@ -791,7 +791,7 @@
 
     </div>
 
-    <!-- ==================== شريط التنقل السفلي الثابت (Panda Style) ==================== -->
+    <!-- شريط التنقل السفلي الثابت -->
     <nav class="bottom-nav-bar">
         <button class="nav-item-btn active" onclick="switchSection('overview', this)">
             <span class="icon">🏠</span>
@@ -832,12 +832,12 @@
             <span style="font-size: 12px; color: #475569; display: block;">المبلغ الإجمالي المستحق:</span>
             <span id="expInvAmount" style="font-size: 22px; font-weight: 900; color: #0284c7;"></span>
         </div>
-        <div style="text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; paddingTop: 10px;">
+        <div style="text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px;">
             تم إصدار هذا المستند الإلكتروني عبر النظام المركزي لأسطورة الطريق - جميع الحقوق محفوظة.
         </div>
     </div>
 
-    <!-- تهيئة Firebase وجلب البيانات من Firestore (وثيقة mainState ومجموعة shipments) -->
+    <!-- تهيئة Firebase وجلب البيانات الفعالة من Firestore -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -923,7 +923,7 @@
                 console.error("Firestore mainState Error: ", error);
             });
 
-            // 2. الاستماع لمجموعة الشحنات المستقلة (shipments) لجلب الإيرادات والأعداد الحقيقية لحظياً
+            // 2. الاستماع لمجموعة الشحنات المستقلة (shipments)
             db.collection("shipments").onSnapshot((querySnapshot) => {
                 let fetchedShipments = [];
                 querySnapshot.forEach((doc) => {
@@ -941,7 +941,7 @@
                 appData.shipments = fetchedShipments;
                 renderAccountsLedger();
             }, (error) => {
-                console.log("مجموعة الشحنات غير مفعلة أو غير موجودة، جاري الاعتماد على البيانات العامة.");
+                console.log("مجموعة الشحنات غير مفعلة، جاري الاعتماد على وثيقة mainState.");
             });
         }
 
@@ -1211,10 +1211,15 @@
             let totalDebit = 0;
             let pendingCount = 0;
 
-            // حساب إيرادات جميع الشحنات من كلا المصدرين (docs و shipments)
+            // حساب الإيرادات مع دعم حقول الأسعار والمبالغ المختلفة (price, amount, extraCost, total)
             allShipments.forEach(sh => {
-                let shAmt = Number(sh.price || sh.amount || 0);
+                let shAmt = Number(sh.price || sh.amount || sh.total || sh.extraCost || 0);
                 totalCredit += shAmt;
+            });
+
+            docs.forEach(docItem => {
+                let docAmt = Number(docItem.price || docItem.amount || docItem.total || 0);
+                totalCredit += docAmt;
             });
 
             visibleAccounts.forEach(item => {
@@ -1227,7 +1232,7 @@
             let netBalance = totalCredit - totalDebit;
             let treasuryBalance = netBalance + (appData.manualTreasury || 0);
 
-            let aiMsg = `الوضع المالي مستقر. إجمالي الشحنات (${allShipments.length})، إيرادات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
+            let aiMsg = `الوضع المالي مستقر. إجمالي الشحنات والمستندات (${allShipments.length + docs.length})، إيرادات ${totalCredit.toLocaleString()} ج.م مقابل مصروفات ${totalDebit.toLocaleString()} ج.م.`;
             if (pendingCount > 0) {
                 aiMsg += ` ⚠️ توجد (${pendingCount}) فواتير أو قيود معلقة.`;
             } else {
@@ -1263,19 +1268,39 @@
             }
 
             if (tbody) {
-                if (filtered.length === 0 && allShipments.length === 0) {
+                if (filtered.length === 0 && allShipments.length === 0 && docs.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--secondary-text); padding: 20px;">لا توجد معاملات أو شحنات مسجلة حالياً في قاعدة البيانات.</td></tr>`;
                 } else {
                     let html = "";
                     
-                    allShipments.forEach((sh) => {
+                    // عرض مستندات docs المخزنة داخل mainState
+                    docs.forEach((docItem) => {
+                        let docPrice = Number(docItem.price || docItem.amount || docItem.total || 0);
                         html += `
                             <tr>
-                                <td>${escapeHtml(sh.date || 'عبر المستندات')}</td>
+                                <td>${escapeHtml(docItem.date || 'عبر المستندات')}</td>
+                                <td><b style="color:var(--primary-orange);">${escapeHtml(docItem.name || docItem.customer || docItem.accountOwner || 'عميل مستند')}</b></td>
+                                <td style="font-size:12px; color:var(--secondary-text);">${escapeHtml(docItem.phone || docItem.pnone || 'غير محدد')}</td>
+                                <td><b>مستند سحابي: ${escapeHtml(docItem.item || docItem.description || 'نقل أو خدمات')}</b></td>
+                                <td><span class="badge-invoice">📄 مستند Firestore</span><br><b style="font-size:14px;">${docPrice.toLocaleString()} ج.م</b></td>
+                                <td><span class="status-badge status-paid">${escapeHtml(docItem.status || 'مسجلة')} ✅</span></td>
+                                <td><span style="color:var(--secondary-text); font-size:11px;">مستند سحابي</span></td>
+                                <td><span style="color:var(--secondary-text); font-size:11px;">مزامنة mainState</span></td>
+                                <td><span style="color:var(--secondary-text); font-size:11px;">قراءة تلقائية</span></td>
+                            </tr>
+                        `;
+                    });
+
+                    // عرض شحنات مجموعة shipments المستقلة
+                    allShipments.forEach((sh) => {
+                        let shPrice = Number(sh.price || sh.amount || sh.total || 0);
+                        html += `
+                            <tr>
+                                <td>${escapeHtml(sh.date || 'عبر الشحنات')}</td>
                                 <td><b style="color:var(--primary-orange);">${escapeHtml(sh.name || sh.customer || 'عميل شحنة')}</b></td>
                                 <td style="font-size:12px; color:var(--secondary-text);">${escapeHtml(sh.phone || sh.pnone || 'غير محدد')}</td>
                                 <td><b>شحنة لوجستية: ${escapeHtml(sh.item || sh.description || 'نقل بضائع')}</b></td>
-                                <td><span class="badge-invoice">📦 شحنة سحابية (Firestore)</span><br><b style="font-size:14px;">${Number(sh.price || sh.amount || 0).toLocaleString()} ج.م</b></td>
+                                <td><span class="badge-invoice">📦 شحنة سحابية</span><br><b style="font-size:14px;">${shPrice.toLocaleString()} ج.م</b></td>
                                 <td><span class="status-badge status-paid">${escapeHtml(sh.status || 'مسجلة')} ✅</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مستند سحابي</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مزامنة Firestore</span></td>
@@ -1284,6 +1309,7 @@
                         `;
                     });
 
+                    // عرض المعاملات والقيود المالية المباشرة
                     filtered.forEach(item => {
                         let badgeClass = "badge-credit";
                         let typeText = "📥 دائن (إيراد)";
@@ -1326,7 +1352,7 @@
                 }
             }
 
-            if(document.getElementById("totalShipmentsCountDisplay")) document.getElementById("totalShipmentsCountDisplay").innerText = allShipments.length;
+            if(document.getElementById("totalShipmentsCountDisplay")) document.getElementById("totalShipmentsCountDisplay").innerText = allShipments.length + docs.length;
             if(document.getElementById("totalCreditDisplay")) document.getElementById("totalCreditDisplay").innerText = totalCredit.toLocaleString() + " ج.م";
             if(document.getElementById("totalDebitDisplay")) document.getElementById("totalDebitDisplay").innerText = totalDebit.toLocaleString() + " ج.م";
             if(document.getElementById("treasuryBalanceDisplay")) document.getElementById("treasuryBalanceDisplay").innerText = treasuryBalance.toLocaleString() + " ج.م";
