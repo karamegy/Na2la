@@ -297,6 +297,7 @@
             text-align: center;
             box-shadow: var(--glow-shadow);
         }
+        .stat-card.shipments { border-right: 4px solid var(--primary-blue); }
         .stat-card.credit { border-right: 4px solid var(--success-color); }
         .stat-card.debit { border-right: 4px solid var(--danger-color); }
         .stat-card.net { border-right: 4px solid var(--primary-blue); }
@@ -532,7 +533,6 @@
     <!-- نافذة الأمان وقفل الدخول الإجباري للمدير -->
     <div id="adminLoginOverlay">
         <div class="login-box-card">
-            <!-- اللوجو المدمج المخصص لتسجيل الدخول -->
             <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 14px;">
                 <div class="panda-logo-avatar" style="width: 50px; height: 50px; font-size: 26px;">🐼</div>
                 <div style="font-size: 32px;">🔒</div>
@@ -612,10 +612,14 @@
                     </div>
                 </div>
 
-                <!-- الملخص المالي الإحصائي الشامل -->
+                <!-- الملخص المالي الإحصائي الشامل (متطابق مع المنصة الفعلية) -->
                 <div class="financial-stats-grid">
+                    <div class="stat-card shipments">
+                        <div class="stat-title">إجمالي الشحنات 📦</div>
+                        <div class="stat-value" id="totalShipmentsCountDisplay" style="color: var(--primary-blue);">0</div>
+                    </div>
                     <div class="stat-card credit">
-                        <div class="stat-title">إجمالي إيرادات الشحنات 📥</div>
+                        <div class="stat-title">إجمالي الإيرادات 📥</div>
                         <div class="stat-value" id="totalCreditDisplay" style="color: var(--success-color);">0.00 ج.م</div>
                     </div>
                     <div class="stat-card debit" style="cursor: pointer;" onclick="switchSection('expenses', document.querySelector('.bottom-nav-bar button:nth-child(2)'))" title="انقر لعرض صفحة المصروفات المستقلة">
@@ -850,7 +854,7 @@
         }
         const db = firebase.firestore();
 
-        let appData = { accounts: [], docs: [], drivers: [], customers: [], manualTreasury: 0, rssMessage: "جاري مزامنة بيانات الشحنات، حركة الخزينة، والتقارير المالية عبر وثيقة mainState في Firestore..." };
+        let appData = { accounts: [], docs: [], shipments: [], drivers: [], customers: [], manualTreasury: 0, rssMessage: "جاري مزامنة بيانات الشحنات، حركة الخزينة، والتقارير المالية عبر وثيقة mainState في Firestore..." };
         let loggedInAccount = null;
 
         let smsGatewayConfig = {
@@ -859,7 +863,6 @@
             enabled: true
         };
 
-        // دالة إظهار أو إخفاء كلمة المرور
         function togglePasswordVisibility() {
             const pwdInput = document.getElementById("managerPasswordInput");
             if (pwdInput.type === "password") {
@@ -869,10 +872,9 @@
             }
         }
 
-        // دالة التحقق من كلمة مرور المدير لإلغاء القفل (كلمة المرور: 0103)
         function verifyManagerLogin() {
             const passwordInput = document.getElementById("managerPasswordInput").value.trim();
-            const managerSecret = "0103"; // كلمة المرور المطلوبة للدخول
+            const managerSecret = "0103";
 
             if (passwordInput === managerSecret) {
                 document.getElementById("adminLoginOverlay").style.display = "none";
@@ -885,7 +887,6 @@
             }
         }
 
-        // نظام التبديل بين الأقسام المستقلة (Pages)
         function switchSection(sectionName, btnElement) {
             document.querySelectorAll('.app-section').forEach(sec => sec.classList.remove('active'));
             document.querySelectorAll('.nav-item-btn').forEach(btn => btn.classList.remove('active'));
@@ -900,7 +901,6 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // قراءة مستند mainState من Firestore سحابياً بشكل مباشر
         function fetchFirestoreData() {
             db.collection("artifacts").doc("mainState").onSnapshot((docSnap) => {
                 if (docSnap.exists) {
@@ -908,6 +908,7 @@
                     appData = {
                         accounts: data.accounts || [],
                         docs: data.docs || [],
+                        shipments: data.shipments || [],
                         drivers: data.drivers || [],
                         customers: data.customers || [],
                         manualTreasury: data.manualTreasury || 0,
@@ -1175,6 +1176,8 @@
 
             let accounts = appData.accounts || [];
             let docs = appData.docs || [];
+            let shipments = appData.shipments || [];
+            let allShipments = [...docs, ...shipments];
             let searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
             let visibleAccounts = accounts;
@@ -1189,7 +1192,8 @@
             let totalDebit = 0;
             let pendingCount = 0;
 
-            docs.forEach(sh => {
+            // حساب إيرادات جميع الشحنات
+            allShipments.forEach(sh => {
                 let shAmt = Number(sh.price || sh.amount || 0);
                 totalCredit += shAmt;
             });
@@ -1240,19 +1244,19 @@
             }
 
             if (tbody) {
-                if (filtered.length === 0 && docs.length === 0) {
+                if (filtered.length === 0 && allShipments.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--secondary-text); padding: 20px;">لا توجد معاملات أو شحنات مسجلة حالياً في وثيقة mainState.</td></tr>`;
                 } else {
                     let html = "";
                     
-                    docs.forEach((sh) => {
+                    allShipments.forEach((sh) => {
                         html += `
                             <tr>
                                 <td>${escapeHtml(sh.date || 'عبر المستندات')}</td>
                                 <td><b style="color:var(--primary-orange);">${escapeHtml(sh.name || sh.customer || 'عميل شحنة')}</b></td>
                                 <td style="font-size:12px; color:var(--secondary-text);">${escapeHtml(sh.phone || sh.pnone || 'غير محدد')}</td>
                                 <td><b>شحنة لوجستية: ${escapeHtml(sh.item || sh.description || 'نقل بضائع')}</b></td>
-                                <td><span class="badge-invoice">📦 شحنة مستندة (docs)</span><br><b style="font-size:14px;">${Number(sh.price || sh.amount || 0).toLocaleString()} ج.م</b></td>
+                                <td><span class="badge-invoice">📦 شحنة مستندة (Firestore)</span><br><b style="font-size:14px;">${Number(sh.price || sh.amount || 0).toLocaleString()} ج.م</b></td>
                                 <td><span class="status-badge status-paid">${escapeHtml(sh.status || 'مسجلة')} ✅</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مستند سحابي</span></td>
                                 <td><span style="color:var(--secondary-text); font-size:11px;">مزامنة Firestore</span></td>
@@ -1303,6 +1307,7 @@
                 }
             }
 
+            if(document.getElementById("totalShipmentsCountDisplay")) document.getElementById("totalShipmentsCountDisplay").innerText = allShipments.length;
             if(document.getElementById("totalCreditDisplay")) document.getElementById("totalCreditDisplay").innerText = totalCredit.toLocaleString() + " ج.م";
             if(document.getElementById("totalDebitDisplay")) document.getElementById("totalDebitDisplay").innerText = totalDebit.toLocaleString() + " ج.م";
             if(document.getElementById("treasuryBalanceDisplay")) document.getElementById("treasuryBalanceDisplay").innerText = treasuryBalance.toLocaleString() + " ج.م";
