@@ -653,7 +653,6 @@
                     appData.deferredInvoices = data.deferredInvoices || [];
                     appData.manualTreasury = data.manualTreasury || 0;
                     
-                    // حل مشكلة عدم ثبات الصورة وعدم مسحها إذا كانت موجودة محلياً أو سحابياً
                     if (data.userAvatar !== undefined && data.userAvatar !== "") {
                         appData.userAvatar = data.userAvatar;
                     }
@@ -802,6 +801,7 @@
                 if (collectionType === 'accounts') appData.accounts = appData.accounts.filter(x => x.id !== id);
                 else if (collectionType === 'expenses') appData.expenses = appData.expenses.filter(x => x.id !== id);
                 else if (collectionType === 'deferred') appData.deferredInvoices = appData.deferredInvoices.filter(x => x.id !== id);
+                else if (collectionType === 'consolidated') appData.consolidatedInvoices = appData.consolidatedInvoices.filter(x => x.id !== id);
                 else if (collectionType === 'shipments') appData.shipments = appData.shipments.filter(x => x.id !== id);
                 else if (collectionType === 'docs') appData.docs = appData.docs.filter(x => x.id !== id);
                 
@@ -816,6 +816,7 @@
             if (collectionType === 'accounts') item = appData.accounts.find(x => x.id === id);
             else if (collectionType === 'expenses') item = appData.expenses.find(x => x.id === id);
             else if (collectionType === 'deferred') item = appData.deferredInvoices.find(x => x.id === id);
+            else if (collectionType === 'consolidated') item = appData.consolidatedInvoices.find(x => x.id === id);
             else if (collectionType === 'shipments') item = appData.shipments.find(x => x.id === id);
             else if (collectionType === 'docs') item = appData.docs.find(x => x.id === id);
 
@@ -849,6 +850,7 @@
             if (collectionType === 'accounts') list = appData.accounts;
             else if (collectionType === 'expenses') list = appData.expenses;
             else if (collectionType === 'deferred') list = appData.deferredInvoices;
+            else if (collectionType === 'consolidated') list = appData.consolidatedInvoices;
             else if (collectionType === 'shipments') list = appData.shipments;
             else if (collectionType === 'docs') list = appData.docs;
 
@@ -878,6 +880,7 @@
             let list = null;
             if (collectionType === 'accounts') list = appData.accounts;
             else if (collectionType === 'deferred') list = appData.deferredInvoices;
+            else if (collectionType === 'consolidated') list = appData.consolidatedInvoices;
             else if (collectionType === 'expenses') list = appData.expenses;
             else if (collectionType === 'shipments') list = appData.shipments;
             else if (collectionType === 'docs') list = appData.docs;
@@ -939,6 +942,7 @@
             (appData.shipments || []).forEach(s => csv += `"${s.date || ''}","${s.name || ''}","${s.phone || ''}","شحنة: ${s.item || ''}","${s.price || 0}","شحنة","مسدد"\n`);
             (appData.docs || []).forEach(d => csv += `"${d.date || ''}","${d.name || ''}","${d.phone || ''}","مستند: ${d.item || ''}","${d.price || 0}","مستند","مسدد"\n`);
             (appData.accounts || []).forEach(a => csv += `"${a.date}","${a.accountOwner}","${a.clientPhone || ''}","${a.description}","${a.amount}","${a.type}","${a.status}"\n`);
+            (appData.consolidatedInvoices || []).forEach(c => csv += `"${c.date || ''}","${c.name || c.accountOwner || ''}","${c.phone || c.clientPhone || ''}","فاتورة مجمعة: ${c.id || ''}","${c.amount || c.price || 0}","آجل مجمع","${c.status || 'pending'}"\n`);
             
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -966,10 +970,21 @@
                     pendingCount++;
                 }
             });
+            
             (appData.expenses || []).forEach(e => totalDebit += Number(e.amount || 0));
+            
+            // حساب الآجل المباشر
             (appData.deferredInvoices || []).forEach(d => {
                 if (d.status === 'pending') {
                     totalDeferred += Number(d.amount || 0);
+                    pendingCount++;
+                }
+            });
+
+            // ➕ التعديل الهام: دمج فواتير الاستهلاك المجمعة (Consolidated Invoices) في الحسابات والديون
+            (appData.consolidatedInvoices || []).forEach(inv => {
+                if (inv.status === 'pending' || inv.status === 'معلق' || !inv.status) {
+                    totalDeferred += Number(inv.amount || inv.price || 0);
                     pendingCount++;
                 }
             });
@@ -1016,7 +1031,16 @@
                     ...(appData.shipments || []).map(s => ({ ...s, type: 'shipment', accountOwner: s.name || s.customer || 'عميل', clientPhone: s.phone || s.pnone || '-', amount: Number(s.price || 0), description: `شحنة: ${s.item || 'نقل'}`, status: 'paid' })),
                     ...(appData.docs || []).map(d => ({ ...d, type: 'doc', accountOwner: d.name || 'عميل', clientPhone: d.phone || '-', amount: Number(d.price || 0), description: `مستند: ${d.item || 'نقل'}`, status: 'paid' })),
                     ...(appData.accounts || []),
-                    ...(appData.deferredInvoices || [])
+                    ...(appData.deferredInvoices || []),
+                    ...(appData.consolidatedInvoices || []).map(c => ({
+                        ...c,
+                        accountOwner: c.name || c.accountOwner || 'عميل آجل',
+                        clientPhone: c.phone || c.clientPhone || '-',
+                        amount: Number(c.amount || c.price || 0),
+                        description: `فاتورة مجمعة (${c.id || ''})`,
+                        type: 'consolidated',
+                        status: c.status || 'pending'
+                    }))
                 ];
 
                 let searchQuery = document.getElementById("accountsSearchInput").value.trim().toLowerCase();
@@ -1035,20 +1059,21 @@
                     if (item.type === 'shipment') badge = '<span class="badge-invoice">📦 شحنة</span>';
                     else if (item.type === 'doc') badge = '<span class="badge-invoice">📁 مستند</span>';
                     else if (item.type === 'deferred') badge = '<span class="badge-deferred">⏳ آجل</span>';
+                    else if (item.type === 'consolidated') badge = '<span class="badge-deferred">📄 آجل مجمع</span>';
                     else if (item.type === 'invoice') badge = '<span class="badge-invoice">📄 فاتورة</span>';
                     else if (item.type === 'debit') badge = '<span class="badge-debit">📤 مصروف</span>';
                     else badge = '<span class="badge-credit">📥 دائن</span>';
 
-                    let status = item.status === 'pending' ? 
-                        `<span class="status-badge status-pending" onclick="toggleRecordStatus(${item.id}, '${item.type === 'deferred' ? 'deferred' : 'accounts'}')">معلق / آجل ⏳</span>` : 
-                        `<span class="status-badge status-paid" onclick="toggleRecordStatus(${item.id}, '${item.type === 'deferred' ? 'deferred' : 'accounts'}')">مسدد ✅</span>`;
+                    let status = item.status === 'pending' || item.status === 'معلق' ? 
+                        `<span class="status-badge status-pending" onclick="toggleRecordStatus(${item.id}, '${item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')}')">معلق / آجل ⏳</span>` : 
+                        `<span class="status-badge status-paid" onclick="toggleRecordStatus(${item.id}, '${item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')}')">مسدد ✅</span>`;
                     
                     let owner = item.accountOwner || item.name || 'غير معروف';
                     let phone = item.clientPhone || item.phone || '-';
                     let desc = item.description || item.item || '-';
                     let amt = Number(item.amount || item.price || 0).toLocaleString();
                     let typeText = item.type === 'shipment' ? 'شحنة' : (item.type === 'doc' ? 'مستند' : 'معاملة');
-                    let collType = item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : 'accounts'));
+                    let collType = item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')));
 
                     return `
                         <tr>
