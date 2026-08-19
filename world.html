@@ -353,6 +353,7 @@
                     <h2 style="font-size: 18px; font-weight: 900; color: var(--primary-orange);">📋 السجل المالي واللوجستي الموسع</h2>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button onclick="openAddDeferredModal()" class="submit-btn" style="padding: 6px 12px; font-size: 12px; background: var(--warning-color);">+ إضافة فاتورة أجل</button>
+                        <button onclick="purgeCorruptedRecords()" class="submit-btn" style="padding: 6px 12px; font-size: 12px; background: var(--danger-color);" title="حذف الفواتير التالفة أو مجهولة المصدر التي لا يمكن حذفها بالطريقة العادية">🧹 تنظيف الفواتير التالفة</button>
                         <button onclick="exportAccountsToCSV()" class="submit-btn" style="padding: 6px 12px; font-size: 12px; background: var(--success-color);">📊 تصدير CSV</button>
                     </div>
                 </div>
@@ -522,7 +523,7 @@
         </div>
     </div>
 
-    <!-- كود الجافاسكريبت المحدث والمصحح تماماً لمنع التضارب بين المستحق والآجل -->
+    <!-- كود الجافاسكريبت المحدث والمصحح تماماً لمنع التضارب وحذف الفواتير التالفة -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -788,18 +789,49 @@
             alert("تم حفظ القيد المالي وترحيله سحابياً بنجاح!");
         }
 
+        // دالة الحذف المحسنة للتعامل مع الـ ID بدقة ومطابقة الأنواع
         function deleteRecord(id, collectionType) {
             if (confirm("هل أنت متأكد من الحذف النهائي والمزامنة السحابية؟")) {
-                if (collectionType === 'accounts') appData.accounts = appData.accounts.filter(x => x.id !== id);
-                else if (collectionType === 'expenses') appData.expenses = appData.expenses.filter(x => x.id !== id);
-                else if (collectionType === 'deferred') appData.deferredInvoices = appData.deferredInvoices.filter(x => x.id !== id);
-                else if (collectionType === 'consolidated') appData.consolidatedInvoices = appData.consolidatedInvoices.filter(x => x.id !== id);
-                else if (collectionType === 'shipments') appData.shipments = appData.shipments.filter(x => x.id !== id);
-                else if (collectionType === 'docs') appData.docs = appData.docs.filter(x => x.id !== id);
+                let list = null;
+                if (collectionType === 'accounts') list = appData.accounts;
+                else if (collectionType === 'expenses') list = appData.expenses;
+                else if (collectionType === 'deferred') list = appData.deferredInvoices;
+                else if (collectionType === 'consolidated') list = appData.consolidatedInvoices;
+                else if (collectionType === 'shipments') list = appData.shipments;
+                else if (collectionType === 'docs') list = appData.docs;
+
+                if (list) {
+                    appData[collectionType] = list.filter(x => {
+                        let xId = x && x.id !== undefined ? String(x.id) : '';
+                        let targetId = id !== undefined ? String(id) : '';
+                        // إذا كان المعرف فارغاً تماماً في العنصر التالف، يتم السماح بحذفه عند استهدافه، أو المطابقة العادية
+                        if (xId === '' && targetId === '') return false;
+                        return xId !== targetId;
+                    });
+                }
                 
                 saveDataAll();
                 renderAllFinancials();
                 alert("✅ تم الحذف والمزامنة بنجاح!");
+            }
+        }
+
+        // دالة التنظيف التلقائي للشحنات والمستندات التالفة أو مجهولة المصدر (الأربع فواتير)
+        function purgeCorruptedRecords() {
+            if (confirm("🧹 هل تريد تنظيف وإزالة أي شحنات أو مستندات تالفة أو مجهولة المصدر لا تحتوي على بيانات صحيحة أو معرفات صالحة؟")) {
+                if (appData.shipments) {
+                    appData.shipments = appData.shipments.filter(s => s && (s.id !== undefined || s.price !== undefined || s.name !== undefined));
+                }
+                if (appData.docs) {
+                    appData.docs = appData.docs.filter(d => d && (d.id !== undefined || d.price !== undefined || d.item !== undefined));
+                }
+                if (appData.accounts) {
+                    appData.accounts = appData.accounts.filter(a => a && (a.id !== undefined || a.amount !== undefined));
+                }
+                
+                saveDataAll();
+                renderAllFinancials();
+                alert("✅ تمت عملية تنظيف البيانات التالفة ومزامنة الفهرس (Index) مع المنصة الأم بنجاح!");
             }
         }
 
@@ -827,7 +859,7 @@
         }
 
         function saveEditedRecord() {
-            let id = Number(document.getElementById("editRecordId").value);
+            let id = document.getElementById("editRecordId").value;
             let collectionType = document.getElementById("editCollectionType").value;
             let owner = document.getElementById("editOwner").value;
             let phone = document.getElementById("editPhone").value;
@@ -847,7 +879,7 @@
             else if (collectionType === 'docs') list = appData.docs;
 
             if (list) {
-                let idx = list.findIndex(x => x.id === id);
+                let idx = list.findIndex(x => String(x.id) === String(id));
                 if (idx !== -1) {
                     list[idx].accountOwner = owner;
                     list[idx].name = owner;
@@ -878,7 +910,7 @@
             else if (collectionType === 'docs') list = appData.docs;
 
             if (list) {
-                let item = list.find(x => x.id === id);
+                let item = list.find(x => String(x.id) === String(id));
                 if (item) {
                     item.status = (item.status === 'pending' || item.status === 'معلق' ? 'paid' : 'pending');
                     saveDataAll();
@@ -944,14 +976,12 @@
             alert("📊 تم تصدير البيانات إلى CSV بنجاح!");
         }
 
-        // دالة الحسابات والملخص المالي المصححة لمنع أي تضارب بين الإيرادات المحصلة والديون الآجلة
         function renderAllFinancials() {
-            let totalCredit = 0;   // الإيرادات المحصلة الفعلية (المسددة)
-            let totalDebit = 0;    // إجمالي المصروفات
-            let totalDeferred = 0; // إجمالي الديون والآجل المستحق (المعلق)
+            let totalCredit = 0;   
+            let totalDebit = 0;    
+            let totalDeferred = 0; 
             let pendingCount = 0;
 
-            // 1. فحص الشحنات الواردة من المنصة الأم
             (appData.shipments || []).forEach(s => {
                 let price = Number(s.price || 0);
                 if (s.status === 'pending' || s.status === 'معلق') {
@@ -962,7 +992,6 @@
                 }
             });
 
-            // 2. فحص المستندات الواردة من المنصة الأم
             (appData.docs || []).forEach(d => {
                 let price = Number(d.price || 0);
                 if (d.status === 'pending' || d.status === 'معلق') {
@@ -973,7 +1002,6 @@
                 }
             });
             
-            // 3. الحسابات العامة والقيود المضافة
             (appData.accounts || []).forEach(a => {
                 let amt = Number(a.amount || 0);
                 if (a.type === 'debit') {
@@ -986,12 +1014,10 @@
                 }
             });
             
-            // 4. المصروفات المسجلة
             (appData.expenses || []).forEach(e => {
                 totalDebit += Number(e.amount || 0);
             });
             
-            // 5. فواتير الآجل المباشرة
             (appData.deferredInvoices || []).forEach(d => {
                 let amt = Number(d.amount || 0);
                 if (d.status === 'pending' || d.status === 'معلق' || !d.status) {
@@ -1000,7 +1026,6 @@
                 }
             });
 
-            // 6. الفواتير المجمعة (Consolidated Invoices)
             (appData.consolidatedInvoices || []).forEach(inv => {
                 let amt = Number(inv.amount || inv.price || 0);
                 if (inv.status === 'pending' || inv.status === 'معلق' || !inv.status) {
@@ -1025,7 +1050,6 @@
             if(pendingCount > 0) aiText += ` تنبيهات: يوجد (${pendingCount}) فواتير آجلة/معلقة بقيمة ${totalDeferred.toLocaleString()} ج.م تتطلب المتابعة.`;
             document.getElementById("aiAnalyticsReportText").innerText = aiText;
 
-            // تحديث جدول المصروفات
             let expTbody = document.getElementById("expensesTableBody");
             if (expTbody) {
                 expTbody.innerHTML = (appData.expenses || []).map(e => `
@@ -1046,7 +1070,6 @@
                 `).join('') || `<tr><td colspan="7" style="text-align:center; color:var(--secondary-text);">لا توجد مصروفات مسجلة</td></tr>`;
             }
 
-            // تحديث جدول السجل الحسابي الشامل والموسع
             let accTbody = document.getElementById("accountsTableBody");
             if (accTbody) {
                 let combined = [
@@ -1087,8 +1110,8 @@
                     else badge = '<span class="badge-credit">📥 دائن</span>';
 
                     let status = item.status === 'pending' || item.status === 'معلق' ? 
-                        `<span class="status-badge status-pending" onclick="toggleRecordStatus(${item.id}, '${item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')))}')">معلق / آجل ⏳</span>` : 
-                        `<span class="status-badge status-paid" onclick="toggleRecordStatus(${item.id}, '${item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')))}')">مسدد ✅</span>`;
+                        `<span class="status-badge status-pending" onclick="toggleRecordStatus('${item.id || ''}', '${item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')))}')">معلق / آجل ⏳</span>` : 
+                        `<span class="status-badge status-paid" onclick="toggleRecordStatus('${item.id || ''}', '${item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')))}')">مسدد ✅</span>`;
                     
                     let owner = item.accountOwner || item.name || 'غير معروف';
                     let phone = item.clientPhone || item.phone || '-';
@@ -1096,6 +1119,7 @@
                     let amt = Number(item.amount || item.price || 0).toLocaleString();
                     let typeText = item.type === 'shipment' ? 'شحنة' : (item.type === 'doc' ? 'مستند' : 'معاملة');
                     let collType = item.type === 'shipment' ? 'shipments' : (item.type === 'doc' ? 'docs' : (item.type === 'deferred' ? 'deferred' : (item.type === 'consolidated' ? 'consolidated' : 'accounts')));
+                    let safeId = item.id !== undefined ? item.id : '';
 
                     return `
                         <tr>
@@ -1115,8 +1139,8 @@
                             </td>
                             <td>
                                 <div class="action-btn-group">
-                                    <button class="edit-btn" onclick="openEditModal(${item.id}, '${collType}')">✏️ تعديل</button>
-                                    <button class="delete-btn" onclick="deleteRecord(${item.id}, '${collType}')">🗑️ حذف</button>
+                                    <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️ تعديل</button>
+                                    <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️ حذف</button>
                                 </div>
                             </td>
                         </tr>
