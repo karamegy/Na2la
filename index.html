@@ -1093,7 +1093,6 @@
         }
         const db = firebase.firestore();
 
-        // دالة معالجة وضغط الصور مع رفع مستوى الدقة والجودة العالية
         function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.85, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -1332,7 +1331,6 @@
             }
         }
 
-        // دالة تسجيل الدخول الموحدة والمحدثة بالمطابقة (الاسم أو رقم الهاتف + الرقم السري PIN)
         function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
@@ -1342,7 +1340,6 @@
                 return;
             }
 
-            // التحقق من حساب المدير الأساسي
             if ((identifier === 'المدير' || identifier === '01000000000' || identifier === 'admin') && (pin === storedPin || pin === '01036')) {
                 currentUserRole = 'admin'; 
                 loggedInDriverName = 'المدير';
@@ -1363,7 +1360,6 @@
                 return;
             }
 
-            // مطابقة البيانات في قائمة السائقين والمشرفين والمديرين (الاسم أو الهاتف مع الرقم السري PIN)
             const matchedUser = (appData.drivers || []).find(d => 
                 (d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin
             );
@@ -1806,6 +1802,26 @@
             alert('تم حفظ وإضافة الفاتورة الآجلة بنجاح! ⏳🚀');
         }
 
+        // دالة تحويل الشحنة إلى فاتورة أجل مباشرة عند التوصيل
+        function convertToDeferred(shipmentId) {
+            let s = (appData.shipments || []).find(item => item.id === shipmentId);
+            if (!s) return;
+
+            document.getElementById('def-inv-code').value = `INV-${s.id}`;
+            document.getElementById('def-client-name').value = s.name;
+            document.getElementById('def-client-phone').value = s.phone || '';
+            document.getElementById('def-total-amount').value = s.price;
+            document.getElementById('def-paid-amount').value = '0';
+            
+            let d = new Date();
+            d.setDate(d.getDate() + 7);
+            document.getElementById('def-due-date').value = d.toISOString().split('T')[0];
+            document.getElementById('def-notes').value = `مستخرجة من الشحنة رقم #${s.id} (${s.item} - ${s.address})`;
+
+            switchTab('deferred-invoices-tab');
+            openAddDeferredModal();
+        }
+
         function loadDeferredInvoicesTable() {
             const tableBody = document.getElementById('deferredInvoicesTableBody');
             if (!tableBody) return;
@@ -1853,6 +1869,9 @@
                         statusBadge = `<span class="badge" style="background:#f59e0b;">معلق ⏳</span>`;
                     }
 
+                    // تقیید زر الحذف على المدير والمشرفين فقط وفقاً لصلاحيات الحسابات
+                    let deleteBtnHtml = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice(${inv.id})">حذف</button>` : '';
+
                     html += `
                         <tr style="border-bottom:1px solid var(--border-color);">
                             <td style="font-weight:bold;">${inv.invoiceId}</td>
@@ -1863,7 +1882,7 @@
                             <td>
                                 <button type="button" class="btn-success btn-sm" onclick="recordDeferredPayment(${inv.id})">تسجيل سداد 💵</button>
                                 <button type="button" class="btn-main btn-sm" style="background:#25d366;" onclick="sendWhatsAppDeferredReminder('${inv.clientPhone}', '${inv.clientName}', ${inv.remainingAmount}, '${inv.dueDate}')">واتساب 📱</button>
-                                <button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice(${inv.id})">حذف</button>
+                                ${deleteBtnHtml}
                             </td>
                         </tr>
                     `;
@@ -1907,6 +1926,10 @@
         }
 
         function deleteDeferredInvoice(id) {
+            if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') {
+                alert('عذراً! صلاحية حذف فواتير الأجل مقتصرة على المدير والمشرفين فقط ولا يحق للسائقين حذفها.');
+                return;
+            }
             if (confirm('هل أنت متأكد من حذف هذه الفاتورة الآجلة؟')) {
                 appData.deferredInvoices = appData.deferredInvoices.filter(i => i.id !== id);
                 saveDataAll();
@@ -3093,6 +3116,7 @@
                         <td>
                             <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">📱 QR</button>
                             <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>
+                            <button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred(${s.id})" title="تحويل الفاتورة إلى قسم الأجل">⏳ أجل</button>
                             ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">🗑️</button>` : ''}
                         </td>
                     `;
