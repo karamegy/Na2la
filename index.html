@@ -506,7 +506,7 @@
         <div class="stat-card" style="border-right-color: var(--success);" onclick="openStatDetailModal('revenue')"><h4>الإيرادات</h4><p id="stat-revenue">0 ج.م</p></div>
         <div class="stat-card" style="border-right-color: var(--purple);" onclick="openStatDetailModal('net_profit')"><h4>صافي الأرباح</h4><p id="stat-net-profit">0 ج.م</p></div>
         <div class="stat-card" style="border-right-color: var(--success);" onclick="openStatDetailModal('cash')"><h4>الخزينة</h4><p id="stat-cash">0 ج.م</p></div>
-        <div class="stat-card" style="border-right-color: var(--danger);" onclick="openStatDetailModal('debts')"><h4>الديون</h4><p id="stat-debts">0 ج.م</p></div>
+        <div class="stat-card" style="border-right-color: var(--danger);" onclick="openStatDetailModal('debts')"><h4>الديون والآجل</h4><p id="stat-debts">0 ج.م</p></div>
     </div>
 
     <!-- صفحة البروفايل الشخصي -->
@@ -1475,6 +1475,7 @@
             let treasury = appData.treasury || [];
             let expenses = appData.expenses || [];
             let customers = appData.customers || [];
+            let deferredInvoices = appData.deferredInvoices || [];
 
             if (type === 'shipments') {
                 titleEl.innerText = '📦 تفاصيل الشحنات والرحلات المتطورة';
@@ -1518,12 +1519,22 @@
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
             } else if (type === 'debts') {
-                titleEl.innerText = '⚠️ حسابات العملاء والديون المستحقة';
-                let totalDebt = customers.reduce((sum, c) => sum + Number(c.debt || 0), 0);
-                let html = `<p style="margin-bottom:8px; font-weight:bold;">إجمالي الديون المعلقة: <span style="color:var(--danger);">${totalDebt} ج.م</span></p>`;
-                html += `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th></tr></thead><tbody>`;
+                titleEl.innerText = '⚠️ حسابات العملاء الفواتير والديون الآجلة';
+                let totalDef = deferredInvoices.reduce((sum, inv) => inv.status !== 'paid' ? sum + Number(inv.remainingAmount || 0) : sum, 0);
+                let totalCustDebt = customers.reduce((sum, c) => sum + Number(c.debt || 0), 0);
+                let grandTotalDebt = totalDef + totalCustDebt;
+                
+                let html = `<p style="margin-bottom:8px; font-weight:bold;">إجمالي الديون والآجل المستحق: <span style="color:var(--danger);">${grandTotalDebt} ج.م</span></p>`;
+                html += `<div class="table-responsive"><table><thead><tr><th>رقم الفاتورة / العميل</th><th>الهاتف</th><th>المبلغ المستحق</th><th>الحالة</th></tr></thead><tbody>`;
+                deferredInvoices.forEach(inv => {
+                    if(inv.status !== 'paid') {
+                        html += `<tr><td>${inv.invoiceId} - ${inv.clientName}</td><td>${inv.clientPhone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${inv.remainingAmount} ج.م</td><td><span class="badge bg-pending">${inv.status}</span></td></tr>`;
+                    }
+                });
                 customers.forEach(c => {
-                    html += `<tr><td>${c.name}</td><td>${c.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${c.debt || 0} ج.م</td></tr>`;
+                    if(c.debt > 0) {
+                        html += `<tr><td>عميل: ${c.name}</td><td>${c.phone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${c.debt} ج.م</td><td><span class="badge bg-pending">مديونية</span></td></tr>`;
+                    }
                 });
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
@@ -1789,10 +1800,10 @@
             document.getElementById('deferred-invoice-form').reset();
             closeModal('addDeferredModal');
             loadDeferredInvoicesTable();
+            render();
             alert('تم حفظ وإضافة الفاتورة الآجلة بنجاح! ⏳🚀');
         }
 
-        // دالة تحويل الشحنة إلى فاتورة أجل مباشرة عند التوصيل
         function convertToDeferred(shipmentId) {
             let s = (appData.shipments || []).find(item => item.id === shipmentId);
             if (!s) return;
@@ -1859,7 +1870,6 @@
                         statusBadge = `<span class="badge" style="background:#f59e0b;">معلق ⏳</span>`;
                     }
 
-                    // تقیید زر الحذف على المدير والمشرفين فقط وفقاً لصلاحيات الحسابات
                     let deleteBtnHtml = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice(${inv.id})">حذف</button>` : '';
 
                     html += `
@@ -1884,6 +1894,8 @@
             if(document.getElementById('totalDeferred')) document.getElementById('totalDeferred').innerText = totalDef.toLocaleString() + " ج.م";
             if(document.getElementById('totalOverdue')) document.getElementById('totalOverdue').innerText = totalOvr.toLocaleString() + " ج.م";
             if(document.getElementById('totalCollected')) document.getElementById('totalCollected').innerText = totalCol.toLocaleString() + " ج.م";
+            
+            render();
         }
 
         function recordDeferredPayment(id) {
@@ -3089,7 +3101,14 @@
             let netProfit = totalRevenue - totalExpenses;
             
             let totalCash = (appData.treasury || []).reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
-            let totalDebts = (appData.customers || []).reduce((sum, c) => sum + Number(c.debt || 0), 0);
+            
+            // ➕ دمج الديون والآجل المعلق لضمان التوافق التام مع بطاقة الإحصائيات
+            let totalDeferredDebts = (appData.deferredInvoices || []).reduce((sum, inv) => {
+                if (inv.status !== 'paid') return sum + Number(inv.remainingAmount || 0);
+                return sum;
+            }, 0);
+            let customerDebts = (appData.customers || []).reduce((sum, c) => sum + Number(c.debt || 0), 0);
+            let totalDebts = customerDebts + totalDeferredDebts;
 
             if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = totalShipments;
             if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = `${totalRevenue} ج.م`;
