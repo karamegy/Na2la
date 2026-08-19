@@ -91,24 +91,29 @@
         
         .brand-container-panda { display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); padding: 6px 16px; border-radius: 20px; }
         
-        /* تصميم تأثير 3D لوجو باندا المتحرك (يخرج ويدخل من الدائرة) */
-        @keyframes pandaFloat3D {
-            0% { transform: translateY(0px) rotate(0deg) scale(1); filter: drop-shadow(0 0 10px rgba(0,242,254,0.6)); }
-            50% { transform: translateY(-5px) rotate(4deg) scale(1.12); filter: drop-shadow(0 0 20px rgba(255,8,68,0.8)); }
-            100% { transform: translateY(0px) rotate(0deg) scale(1); filter: drop-shadow(0 0 10px rgba(0,242,254,0.6)); }
+        /* إطار دائري ثابت تماماً مع السماح للباندا/الصورة بالخروج والدخول بحركة ثري دي */
+        @keyframes pandaPop3D {
+            0% { transform: scale(1) translateY(0px) rotate(0deg); }
+            35% { transform: scale(1.38) translateY(-6px) rotate(-6deg); filter: drop-shadow(0 8px 20px rgba(0,242,254,0.8)); z-index: 20; }
+            70% { transform: scale(1.15) translateY(4px) rotate(6deg); filter: drop-shadow(0 4px 12px rgba(255,8,68,0.6)); z-index: 20; }
+            100% { transform: scale(1) translateY(0px) rotate(0deg); }
         }
 
         .header-profile-avatar {
             width: 48px; height: 48px; border-radius: 50%; overflow: visible;
             border: 2px solid var(--primary-blue); cursor: pointer; display: flex;
             align-items: center; justify-content: center; background: rgba(0, 242, 254, 0.1);
-            position: relative; animation: pandaFloat3D 3.5s ease-in-out infinite;
+            position: relative; box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);
         }
-        .header-profile-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-        .header-profile-avatar span { font-size: 24px; display: inline-block; }
+        .header-profile-avatar img, .header-profile-avatar span {
+            width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: inline-block;
+            animation: pandaPop3D 4s ease-in-out infinite;
+            transform-origin: center center;
+        }
+        .header-profile-avatar span { font-size: 24px; line-height: 44px; text-align: center; }
         .header-profile-avatar::after {
             content: '⚙️'; position: absolute; bottom: -4px; right: -4px; font-size: 10px;
-            background: var(--primary-orange); border-radius: 50%; padding: 2px;
+            background: var(--primary-orange); border-radius: 50%; padding: 2px; z-index: 25;
         }
 
         .brand-text-styled { font-size: 15px; font-weight: 900; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -217,11 +222,13 @@
 
     <header>
         <div class="brand-container-panda">
-            <!-- 3D Logo / Avatar Panda with Image Upload Support -->
-            <div class="header-profile-avatar" onclick="triggerProfileAvatarChange()" title="انقر لرفع وتغيير صورة لوجو باندا الثري دي الشخصية">
+            <!-- 3D Logo / Avatar Panda with Image Upload Support & Static Circular Frame -->
+            <div class="header-profile-avatar" onclick="triggerProfileAvatarChange()" title="انقر لرفع أو تغيير صورة لوجو باندا الثري دي الشخصية">
                 <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none;">
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
+            <!-- عنصر مخفي لرفع الصورة من الجهاز مباشرة -->
+            <input type="file" id="localAvatarUploadInput" accept="image/*" style="display: none;" onchange="handleLocalAvatarUpload(event)">
             <div class="brand-text-styled">أسطورة الطريق - الإدارة العليا V98 🐎</div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
@@ -559,12 +566,36 @@
         }
 
         function triggerProfileAvatarChange() {
-            let imgUrl = prompt("أدخل رابط صورة لجو باندا الثري دي الشخصية الجديدة (رابط مباشر لـ صورة):", appData.userAvatar || "");
-            if (imgUrl !== null) {
-                appData.userAvatar = imgUrl.trim();
+            let choice = prompt("اختر طريقة تغيير لوجو الباندا الثري دي:\n1 - رفع صورة من جهازك\n2 - إدخال رابط صورة مباشر\n(اكتب 1 أو 2 أو اتركه فارغاً للعودة للإيموجي الافتراضي 🐼):", "1");
+            if (choice === "1") {
+                document.getElementById("localAvatarUploadInput").click();
+            } else if (choice === "2") {
+                let imgUrl = prompt("أدخل رابط صورة لوجو الباندا الثري دي الجديدة:", appData.userAvatar || "");
+                if (imgUrl !== null) {
+                    appData.userAvatar = imgUrl.trim();
+                    saveDataAll();
+                    updateProfileAvatarUI();
+                    alert("✅ تم تحديث لوجو الباندا الثري دي بنجاح!");
+                }
+            } else if (choice === "") {
+                appData.userAvatar = "";
                 saveDataAll();
                 updateProfileAvatarUI();
-                alert("✅ تم تحديث لوجو الباندا الثري دي بنجاح!");
+                alert("✅ تم إعادة ضبط الباندا الافتراضي!");
+            }
+        }
+
+        function handleLocalAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    appData.userAvatar = e.target.result;
+                    saveDataAll();
+                    updateProfileAvatarUI();
+                    alert("✅ تم رفع الصورة بنجاح وحفظها سحابياً كلوجو ثري دي متحرك!");
+                };
+                reader.readAsDataURL(file);
             }
         }
 
