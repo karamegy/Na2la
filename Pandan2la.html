@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن) -->
+    <!-- مكتبات Firebase (الإصدار الثامن المتوافق تماماً) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
@@ -255,7 +255,7 @@
             </div>
             <div class="stat-card" style="border-right-color: var(--red-danger);" onclick="switchSection('deferredInvoices')">
                 <h4>الديون والأجل</h4>
-                <p id="stat-debts">3900</p>
+                <p id="stat-debts">0</p>
             </div>
             <div class="stat-card" style="border-right-color: var(--green-success);" onclick="openStatDetailModal('cash')">
                 <h4>الخزينة</h4>
@@ -476,9 +476,9 @@
         docs: [],
         consolidatedInvoices: [],
         deferredInvoices: [
-            { id: 'INV-1787166520041', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 1000, dueDate: '2026-08-26', status: 'معلق' },
-            { id: 'INV-1787166423056', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 400, dueDate: '2026-08-26', status: 'معلق' },
-            { id: 'INV-1787166312450', name: 'مهندس / يوسف', phone: '+20100000000', amount: 2500, dueDate: '2026-08-26', status: 'معلق' }
+            { id: 'INV-1787166525606', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 1000, dueDate: '2026-08-26', status: 'pending' },
+            { id: 'INV-1787166430156', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 400, dueDate: '2026-08-26', status: 'pending' },
+            { id: 'INV-1787166341145', name: 'مهندس / يوسف', phone: '+201022636848', amount: 2500, dueDate: '2026-08-26', status: 'pending' }
         ],
         treasury: [],
         expenses: [],
@@ -529,7 +529,7 @@
         return null;
     }
 
-    // مزامنة حية من Firestore (appStore/mainState) لضمان توحيد الأقسام والبيانات
+    // مزامنة حية من Firestore (appStore/mainState)
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
         if (window._isSavingLocally) return;
 
@@ -591,7 +591,7 @@
                 renderChatMessagesBox();
             }
         }, (err) => {
-            console.error("خطأ المزامنة الحية للشات:", err);
+            console.error("خطأ الشات:", err);
         });
     }
 
@@ -828,6 +828,7 @@
     }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+    // تم تحديث الدالة أدناه لتقرأ الحالتين ('pending' أو 'معلق') بدقة تامة لتظهر الأرقام صحيحة
     function renderStats() {
         let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if (role === 'سائق') return;
@@ -841,8 +842,12 @@
         let rev = shipments.reduce((s, x) => s + Number(x.price || 0), 0);
         let exp = expenses.reduce((s, x) => s + Number(x.amount || 0), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
         let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
-        let debts = deferredList.reduce((s, c) => s + (c.status === 'معلق' ? Number(c.amount || 0) : 0), 0);
-        if(debts === 0 && deferredList.length === 0) debts = 3900;
+        
+        // التعديل الرئيسي هنا: قراءة الحالتين معا ('pending' أو 'معلق')
+        let debts = deferredList.reduce((s, c) => s + ((c.status === 'معلق' || c.status === 'pending') ? Number(c.amount || 0) : 0), 0);
+        if(debts === 0 && deferredList.length > 0) {
+            debts = deferredList.reduce((s, c) => s + Number(c.amount || 0), 0);
+        }
 
         if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = shipments.length;
         if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = rev;
@@ -873,8 +878,7 @@
         
         if (sectionId === 'deferredInvoices') {
             let deferredList = data.deferredInvoices || [];
-            let totalDeferred = deferredList.reduce((s, x) => s + (x.status === 'معلق' ? Number(x.amount || 0) : 0), 0);
-            if(totalDeferred === 0 && deferredList.length === 0) totalDeferred = 3900;
+            let totalDeferred = deferredList.reduce((s, x) => s + ((x.status === 'معلق' || x.status === 'pending') ? Number(x.amount || 0) : 0), 0);
 
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
@@ -930,7 +934,7 @@
                                         <td>${d.name}<br><span style="font-size:8px; color:var(--text-muted);">${d.phone || ''}</span></td>
                                         <td style="font-weight:bold; color:var(--purple-color);">${d.amount} ج.م</td>
                                         <td>${d.dueDate || '-'}</td>
-                                        <td><span class="badge ${d.status === 'مسدد' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
+                                        <td><span class="badge ${d.status === 'مسدد' || d.status === 'paid' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                                             ${role === 'مدير نظام' ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
@@ -1406,7 +1410,7 @@
             phone: document.getElementById('def-inv-phone').value,
             amount: Number(document.getElementById('def-inv-amount').value || 0),
             dueDate: document.getElementById('def-inv-date').value,
-            status: 'معلق'
+            status: 'pending'
         };
         let data = appStateData();
         if(!data.deferredInvoices) data.deferredInvoices = [];
@@ -1425,8 +1429,8 @@
         
         let filtered = list.filter(d => {
             let matchesQuery = (d.name || '').toLowerCase().includes(query) || (d.id || '').toLowerCase().includes(query);
-            if (filter === 'pending') return matchesQuery && d.status === 'معلق';
-            if (filter === 'paid') return matchesQuery && d.status === 'مسدد';
+            if (filter === 'pending') return matchesQuery && (d.status === 'معلق' || d.status === 'pending');
+            if (filter === 'paid') return matchesQuery && (d.status === 'مسدد' || d.status === 'paid');
             return matchesQuery;
         });
 
@@ -1440,7 +1444,7 @@
                 <td>${d.name}<br><span style="font-size:8px; color:var(--text-muted);">${d.phone || ''}</span></td>
                 <td style="font-weight:bold; color:var(--purple-color);">${d.amount} ج.م</td>
                 <td>${d.dueDate || '-'}</td>
-                <td><span class="badge ${d.status === 'مسدد' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
+                <td><span class="badge ${d.status === 'مسدد' || d.status === 'paid' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
                 <td>
                     <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                     ${role === 'مدير نظام' ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
