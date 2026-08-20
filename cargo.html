@@ -3,7 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سوق الحمولات - نقلة (Na2la)</title>
+    <title>سوق الحمولات - نقلة (Na2la) V52 PRO</title>
+    
+    <!-- مكتبات Firebase V10 الحديثة -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+          authDomain: "n2la-642d3.firebaseapp.com",
+          projectId: "n2la-642d3",
+          storageBucket: "n2la-642d3.firebasestorage.app",
+          messagingSenderId: "1085749997466",
+          appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+          measurementId: "G-KH4ZYFB8LC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseDb = db;
+
+        // تسجيل الدخول التلقائي سحابياً لتلبية شرط request.auth != null في قواعد Firestore
+        signInAnonymously(auth).then(() => {
+            console.log("✅ تم المصادقة السحابية بنجاح في سوق الحمولات");
+            document.getElementById("cloudStatusIndicator").innerText = "☁️ سحابي متصل وآمن";
+            document.getElementById("cloudStatusIndicator").style.background = "#22c55e";
+            loadCloudCargo();
+        }).catch((error) => {
+            console.error("⚠️ خطأ في المصادقة السحابية:", error);
+        });
+
+        // دالة إضافة حمولة جديدة سحابياً
+        window.addCargoCloud = async function(e) {
+            e.preventDefault();
+
+            const fromLoc = document.getElementById('fromLoc').value;
+            const toLoc = document.getElementById('toLoc').value;
+            const cargoType = document.getElementById('cargoType').value;
+            const offeredPrice = document.getElementById('offeredPrice').value;
+            const clientPhone = document.getElementById('clientPhone').value;
+            const loadTime = document.getElementById('loadTime').value;
+
+            const cargoObj = {
+                id: String(Date.now()),
+                from: fromLoc,
+                to: toLoc,
+                type: cargoType,
+                price: offeredPrice,
+                phone: clientPhone,
+                time: loadTime,
+                date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+                timestamp: Date.now()
+            };
+
+            try {
+                // حفظ في مجموعة cargo و shipments للربط الشامل
+                await setDoc(doc(db, "cargo", cargoObj.id), cargoObj);
+                await setDoc(doc(db, "shipments", cargoObj.id), {
+                    id: cargoObj.id,
+                    accountOwner: "عميل سوق الحمولات",
+                    clientPhone: clientPhone,
+                    description: `نقل حمولة من ${fromLoc} إلى ${toLoc} (${cargoType})`,
+                    amount: Number(offeredPrice),
+                    date: new Date().toLocaleDateString('ar-EG'),
+                    status: 'pending',
+                    type: 'shipment'
+                });
+
+                // تحديث التخزين المحلي أيضاً كنسخة احتياطية
+                let cargoData = JSON.parse(localStorage.getItem('na2la_cargo_list')) || [];
+                cargoData.unshift(cargoObj);
+                localStorage.setItem('na2la_cargo_list', JSON.stringify(cargoData));
+
+                document.getElementById('cargoForm').reset();
+                loadCloudCargo();
+                alert("✅ تم نشر طلب الحمولة بنجاح ومزامنته سحابياً مع السائقين!");
+            } catch (err) {
+                alert("⚠️ خطأ أثناء حفظ الحمولة سحابياً: " + err.message);
+            }
+        };
+
+        // تحميل الحمولات من سحابة Firestore لحظياً
+        function loadCloudCargo() {
+            const container = document.getElementById('cargoList');
+            onSnapshot(collection(db, "cargo"), (snapshot) => {
+                let cloudList = [];
+                snapshot.forEach(doc => {
+                    cloudList.push(doc.data());
+                });
+
+                // الترتيب الأحدث أولاً
+                cloudList.sort((a, b) => b.timestamp - a.timestamp);
+
+                if (cloudList.length === 0) {
+                    // إذا لم توجد في السحابة، اعرض من التخزين المحلي
+                    renderLocalFallback();
+                    return;
+                }
+
+                renderCargoUI(cloudList);
+            }, (error) => {
+                console.error("خطأ في جلب الحمولات سحابياً:", error);
+                renderLocalFallback();
+            });
+        }
+
+        function renderLocalFallback() {
+            let cargoData = JSON.parse(localStorage.getItem('na2la_cargo_list')) || [];
+            renderCargoUI(cargoData);
+        }
+
+        function renderCargoUI(cargoData) {
+            const container = document.getElementById('cargoList');
+            if (!container) return;
+
+            if (cargoData.length === 0) {
+                container.innerHTML = `<div class="card" style="text-align:center; color:#94a3b8;">لا توجد طلبات حمولات معروضة حالياً. كن أول من يضيف حمولة!</div>`;
+                return;
+            }
+
+            container.innerHTML = cargoData.map(c => {
+                const waMessage = encodeURIComponent(`السلام عليكم، قرأت طلب الحمولة الخاص بك على تطبيق نقلة (من ${c.from} إلى ${c.to}). أنا جاهز لنقل الحمولة.`);
+                const waUrl = `https://wa.me/2${c.phone}?text=${waMessage}`;
+
+                return `
+                    <div class="cargo-item">
+                        <div class="cargo-header">
+                            <span class="cargo-route">📍 ${c.from} ⬅️ ${c.to}</span>
+                            <span class="cargo-badge">${c.price} ج.م</span>
+                        </div>
+                        <div class="cargo-details">
+                            <strong>نوع الحمولة:</strong> ${c.type}<br>
+                            <strong>موعد التحميل:</strong> ${c.time}<br>
+                            <small style="color:#94a3b8;">تم النشر: ${c.date || 'الآن'}</small>
+                        </div>
+                        <a href="${waUrl}" target="_blank" class="whatsapp-btn">💬 تواصل مع العميل عبر WhatsApp</a>
+                    </div>
+                `;
+            }).join('');
+        }
+    </script>
+
     <style>
         :root {
             --primary-color: #2563eb;
@@ -28,7 +172,6 @@
             padding-bottom: 50px;
         }
 
-        /* شريط التصفح الموحد */
         nav {
             background-color: var(--card-bg);
             border-bottom: 1px solid var(--border-color);
@@ -52,6 +195,7 @@
             display: flex;
             gap: 12px;
             list-style: none;
+            align-items: center;
         }
 
         .nav-links a {
@@ -63,6 +207,15 @@
 
         .nav-links a.active {
             color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .cloud-badge {
+            background: var(--accent-orange);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
             font-weight: bold;
         }
 
@@ -132,7 +285,6 @@
 
         .btn-success { background-color: var(--accent-green); }
 
-        /* كارت الطلب */
         .cargo-item {
             background: #ffffff;
             border: 1px solid var(--border-color);
@@ -192,8 +344,9 @@
         <ul class="nav-links">
             <li><a href="index.html">الرئيسية</a></li>
             <li><a href="cargo.html" class="active">سوق الحمولات</a></li>
-            <li><a href="community.html">المجتمع</a></li>
-            <li><a href="driver-profile.html">حسابي</a></li>
+            <li><a href="Com.html">المجتمع</a></li>
+            <li><a href="World.html">الخزينة والمالية</a></li>
+            <li><span id="cloudStatusIndicator" class="cloud-badge">☁️ جاري الاتصال...</span></li>
         </ul>
     </nav>
 
@@ -201,8 +354,8 @@
 
         <!-- 1. نموذج إضافة حمولة جديدة (للعملاء) -->
         <div class="card">
-            <h2 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--primary-color);">📦 إضافة طلب نقل حمولة جديد</h2>
-            <form id="cargoForm" onsubmit="addCargo(event)">
+            <h2 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--primary-color);">📦 إضافة طلب نقل حمولة جديد (مزامنة سحابية)</h2>
+            <form id="cargoForm" onsubmit="addCargoCloud(event)">
                 <div class="grid-2">
                     <div class="input-group">
                         <label>من (مكان التحميل):</label>
@@ -227,7 +380,7 @@
 
                 <div class="grid-2">
                     <div class="input-group">
-                        <label>رقم موكيل/الواتساب للتواصل:</label>
+                        <label>رقم موكل/الواتساب للتواصل:</label>
                         <input type="tel" id="clientPhone" placeholder="010XXXXXXXX" required>
                     </div>
                     <div class="input-group">
@@ -236,121 +389,15 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-success">🚀 نشر طلب الحمولة للسائقين</button>
+                <button type="submit" class="btn btn-success">🚀 نشر طلب الحمولة للسائقين سحابياً</button>
             </form>
         </div>
 
         <!-- 2. قائمة الحمولات والطلبات المتاحة (للسائقين) -->
-        <h2 class="section-title">🚛 الحمولات والطلبات المتاحة حالياً</h2>
+        <h2 class="section-title">🚛 الحمولات والطلبات المتاحة حالياً (متزامن سحابياً)</h2>
         <div id="cargoList"></div>
 
     </div>
-
-    <script>
-        // إضافة طلب حمولة جديد وتخزينه في localStorage
-        function addCargo(e) {
-            e.preventDefault();
-
-            const fromLoc = document.getElementById('fromLoc').value;
-            const toLoc = document.getElementById('toLoc').value;
-            const cargoType = document.getElementById('cargoType').value;
-            const offeredPrice = document.getElementById('offeredPrice').value;
-            const clientPhone = document.getElementById('clientPhone').value;
-            const loadTime = document.getElementById('loadTime').value;
-
-            const newCargo = {
-                id: Date.now(),
-                from: fromLoc,
-                to: toLoc,
-                type: cargoType,
-                price: offeredPrice,
-                phone: clientPhone,
-                time: loadTime,
-                date: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
-            };
-
-            // حفظ الطلب
-            let cargoData = JSON.parse(localStorage.getItem('na2la_cargo_list')) || [];
-            cargoData.unshift(newCargo);
-            localStorage.setItem('na2la_cargo_list', JSON.stringify(cargoData));
-
-            // ربط تلقائي مع مجتمع السائقين (نشر منشور آلي في community)
-            saveToCommunityAlert(newCargo);
-
-            // إعادة ضبط النموذج وتحديث القائمة
-            document.getElementById('cargoForm').reset();
-            renderCargo();
-            alert("تم نشر طلب الحمولة بنجاح وإشعار السائقين!");
-        }
-
-        // إرسال تنبيه لمجتمع السائقين تلقائياً
-        function saveToCommunityAlert(cargo) {
-            const alertText = `🚨 **طلب نقل حمولة جديد!**\n📍 من: ${cargo.from} ⬅️ إلى: ${cargo.to}\n📦 نوع البضاعة: ${cargo.type}\n💵 السعر المقترح: ${cargo.price} ج.م\n⏰ الموعد: ${cargo.time}`;
-            
-            let posts = JSON.parse(localStorage.getItem('na2la_community_posts')) || [];
-            posts.unshift({
-                id: Date.now(),
-                author: "نظام الطلبات (Na2la System)",
-                text: alertText,
-                image: "",
-                time: "الآن"
-            });
-            localStorage.setItem('na2la_community_posts', JSON.stringify(posts));
-        }
-
-        // عرض قائمة الحمولات
-        function renderCargo() {
-            const container = document.getElementById('cargoList');
-            let cargoData = JSON.parse(localStorage.getItem('na2la_cargo_list')) || [];
-
-            if (cargoData.length === 0) {
-                container.innerHTML = `<div class="card" style="text-align:center; color:#94a3b8;">لا توجد طلبات حمولات معروضة حالياً. كن أول من يضيف حمولة!</div>`;
-                return;
-            }
-
-            container.innerHTML = cargoData.map(c => {
-                // تجهيز رابط واتساب مباشر للتواصل مع العميل
-                const waMessage = encodeURIComponent(`السلام عليكم، قرأت طلب الحمولة الخاص بك على تطبيق نقلة (من ${c.from} إلى ${c.to}). أنا جاهز لنقل الحمولة.`);
-                const waUrl = `https://wa.me/2${c.phone}?text=${waMessage}`;
-
-                return `
-                    <div class="cargo-item">
-                        <div class="cargo-header">
-                            <span class="cargo-route">📍 ${c.from} ⬅️ ${c.to}</span>
-                            <span class="cargo-badge">${c.price} ج.م</span>
-                        </div>
-                        <div class="cargo-details">
-                            <strong>نوع الحمولة:</strong> ${c.type}<br>
-                            <strong>موعد التحميل:</strong> ${c.time}<br>
-                            <small style="color:#94a3b8;">تم النشر: ${c.date}</small>
-                        </div>
-                        <a href="${waUrl}" target="_blank" class="whatsapp-btn">💬 تواصل مع العميل عبر WhatsApp</a>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // تشغيل العرض عند فتح الصفحة
-        window.onload = renderCargo;
-    </script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDn-RNJ2ak3I0DdfzTZm...",
-    authDomain: "n2la-642d3.firebaseapp.com",
-    projectId: "n2la-642d3",
-    storageBucket: "n2la-642d3.appspot.com",
-    messagingSenderId: "108574997466",
-    appId: "1:108574997466:web:13e5539...",
-    measurementId: "G-KH4ZYFB8LC"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  console.log("تم ربط قاعدة البيانات لهذه الصفحة بنجاح");
-</script>
 
 </body>
 </html>
