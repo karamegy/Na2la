@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V89.5 PRO SYNC</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V89.6 PRO SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -135,7 +135,7 @@
 <div class="login-screen" id="lock-screen" style="display: none;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.5 PRO SYNC)</h3>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.6 PRO SYNC)</h3>
         <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً لحظياً عبر Firestore (appStore/mainState)</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
@@ -164,6 +164,9 @@
             <input type="text" id="vis-address" required placeholder="عنوان التوصيل بالتفصيل">
             <input type="text" id="vis-item" required placeholder="وصف الحمولة">
             <input type="number" id="vis-price" required placeholder="الأجرة المتفق عليها (ج.م)">
+            <label style="display:flex; align-items:center; gap:6px; margin:6px 0; font-size:9px; cursor:pointer;">
+                <input type="checkbox" id="vis-is-deferred" style="width:auto; margin:0;"> ⏳ ترحيل هذه الرحلة كفاتورة أجل (قسم الأجل)
+            </label>
             <button type="submit" class="btn-success" style="margin-top: 4px;">حجز وإرسال للإدارة 🚀</button>
         </form>
     </div>
@@ -191,11 +194,11 @@
             <button type="button" onclick="closeModal('deferredModal')" class="btn-danger btn-sm">✕ إغلاق</button>
         </div>
         <form onsubmit="saveDeferredInvoice(event)">
-            <input type="text" id="def-inv-id" placeholder="رقم الفاتورة" required value="INV-1787166520042">
+            <input type="text" id="def-inv-id" placeholder="رقم الفاتورة" required value="INV-">
             <input type="text" id="def-inv-name" placeholder="اسم العميل الرباعي" required>
             <input type="tel" id="def-inv-phone" placeholder="رقم الهاتف" required>
             <input type="number" id="def-inv-amount" placeholder="المبلغ المتبقي (ج.م)" required>
-            <input type="date" id="def-inv-date" required value="2026-08-26">
+            <input type="date" id="def-inv-date" required>
             <button type="submit" class="btn-success" style="margin-top: 4px;">حفظ الفاتورة الأجل 💾</button>
         </form>
     </div>
@@ -329,7 +332,7 @@
             <div id="invoice-preview-card">
                 <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
                     <h2 style="font-size: 14px; color: #2563eb;">أسطورة الطريق & باندا</h2>
-                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V89)</p>
+                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V89.6)</p>
                 </div>
                 <div style="font-size: 10px; line-height: 1.6;">
                     <p><strong>رقم البوليصة:</strong> <span id="inv-id"></span></p>
@@ -475,14 +478,10 @@
         shipments: [],
         docs: [],
         consolidatedInvoices: [],
-        deferredInvoices: [
-            { id: 'INV-1787166525606', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 1000, dueDate: '2026-08-26', status: 'pending' },
-            { id: 'INV-1787166430156', name: 'المهندس / محمد عبادة', phone: '+201006586757', amount: 400, dueDate: '2026-08-26', status: 'pending' },
-            { id: 'INV-1787166341145', name: 'مهندس / يوسف', phone: '+201022636848', amount: 2500, dueDate: '2026-08-26', status: 'pending' }
-        ],
+        deferredInvoices: [], // تم تفريغ الفواتير الافتراضية لمنع عودة الفواتير المحذوفة
         treasury: [],
         expenses: [],
-        customers: [{ id: 1, name: 'عميل أجل افتراضي', phone: '01000000000', debt: 3900 }],
+        customers: [{ id: 1, name: 'عميل أجل افتراضي', phone: '01000000000', debt: 0 }],
         drivers: [{ id: 1, name: 'كرم حمدي', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق' }],
         communityPosts: [],
         posts: [],
@@ -520,7 +519,7 @@
             if (dataStr) {
                 try {
                     let parsed = JSON.parse(dataStr);
-                    if (parsed && (parsed.docs?.length > 0 || parsed.shipments?.length > 0)) {
+                    if (parsed) {
                         return parsed;
                     }
                 } catch(e) {}
@@ -529,7 +528,7 @@
         return null;
     }
 
-    // مزامنة حية من Firestore (appStore/mainState)
+    // مزامنة حية من Firestore (appStore/mainState) مع دمج دقيق
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
         if (window._isSavingLocally) return;
 
@@ -554,20 +553,20 @@
         appData = {
             shipments: rawShipments,
             docs: rawShipments,
-            consolidatedInvoices: remoteData?.consolidatedInvoices?.length ? remoteData.consolidatedInvoices : (localData?.consolidatedInvoices?.length ? localData.consolidatedInvoices : defaultInitialData.consolidatedInvoices),
-            deferredInvoices: remoteData?.deferredInvoices?.length ? remoteData.deferredInvoices : (localData?.deferredInvoices?.length ? localData.deferredInvoices : defaultInitialData.deferredInvoices),
-            treasury: remoteData?.treasury?.length ? remoteData.treasury : (localData?.treasury?.length ? localData.treasury : defaultInitialData.treasury),
-            expenses: remoteData?.expenses?.length ? remoteData.expenses : (localData?.expenses?.length ? localData.expenses : defaultInitialData.expenses),
-            customers: remoteData?.customers?.length ? remoteData.customers : (localData?.customers?.length ? localData.customers : defaultInitialData.customers),
-            drivers: remoteData?.drivers?.length ? remoteData.drivers : (localData?.drivers?.length ? localData.drivers : defaultInitialData.drivers),
+            consolidatedInvoices: remoteData?.consolidatedInvoices || localData?.consolidatedInvoices || defaultInitialData.consolidatedInvoices,
+            deferredInvoices: remoteData?.deferredInvoices || localData?.deferredInvoices || defaultInitialData.deferredInvoices,
+            treasury: remoteData?.treasury || localData?.treasury || defaultInitialData.treasury,
+            expenses: remoteData?.expenses || localData?.expenses || defaultInitialData.expenses,
+            customers: remoteData?.customers || localData?.customers || defaultInitialData.customers,
+            drivers: remoteData?.drivers || localData?.drivers || defaultInitialData.drivers,
             communityPosts: remoteData?.communityPosts || remoteData?.posts || remoteData?.wallPosts || localData?.communityPosts || defaultInitialData.communityPosts,
             posts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
             wallPosts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
-            trucks: remoteData?.trucks?.length ? remoteData.trucks : (localData?.trucks?.length ? localData.trucks : defaultInitialData.trucks),
-            maintenanceLogs: remoteData?.maintenanceLogs?.length ? remoteData.maintenanceLogs : (localData?.maintenanceLogs?.length ? localData.maintenanceLogs : defaultInitialData.maintenanceLogs),
+            trucks: remoteData?.trucks || localData?.trucks || defaultInitialData.trucks,
+            maintenanceLogs: remoteData?.maintenanceLogs || localData?.maintenanceLogs || defaultInitialData.maintenanceLogs,
             chat: appData.chat || [],
-            centralBroadcasts: remoteData?.centralBroadcasts?.length ? remoteData.centralBroadcasts : (localData?.centralBroadcasts?.length ? localData.centralBroadcasts : defaultInitialData.centralBroadcasts),
-            auditLogs: remoteData?.auditLogs?.length ? remoteData.auditLogs : (localData?.auditLogs?.length ? localData.auditLogs : defaultInitialData.auditLogs),
+            centralBroadcasts: remoteData?.centralBroadcasts || localData?.centralBroadcasts || defaultInitialData.centralBroadcasts,
+            auditLogs: remoteData?.auditLogs || localData?.auditLogs || defaultInitialData.auditLogs,
             files: remoteData?.files || localData?.files || []
         };
         
@@ -625,7 +624,7 @@
             shipments: unifiedShipments,
             wallPosts: appData.posts,
             posts: appData.posts
-        }, { merge: true }).then(() => {
+        }).then(() => {
             setTimeout(() => { window._isSavingLocally = false; }, 1200);
             if(typeof renderStats === 'function') renderStats();
             if(typeof refreshActiveSection === 'function') refreshActiveSection();
@@ -825,10 +824,13 @@
     function openModal(id) { 
         document.getElementById(id).style.display = 'flex'; 
         if(id === 'driversCommunityModal') renderCommunityPosts(); 
+        if(id === 'deferredModal') {
+            document.getElementById('def-inv-id').value = 'INV-' + Date.now();
+            document.getElementById('def-inv-date').value = new Date().toISOString().split('T')[0];
+        }
     }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // تم تحديث الدالة أدناه لتقرأ الحالتين ('pending' أو 'معلق') بدقة تامة لتظهر الأرقام صحيحة
     function renderStats() {
         let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if (role === 'سائق') return;
@@ -843,7 +845,6 @@
         let exp = expenses.reduce((s, x) => s + Number(x.amount || 0), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
         let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
         
-        // التعديل الرئيسي هنا: قراءة الحالتين معا ('pending' أو 'معلق')
         let debts = deferredList.reduce((s, c) => s + ((c.status === 'معلق' || c.status === 'pending') ? Number(c.amount || 0) : 0), 0);
         if(debts === 0 && deferredList.length > 0) {
             debts = deferredList.reduce((s, c) => s + Number(c.amount || 0), 0);
@@ -1133,8 +1134,8 @@
         } else if (sectionId === 'shipments') {
             content.innerHTML = `
                 ${role !== 'سائق' ? `
-                <div class="card">
-                    <h3><span>📦 تسجيل رحلة وشحنة جديدة (تظهر فوراً في باندا)</span></h3>
+                <div class="card" style="border: 2px solid var(--accent-main);">
+                    <h3><span>📦 تسجيل رحلة وشحنة جديدة (مع أيقونة الأجل)</span></h3>
                     <form onsubmit="saveNewShipment(event)">
                         <input type="text" id="s-name" placeholder="اسم العميل" required>
                         <input type="text" id="s-phone" placeholder="رقم الهاتف">
@@ -1146,10 +1147,14 @@
                             <option value="عاجل ⚡">أولوية عاجلة ⚡</option>
                             <option value="مهم جداً 👑">أولوية مهمة جداً 👑</option>
                         </select>
-                        <select id="s-driver">
+                        <select id="s-driver" style="margin-bottom:5px;">
                             <option value="">-- السائق المعين --</option>
                             ${(data.drivers || []).map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
                         </select>
+                        <!-- أيقونة / خيار الأجل المطلوبة -->
+                        <label style="display:flex; align-items:center; gap:6px; margin:6px 0; font-size:9px; font-weight:bold; color:var(--yellow-warning); cursor:pointer; background:var(--bg-dark); padding:6px; border-radius:6px; border:1px solid var(--border-color);">
+                            <input type="checkbox" id="s-is-deferred" style="width:auto; margin:0;"> ⏳ ترحيل هذه الفاتورة إلى "قسم الأجل" فوراً
+                        </label>
                         <button type="submit" class="btn-main">حفظ وتوليد بوليصة QR 💾</button>
                     </form>
                 </div>` : ''}
@@ -2014,13 +2019,19 @@
             showToast('عذراً، حساب السائق لا يمتلك صلاحية إضافة شحنات جديدة!', 'warning');
             return;
         }
+        const isDeferredChecked = document.getElementById('s-is-deferred')?.checked || false;
+        const shipmentId = 'INV-' + Date.now();
+        const sName = document.getElementById('s-name').value;
+        const sPhone = document.getElementById('s-phone').value;
+        const sPrice = Number(document.getElementById('s-price').value);
+
         const newShipment = {
-            id: Date.now(),
-            name: document.getElementById('s-name').value,
-            phone: document.getElementById('s-phone').value,
+            id: shipmentId,
+            name: sName,
+            phone: sPhone,
             address: document.getElementById('s-address').value,
             item: document.getElementById('s-item').value,
-            price: Number(document.getElementById('s-price').value),
+            price: sPrice,
             priority: document.getElementById('s-priority').value,
             assignedDriver: document.getElementById('s-driver').value,
             milestone: 'تم التسجيل',
@@ -2028,14 +2039,31 @@
             gps: '30.0444,31.2357',
             date: new Date().toLocaleDateString('ar-EG')
         };
+
         let data = appStateData();
         let list = getAllShipments(data);
         list.unshift(newShipment);
         data.shipments = list;
         data.docs = list;
+
+        // إذا تم تفعيل خيار الأجل، يتم ترحيلها تلقائياً لقسم الأجل
+        if (isDeferredChecked) {
+            if(!data.deferredInvoices) data.deferredInvoices = [];
+            data.deferredInvoices.unshift({
+                id: shipmentId,
+                name: sName,
+                phone: sPhone,
+                amount: sPrice,
+                dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                status: 'pending'
+            });
+            showToast('📦 تم حفظ الشحنة وترحيلها كفاتورة أُجل بنجاح!');
+        } else {
+            showToast('تم حفظ الشحنة وظهرت في غرفة باندا بنجاح! 🚀');
+        }
+
         saveDataAll();
         switchSection('shipments');
-        showToast('تم حفظ الشحنة وظهرت في غرفة باندا بنجاح! 🚀');
     }
 
     function saveTreasury(e) {
@@ -2099,13 +2127,19 @@
     }
 
     function saveVisitorShipment() {
+        const isDeferred = document.getElementById('vis-is-deferred')?.checked || false;
+        const shipmentId = 'INV-' + Date.now();
+        const vName = document.getElementById('vis-name').value;
+        const vPhone = document.getElementById('vis-phone').value;
+        const vPrice = Number(document.getElementById('vis-price').value);
+
         const newShipment = {
-            id: Date.now(),
-            name: document.getElementById('vis-name').value,
-            phone: document.getElementById('vis-phone').value,
+            id: shipmentId,
+            name: vName,
+            phone: vPhone,
             address: document.getElementById('vis-address').value,
             item: document.getElementById('vis-item').value,
-            price: Number(document.getElementById('vis-price').value),
+            price: vPrice,
             priority: 'عادي',
             milestone: 'تم التسجيل',
             status: 'في الانتظار',
@@ -2117,9 +2151,22 @@
         list.unshift(newShipment);
         data.shipments = list;
         data.docs = list;
+
+        if (isDeferred) {
+            if(!data.deferredInvoices) data.deferredInvoices = [];
+            data.deferredInvoices.unshift({
+                id: shipmentId,
+                name: vName,
+                phone: vPhone,
+                amount: vPrice,
+                dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                status: 'pending'
+            });
+        }
+
         saveDataAll();
         closeModal('visitorBookingModal');
-        showToast('تم حجز الرحلة وظهوره في غرفة باندا والإدارة بنجاح!');
+        showToast('تم حجز الرحلة وترحيلها بنجاح!');
     }
 
     function publishCommunityPost() {
@@ -2220,7 +2267,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V89.5", 20, 20);
+        doc.text("Global Transport Hub - Waybill V89.6", 20, 20);
         doc.text(`Client: ${s.name || '-'}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address || '-'}`, 20, 50);
@@ -2236,7 +2283,7 @@
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v89_5.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v89_6.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
