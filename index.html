@@ -322,12 +322,24 @@
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
                 <button type="button" class="btn-main" onclick="performUnifiedLogin()" style="padding: 12px; font-size: 12px;">تسجيل الدخول السحابي الآمن 🔐</button>
                 
+                <!-- زر تسجيل الدخول بواسطة جوجل (Google) -->
+                <button type="button" onclick="signInWithGoogle()" style="background-color: #db4437; color: white; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 11px;">
+                    🌐 تسجيل الدخول باستخدام جوجل (Google)
+                </button>
+
+                <!-- زر تسجيل الدخول برقم الهاتف (SMS) -->
+                <button type="button" onclick="promptPhoneSignIn()" style="background-color: #0284c7; color: white; padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 11px;">
+                    📱 تسجيل الدخول برقم الهاتف (SMS)
+                </button>
+                
                 <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;">
                 
                 <button type="button" class="btn-success" onclick="openVisitorBooking()" style="padding: 10px; font-size: 11px;">📦 حجز رحلة جديدة (للزبائن والزوار)</button>
                 <button type="button" onclick="openDriverRegister()" class="btn-purple" style="padding: 10px; font-size: 11px;">🚀 تسجيل حساب جديد للسائقين</button>
             </div>
         </div>
+        <!-- حاوية ضرورية لخدمة التحقق برقم الهاتف reCAPTCHA -->
+        <div id="recaptcha-container"></div>
     </div>
 
     <div id="driver-register-container">
@@ -1090,6 +1102,68 @@
         }
         const db = firebase.firestore();
         const auth = firebase.auth();
+
+        // دوال تسجيل الدخول عبر Google و Phone الجديدة المتوافقة مع Firebase v8
+        function signInWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    const user = result.user;
+                    finishOAuthLogin(user.displayName || user.email, 'driver');
+                })
+                .catch((error) => {
+                    alert("فشل تسجيل الدخول بجوجل: " + error.message);
+                });
+        }
+
+        function promptPhoneSignIn() {
+            let phoneNumber = prompt("أدخل رقم الهاتف متبوعاً برمز الدولة (مثال: +2010xxxxxxxx):");
+            if (!phoneNumber) return;
+
+            if (!window.recaptchaVerifier) {
+                window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                    'size': 'invisible'
+                });
+            }
+
+            const appVerifier = window.recaptchaVerifier;
+            auth.signInWithPhoneNumber(phoneNumber, appVerifier)
+                .then((confirmationResult) => {
+                    let verificationCode = prompt("تم إرسال رمز التحقق في رسالة نصية (SMS). أدخل الرمز المكون من 6 أرقام:");
+                    if (verificationCode) {
+                        return confirmationResult.confirm(verificationCode);
+                    }
+                })
+                .then((result) => {
+                    if (result) {
+                        const user = result.user;
+                        finishOAuthLogin(user.phoneNumber || 'سائق الهاتف', 'driver');
+                    }
+                })
+                .catch((error) => {
+                    alert("فشل التحقق من رقم الهاتف: " + error.message);
+                });
+        }
+
+        function finishOAuthLogin(name, role) {
+            currentUserRole = role;
+            loggedInDriverName = name;
+            localStorage.setItem('current_user_role', currentUserRole);
+            localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+            viewingProfileName = null;
+            
+            document.getElementById('lock-screen').style.display = 'none';
+            document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+            
+            setupNavigation();
+            if (currentUserRole === 'admin') setAdminUIMode();
+            else if (currentUserRole === 'supervisor') setSupervisorUIMode();
+            else setDriverUIMode();
+            
+            initRealtimeListeners();
+            render();
+            alert('تم الاتصال بالسحابة وتسجيل الدخول بنجاح! 🚀');
+        }
 
         // ضغط شديد للصور لحماية قاعدة البيانات وتجنب تجاوز حد الـ 1MB
         function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
@@ -2601,7 +2675,7 @@
                             <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق عادي</option>
                             <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                             <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
-                            <option value="مدير نظام" ${d.role === 'مدير نظام' ? 'selected' : ''}>مدير نظام</option>
+                            <option value="مدير نظام" ${d.role === 'مدير نظام' ? 'selected' : ''}>مدير أساسي</option>
                         </select>
                     </td>
                     <td>${d.title || 'سائق'}</td>
