@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المتقدمة V98.4 PRO</title>
     
-    <!-- مكتبات Firebase V8 -->
+    <!-- مكتبات Firebase V8 (متضمنة Firestore و Auth للمصادقة الآمنة) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <!-- مكتبات توليد PDF والصور -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -192,17 +193,17 @@
 </head>
 <body data-theme="3d-vibrant">
 
-    <!-- بوابة قفل الأمان للمدير -->
-    <div id="adminLoginOverlay" style="display: none;">
+    <!-- بوابة قفل الأمان للمدير المتوافقة مع Firebase Auth -->
+    <div id="adminLoginOverlay" style="display: flex;">
         <div class="login-box-card">
             <div style="font-size: 44px; margin-bottom: 10px;">🐼🔒</div>
             <h2 style="color: var(--primary-orange); font-size: 20px; font-weight: 900; margin-bottom: 8px;">بوابة الإدارة الكبرى - أسطورة الطريق V98.4</h2>
-            <p style="color: var(--secondary-text); font-size: 12px; margin-bottom: 20px;">أدخل كلمة مرور المدير للوصول الكامل إلى لوحة التحكم المربوطة سحابياً:</p>
+            <p style="color: var(--secondary-text); font-size: 12px; margin-bottom: 20px;">أدخل كلمة المرور لتفعيل المصادقة السحابية والوصول إلى لوحة التحكم:</p>
             <div style="position: relative; margin-bottom: 14px;">
                 <input type="password" id="managerPasswordInput" placeholder="كلمة المرور السرية..." class="calc-input" style="text-align: center; font-size: 16px; letter-spacing: 2px; margin-bottom: 0;" onkeydown="if(event.key === 'Enter') verifyManagerLogin()">
                 <span onclick="togglePasswordVisibility()" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px;">👁️</span>
             </div>
-            <button onclick="verifyManagerLogin()" class="submit-btn" style="width: 100%; padding: 12px; font-size: 15px;">دخول المدير 🚀</button>
+            <button onclick="verifyManagerLogin()" class="submit-btn" style="width: 100%; padding: 12px; font-size: 15px;">دخول المدير سحابياً 🚀</button>
         </div>
     </div>
 
@@ -249,7 +250,7 @@
                         <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">مزامنة سحابية تامة وآمنة مع توحيد مفاتيح البيانات لجميع الشاشات.</p>
                     </div>
                     <div style="background: rgba(0,242,254,0.15); color: var(--primary-blue); padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 900;">
-                        🔒 إدارة كبرى (متصل بـ Firestore ☁️)
+                        🔒 مصادق سحابياً (Auth Active ☁️)
                     </div>
                 </div>
 
@@ -517,7 +518,7 @@
         </div>
     </div>
 
-    <!-- سكريبت الجافاسكريبت الموحد والمزدوج المزامنة سحابياً -->
+    <!-- سكريبت الجافاسكريبت الموحد والمزود بالمصادقة السحابية الفعّالة -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -531,10 +532,12 @@
 
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.firestore();
+        const auth = firebase.auth();
+        window.db = db;
+        window.auth = auth;
 
         let currentAccountFilter = 'all';
 
-        // دوال حماية وتوحيد استخراج المفاتيح
         function getSafeName(item) {
             if (!item) return 'غير محدد';
             return item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل غير محدد';
@@ -563,7 +566,6 @@
             return 'paid';
         }
 
-        // هيكل البيانات الموحد
         let appData = { 
             accounts: [], 
             shipments: [], 
@@ -585,10 +587,11 @@
             }
         };
 
-        window.addEventListener("DOMContentLoaded", () => {
-            const isAuth = sessionStorage.getItem("na2la_manager_auth");
-            if (isAuth === "true") {
+        // مراقبة حالة المصادقة السحابية الفعّالة لضمان توافقها مع Firestore Rules
+        auth.onAuthStateChanged(user => {
+            if (user) {
                 document.getElementById("adminLoginOverlay").style.display = "none";
+                sessionStorage.setItem("na2la_manager_auth", "true");
                 initFirestoreSync();
             } else {
                 document.getElementById("adminLoginOverlay").style.display = "flex";
@@ -600,13 +603,29 @@
             pwdInput.type = pwdInput.type === "password" ? "text" : "password";
         }
 
-        function verifyManagerLogin() {
+        async function verifyManagerLogin() {
             const pwd = document.getElementById("managerPasswordInput").value.trim();
             if (pwd === "0103" || pwd === "01036") {
-                sessionStorage.setItem("na2la_manager_auth", "true");
-                document.getElementById("adminLoginOverlay").style.display = "none";
-                initFirestoreSync();
-                alert("✅ تم الدخول بنجاح وتفعيل المزامنة التامة!");
+                let email = "admin@na2la.com";
+                let password = pwd + "9988";
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                    document.getElementById("adminLoginOverlay").style.display = "none";
+                    sessionStorage.setItem("na2la_manager_auth", "true");
+                    initFirestoreSync();
+                    alert("✅ تم الدخول بنجاح وتفعيل المصادقة السحابية والمزامنة التامة!");
+                } catch (err) {
+                    try {
+                        await auth.createUserWithEmailAndPassword(email, password);
+                        await auth.signInWithEmailAndPassword(email, password);
+                        document.getElementById("adminLoginOverlay").style.display = "none";
+                        sessionStorage.setItem("na2la_manager_auth", "true");
+                        initFirestoreSync();
+                        alert("✅ تم إنشاء الحساب والمصادقة بنجاح!");
+                    } catch (createErr) {
+                        alert("⚠️ خطأ في مصادقة Firebase Auth: " + createErr.message);
+                    }
+                }
             } else {
                 alert("⚠️ كلمة المرور غير صحيحة.");
             }
@@ -662,9 +681,7 @@
             renderAllFinancials();
         }
 
-        // الاستماع المزدوج الشامل للمجموعات المستقلة والوثيقة العامة
         function initFirestoreSync() {
-            // 1. الاستماع للوثيقة العامة mainState
             db.collection("appStore").doc("mainState").onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
@@ -683,7 +700,6 @@
                 }
             });
 
-            // 2. الاستماع الفوري لكل مجموعة مستقلة لتفادي أي تضارب
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts', 'consolidatedInvoices'];
             collections.forEach(col => {
                 db.collection(col).onSnapshot(snapshot => {
@@ -695,7 +711,6 @@
             });
         }
 
-        // الحفظ المزدوج سحابياً في المستند الخاص وفي الوثيقة العامة
         function saveDataAll() {
             if (!appData.accounts) appData.accounts = [];
             if (!appData.treasury) appData.treasury = [];
@@ -1094,7 +1109,6 @@
 
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
-            // تقرير الذكاء الاصطناعي التشغيلي التلقائي
             let aiText = `إجمالي الشحنات المسجلة: <b>${(appData.shipments || []).length}</b> شحنة.<br>`;
             aiText += `معدل الالتزام والتحصيل: <b>${(totalCredit + totalDeferred > 0 ? ((totalCredit / (totalCredit + totalDeferred)) * 100).toFixed(1) : 100)}%</b>.<br>`;
             if (totalDeferred > 0) {
