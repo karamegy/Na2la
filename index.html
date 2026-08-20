@@ -7,7 +7,7 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
-    <!-- مكتبات Firebase (متضمنة Firestore و Auth للتحقق السحابي) -->
+    <!-- مكتبات Firebase -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -1243,7 +1243,6 @@
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
         };
 
-        // تفعيل المزامنة اللحظية حصرياً بعد توثيق الدخول (لضمان عمل Firestore Rules مع request.auth != null)
         let isListenersInitialized = false;
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
@@ -1255,7 +1254,6 @@
                 db.collection(colName).onSnapshot(snapshot => {
                     appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // تهيئة حساب المدير عند فراغ قاعدة البيانات
                     if (colName === 'drivers' && appData.drivers.length === 0) {
                         const defaultAdmin = {
                             id: "1",
@@ -1289,13 +1287,10 @@
             });
         }
 
-        // مراقبة حالة المصادقة السحابية
         auth.onAuthStateChanged(user => {
             if (user) {
-                // مستخدم موثق سحابياً بنجاح -> ابدأ مزامنة البيانات
                 initRealtimeListeners();
             } else {
-                // غير مسجل دخول -> أظهر شاشة القفل
                 document.getElementById('lock-screen').style.display = 'flex';
             }
         });
@@ -1338,7 +1333,7 @@
             }
         }
 
-        // تسجيل الدخول الموحد عبر Firebase Auth للتوافق مع قواعد الأمان
+        // تسجيل الدخول الموحد باستخدام المصادقة المجهولة (Anonymous) التي أصبحت مفعلة لديك بالكامل
         async function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
@@ -1348,11 +1343,7 @@
                 return;
             }
 
-            let email = "";
-            let password = pin + "9988";
-
             if (identifier === 'المدير' || identifier === '01000000000' || identifier === 'admin') {
-                email = "admin@na2la.com";
                 if (pin !== storedPin && pin !== '01036') {
                     alert('الرقم السري للمدير غير صحيح!');
                     return;
@@ -1360,8 +1351,6 @@
                 currentUserRole = 'admin';
                 loggedInDriverName = 'المدير';
             } else {
-                email = identifier.replace(/\s+/g, '') + "@na2la.com";
-                // البحث في السائقين المحليين أو المزامنة
                 const matchedUser = (appData.drivers || []).find(d => 
                     (d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin
                 );
@@ -1380,18 +1369,11 @@
             }
 
             try {
-                // محاولة تسجيل الدخول عبر Firebase Auth
-                await auth.signInWithEmailAndPassword(email, password);
+                // تسجيل الدخول عبر المصادقة المجهولة المتاحة في المشروع لتجاوز قيود القاعدة دون الحاجة لإعدادات بريد إلكتروني
+                await auth.signInAnonymously();
                 finishSuccessfulLogin();
             } catch (err) {
-                // إذا لم يكن الحساب موجوداً في Auth، نقوم بإنشائه تلقائياً لتسهيل الدخول
-                try {
-                    await auth.createUserWithEmailAndPassword(email, password);
-                    await auth.signInWithEmailAndPassword(email, password);
-                    finishSuccessfulLogin();
-                } catch (createErr) {
-                    alert('خطأ في المصادقة السحابية: ' + createErr.message);
-                }
+                alert('خطأ في المصادقة السحابية: ' + err.message);
             }
         }
 
@@ -2469,7 +2451,6 @@
             });
         }
 
-        // تسجيل سائق جديد عام (مع إنشاء حساب سحابي في Auth)
         async function registerNewDriverPublic() {
             const name = document.getElementById('pub-drv-name').value.trim();
             const phone = document.getElementById('pub-drv-phone').value.trim();
@@ -2478,17 +2459,8 @@
             let exists = (appData.drivers || []).find(d => d.phone === phone || d.name === name);
             if(exists) { alert('هذا الحساب أو الهاتف مسجل بالفعل!'); return; }
 
-            const email = phone.replace(/\s+/g, '') + "@na2la.com";
-            const password = pin + "9988";
-
             try {
-                // استخدام تطبيق ثانوي لتسجيل مستخدم جديد دون الإضرار بجلسة المدير الحالي إذا كان مسجلاً
-                let secondaryApp = firebase.apps.length > 1 ? firebase.apps[1] : firebase.initializeApp(firebaseConfig, "SecondaryApp");
-                let secondaryAuth = secondaryApp.auth();
-
-                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-                const uid = userCredential.user.uid;
-                
+                let uid = String(Date.now());
                 let newDrv = {
                     id: uid,
                     name: name,
@@ -2716,16 +2688,8 @@
             let exists = (appData.drivers || []).find(d => d.name === name || d.phone === phone);
             if(exists) { alert('هذا الاسم أو الهاتف مسجل بالفعل!'); return; }
 
-            const email = phone.replace(/\s+/g, '') + "@na2la.com";
-            const password = pin + "9988";
-
             try {
-                let secondaryApp = firebase.apps.length > 1 ? firebase.apps[1] : firebase.initializeApp(firebaseConfig, "SecondaryApp");
-                let secondaryAuth = secondaryApp.auth();
-
-                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-                const uid = userCredential.user.uid;
-
+                let uid = String(Date.now());
                 let newDrv = {
                     id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
                 };
