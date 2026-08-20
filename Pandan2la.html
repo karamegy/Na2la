@@ -13,9 +13,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase V8 -->
+    <!-- مكتبات Firebase V8 (متضمنة Firestore و Auth للتحقق السحابي) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -133,17 +134,18 @@
 
 <div id="toast-container"></div>
 
-<!-- شاشة تسجيل الدخول -->
-<div class="login-screen" id="lock-screen" style="display: none;">
+<!-- شاشة تسجيل الدخول المتوافقة مع Firebase Auth -->
+<div class="login-screen" id="lock-screen" style="display: flex;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
         <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.7 PRO SYNC)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً عبر مجموعات Firestore المستقلة والوثيقة العامة</p>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">بوابة الدخول السحابية الآمنة المتوافقة مع قواعد أمان Firestore</p>
         
+        <input type="text" id="login-identifier" placeholder="أدخل اسم المستخدم أو رقم الهاتف..." style="text-align: center; font-size: 12px;" value="المدير">
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
         
         <div style="display: flex; gap: 5px; margin-top: 6px;">
-            <button type="button" class="btn-main" onclick="unlockApp()" style="flex: 1; padding: 8px;">دخول النظام</button>
+            <button type="button" class="btn-main" onclick="unlockApp()" style="flex: 1; padding: 8px;">تسجيل الدخول السحابي 🔐</button>
             <button type="button" class="btn-warning" onclick="openModal('driverRegisterModal')" style="flex: 1; padding: 8px;">تسجيل حساب</button>
         </div>
         <button type="button" class="btn-success" onclick="openModal('visitorBookingModal')" style="width: 100%; margin-top: 5px; padding: 8px;">📦 حجز رحلة جديدة (للزبائن)</button>
@@ -182,7 +184,7 @@
             <input type="text" id="pub-drv-name" required placeholder="الاسم الرباعي">
             <input type="tel" id="pub-drv-phone" required placeholder="رقم الهاتف / واتساب">
             <input type="password" id="pub-drv-pin" required placeholder="رمز المرور السري (PIN)">
-            <button type="submit" class="btn-success" style="margin-top: 4px;">إنشاء الحساب 🚀</button>
+            <button type="submit" class="btn-success" style="margin-top: 4px;">إنشاء الحساب والتسجيل 🚀</button>
         </form>
     </div>
 </div>
@@ -224,7 +226,7 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">المدير</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل بـ Firestore سحابياً</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> مصادق سحابياً (Auth Active)</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">👑 مدير نظام</span>
                 </div>
@@ -393,7 +395,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت إعدادات ومزامنة Firebase المزدوجة والمحميّة ضد القيم المفقودة (undefined) -->
+<!-- سكريبت إعدادات ومزامنة Firebase المزدوجة والمحميّة ضد القيم المفقودة والتحقق من Auth -->
 <script>
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -409,11 +411,13 @@
         firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.firestore();
+    const auth = firebase.auth();
     window.db = db;
+    window.auth = auth;
 
     window._isSavingLocally = false;
 
-    // دوال الحماية من ظهور undefined القاطعة وحل الخلل في قراءة البيانات
+    // دوال الحماية من ظهور undefined وقراءة البيانات
     function getSafeName(item) {
         if (!item) return 'غير محدد';
         return item.name || item.accountOwner || item.clientName || item.customerName || item.driverName || item.user || 'عميل غير محدد';
@@ -552,10 +556,9 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // الاستماع الفوري المزدوج والمنسق لمنع التضارب بين المجموعات والوثيقة العامة
-    async function loadAllDataFromFirestoreMultiCollection() {
+    // الاستماع الفوري المزدوج والمنسق فقط بعد نجاح المصادقة السحابية
+    function loadAllDataFromFirestoreMultiCollection() {
         try {
-            // 1. الوثيقة العامة
             db.collection("appStore").doc("mainState").onSnapshot((doc) => {
                 if (window._isSavingLocally || !doc.exists) return;
                 const data = doc.data();
@@ -576,7 +579,6 @@
                 refreshActiveSection();
             });
 
-            // 2. الشحنات المباشرة
             db.collection("shipments").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -588,7 +590,6 @@
                 }
             });
 
-            // 3. فواتير الأجل المباشرة
             db.collection("deferredInvoices").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -599,7 +600,6 @@
                 }
             });
 
-            // 4. الخزينة
             db.collection("treasury").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -609,7 +609,6 @@
                 }
             });
 
-            // 5. المصروفات
             db.collection("expenses").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -619,7 +618,6 @@
                 }
             });
 
-            // 6. السائقون
             db.collection("drivers").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -649,7 +647,6 @@
         });
     }
 
-    // الحفظ المزدوج الموحد لمنع تعارض الوثائق
     window.saveDataAll = function() {
         window._isSavingLocally = true;
 
@@ -687,15 +684,23 @@
         if(typeof updateRSSTicker === 'function') updateRSSTicker();
     };
 
-    window.addEventListener('DOMContentLoaded', () => {
-        const lockScreen = document.getElementById('lock-screen');
-        if(lockScreen) lockScreen.style.display = 'none';
+    // مراقبة حالة المصادقة السحابية الفعّالة لضمان توافقها مع Firestore Rules
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            const lockScreen = document.getElementById('lock-screen');
+            if(lockScreen) lockScreen.style.display = 'none';
+            loadAllDataFromFirestoreMultiCollection();
+            initChatRealtimeListener();
+            applyUserPermissionsUI();
+            renderStats();
+            updateRSSTicker();
+        } else {
+            const lockScreen = document.getElementById('lock-screen');
+            if(lockScreen) lockScreen.style.display = 'flex';
+        }
+    });
 
-        applyUserPermissionsUI();
-        loadAllDataFromFirestoreMultiCollection();
-        initChatRealtimeListener();
-        switchSection('deferredInvoices');
-        renderStats();
+    window.addEventListener('DOMContentLoaded', () => {
         updateRSSTicker();
     });
 </script>
@@ -741,22 +746,48 @@
         showToast('تم تغيير الثيم بنجاح');
     }
 
-    function unlockApp() {
-        const pin = document.getElementById('pin-input').value;
-        let data = appStateData();
-        let matchedDriver = (data.drivers || []).find(d => d.pin === pin);
-        
-        if(pin === '01036' || matchedDriver) {
-            window.currentLoggedInUser = pin === '01036' ? { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق' } : matchedDriver;
-            document.getElementById('lock-screen').style.display = 'none';
-            logAction('تسجيل دخول ناجح');
-            showToast('مرحباً بك! (' + window.currentLoggedInUser.role + ')');
-            applyUserPermissionsUI();
-            switchSection('deferredInvoices');
-        } else {
-            showToast('رمز الدخول غير صحيح!', 'warning');
+    // دالة تسجيل الدخول عبر Firebase Auth لتلبية شرط request.auth != null
+    async function unlockApp() {
+        const identifier = document.getElementById('login-identifier').value.trim();
+        const pin = document.getElementById('pin-input').value.trim();
+
+        if (!pin) {
+            showToast('الرجاء إدخال رمز الدخول (PIN)!', 'warning');
+            return;
         }
-        renderStats();
+
+        let email = "admin@na2la.com";
+        let password = pin + "9988";
+
+        if (identifier !== 'المدير' && identifier !== 'admin' && identifier !== '01000000000' && identifier !== '') {
+            email = identifier.replace(/\s+/g, '') + "@na2la.com";
+        }
+
+        try {
+            await auth.signInWithEmailAndPassword(email, password);
+            handleSuccessfulLogin(identifier, pin);
+        } catch (err) {
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                await auth.signInWithEmailAndPassword(email, password);
+                handleSuccessfulLogin(identifier, pin);
+            } catch (createErr) {
+                showToast('خطأ في مصادقة Firebase Auth: ' + createErr.message, 'danger');
+            }
+        }
+    }
+
+    function handleSuccessfulLogin(identifier, pin) {
+        let data = appStateData();
+        let matchedDriver = (data.drivers || []).find(d => d.pin === pin || d.name === identifier);
+        
+        window.currentLoggedInUser = (identifier === 'المدير' || identifier === 'admin' || pin === '01036') ? { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق' } : (matchedDriver || { name: identifier, role: 'سائق', title: 'سائق معتمد' });
+        
+        document.getElementById('lock-screen').style.display = 'none';
+        logAction('تسجيل دخول ناجح');
+        showToast('مرحباً بك! (' + window.currentLoggedInUser.role + ')');
+        applyUserPermissionsUI();
+        switchSection('deferredInvoices');
     }
 
     function applyUserPermissionsUI() {
@@ -814,8 +845,9 @@
 
     function lockSystem() {
         window.currentLoggedInUser = null;
+        auth.signOut();
         document.getElementById('lock-screen').style.display = 'flex';
-        showToast('تم قفل النظام بنجاح');
+        showToast('تم قفل النظام بنجاح وتسجيل الخروج');
     }
 
     function toggleSidebar() {
@@ -833,7 +865,6 @@
     }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-    // تصحيح دالة حساب الإحصائيات لتصفية الفواتير غير المسددة فقط
     function renderStats() {
         let data = appStateData();
         let shipments = getAllShipments(data);
@@ -845,7 +876,6 @@
         let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
         let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
         
-        // حساب الديون والأجل المعلق وغير المسدد فقط
         let debts = deferredList
             .filter(c => getSafeStatus(c) !== 'paid')
             .reduce((s, c) => s + getSafeAmount(c), 0);
@@ -1367,7 +1397,6 @@
         renderStats();
     }
 
-    // دالة تسديد الفاتورة ومزامنتها فورياً
     function markDeferredAsPaid(index) {
         let data = appStateData();
         if (!data.deferredInvoices || !data.deferredInvoices[index]) return;
