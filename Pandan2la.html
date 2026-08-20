@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن المتوافق تماماً مع Firestore) -->
+    <!-- مكتبات Firebase V8 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
@@ -138,7 +138,7 @@
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
         <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.7 PRO SYNC)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً عبر مجموعات Firestore المستقلة</p>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً عبر مجموعات Firestore المستقلة والوثيقة العامة</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
         
@@ -212,7 +212,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع غرفة باندا العليا عبر المجموعات المستقلة...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع غرفة باندا العليا عبر المجموعات المستقلة والوثيقة العامة...</span>
                 </div>
             </div>
         </div>
@@ -393,7 +393,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت إعدادات ومزامنة Firebase باستخدام المعمارية الجديدة (المجموعات المستقلة) -->
+<!-- سكريبت إعدادات ومزامنة Firebase المزدوجة والمحميّة ضد القيم المفقودة (undefined) -->
 <script>
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -413,7 +413,35 @@
 
     window._isSavingLocally = false;
 
-    // دالة ضغط الصور لتجنب تجاوز حد 1 ميجابايت
+    // دوال الحماية من ظهور undefined القاطعة وحل الخلل في قراءة البيانات
+    function getSafeName(item) {
+        if (!item) return 'غير محدد';
+        return item.name || item.accountOwner || item.clientName || item.customerName || item.driverName || item.user || 'عميل غير محدد';
+    }
+
+    function getSafePhone(item) {
+        if (!item) return 'غير محدد';
+        return item.phone || item.clientPhone || item.mobile || item.tel || 'غير محدد';
+    }
+
+    function getSafeAmount(item) {
+        if (!item) return 0;
+        let val = item.amount ?? item.price ?? item.remaining ?? item.total ?? item.value ?? item.totalAmount ?? 0;
+        return Number(val) || 0;
+    }
+
+    function getSafeDesc(item) {
+        if (!item) return 'بدون بيان';
+        return item.item || item.description || item.notes || item.title || item.desc || 'معاملة مالية';
+    }
+
+    function getSafeStatus(item) {
+        if (!item) return 'pending';
+        let s = String(item.status || '').toLowerCase();
+        if (s === 'مسدد' || s === 'paid' || s === 'delivered' || s === 'تم التوصيل') return 'paid';
+        return 'pending';
+    }
+
     function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7, callback) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -493,7 +521,7 @@
         deferredInvoices: [],
         treasury: [],
         expenses: [],
-        customers: [{ id: 1, name: 'عميل أجل افتراضي', phone: '01000000000', debt: 0 }],
+        customers: [{ id: 1, name: 'عميل أجل افتراضي', accountOwner: 'عميل أجل افتراضي', phone: '01000000000', debt: 0 }],
         drivers: [{ id: 1, name: 'كرم حمدي', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق' }],
         communityPosts: [],
         posts: [],
@@ -515,8 +543,8 @@
         let s = dataObj.shipments || [];
         let combinedMap = new Map();
         [...s, ...d].forEach(item => {
-            if (item && (item.name || item.item)) {
-                let key = item.id || `${item.name}_${item.item}_${item.price}`;
+            if (item && (getSafeName(item) || getSafeDesc(item))) {
+                let key = item.id || `${getSafeName(item)}_${getSafeDesc(item)}_${getSafeAmount(item)}`;
                 combinedMap.set(key, item);
             }
         });
@@ -524,60 +552,73 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // الاستماع الفوري للتحديثات من المجموعات المستقلة في Firestore (بدون تضخم المستند الواحد)
+    // الاستماع الفوري المزدوج للوثيقة العامة وللمجموعات المستقلة
     async function loadAllDataFromFirestoreMultiCollection() {
         try {
+            db.collection("appStore").doc("mainState").onSnapshot((doc) => {
+                if (window._isSavingLocally) return;
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.deferredInvoices && data.deferredInvoices.length > 0) appData.deferredInvoices = data.deferredInvoices;
+                    if (data.shipments && data.shipments.length > 0) { appData.shipments = data.shipments; appData.docs = data.shipments; }
+                    if (data.treasury && data.treasury.length > 0) appData.treasury = data.treasury;
+                    if (data.expenses && data.expenses.length > 0) appData.expenses = data.expenses;
+                    if (data.drivers && data.drivers.length > 0) appData.drivers = data.drivers;
+                    if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                }
+            });
+
             db.collection("shipments").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
-                appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.docs = appData.shipments;
-                window.appData = appData;
-                if(typeof renderStats === 'function') renderStats();
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if (!snapshot.empty) {
+                    appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    appData.docs = appData.shipments;
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                }
             });
 
             db.collection("deferredInvoices").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
-                appData.deferredInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appData = appData;
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if (!snapshot.empty) {
+                    appData.deferredInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.appData = appData;
+                    refreshActiveSection();
+                }
             });
 
             db.collection("treasury").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
-                appData.treasury = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appData = appData;
-                if(typeof renderStats === 'function') renderStats();
+                if (!snapshot.empty) {
+                    appData.treasury = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.appData = appData;
+                    renderStats();
+                }
             });
 
             db.collection("expenses").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
-                appData.expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appData = appData;
-                if(typeof renderStats === 'function') renderStats();
+                if (!snapshot.empty) {
+                    appData.expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.appData = appData;
+                    renderStats();
+                }
             });
 
             db.collection("drivers").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
-                appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appData = appData;
-            });
-
-            db.collection("consolidatedInvoices").onSnapshot((snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.consolidatedInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                window.appData = appData;
-            });
-
-            db.collection("posts").onSnapshot((snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.wallPosts = appData.posts;
-                window.appData = appData;
+                if (!snapshot.empty) {
+                    appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.appData = appData;
+                }
             });
 
         } catch (error) {
-            console.error("خطأ في مزامنة المجموعات المستقلة:", error);
+            console.error("خطأ المزامنة:", error);
         }
     }
 
@@ -597,49 +638,35 @@
         });
     }
 
-    // دالة الحفظ المركزية المحدثة لتخزين كل قسم في مجموعته المستقلة الخاصة به
+    // الحفظ المزدوج لمنع أي تعارض
     window.saveDataAll = function() {
         window._isSavingLocally = true;
 
         if (appData.shipments) {
             appData.shipments.forEach(s => {
-                if (s.id) {
-                    db.collection('shipments').doc(String(s.id)).set(s, { merge: true }).catch(err => console.error(err));
-                }
+                if (s.id) db.collection('shipments').doc(String(s.id)).set(s, { merge: true }).catch(err => console.error(err));
             });
         }
 
         if (appData.deferredInvoices) {
             appData.deferredInvoices.forEach(d => {
-                if (d.id) {
-                    db.collection('deferredInvoices').doc(String(d.id)).set(d, { merge: true }).catch(err => console.error(err));
-                }
+                if (d.id) db.collection('deferredInvoices').doc(String(d.id)).set(d, { merge: true }).catch(err => console.error(err));
             });
         }
 
         if (appData.treasury) {
             appData.treasury.forEach(t => {
-                if (t.id) {
-                    db.collection('treasury').doc(String(t.id)).set(t, { merge: true }).catch(err => console.error(err));
-                }
+                if (t.id) db.collection('treasury').doc(String(t.id)).set(t, { merge: true }).catch(err => console.error(err));
             });
         }
 
         if (appData.expenses) {
             appData.expenses.forEach(ex => {
-                if (ex.id) {
-                    db.collection('expenses').doc(String(ex.id)).set(ex, { merge: true }).catch(err => console.error(err));
-                }
+                if (ex.id) db.collection('expenses').doc(String(ex.id)).set(ex, { merge: true }).catch(err => console.error(err));
             });
         }
 
-        if (appData.drivers) {
-            appData.drivers.forEach(drv => {
-                if (drv.id) {
-                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).catch(err => console.error(err));
-                }
-            });
-        }
+        db.collection("appStore").doc("mainState").set(appData, { merge: true }).catch(err => console.error(err));
 
         localStorage.setItem('transportAppV89', JSON.stringify(appData));
         setTimeout(() => { window._isSavingLocally = false; }, 1000);
@@ -759,6 +786,7 @@
             <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
             <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية ومقرات الشحنات</button>
             <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
+            <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات والأحداث</button>
         `;
     }
 
@@ -801,16 +829,16 @@
         let treasury = data.treasury || [];
         let deferredList = data.deferredInvoices || [];
 
-        let rev = shipments.reduce((s, x) => s + Number(x.price || 0), 0);
-        let exp = expenses.reduce((s, x) => s + Number(x.amount || 0), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
-        let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
-        let debts = deferredList.reduce((s, c) => s + Number(c.amount || 0), 0);
+        let rev = shipments.reduce((s, x) => s + getSafeAmount(x), 0);
+        let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
+        let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
+        let debts = deferredList.reduce((s, c) => s + getSafeAmount(c), 0);
 
         if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = shipments.length;
-        if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = rev;
-        if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = (rev - exp);
-        if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = cash;
-        if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = debts;
+        if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = rev.toLocaleString() + ' ج.م';
+        if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = (rev - exp).toLocaleString() + ' ج.م';
+        if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = cash.toLocaleString() + ' ج.م';
+        if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = debts.toLocaleString() + ' ج.م';
     }
 
     function switchSection(sectionId, el, isRefresh = false) {
@@ -828,20 +856,20 @@
         
         if (sectionId === 'deferredInvoices') {
             let deferredList = data.deferredInvoices || [];
-            let totalDeferred = deferredList.reduce((s, x) => s + Number(x.amount || 0), 0);
+            let totalDeferred = deferredList.reduce((s, x) => s + getSafeAmount(x), 0);
 
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <h3 style="margin:0; color:var(--yellow-warning);">⏳ إدارة الأجل والفواتير المتأخرة</h3>
-                        <button class="btn-warning btn-sm" style="color:#000; font-weight:bold;" onclick="openModal(\'deferredModal\')">+ إضافة فاتورة أجل جديدة</button>
+                        <button class="btn-warning btn-sm" style="color:#000; font-weight:bold;" onclick="openModal('deferredModal')">+ إضافة فاتورة أجل جديدة</button>
                     </div>
                     <p style="font-size:9px; color:var(--text-muted); margin-bottom:8px;">متابعة حسابات العملاء الآجلة، فحص المتأخرات تلقائياً، وإرسال تنبيهات السداد الفورية عبر واتساب:</p>
                     
                     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--yellow-warning); text-align:center;">
                             <span style="font-size:8px; color:var(--text-muted);">إجمالي الأجل المستحق</span>
-                            <p style="font-size:11px; font-weight:bold; color:var(--yellow-warning); margin-top:2px;">${totalDeferred} ج.م</p>
+                            <p style="font-size:11px; font-weight:bold; color:var(--yellow-warning); margin-top:2px;">${totalDeferred.toLocaleString()} ج.م</p>
                         </div>
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--red-danger); text-align:center;">
                             <span style="font-size:8px; color:var(--text-muted);">المتأخرات الخطيرة</span>
@@ -878,19 +906,24 @@
                                 </tr>
                             </thead>
                             <tbody id="deferred-table-body">
-                                ${deferredList.map((d, idx) => `
+                                ${deferredList.map((d, idx) => {
+                                    let name = getSafeName(d);
+                                    let phone = getSafePhone(d);
+                                    let amt = getSafeAmount(d);
+                                    let st = getSafeStatus(d);
+                                    return `
                                     <tr>
-                                        <td style="font-weight:bold; font-size:8px;">${d.id}</td>
-                                        <td>${d.name}<br><span style="font-size:8px; color:var(--text-muted);">${d.phone || ''}</span></td>
-                                        <td style="font-weight:bold; color:var(--purple-color);">${d.amount} ج.م</td>
-                                        <td>${d.dueDate || '-'}</td>
-                                        <td><span class="badge ${d.status === 'مسدد' || d.status === 'paid' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
+                                        <td style="font-weight:bold; font-size:8px;">${d.id || idx}</td>
+                                        <td>${name}<br><span style="font-size:8px; color:var(--text-muted);">${phone}</span></td>
+                                        <td style="font-weight:bold; color:var(--purple-color);">${amt.toLocaleString()} ج.م</td>
+                                        <td>${d.dueDate || d.date || '-'}</td>
+                                        <td><span class="badge ${st === 'paid' ? 'bg-delivered' : 'bg-pending'}">${st === 'paid' ? 'مسدد' : 'معلق'}</span></td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة</td></tr>'}
+                                `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -900,7 +933,7 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل اللحظي</h3>
-                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو فاتورة أجل يتم إدخالها تتزامن لحظياً عبر مجموعات Firestore المستقلة:</p>
+                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو فاتورة أجل يتم إدخالها تتزامن لحظياً عبر المجموعات والوثيقة العامة:</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ إدارة الأجل والفواتير</button>
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
@@ -914,12 +947,12 @@
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>⏳ إجمالي فواتير الأجل: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة: <strong style="color:var(--green-success);">متصل بالمجموعات المستقلة لحظياً</strong></p>
+                        <p>🟢 حالة المزامنة: <strong style="color:var(--green-success);">متصل ومحمي من التضارب</strong></p>
                     </div>
                 </div>
             `;
         } else if (sectionId === 'consolidatedInvoices') {
-            const uniqueClients = [...new Set(shipmentsList.map(s => s.name))];
+            const uniqueClients = [...new Set(shipmentsList.map(s => getSafeName(s)))];
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--green-success);">
                     <h3 style="color:var(--green-success);">📑 قسم الفواتير المجمعة للشحنات</h3>
@@ -946,9 +979,9 @@
                                 ${(data.consolidatedInvoices || []).map((ci, index) => `
                                     <tr>
                                         <td>#${String(ci.id || index).slice(-4)}</td>
-                                        <td>${ci.clientName}</td>
+                                        <td>${getSafeName(ci)}</td>
                                         <td>${ci.shipments?.length || 0}</td>
-                                        <td style="font-weight:bold; color:var(--green-success);">${ci.totalAmount} ج.م</td>
+                                        <td style="font-weight:bold; color:var(--green-success);">${getSafeAmount(ci).toLocaleString()} ج.م</td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="openConsolidatedImageModal('${ci.id}')" title="صورة">🖼️</button>
                                             <button class="btn-warning btn-sm" onclick="exportConsolidatedWhatsApp('${ci.id}')" title="واتساب">💬</button>
@@ -995,7 +1028,7 @@
                     <h3 style="color:var(--purple-color);">📍 نظام تتبع مراحل الشحنة الخطي (Live Timeline)</h3>
                     <select id="track-shipment-select" onchange="renderTrackingDetails()" style="margin-bottom:8px;">
                         <option value="">-- اختر الشحنة للتتبع --</option>
-                        ${shipmentsList.map((s, idx) => `<option value="${idx}">${s.name} - ${s.item}</option>`).join('')}
+                        ${shipmentsList.map((s, idx) => `<option value="${idx}">${getSafeName(s)} - ${getSafeDesc(s)}</option>`).join('')}
                     </select>
                     <div id="tracking-timeline-view" style="background:var(--bg-dark); padding:10px; border-radius:6px;">
                         <p style="font-size:9px; text-align:center; color:var(--text-muted);">الرجاء اختيار شحنة لعرض الخط الزمني لمراحل التوصيل</p>
@@ -1012,8 +1045,8 @@
                             <tbody>
                                 ${(data.drivers || []).map((d, idx) => `
                                     <tr>
-                                        <td style="font-weight:bold;">${d.name}</td>
-                                        <td>${d.phone || '-'}</td>
+                                        <td style="font-weight:bold;">${getSafeName(d)}</td>
+                                        <td>${getSafePhone(d)}</td>
                                         <td>
                                             <select onchange="updateDriverField(${idx}, 'role', this.value)" style="font-size:9px; padding:2px;">
                                                 <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق</option>
@@ -1067,7 +1100,7 @@
                         </select>
                         <select id="s-driver" style="margin-bottom:5px;">
                             <option value="">-- السائق المعين --</option>
-                            ${(data.drivers || []).map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
+                            ${(data.drivers || []).map(d => `<option value="${getSafeName(d)}">${getSafeName(d)}</option>`).join('')}
                         </select>
                         <div style="margin-bottom: 6px;">
                             <label style="font-size:9px; font-weight:bold; color:var(--text-muted); display:block; margin-bottom:2px;">📷 إرفاق صورة الشحنة:</label>
@@ -1090,9 +1123,9 @@
                             <tbody id="shipments-table-body">
                                 ${shipmentsList.map((s, idx) => `
                                     <tr>
-                                        <td>${s.name}</td>
-                                        <td>${s.item}</td>
-                                        <td>${s.price}</td>
+                                        <td>${getSafeName(s)}</td>
+                                        <td>${getSafeDesc(s)}</td>
+                                        <td>${getSafeAmount(s).toLocaleString()} ج.م</td>
                                         <td><span class="badge ${s.priority?.includes('عاجل') ? 'bg-danger' : 'bg-transit'}">${s.priority || 'عادي'}</span></td>
                                         <td>
                                             <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
@@ -1122,7 +1155,7 @@
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num}</td><td>${tr.driver}</td><td>${tr.km} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
+                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1145,9 +1178,9 @@
                                 ${(data.treasury || []).map((t, idx) => `
                                     <tr>
                                         <td><span class="badge ${t.type === 'in' ? 'bg-delivered' : 'bg-danger'}">${t.type === 'in' ? 'إيداع' : 'سحب'}</span></td>
-                                        <td>${t.amount} ج.م</td>
-                                        <td>${t.desc}</td>
-                                        <td>${t.date}</td>
+                                        <td>${getSafeAmount(t).toLocaleString()} ج.م</td>
+                                        <td>${getSafeDesc(t)}</td>
+                                        <td>${t.date || '-'}</td>
                                         <td>
                                             <button class="btn-warning btn-sm" onclick="openEditModal('treasury', ${idx})">✏️</button>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})">✕</button>
@@ -1174,9 +1207,9 @@
                             <tbody>
                                 ${(data.expenses || []).map((ex, idx) => `
                                     <tr>
-                                        <td>${ex.title}</td>
-                                        <td>${ex.amount} ج.م</td>
-                                        <td>${ex.date}</td>
+                                        <td>${getSafeDesc(ex)}</td>
+                                        <td>${getSafeAmount(ex).toLocaleString()} ج.م</td>
+                                        <td>${ex.date || '-'}</td>
                                         <td>
                                             <button class="btn-warning btn-sm" onclick="openEditModal('expenses', ${idx})">✏️</button>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})">✕</button>
@@ -1204,9 +1237,9 @@
                             <tbody>
                                 ${(data.customers || []).map((c, idx) => `
                                     <tr>
-                                        <td>${c.name}</td>
-                                        <td>${c.phone}</td>
-                                        <td><span class="badge bg-danger">${c.debt} ج.م</span></td>
+                                        <td>${getSafeName(c)}</td>
+                                        <td>${getSafePhone(c)}</td>
+                                        <td><span class="badge bg-danger">${(c.debt ?? getSafeAmount(c)).toLocaleString()} ج.م</span></td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="payCustomerDebt(${idx})" title="سداد">سداد</button>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>
@@ -1255,7 +1288,7 @@
                     <div id="feed-container">
                         ${(data.posts || data.wallPosts || []).map((p, idx) => `
                             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; justify-content:space-between; align-items:center;">
-                                <div><strong>${p.user || p.name || 'مستخدم'}</strong>: <p style="margin-top:2px;">${p.text || p.content || p.message || ''}</p></div>
+                                <div><strong>${getSafeName(p)}</strong>: <p style="margin-top:2px;">${getSafeDesc(p)}</p></div>
                                 <button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>
                             </div>
                         `).join('') || '<p style="font-size:9px; color:var(--text-muted);">لا توجد إعلانات</p>'}
@@ -1298,27 +1331,52 @@
                     <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال التقرير اليومي عبر واتساب</button>
                 </div>
             `;
+        } else if (sectionId === 'auditLogs') {
+            content.innerHTML = `
+                <div class="card">
+                    <h3><span>🔍 سجل العمليات والأحداث</span></h3>
+                    <div style="background:var(--bg-dark); max-height:280px; overflow-y:auto; padding:8px; border-radius:6px; font-size:10px; display:flex; flex-direction:column; gap:4px;">
+                        ${(data.auditLogs || []).map(l => `
+                            <div style="background:var(--card-bg); padding:6px; border-radius:4px; border-right:3px solid var(--accent-main); display:flex; justify-content:space-between;">
+                                <span>${l.user || 'مستخدم'}: <strong>${l.action || '-'}</strong></span>
+                                <span style="font-size:8px; color:var(--text-muted);">${l.time || ''}</span>
+                            </div>
+                        `).join('') || '<p style="font-size:9px; text-align:center; color:var(--text-muted);">لا توجد أحداث مسجلة</p>'}
+                    </div>
+                </div>
+            `;
         }
         renderStats();
     }
 
     function saveDeferredInvoice(e) {
         e.preventDefault();
+        const name = document.getElementById('def-inv-name').value;
+        const phone = document.getElementById('def-inv-phone').value;
+        const amount = Number(document.getElementById('def-inv-amount').value || 0);
+
         const newInv = {
             id: document.getElementById('def-inv-id').value,
-            name: document.getElementById('def-inv-name').value,
-            phone: document.getElementById('def-inv-phone').value,
-            amount: Number(document.getElementById('def-inv-amount').value || 0),
+            name: name,
+            accountOwner: name,
+            clientName: name,
+            phone: phone,
+            clientPhone: phone,
+            amount: amount,
+            price: amount,
+            remaining: amount,
             dueDate: document.getElementById('def-inv-date').value,
-            status: 'pending'
+            status: 'pending',
+            date: new Date().toLocaleDateString('ar-EG')
         };
+
         let data = appStateData();
         if(!data.deferredInvoices) data.deferredInvoices = [];
         data.deferredInvoices.unshift(newInv);
         saveDataAll();
         closeModal('deferredModal');
         switchSection('deferredInvoices');
-        showToast('تم حفظ فاتورة الأجل بنجاح! ⏳');
+        showToast('تم حفظ فاتورة الأجل بنجاح ومزامنتها! ⏳');
     }
 
     function filterDeferredInvoices() {
@@ -1328,36 +1386,47 @@
         let list = data.deferredInvoices || [];
         
         let filtered = list.filter(d => {
-            let matchesQuery = (d.name || '').toLowerCase().includes(query) || (d.id || '').toLowerCase().includes(query);
-            if (filter === 'pending') return matchesQuery && (d.status === 'معلق' || d.status === 'pending');
-            if (filter === 'paid') return matchesQuery && (d.status === 'مسدد' || d.status === 'paid');
+            let name = getSafeName(d).toLowerCase();
+            let id = String(d.id || '').toLowerCase();
+            let matchesQuery = name.includes(query) || id.includes(query);
+            let st = getSafeStatus(d);
+            if (filter === 'pending') return matchesQuery && st === 'pending';
+            if (filter === 'paid') return matchesQuery && st === 'paid';
             return matchesQuery;
         });
 
         const tbody = document.getElementById('deferred-table-body');
         if(!tbody) return;
 
-        tbody.innerHTML = filtered.map((d, idx) => `
+        tbody.innerHTML = filtered.map((d, idx) => {
+            let name = getSafeName(d);
+            let phone = getSafePhone(d);
+            let amt = getSafeAmount(d);
+            let st = getSafeStatus(d);
+            return `
             <tr>
-                <td style="font-weight:bold; font-size:8px;">${d.id}</td>
-                <td>${d.name}<br><span style="font-size:8px; color:var(--text-muted);">${d.phone || ''}</span></td>
-                <td style="font-weight:bold; color:var(--purple-color);">${d.amount} ج.م</td>
-                <td>${d.dueDate || '-'}</td>
-                <td><span class="badge ${d.status === 'مسدد' || d.status === 'paid' ? 'bg-delivered' : 'bg-pending'}">${d.status || 'معلق'}</span></td>
+                <td style="font-weight:bold; font-size:8px;">${d.id || idx}</td>
+                <td>${name}<br><span style="font-size:8px; color:var(--text-muted);">${phone}</span></td>
+                <td style="font-weight:bold; color:var(--purple-color);">${amt.toLocaleString()} ج.م</td>
+                <td>${d.dueDate || d.date || '-'}</td>
+                <td><span class="badge ${st === 'paid' ? 'bg-delivered' : 'bg-pending'}">${st === 'paid' ? 'مسدد' : 'معلق'}</span></td>
                 <td>
                     <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                     <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                 </td>
             </tr>
-        `).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير مطابقة للبحث</td></tr>';
+        `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير مطابقة للبحث</td></tr>';
     }
 
     function sendDeferredWhatsApp(index) {
         let data = appStateData();
         const d = (data.deferredInvoices || [])[index];
         if(!d) return;
-        let msg = `⏳ *تنبيه سداد فاتورة أجل - أسطورة الطريق*\n\nعزيزي العميل: ${d.name}\nرقم الفاتورة: ${d.id}\nالمبلغ المتبقي: *${d.amount} ج.م*\nتاريخ الاستحقاق: ${d.dueDate}\n\nنرجو سرعة السداد في الموعد المحدد. شكراً لتعاملكم معنا!`;
-        window.open(`https://wa.me/${d.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank');
+        let name = getSafeName(d);
+        let phone = getSafePhone(d);
+        let amt = getSafeAmount(d);
+        let msg = `⏳ *تنبيه سداد فاتورة أجل - أسطورة الطريق*\n\nعزيزي العميل: ${name}\nرقم الفاتورة: ${d.id}\nالمبلغ المتبقي: *${amt} ج.م*\nتاريخ الاستحقاق: ${d.dueDate || '-'}\n\nنرجو سرعة السداد في الموعد المحدد. شكراً لتعاملكم معنا!`;
+        window.open(`https://wa.me/${phone !== 'غير محدد' ? phone.replace(/[^0-9]/g, '') : ''}?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     function renderChatMessagesBox() {
@@ -1428,9 +1497,11 @@
 
     function saveCustomer(e) {
         e.preventDefault();
+        const name = document.getElementById('cust-name').value;
         const newCust = {
             id: Date.now(),
-            name: document.getElementById('cust-name').value,
+            name: name,
+            accountOwner: name,
             phone: document.getElementById('cust-phone').value,
             debt: Number(document.getElementById('cust-debt').value || 0)
         };
@@ -1465,7 +1536,9 @@
         const newPost = {
             id: Date.now(),
             user: userName,
+            name: userName,
             text: text,
+            item: text,
             time: new Date().toLocaleTimeString('ar-EG')
         };
         let data = appStateData();
@@ -1483,13 +1556,13 @@
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
         const tbody = document.getElementById('shipments-table-body');
-        const filtered = shipmentsList.filter(s => (s.name || '').toLowerCase().includes(query) || (s.item || '').toLowerCase().includes(query));
+        const filtered = shipmentsList.filter(s => getSafeName(s).toLowerCase().includes(query) || getSafeDesc(s).toLowerCase().includes(query));
         
         tbody.innerHTML = filtered.map((s, idx) => `
             <tr>
-                <td>${s.name}</td>
-                <td>${s.item}</td>
-                <td>${s.price}</td>
+                <td>${getSafeName(s)}</td>
+                <td>${getSafeDesc(s)}</td>
+                <td>${getSafeAmount(s).toLocaleString()} ج.م</td>
                 <td><span class="badge ${s.priority?.includes('عاجل') ? 'bg-danger' : 'bg-transit'}">${s.priority || 'عادي'}</span></td>
                 <td>
                     <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
@@ -1518,16 +1591,16 @@
         const s = list[index];
         if(!s) return;
         document.getElementById('inv-id').innerText = `#${String(s.id || index).slice(-4)}`;
-        document.getElementById('inv-name').innerText = s.name || '-';
-        document.getElementById('inv-phone').innerText = s.phone || '-';
+        document.getElementById('inv-name').innerText = getSafeName(s);
+        document.getElementById('inv-phone').innerText = getSafePhone(s);
         document.getElementById('inv-address').innerText = s.address || '-';
-        document.getElementById('inv-item').innerText = s.item || '-';
-        document.getElementById('inv-price').innerText = s.price || 0;
+        document.getElementById('inv-item').innerText = getSafeDesc(s);
+        document.getElementById('inv-price').innerText = getSafeAmount(s);
         document.getElementById('inv-date').innerText = s.date || new Date().toLocaleDateString('ar-EG');
         
         const imgBox = document.getElementById('inv-img-box');
-        if(s.img) {
-            imgBox.innerHTML = `<img src="${s.img}" style="max-width:100%; max-height:140px; border-radius:6px; object-fit:contain; border:1px solid #cbd5e1;">`;
+        if(s.img || s.mediaUrl) {
+            imgBox.innerHTML = `<img src="${s.img || s.mediaUrl}" style="max-width:100%; max-height:140px; border-radius:6px; object-fit:contain; border:1px solid #cbd5e1;">`;
         } else {
             imgBox.innerHTML = '';
         }
@@ -1551,7 +1624,8 @@
         let data = appStateData();
         let amount = prompt('أدخل المبلغ المراد سداده:', '0');
         if(amount && !isNaN(amount)) {
-            data.customers[index].debt = Math.max(0, Number(data.customers[index].debt) - Number(amount));
+            let currentDebt = data.customers[index].debt ?? getSafeAmount(data.customers[index]);
+            data.customers[index].debt = Math.max(0, Number(currentDebt) - Number(amount));
             saveDataAll();
             showToast('تم سداد جزء من الدين بنجاح!');
             switchSection('customers');
@@ -1569,26 +1643,26 @@
         if (type === 'shipments') {
             title.innerText = '📦 تفاصيل الشحنات والرحلات';
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th></tr></thead><tbody>` +
-                shipmentsList.map((s) => `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td></tr>`).join('') +
+                shipmentsList.map((s) => `<tr><td>${getSafeName(s)}</td><td>${getSafeDesc(s)}</td><td>${getSafeAmount(s).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'cash') {
             title.innerText = '💵 تفاصيل حركات الخزينة';
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>` +
-                (data.treasury || []).map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td></tr>`).join('') +
+                (data.treasury || []).map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'debts') {
             title.innerText = '⚠️ تفاصيل ديون العملاء والأجل';
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>الديون والأجل</th></tr></thead><tbody>` +
-                (data.deferredInvoices || []).map((c) => `<tr><td>${c.name}</td><td>${c.phone}</td><td>${c.amount} ج.م</td></tr>`).join('') +
+                (data.deferredInvoices || []).map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
             title.innerText = '📈 تحليل الإيرادات والمصروفات والأرباح';
-            let rev = shipmentsList.reduce((s, x) => s + Number(x.price || 0), 0);
-            let exp = (data.expenses || []).reduce((s, x) => s + Number(x.amount || 0), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
+            let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
+            let exp = (data.expenses || []).reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
             body.innerHTML = `<div style="font-size:11px; line-height:1.6;">
-                <p>💰 إجمالي الإيرادات: <strong>${rev} ج.م</strong></p>
-                <p>⛽ إجمالي المصروفات: <strong>${exp} ج.م</strong></p>
-                <p>📈 صافي الأرباح: <strong style="color:var(--green-success);">${rev - exp} ج.م</strong></p>
+                <p>💰 إجمالي الإيرادات: <strong>${rev.toLocaleString()} ج.م</strong></p>
+                <p>⛽ إجمالي المصروفات: <strong>${exp.toLocaleString()} ج.م</strong></p>
+                <p>📈 صافي الأرباح: <strong style="color:var(--green-success);">${(rev - exp).toLocaleString()} ج.م</strong></p>
             </div>`;
         }
     }
@@ -1607,13 +1681,29 @@
             document.getElementById('edit-modal-title').innerText = 'تعديل بيانات الشحنة';
             fields.innerHTML = `
                 <label style="font-size:9px;">اسم العميل:</label>
-                <input type="text" id="edit-name" value="${item.name || ''}" required>
+                <input type="text" id="edit-name" value="${getSafeName(item)}" required>
                 <label style="font-size:9px;">عنوان التوصيل:</label>
                 <input type="text" id="edit-address" value="${item.address || ''}" required>
                 <label style="font-size:9px;">وصف الحمولة:</label>
-                <input type="text" id="edit-item" value="${item.item || ''}" required>
+                <input type="text" id="edit-item" value="${getSafeDesc(item)}" required>
                 <label style="font-size:9px;">الأجرة (ج.م):</label>
-                <input type="number" id="edit-price" value="${item.price || 0}" required>
+                <input type="number" id="edit-price" value="${getSafeAmount(item)}" required>
+            `;
+        } else if(type === 'treasury') {
+            document.getElementById('edit-modal-title').innerText = 'تعديل الحركة النقدية';
+            fields.innerHTML = `
+                <label style="font-size:9px;">البيان:</label>
+                <input type="text" id="edit-desc" value="${getSafeDesc(item)}" required>
+                <label style="font-size:9px;">المبلغ (ج.م):</label>
+                <input type="number" id="edit-amount" value="${getSafeAmount(item)}" required>
+            `;
+        } else if(type === 'expenses') {
+            document.getElementById('edit-modal-title').innerText = 'تعديل المصروف';
+            fields.innerHTML = `
+                <label style="font-size:9px;">عنوان المصروف:</label>
+                <input type="text" id="edit-title" value="${getSafeDesc(item)}" required>
+                <label style="font-size:9px;">المبلغ (ج.م):</label>
+                <input type="number" id="edit-amount" value="${getSafeAmount(item)}" required>
             `;
         }
         openModal('editItemModal');
@@ -1628,11 +1718,20 @@
         if(type === 'shipments') {
             let list = getAllShipments(data);
             list[index].name = document.getElementById('edit-name').value;
+            list[index].accountOwner = list[index].name;
             list[index].address = document.getElementById('edit-address').value;
             list[index].item = document.getElementById('edit-item').value;
+            list[index].description = list[index].item;
             list[index].price = Number(document.getElementById('edit-price').value);
+            list[index].amount = list[index].price;
             data.shipments = list;
             data.docs = list;
+        } else if(type === 'treasury') {
+            data.treasury[index].desc = document.getElementById('edit-desc').value;
+            data.treasury[index].amount = Number(document.getElementById('edit-amount').value);
+        } else if(type === 'expenses') {
+            data.expenses[index].title = document.getElementById('edit-title').value;
+            data.expenses[index].amount = Number(document.getElementById('edit-amount').value);
         }
 
         saveDataAll();
@@ -1649,11 +1748,11 @@
             container.innerHTML = '<p style="color:var(--text-muted); text-align:center;">اختر العميل أولاً لعرض شحناته</p>';
             return;
         }
-        const clientShipments = shipmentsList.filter(s => s.name === clientName);
+        const clientShipments = shipmentsList.filter(s => getSafeName(s) === clientName);
         container.innerHTML = clientShipments.map((s, idx) => `
             <label style="display:flex; align-items:center; gap:6px; margin-bottom:3px; cursor:pointer;">
-                <input type="checkbox" name="ci-shipment-chk" value="${idx}" data-price="${s.price}" data-item="${s.item}" style="width:auto; margin:0;">
-                <span>${s.item} - <strong>${s.price} ج.م</strong> (${s.date || ''})</span>
+                <input type="checkbox" name="ci-shipment-chk" value="${idx}" data-price="${getSafeAmount(s)}" data-item="${getSafeDesc(s)}" style="width:auto; margin:0;">
+                <span>${getSafeDesc(s)} - <strong>${getSafeAmount(s).toLocaleString()} ج.م</strong> (${s.date || ''})</span>
             </label>
         `).join('');
     }
@@ -1683,15 +1782,19 @@
 
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        const matchedShipment = shipmentsList.find(s => s.name === clientName);
-        if(matchedShipment) clientPhone = matchedShipment.phone || '';
+        const matchedShipment = shipmentsList.find(s => getSafeName(s) === clientName);
+        if(matchedShipment) clientPhone = getSafePhone(matchedShipment);
 
         const newConsolidated = {
             id: Date.now(),
+            name: clientName,
             clientName: clientName,
+            accountOwner: clientName,
             phone: clientPhone,
             shipments: selectedShipments,
             totalAmount: totalAmount,
+            amount: totalAmount,
+            price: totalAmount,
             date: new Date().toLocaleDateString('ar-EG')
         };
 
@@ -1703,37 +1806,21 @@
         switchSection('consolidatedInvoices');
     }
 
-    function deleteItem(key, index) {
-        if(confirm('هل أنت متأكد من الحذف؟')) {
-            let data = appStateData();
-            let targetList = key === 'shipments' ? getAllShipments(data) : data[key];
-            if(targetList) {
-                targetList.splice(index, 1);
-                if(key === 'shipments') {
-                    data.shipments = targetList;
-                    data.docs = targetList;
-                }
-                saveDataAll();
-                showToast('تم الحذف بنجاح');
-            }
-        }
-    }
-
     function openConsolidatedImageModal(id) {
         let data = appStateData();
         const ci = (data.consolidatedInvoices || []).find(item => item.id == id);
         if(!ci) return;
         document.getElementById('c-inv-id').innerText = `#${String(ci.id).slice(-4)}`;
-        document.getElementById('c-inv-name').innerText = ci.clientName;
-        document.getElementById('c-inv-phone').innerText = ci.phone || '-';
-        document.getElementById('c-inv-date').innerText = ci.date;
-        document.getElementById('c-inv-total').innerText = ci.totalAmount;
+        document.getElementById('c-inv-name').innerText = getSafeName(ci);
+        document.getElementById('c-inv-phone').innerText = getSafePhone(ci);
+        document.getElementById('c-inv-date').innerText = ci.date || '-';
+        document.getElementById('c-inv-total').innerText = getSafeAmount(ci).toLocaleString();
 
         const listContainer = document.getElementById('c-inv-items-list');
         listContainer.innerHTML = (ci.shipments || []).map((sh, idx) => `
             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                <span>${idx+1}. ${sh.item}</span>
-                <strong>${sh.price} ج.م</strong>
+                <span>${idx+1}. ${sh.item || 'شحنة'}</span>
+                <strong>${Number(sh.price || 0).toLocaleString()} ج.م</strong>
             </div>
         `).join('');
 
@@ -1757,8 +1844,11 @@
         const ci = (data.consolidatedInvoices || []).find(item => item.id == id);
         if(!ci) return;
         let itemsStr = (ci.shipments || []).map((sh) => `• ${sh.item}: *${sh.price} ج.م*`).join('\n');
-        let msg = `📑 *فاتورة مجمعة معتمدة - أسطورة الطريق*\n\nرقم الفاتورة: #${String(ci.id).slice(-4)}\nالعميل: ${ci.clientName}\nالتاريخ: ${ci.date}\n\n*تفاصيل الشحنات:*\n${itemsStr}\n\n💰 *الإجمالي المستحق: ${ci.totalAmount} ج.م*\n\nشكراً لتعاملكم معنا!`;
-        window.open(`https://wa.me/${ci.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank');
+        let name = getSafeName(ci);
+        let phone = getSafePhone(ci);
+        let amt = getSafeAmount(ci);
+        let msg = `📑 *فاتورة مجمعة معتمدة - أسطورة الطريق*\n\nرقم الفاتورة: #${String(ci.id).slice(-4)}\nالعميل: ${name}\nالتاريخ: ${ci.date || '-'}\n\n*تفاصيل الشحنات:*\n${itemsStr}\n\n💰 *الإجمالي المستحق: ${amt.toLocaleString()} ج.م*\n\nشكراً لتعاملكم معنا!`;
+        window.open(`https://wa.me/${phone !== 'غير محدد' ? phone.replace(/[^0-9]/g, '') : ''}?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     function renderTrackingDetails() {
@@ -1777,7 +1867,7 @@
         const currentStage = s.milestone || 'تم التسجيل';
 
         container.innerHTML = `
-            <p style="font-size:10px; margin-bottom:6px; font-weight:bold;">العميل: ${s.name} | الحمولة: ${s.item}</p>
+            <p style="font-size:10px; margin-bottom:6px; font-weight:bold;">العميل: ${getSafeName(s)} | الحمولة: ${getSafeDesc(s)}</p>
             <div style="display:flex; gap:5px; margin-top:8px;">
                 <select id="next-milestone" style="margin:0;">
                     ${stages.map(st => `<option value="${st}" ${st === currentStage ? 'selected' : ''}>${st}</option>`).join('')}
@@ -1832,9 +1922,11 @@
 
     function saveNewDriver(e) {
         e.preventDefault();
+        const name = document.getElementById('new-d-name').value;
         const newDrv = {
             id: Date.now(),
-            name: document.getElementById('new-d-name').value,
+            name: name,
+            driverName: name,
             phone: document.getElementById('new-d-phone').value,
             pin: document.getElementById('new-d-pin').value,
             role: document.getElementById('new-d-role').value,
@@ -1847,69 +1939,6 @@
         saveDataAll();
         switchSection('driversControl');
         showToast('تم إضافة الحساب بنجاح وتحديث باندا!');
-    }
-
-    function saveNewShipment(e) {
-        e.preventDefault();
-        const isDeferredChecked = document.getElementById('s-is-deferred')?.checked || false;
-        const shipmentId = 'INV-' + Date.now();
-        const sName = document.getElementById('s-name').value;
-        const sPhone = document.getElementById('s-phone').value;
-        const sPrice = Number(document.getElementById('s-price').value);
-
-        const newShipment = {
-            id: shipmentId,
-            name: sName,
-            phone: sPhone,
-            address: document.getElementById('s-address').value,
-            item: document.getElementById('s-item').value,
-            price: sPrice,
-            priority: document.getElementById('s-priority').value,
-            assignedDriver: document.getElementById('s-driver').value,
-            img: temporaryShipmentImageBase64 || '',
-            milestone: 'تم التسجيل',
-            status: 'في الانتظار',
-            gps: '30.0444,31.2357',
-            date: new Date().toLocaleDateString('ar-EG')
-        };
-
-        let data = appStateData();
-        let list = getAllShipments(data);
-        list.unshift(newShipment);
-        data.shipments = list;
-        data.docs = list;
-
-        if (temporaryShipmentImageBase64) {
-            if(!data.posts) data.posts = [];
-            data.posts.unshift({
-                id: Date.now(),
-                user: window.currentLoggedInUser ? window.currentLoggedInUser.name : 'الإدارة',
-                text: `📦 [شحنة جديدة للعميل ${sName}]: ${newShipment.item} - الأجرة: ${sPrice} ج.م`,
-                mediaUrl: temporaryShipmentImageBase64,
-                mediaType: 'image',
-                time: new Date().toLocaleTimeString('ar-EG')
-            });
-            data.wallPosts = data.posts;
-        }
-
-        if (isDeferredChecked) {
-            if(!data.deferredInvoices) data.deferredInvoices = [];
-            data.deferredInvoices.unshift({
-                id: shipmentId,
-                name: sName,
-                phone: sPhone,
-                amount: sPrice,
-                dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
-                status: 'pending'
-            });
-            showToast('📦 تم حفظ الشحنة وترحيلها كفاتورة أُجل بنجاح!');
-        } else {
-            showToast('تم حفظ الشحنة بنجاح! 🚀');
-        }
-
-        temporaryShipmentImageBase64 = '';
-        saveDataAll();
-        switchSection('shipments');
     }
 
     function saveTreasury(e) {
@@ -1931,9 +1960,11 @@
 
     function saveExpense(e) {
         e.preventDefault();
+        const title = document.getElementById('exp-title').value;
         const newEx = {
             id: Date.now(),
-            title: document.getElementById('exp-title').value,
+            title: title,
+            desc: title,
             amount: Number(document.getElementById('exp-amount').value),
             date: new Date().toLocaleDateString('ar-EG')
         };
@@ -1946,9 +1977,11 @@
     }
 
     function registerNewDriverPublic() {
+        const name = document.getElementById('pub-drv-name').value;
         const newDrv = {
             id: Date.now(),
-            name: document.getElementById('pub-drv-name').value,
+            name: name,
+            driverName: name,
             phone: document.getElementById('pub-drv-phone').value,
             pin: document.getElementById('pub-drv-pin').value,
             role: 'سائق',
@@ -1969,14 +2002,20 @@
         const vName = document.getElementById('vis-name').value;
         const vPhone = document.getElementById('vis-phone').value;
         const vPrice = Number(document.getElementById('vis-price').value);
+        const vItem = document.getElementById('vis-item').value;
 
         const newShipment = {
             id: shipmentId,
             name: vName,
+            accountOwner: vName,
+            clientName: vName,
             phone: vPhone,
+            clientPhone: vPhone,
             address: document.getElementById('vis-address').value,
-            item: document.getElementById('vis-item').value,
+            item: vItem,
+            description: vItem,
             price: vPrice,
+            amount: vPrice,
             priority: 'عادي',
             milestone: 'تم التسجيل',
             status: 'في الانتظار',
@@ -1994,8 +2033,13 @@
             data.deferredInvoices.unshift({
                 id: shipmentId,
                 name: vName,
+                accountOwner: vName,
+                clientName: vName,
                 phone: vPhone,
+                clientPhone: vPhone,
                 amount: vPrice,
+                price: vPrice,
+                remaining: vPrice,
                 dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
                 status: 'pending'
             });
@@ -2013,7 +2057,9 @@
         const newPost = {
             id: Date.now(),
             user: userName,
+            name: userName,
             text: text,
+            item: text,
             time: new Date().toLocaleTimeString('ar-EG')
         };
         let data = appStateData();
@@ -2035,9 +2081,9 @@
         container.innerHTML = posts.map(p => `
             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid var(--border-color); font-size:10px;">
                 <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--text-muted); margin-bottom:2px;">
-                    <strong>${p.user || p.name || 'مستخدم'}</strong><span>${p.time || p.date || ''}</span>
+                    <strong>${getSafeName(p)}</strong><span>${p.time || p.date || ''}</span>
                 </div>
-                <p>${p.text || p.content || p.message || ''}</p>
+                <p>${getSafeDesc(p)}</p>
             </div>
         `).join('') || '<p style="font-size:9px; text-align:center; color:var(--text-muted);">لا توجد منشورات</p>';
     }
@@ -2058,7 +2104,7 @@
             if(s.gps) {
                 const coords = s.gps.split(',').map(Number);
                 if(coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                    L.marker(coords).addTo(map).bindPopup(`<b>العميل:</b> ${s.name}<br><b>الحمولة:</b> ${s.item}<br><b>المرحلة:</b> ${s.milestone || 'نشط'}`);
+                    L.marker(coords).addTo(map).bindPopup(`<b>العميل:</b> ${getSafeName(s)}<br><b>الحمولة:</b> ${getSafeDesc(s)}<br><b>المرحلة:</b> ${s.milestone || 'نشط'}`);
                 }
             }
         });
@@ -2094,7 +2140,7 @@
         if(!s) return;
         const box = document.getElementById('qrcode');
         box.innerHTML = '';
-        new QRCode(box, { text: `https://karamegy.github.io/Na2la/?shipment=${s.name}`, width: 140, height: 140 });
+        new QRCode(box, { text: `https://karamegy.github.io/Na2la/?shipment=${getSafeName(s)}`, width: 140, height: 140 });
         openModal('qr-modal');
     }
 
@@ -2106,12 +2152,12 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         doc.text("Global Transport Hub - Waybill V89.7", 20, 20);
-        doc.text(`Client: ${s.name || '-'}`, 20, 30);
-        doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
+        doc.text(`Client: ${getSafeName(s)}`, 20, 30);
+        doc.text(`Phone: ${getSafePhone(s)}`, 20, 40);
         doc.text(`Address: ${s.address || '-'}`, 20, 50);
-        doc.text(`Item: ${s.item || '-'}`, 20, 60);
-        doc.text(`Price: ${s.price || 0} EGP`, 20, 70);
-        doc.save(`waybill_${s.name || 'shipment'}.pdf`);
+        doc.text(`Item: ${getSafeDesc(s)}`, 20, 60);
+        doc.text(`Price: ${getSafeAmount(s)} EGP`, 20, 70);
+        doc.save(`waybill_${getSafeName(s)}.pdf`);
         showToast('تم تصدير البوليصة بنجاح!');
     }
 
@@ -2128,8 +2174,8 @@
     function exportSummaryWhatsApp() {
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let rev = shipmentsList.reduce((s, x) => s + Number(x.price || 0), 0);
-        let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev} ج.م`;
+        let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
+        let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev.toLocaleString()} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 </script>
