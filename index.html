@@ -1271,24 +1271,37 @@
             renderRSSTicker();
         });
 
-        // دالة الحفظ السحابي مع تقليم ذكي للمصفوفات لتجنب تجاوز حد 1 ميجابايت
+        // دالة الحفظ السحابي المحسنة لضمان عدم تجاوز حد 1 ميجابايت على فايرستور
         function saveDataAll() {
             window._isSavingLocally = true;
             if (appData.auditLogs && appData.auditLogs.length > 5) appData.auditLogs = appData.auditLogs.slice(0, 5);
-            if (appData.chat && appData.chat.length > 25) appData.chat = appData.chat.slice(-25);
-            if (appData.communityPosts && appData.communityPosts.length > 10) appData.communityPosts = appData.communityPosts.slice(0, 10);
-            if (appData.posts && appData.posts.length > 10) appData.posts = appData.posts.slice(0, 10);
+            if (appData.chat && appData.chat.length > 15) appData.chat = appData.chat.slice(-15);
+            if (appData.communityPosts && appData.communityPosts.length > 6) appData.communityPosts = appData.communityPosts.slice(0, 6);
+            if (appData.posts && appData.posts.length > 6) appData.posts = appData.posts.slice(0, 6);
+
+            // تنظيف صور الشحنات القديمة تلقائياً للإبقاء على الحجم أقل من 1 ميجابايت
+            if (appData.shipments && appData.shipments.length > 8) {
+                for (let i = 8; i < appData.shipments.length; i++) {
+                    if (appData.shipments[i].img) {
+                        appData.shipments[i].img = '';
+                    }
+                }
+            }
 
             localStorage.setItem('transportAppV89', JSON.stringify(appData));
             return db.collection('appStore').doc('mainState').set(appData, { merge: true })
                 .then(() => {
-                    console.log("تم الحفظ سحابياً بنجاح دون تجاوز الحجم ☁️");
+                    console.log("تم الحفظ سحابياً بنجاح دون تجاوز الحد ☁️");
                     setTimeout(() => { window._isSavingLocally = false; }, 1000);
                 })
                 .catch((error) => {
                     window._isSavingLocally = false;
                     console.error("خطأ في الحفظ السحابي:", error);
-                    alert('❌ فشل الحفظ السحابي: حجم البيانات كبير جداً. يرجى استخدام زر تفريغ المساحة.');
+                    // تنظيف طارئ وإعادة المحاولة تلقائياً
+                    appData.shipments.forEach(s => { if(s.img && s.img.length > 500) s.img = ''; });
+                    db.collection('appStore').doc('mainState').set(appData, { merge: true }).then(() => {
+                        alert('⚠️ تم تنظيف المساحة تلقائياً لتجاوز حد القاعدة، وحفظ البيانات بنجاح.');
+                    });
                 });
         }
 
