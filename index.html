@@ -1381,7 +1381,6 @@
         function setupNavigation() {
             const nav = document.getElementById('main-nav');
             if (currentUserRole === 'admin') {
-                // المدير يرى كل شيء بما في ذلك الفواتير المجمعة وقسم الأجل
                 nav.innerHTML = `
                     <button type="button" class="active" onclick="switchTab('crud-tab', this); toggleSidebar();" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>
                     <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
@@ -1401,7 +1400,6 @@
                     <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشريط RSS</button>
                 `;
             } else if (currentUserRole === 'supervisor') {
-                // المشرف لا يرى الفواتير المجمعة ولا قسم الأجل حسب طلبك
                 nav.innerHTML = `
                     <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
@@ -1412,7 +1410,6 @@
                     <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير والفواتير</button>
                 `;
             } else {
-                // السائق لا يرى سوى حسابه وشحناته والخدمات الشخصية العامة ولا يرى أي شيء يخص الأجل أو الفواتير المجمعة
                 nav.innerHTML = `
                     <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 شحناتي ومهماتي</button>
@@ -1492,9 +1489,10 @@
 
             if (type === 'shipments') {
                 titleEl.innerText = '📦 تفاصيل الشحنات والرحلات المتطورة';
-                let html = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th></tr></thead><tbody>`;
+                let html = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
-                    html += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td></tr>`;
+                    let defBtnModal = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6; padding:2px 6px; font-size:9px;" onclick="convertToDeferred(${s.id})" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
+                    html += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td><td>${defBtnModal}</td></tr>`;
                 });
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
@@ -1678,7 +1676,6 @@
         function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
         function switchTab(tabId, btn) {
-            // حماية صارمة لمنع السائقين أو المشرفين من فتح صفحات الفواتير المجمعة أو الأجل حتى لو حاولوا بـ URL أو غيره
             if ((tabId === 'consolidated-invoices-tab' || tabId === 'deferred-invoices-tab') && currentUserRole !== 'admin') {
                 alert('عذراً، هذا القسم مخصص لمدير النظام فقط ولا يجوز ظهوره أو فتحه للسائقين أو المشرفين.');
                 return;
@@ -1829,7 +1826,7 @@
 
         function convertToDeferred(shipmentId) {
             if (currentUserRole !== 'admin') {
-                alert('عذراً، تحويل الفواتير لقسم الأجل مخصص للمدير فقط.');
+                alert('عذراً، تحويل الشحنات إلى قسم الأجل مخصص لمدير النظام فقط لعدم تضارب الفواتير.');
                 return;
             }
             let s = (appData.shipments || []).find(item => item.id === shipmentId);
@@ -3077,6 +3074,7 @@
                 headersRow.innerHTML = `<th>#</th><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>السائق</th><th>الحالة</th><th>إجراءات</th>`;
                 (appData.shipments || []).forEach((s, idx) => {
                     let tr = document.createElement('tr');
+                    let deferredBtnCRUD = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred(${s.id})" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
                     tr.innerHTML = `
                         <td>${idx + 1}</td>
                         <td>${s.name}</td>
@@ -3086,6 +3084,7 @@
                         <td>${s.status}</td>
                         <td>
                             <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id}); switchTab('shipments-tab');">تعديل</button>
+                            ${deferredBtnCRUD}
                             <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
                         </td>
                     `;
