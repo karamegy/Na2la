@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - Global TransportHub V90 3D PRO - متعدد المجموعات والسحابي</title>
+    <title>أسطورة الطريق - Global TransportHub V90 3D PRO - السحابي الآمن</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
-    <!-- مكتبات Firebase (الإصدار الثامن متوافق مع Firestore) -->
+    <!-- مكتبات Firebase (متضمنة Firestore و Auth للتحقق السحابي) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -312,13 +314,13 @@
     <div id="lock-screen">
         <div class="login-gateway-box">
             <h3 style="margin-bottom: 8px; color: #38bdf8; font-size: 16px;">🐎 أسطورة الطريق (Na2la)</h3>
-            <p style="font-size: 11px; opacity: 0.85; margin-bottom: 16px;">البوابة الموحدة للأنظمة اللوجستية وإدارة الأسطول</p>
+            <p style="font-size: 11px; opacity: 0.85; margin-bottom: 16px;">البوابة الموحدة للأنظمة اللوجستية وإدارة الأسطول السحابية</p>
             
             <input type="text" id="login-identifier" placeholder="أدخل اسم المستخدم أو رقم الهاتف..." autocomplete="off">
             <input type="password" id="login-pin-input" maxlength="15" placeholder="أدخل الرقم السري (PIN)...">
             
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
-                <button type="button" class="btn-main" onclick="performUnifiedLogin()" style="padding: 12px; font-size: 12px;">تسجيل الدخول الآمن 🔐</button>
+                <button type="button" class="btn-main" onclick="performUnifiedLogin()" style="padding: 12px; font-size: 12px;">تسجيل الدخول السحابي الآمن 🔐</button>
                 
                 <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;">
                 
@@ -473,7 +475,7 @@
             <button type="button" onclick="openModal('driversCommunityModal')" class="btn-sm" style="background:#0284c7; color:#fff;">👥 المجتمع</button>
             <button type="button" onclick="lockSystem()" class="btn-sm" style="background:var(--danger); color:#fff;">🔒 قفل</button>
             <button type="button" onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌙/☀️</button>
-            <span class="cloud-badge" id="cloud-status">Multi-Collection ☁️⚡</span>
+            <span class="cloud-badge" id="cloud-status">Auth & Multi-Collection ☁️⚡</span>
         </div>
     </header>
 
@@ -1087,8 +1089,9 @@
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
-        // ضغط شديد للصور لحماية قاعدة البيانات وتجنب تجاور حد الـ 1MB
+        // ضغط شديد للصور لحماية قاعدة البيانات وتجنب تجاوز حد الـ 1MB
         function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -1166,8 +1169,12 @@
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
         };
 
-        // الربط بالمزامنة اللحظية مع تهيئة القاعدة الفارغة تلقائياً
+        // تفعيل المزامنة اللحظية حصرياً بعد توثيق الدخول (لضمان عمل Firestore Rules مع request.auth != null)
+        let isListenersInitialized = false;
         function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
+
             const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
             
             collections.forEach(colName => {
@@ -1208,11 +1215,19 @@
             });
         }
 
-        initRealtimeListeners();
+        // مراقبة حالة المصادقة السحابية
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                // مستخدم موثق سحابياً بنجاح -> ابدأ مزامنة البيانات
+                initRealtimeListeners();
+            } else {
+                // غير مسجل دخول -> أظهر شاشة القفل
+                document.getElementById('lock-screen').style.display = 'flex';
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', () => {
             if (currentUserRole) {
-                document.getElementById('lock-screen').style.display = 'none';
                 setupNavigation();
                 if (currentUserRole === 'admin') setAdminUIMode();
                 else if (currentUserRole === 'supervisor') setSupervisorUIMode();
@@ -1249,7 +1264,8 @@
             }
         }
 
-        function performUnifiedLogin() {
+        // تسجيل الدخول الموحد عبر Firebase Auth للتوافق مع قواعد الأمان
+        async function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
 
@@ -1258,51 +1274,68 @@
                 return;
             }
 
-            if ((identifier === 'المدير' || identifier === '01000000000' || identifier === 'admin') && (pin === storedPin || pin === '01036')) {
-                currentUserRole = 'admin'; 
+            let email = "";
+            let password = pin + "9988";
+
+            if (identifier === 'المدير' || identifier === '01000000000' || identifier === 'admin') {
+                email = "admin@na2la.com";
+                if (pin !== storedPin && pin !== '01036') {
+                    alert('الرقم السري للمدير غير صحيح!');
+                    return;
+                }
+                currentUserRole = 'admin';
                 loggedInDriverName = 'المدير';
-                localStorage.setItem('current_user_role', currentUserRole);
-                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-                viewingProfileName = null;
-                document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `لوحة التحكم (مدير النظام: ${loggedInDriverName})`;
-                
-                setupNavigation();
-                setAdminUIMode();
-                render();
-                return;
-            }
-
-            const matchedUser = (appData.drivers || []).find(d => 
-                (d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin
-            );
-
-            if (matchedUser) {
-                viewingProfileName = null;
+            } else {
+                email = identifier.replace(/\s+/g, '') + "@na2la.com";
+                // البحث في السائقين المحليين أو المزامنة
+                const matchedUser = (appData.drivers || []).find(d => 
+                    (d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin
+                );
+                if (!matchedUser) {
+                    alert('خطأ في المطابقة: الاسم أو رقم الهاتف أو الرقم السري (PIN) غير متطابقين بدقة!');
+                    return;
+                }
                 loggedInDriverName = matchedUser.name;
-                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-
-                if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || (matchedUser.title && matchedUser.title.includes('مدير'))) {
+                if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد') {
                     currentUserRole = 'admin';
-                } else if (matchedUser.role === 'مشرف' || (matchedUser.title && matchedUser.title.includes('مشرف'))) {
+                } else if (matchedUser.role === 'مشرف') {
                     currentUserRole = 'supervisor';
                 } else {
                     currentUserRole = 'driver';
                 }
-
-                localStorage.setItem('current_user_role', currentUserRole);
-                document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `حساب: ${matchedUser.name} (${matchedUser.role})`;
-                setupNavigation();
-                
-                if (currentUserRole === 'admin') setAdminUIMode();
-                else if (currentUserRole === 'supervisor') setSupervisorUIMode();
-                else setDriverUIMode();
-
-                render();
-            } else {
-                alert('خطأ في المطابقة: الاسم أو رقم الهاتف أو الرقم السري (PIN) غير متطابقين بدقة!');
             }
+
+            try {
+                // محاولة تسجيل الدخول عبر Firebase Auth
+                await auth.signInWithEmailAndPassword(email, password);
+                finishSuccessfulLogin();
+            } catch (err) {
+                // إذا لم يكن الحساب موجوداً في Auth، نقوم بإنشائه تلقائياً لتسهيل الدخول
+                try {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                    await auth.signInWithEmailAndPassword(email, password);
+                    finishSuccessfulLogin();
+                } catch (createErr) {
+                    alert('خطأ في المصادقة السحابية: ' + createErr.message);
+                }
+            }
+        }
+
+        function finishSuccessfulLogin() {
+            localStorage.setItem('current_user_role', currentUserRole);
+            localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+            viewingProfileName = null;
+            document.getElementById('lock-screen').style.display = 'none';
+            document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+            
+            setupNavigation();
+            if (currentUserRole === 'admin') setAdminUIMode();
+            else if (currentUserRole === 'supervisor') setSupervisorUIMode();
+            else setDriverUIMode();
+            
+            initRealtimeListeners();
+            render();
+            alert('تم الاتصال بالسحابة وتسجيل الدخول بنجاح! 🚀');
         }
 
         function setupNavigation() {
@@ -1475,6 +1508,7 @@
             localStorage.removeItem('current_user_role');
             localStorage.removeItem('logged_in_driver_name');
             viewingProfileName = null;
+            auth.signOut();
             document.getElementById('lock-screen').style.display = 'flex'; 
             document.getElementById('login-identifier').value = ''; 
             document.getElementById('login-pin-input').value = ''; 
@@ -2361,7 +2395,8 @@
             });
         }
 
-        function registerNewDriverPublic() {
+        // تسجيل سائق جديد عام (مع إنشاء حساب سحابي في Auth)
+        async function registerNewDriverPublic() {
             const name = document.getElementById('pub-drv-name').value.trim();
             const phone = document.getElementById('pub-drv-phone').value.trim();
             const pin = document.getElementById('pub-drv-pin').value.trim();
@@ -2369,24 +2404,36 @@
             let exists = (appData.drivers || []).find(d => d.phone === phone || d.name === name);
             if(exists) { alert('هذا الحساب أو الهاتف مسجل بالفعل!'); return; }
 
-            let newId = String(Date.now());
-            let newDrv = {
-                id: newId,
-                name: name,
-                phone: phone,
-                pin: pin,
-                role: 'سائق',
-                title: 'سائق مستجد',
-                status: 'متاح 🟢',
-                avatar: '',
-                cover: ''
-            };
+            const email = phone.replace(/\s+/g, '') + "@na2la.com";
+            const password = pin + "9988";
 
-            db.collection('drivers').doc(newId).set(newDrv).then(() => {
+            try {
+                // استخدام تطبيق ثانوي لتسجيل مستخدم جديد دون الإضرار بجلسة المدير الحالي إذا كان مسجلاً
+                let secondaryApp = firebase.apps.length > 1 ? firebase.apps[1] : firebase.initializeApp(firebaseConfig, "SecondaryApp");
+                let secondaryAuth = secondaryApp.auth();
+
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const uid = userCredential.user.uid;
+                
+                let newDrv = {
+                    id: uid,
+                    name: name,
+                    phone: phone,
+                    pin: pin,
+                    role: 'سائق',
+                    title: 'سائق مستجد',
+                    status: 'متاح 🟢',
+                    avatar: '',
+                    cover: ''
+                };
+
+                await db.collection('drivers').doc(uid).set(newDrv);
                 closeDriverRegister();
-                alert('تم تسجيل حساب السائق بنجاح!');
+                alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
                 document.getElementById('public-driver-form').reset();
-            });
+            } catch (err) {
+                alert('فشل التسجيل السحابي: ' + err.message);
+            }
         }
 
         async function saveShipmentHandler(e) {
@@ -2585,7 +2632,7 @@
             }
         }
 
-        function saveNewDriverHandler(e) {
+        async function saveNewDriverHandler(e) {
             e.preventDefault();
             const name = document.getElementById('drv-fullname').value.trim();
             const phone = document.getElementById('drv-phone').value.trim();
@@ -2595,15 +2642,26 @@
             let exists = (appData.drivers || []).find(d => d.name === name || d.phone === phone);
             if(exists) { alert('هذا الاسم أو الهاتف مسجل بالفعل!'); return; }
 
-            let newId = String(Date.now());
-            let newDrv = {
-                id: newId, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
-            };
-            
-            db.collection('drivers').doc(newId).set(newDrv).then(() => {
+            const email = phone.replace(/\s+/g, '') + "@na2la.com";
+            const password = pin + "9988";
+
+            try {
+                let secondaryApp = firebase.apps.length > 1 ? firebase.apps[1] : firebase.initializeApp(firebaseConfig, "SecondaryApp");
+                let secondaryAuth = secondaryApp.auth();
+
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const uid = userCredential.user.uid;
+
+                let newDrv = {
+                    id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
+                };
+                
+                await db.collection('drivers').doc(uid).set(newDrv);
                 document.getElementById('driver-profile-form').reset();
-                alert('تم إضافة الحساب بنجاح! 🚀');
-            });
+                alert('تم إضافة الحساب السحابي بنجاح! 🚀');
+            } catch (err) {
+                alert('فشل إنشاء الحساب: ' + err.message);
+            }
         }
 
         function runAIMechanicAnalysis() {
