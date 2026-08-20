@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المتقدمة V98.4 PRO</title>
     
-    <!-- مكتبات Firebase -->
+    <!-- مكتبات Firebase V8 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
@@ -209,7 +209,7 @@
     <!-- شريط الإشعارات المتحرك RSS -->
     <div class="rss-ticker-bar">
         <div style="font-weight: 900; color: var(--primary-orange);">📡 إشعار RSS:</div>
-        <div class="rss-content" id="rssTickerText">جاري مزامنة الشحنات، الفواتير الآجلة، وحركة الخزينة لحظياً عبر وثيقة mainState في Firestore دون تضارب...</div>
+        <div class="rss-content" id="rssTickerText">جاري مزامنة الشحنات، الفواتير الآجلة، وحركة الخزينة لحظياً عبر Firestore سحابياً دون تضارب...</div>
         <button class="rss-btn" onclick="editRssMessage()">✏️ تعديل</button>
     </div>
 
@@ -517,7 +517,7 @@
         </div>
     </div>
 
-    <!-- كود الجافاسكريبت الموحد والمحدث مع ممر المحاذاة الشامل للمفاتيح متوافق تماماً مع جميع الشاشات -->
+    <!-- سكريبت الجافاسكريبت الموحد والمزدوج المزامنة سحابياً -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -534,7 +534,7 @@
 
         let currentAccountFilter = 'all';
 
-        // دوال استخراج وقراءة المفاتيح المحمية لمنع ظهور undefined
+        // دوال حماية وتوحيد استخراج المفاتيح
         function getSafeName(item) {
             if (!item) return 'غير محدد';
             return item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل غير محدد';
@@ -547,23 +547,23 @@
 
         function getSafeAmount(item) {
             if (!item) return 0;
-            let val = item.amount ?? item.price ?? item.total ?? item.remaining ?? item.value ?? 0;
+            let val = item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0;
             return Number(val) || 0;
         }
 
         function getSafeDesc(item) {
             if (!item) return 'بدون بيان';
-            return item.description || item.item || item.notes || item.details || 'معاملة مالية';
+            return item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية';
         }
 
         function getSafeStatus(item) {
             if (!item) return 'paid';
-            let s = String(item.status || '').toLowerCase();
+            let s = String(item.status || item.paymentStatus || '').toLowerCase();
             if (s === 'pending' || s === 'معلق' || s === 'غير مسدد' || s === 'آجل') return 'pending';
             return 'paid';
         }
 
-        // هيكل البيانات الشامل
+        // هيكل البيانات الموحد
         let appData = { 
             accounts: [], 
             shipments: [], 
@@ -662,36 +662,40 @@
             renderAllFinancials();
         }
 
+        // الاستماع المزدوج الشامل للمجموعات المستقلة والوثيقة العامة
         function initFirestoreSync() {
+            // 1. الاستماع للوثيقة العامة mainState
             db.collection("appStore").doc("mainState").onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
-                    appData.accounts = data.accounts || [];
-                    appData.shipments = data.shipments || [];
-                    appData.docs = data.docs || [];
-                    appData.drivers = data.drivers || [];
-                    appData.customers = data.customers || [];
-                    appData.chat = data.chat || [];
-                    appData.auditLogs = data.auditLogs || [];
-                    appData.consolidatedInvoices = data.consolidatedInvoices || [];
-                    appData.expenses = data.expenses || [];
-                    appData.deferredInvoices = data.deferredInvoices || [];
-                    appData.treasury = data.treasury || [];
-                    appData.trucks = data.trucks || [];
-                    
+                    if (data.accounts) appData.accounts = data.accounts;
+                    if (data.shipments) appData.shipments = data.shipments;
+                    if (data.expenses) appData.expenses = data.expenses;
+                    if (data.deferredInvoices) appData.deferredInvoices = data.deferredInvoices;
+                    if (data.treasury) appData.treasury = data.treasury;
                     if (data.userAvatar !== undefined) appData.userAvatar = data.userAvatar;
                     if (data.rssMessage) appData.rssMessage = data.rssMessage;
                     if (data.smsConfig) appData.smsConfig = data.smsConfig;
                     
                     document.getElementById("rssTickerText").innerText = appData.rssMessage;
                     updateProfileAvatarUI();
-                } else {
-                    saveDataAll();
+                    renderAllFinancials();
                 }
-                renderAllFinancials();
+            });
+
+            // 2. الاستماع الفوري لكل مجموعة مستقلة لتفادي أي تضارب
+            const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts', 'consolidatedInvoices'];
+            collections.forEach(col => {
+                db.collection(col).onSnapshot(snapshot => {
+                    if (!snapshot.empty) {
+                        appData[col] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        renderAllFinancials();
+                    }
+                }, err => console.error(`خطأ مزامنة ${col}:`, err));
             });
         }
 
+        // الحفظ المزدوج سحابياً في المستند الخاص وفي الوثيقة العامة
         function saveDataAll() {
             if (!appData.accounts) appData.accounts = [];
             if (!appData.treasury) appData.treasury = [];
@@ -699,6 +703,16 @@
             if (!appData.deferredInvoices) appData.deferredInvoices = [];
 
             db.collection("appStore").doc("mainState").set(appData, { merge: true }).catch(err => console.error("خطأ المزامنة:", err));
+        }
+
+        function syncItemToCollection(colName, item) {
+            if (!item || !item.id) return;
+            db.collection(colName).doc(String(item.id)).set(item, { merge: true }).catch(err => console.error(err));
+        }
+
+        function deleteItemFromCollection(colName, id) {
+            if (!id) return;
+            db.collection(colName).doc(String(id)).delete().catch(err => console.error(err));
         }
 
         function editRssMessage() {
@@ -741,11 +755,13 @@
             let amount = parseFloat(document.getElementById("expAmount").value);
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بشكل صحيح");
 
-            appData.expenses.unshift({ 
-                id: Date.now(), 
+            let newId = String(Date.now());
+            let expObj = { 
+                id: newId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
+                clientName: owner,
                 category: category, 
                 description: desc, 
                 item: desc,
@@ -753,8 +769,12 @@
                 price: amount,
                 type: 'debit', 
                 status: 'paid' 
-            });
+            };
+
+            appData.expenses.unshift(expObj);
+            syncItemToCollection('expenses', expObj);
             saveDataAll();
+
             document.getElementById("expDesc").value = "";
             document.getElementById("expAmount").value = "";
             renderAllFinancials();
@@ -766,19 +786,23 @@
             let reason = document.getElementById("treasuryReasonInput").value.trim() || (type === 'deposit' ? 'إيداع نقدي' : 'صرف نقدي');
             if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح للحركة النقدية");
 
-            if (!appData.treasury) appData.treasury = [];
-            
-            appData.treasury.unshift({
-                id: Date.now(),
+            let newId = String(Date.now());
+            let tObj = {
+                id: newId,
                 type: type === 'deposit' ? 'in' : 'out',
                 amount: amt,
                 price: amt,
                 desc: reason,
                 description: reason,
                 date: new Date().toLocaleString('ar-EG')
-            });
+            };
 
+            if (!appData.treasury) appData.treasury = [];
+            appData.treasury.unshift(tObj);
+
+            syncItemToCollection('treasury', tObj);
             saveDataAll();
+
             document.getElementById("treasuryInputAmount").value = "";
             document.getElementById("treasuryReasonInput").value = "";
             renderAllFinancials();
@@ -788,6 +812,7 @@
         function deleteTreasuryItem(id) {
             if (confirm("هل تريد حذف هذه الحركة النقدية من الخزينة؟")) {
                 appData.treasury = (appData.treasury || []).filter(t => String(t.id) !== String(id));
+                deleteItemFromCollection('treasury', id);
                 saveDataAll();
                 renderAllFinancials();
             }
@@ -795,7 +820,6 @@
 
         function openAddDeferredModal() { document.getElementById("addDeferredModal").style.display = 'flex'; }
 
-        // حفظ الآجل مع إسناد المفاتيح المزدوجة لتتوافق مع Index وPandan2la دون undefined
         function saveDeferredInvoice() {
             let name = document.getElementById("defClientName").value;
             let phone = document.getElementById("defPhone").value;
@@ -804,8 +828,10 @@
             if (!name || isNaN(amount)) return alert("أدخل بيانات الآجل صحيحة");
 
             let invId = "INV-" + Math.floor(10000000000 + Math.random() * 90000000000);
+            let newId = String(Date.now());
             let record = { 
-                id: invId, 
+                id: newId,
+                invoiceId: invId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: name, 
                 name: name,
@@ -816,6 +842,7 @@
                 item: "فاتورة أجل مستحقة",
                 amount: amount, 
                 price: amount,
+                remainingAmount: amount,
                 remaining: amount,
                 type: 'deferred', 
                 status: 'pending', 
@@ -823,7 +850,9 @@
             };
 
             appData.deferredInvoices.unshift(record);
+            syncItemToCollection('deferredInvoices', record);
             saveDataAll();
+
             document.getElementById('addDeferredModal').style.display = 'none';
             renderAllFinancials();
             alert("تم حفظ فاتورة الآجل بنجاح ومزامنتها لجميع الواجهات!");
@@ -838,8 +867,9 @@
             let status = document.getElementById("accPaymentStatus").value;
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بدقة");
 
-            appData.accounts.unshift({ 
-                id: Date.now(), 
+            let newId = String(Date.now());
+            let record = { 
+                id: newId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
@@ -852,8 +882,12 @@
                 price: amount,
                 type: type, 
                 status: status 
-            });
+            };
+
+            appData.accounts.unshift(record);
+            syncItemToCollection('accounts', record);
             saveDataAll();
+
             document.getElementById("accDescription").value = "";
             document.getElementById("accAmount").value = "";
             document.getElementById("accAccountOwner").value = "";
@@ -864,11 +898,13 @@
 
         function deleteRecord(id, collectionType) {
             if (confirm("هل أنت متأكد من الحذف النهائي والمزامنة السحابية؟")) {
+                let targetCol = collectionType;
                 if (collectionType === 'accounts') appData.accounts = appData.accounts.filter(x => String(x.id) !== String(id));
                 else if (collectionType === 'expenses') appData.expenses = appData.expenses.filter(x => String(x.id) !== String(id));
-                else if (collectionType === 'deferred') appData.deferredInvoices = appData.deferredInvoices.filter(x => String(x.id) !== String(id));
+                else if (collectionType === 'deferred') { targetCol = 'deferredInvoices'; appData.deferredInvoices = appData.deferredInvoices.filter(x => String(x.id) !== String(id)); }
                 else if (collectionType === 'shipments') appData.shipments = appData.shipments.filter(x => String(x.id) !== String(id));
                 
+                deleteItemFromCollection(targetCol, id);
                 saveDataAll();
                 renderAllFinancials();
                 alert("✅ تم الحذف والمزامنة بنجاح!");
@@ -890,7 +926,7 @@
             let item = null;
             if (collectionType === 'accounts') item = appData.accounts.find(x => String(x.id) === String(id));
             else if (collectionType === 'expenses') item = appData.expenses.find(x => String(x.id) === String(id));
-            else if (collectionType === 'deferred') item = appData.deferredInvoices.find(x => String(x.id) === String(id));
+            else if (collectionType === 'deferred' || collectionType === 'deferredInvoices') item = appData.deferredInvoices.find(x => String(x.id) === String(id));
             else if (collectionType === 'shipments') item = appData.shipments.find(x => String(x.id) === String(id));
 
             if (!item) return alert("العنصر غير موجود.");
@@ -917,7 +953,8 @@
             let type = document.getElementById("editType").value;
             let status = document.getElementById("editStatus").value;
 
-            let list = collectionType === 'accounts' ? appData.accounts : (collectionType === 'expenses' ? appData.expenses : (collectionType === 'shipments' ? appData.shipments : appData.deferredInvoices));
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+            let list = appData[colName] || [];
             let idx = list.findIndex(x => String(x.id) === String(id));
             if (idx !== -1) {
                 list[idx].accountOwner = owner;
@@ -931,6 +968,8 @@
                 list[idx].price = amount;
                 list[idx].type = type;
                 list[idx].status = status;
+
+                syncItemToCollection(colName, list[idx]);
             }
 
             saveDataAll();
@@ -940,18 +979,20 @@
         }
 
         function toggleRecordStatus(id, collectionType) {
-            let list = collectionType === 'accounts' ? appData.accounts : (collectionType === 'shipments' ? appData.shipments : appData.deferredInvoices);
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+            let list = appData[colName] || [];
             let item = list.find(x => String(x.id) === String(id));
             if (item) {
                 let current = getSafeStatus(item);
                 item.status = (current === 'pending' ? 'paid' : 'pending');
+                syncItemToCollection(colName, item);
                 saveDataAll();
                 renderAllFinancials();
             }
         }
 
         function fillExportTemplate(item) {
-            document.getElementById("expInvId").innerText = item.id || '-';
+            document.getElementById("expInvId").innerText = item.invoiceId || item.id || '-';
             document.getElementById("expInvDate").innerText = item.date || '-';
             document.getElementById("expInvOwner").innerText = getSafeName(item);
             document.getElementById("expInvPhone").innerText = getSafePhone(item);
@@ -1054,12 +1095,12 @@
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
             // تقرير الذكاء الاصطناعي التشغيلي التلقائي
-            let aiText = `إجمالي الشحنات المسجلة: <b>${appData.shipments.length}</b> شحنة.<br>`;
+            let aiText = `إجمالي الشحنات المسجلة: <b>${(appData.shipments || []).length}</b> شحنة.<br>`;
             aiText += `معدل الالتزام والتحصيل: <b>${(totalCredit + totalDeferred > 0 ? ((totalCredit / (totalCredit + totalDeferred)) * 100).toFixed(1) : 100)}%</b>.<br>`;
             if (totalDeferred > 0) {
                 aiText += `<span style="color:var(--warning-color);">⚠️ توجد مديونيات آجلة بقيمة ${totalDeferred.toLocaleString()} ج.م تتطلب المتابعة.</span>`;
             } else {
-                aiText += `<span style="color:var(--success-color);">✅ السيولة متنزنة والتحصيل ممتاز.</span>`;
+                aiText += `<span style="color:var(--success-color);">✅ السيولة متزنة والتحصيل ممتاز.</span>`;
             }
             document.getElementById("aiAnalyticsReportText").innerHTML = aiText;
 
@@ -1071,7 +1112,7 @@
                         <td><span class="badge-${t.type === 'in' ? 'credit' : 'debit'}">${t.type === 'in' ? 'إيداع 📥' : 'صرف 📤'}</span></td>
                         <td><b>${getSafeAmount(t).toLocaleString()} ج.م</b></td>
                         <td>${getSafeDesc(t)}</td>
-                        <td><button class="delete-btn" onclick="deleteTreasuryItem(${t.id})">حذف</button></td>
+                        <td><button class="delete-btn" onclick="deleteTreasuryItem('${t.id}')">حذف</button></td>
                     </tr>
                 `).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--secondary-text);">لا توجد حركات بالخزينة</td></tr>`;
             }
@@ -1103,7 +1144,7 @@
                     combined.push(...(appData.shipments || []).map(s => ({ ...s, collectionSource: 'shipments', type: 'shipment' })));
                 }
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
-                    combined.push(...(appData.deferredInvoices || []).map(d => ({ ...d, collectionSource: 'deferred', type: 'deferred' })));
+                    combined.push(...(appData.deferredInvoices || []).map(d => ({ ...d, collectionSource: 'deferredInvoices', type: 'deferred' })));
                 }
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') {
                     combined.push(...(appData.accounts || []).map(a => ({ ...a, collectionSource: 'accounts' })));
@@ -1137,7 +1178,7 @@
 
                     return `
                         <tr>
-                            <td><b>${safeId}</b><br><span style="font-size:10px; color:var(--secondary-text);">${item.date || '-'}</span></td>
+                            <td><b>${item.invoiceId || safeId}</b><br><span style="font-size:10px; color:var(--secondary-text);">${item.date || '-'}</span></td>
                             <td><b>${name}</b></td>
                             <td>${phone}</td>
                             <td>${desc}</td>
