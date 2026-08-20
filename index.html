@@ -1115,7 +1115,8 @@
         }
         const db = firebase.firestore();
 
-        function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.85, callback) {
+        // دالة ضغط الصور الذكية لمنع تجاوز حجم 1 ميجابايت لمستندات Firestore
+        function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.75, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -1270,51 +1271,35 @@
             renderRSSTicker();
         });
 
+        // دالة الحفظ السحابي مع تقليم ذكي للمصفوفات لتجنب تجاوز حد 1 ميجابايت
         function saveDataAll() {
             window._isSavingLocally = true;
-            if (appData.auditLogs && appData.auditLogs.length > 5) {
-                appData.auditLogs = appData.auditLogs.slice(0, 5);
-            }
-            if (appData.chat && appData.chat.length > 40) {
-                appData.chat = appData.chat.slice(-40);
-            }
-            if (appData.communityPosts && appData.communityPosts.length > 15) {
-                appData.communityPosts = appData.communityPosts.slice(0, 15);
-            }
-            if (appData.posts && appData.posts.length > 15) {
-                appData.posts = appData.posts.slice(0, 15);
-            }
-
-            const jsonString = JSON.stringify(appData);
-            const sizeInMb = new Blob([jsonString]).size / (1024 * 1024);
-            if (sizeInMb > 0.90) {
-                alert('⚠️ تنبيه: حجم البيانات يقترب من الحد الأقصى للمستند (1 ميجابايت). يرجى تفريغ المساحة السحابية لتجنب فقدان الحفظ.');
-            }
+            if (appData.auditLogs && appData.auditLogs.length > 5) appData.auditLogs = appData.auditLogs.slice(0, 5);
+            if (appData.chat && appData.chat.length > 25) appData.chat = appData.chat.slice(-25);
+            if (appData.communityPosts && appData.communityPosts.length > 10) appData.communityPosts = appData.communityPosts.slice(0, 10);
+            if (appData.posts && appData.posts.length > 10) appData.posts = appData.posts.slice(0, 10);
 
             localStorage.setItem('transportAppV89', JSON.stringify(appData));
-            return db.collection('appStore').doc('mainState').set(appData)
+            return db.collection('appStore').doc('mainState').set(appData, { merge: true })
                 .then(() => {
-                    console.log("تم الحفظ سحابياً بنجاح ☁️");
-                    setTimeout(() => { window._isSavingLocally = false; }, 1200);
+                    console.log("تم الحفظ سحابياً بنجاح دون تجاوز الحجم ☁️");
+                    setTimeout(() => { window._isSavingLocally = false; }, 1000);
                 })
                 .catch((error) => {
                     window._isSavingLocally = false;
                     console.error("خطأ في الحفظ السحابي:", error);
-                    alert('❌ فشل الحفظ السحابي: قد يكون حجم البيانات أو الصور المرفقة كبيراً جداً. يرجى تفريغ المساحة.');
+                    alert('❌ فشل الحفظ السحابي: حجم البيانات كبير جداً. يرجى استخدام زر تفريغ المساحة.');
                 });
         }
 
         function cleanCloudStorageBloat() {
-            if (confirm('هل تريد تفريغ المساحة وحذف الصور/الرسائل المؤقتة القديمة لتخفيف الحجم وإصلاح مشكلة الـ 1 ميجابايت؟ (لن يتم مسح الفواتير أو الشحنات الأساسية)')) {
+            if (confirm('هل تريد تفريغ المساحة وحذف البيانات المؤقتة لتخفيف الحجم وإصلاح مشكلة 1 ميجابايت؟ (لن يتم مسح الشحنات أو الفواتير الأساسية)')) {
                 appData.chat = [];
                 appData.posts = [];
                 appData.communityPosts = [];
                 appData.shipments.forEach(s => { if(s.img && s.img.length > 20000) s.img = ''; });
                 if(appData.drivers) {
-                    appData.drivers.forEach(d => {
-                        d.avatar = '';
-                        d.cover = '';
-                    });
+                    appData.drivers.forEach(d => { d.avatar = ''; d.cover = ''; });
                 }
                 saveDataAll().then(() => {
                     alert('تم تفريغ المساحة السحابية بنجاح وأصبح النظام جاهزاً للعمل بكفاءة 🚀');
@@ -1745,7 +1730,7 @@
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 1200, 1200, 0.85, (compressedUrl) => {
+                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
                     uploadedImgBase64 = compressedUrl;
                 });
             }
@@ -1754,7 +1739,7 @@
         function handleVisitorImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 1200, 1200, 0.85, (compressedUrl) => {
+                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
                     visitorImgBase64 = compressedUrl;
                 });
             }
@@ -1763,7 +1748,7 @@
         function handleDocImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 1200, 1200, 0.85, (compressedUrl) => {
+                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
                     input.dataset.compressedSrc = compressedUrl;
                 });
             }
@@ -2276,7 +2261,7 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 600, 600, 0.85, (compressedUrl) => {
+                compressImage(file, 400, 400, 0.75, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.avatar = compressedUrl;
@@ -2290,7 +2275,7 @@
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 1200, 600, 0.85, (compressedUrl) => {
+                compressImage(file, 800, 400, 0.75, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.cover = compressedUrl;
@@ -2318,7 +2303,7 @@
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 1200, 1200, 0.85, (compressedUrl) => {
+                        compressImage(file, 800, 800, 0.75, (compressedUrl) => {
                             profileWallFilesArr.push({ type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بنجاح ✅`;
@@ -2362,7 +2347,7 @@
 
         function loadAndRenderProfileWall(profileName) {
             const container = document.getElementById('profile-wall-posts-container');
-            container.innerHTML = `<div class="card" style="text-align:center; opacity:0.7; font-size:11px;">جاري تحميل المنشورات و图片的 الحائط من السحابة...</div>`;
+            container.innerHTML = `<div class="card" style="text-align:center; opacity:0.7; font-size:11px;">جاري تحميل المنشورات من السحابة...</div>`;
 
             db.collection('profileWalls')
               .where('profileName', '==', profileName)
@@ -2377,10 +2362,8 @@
                       posts.push(data);
                   });
 
-                  // دمج الشحنات التي تحمل صوراً لهذا السائق أو العميل لتظهر تلقائياً على حائط البروفايل أيضاً
                   let relatedShipments = (appData.shipments || []).filter(s => s.img && (s.assignedDriver === profileName || s.name === profileName || profileName === loggedInDriverName));
                   relatedShipments.forEach(s => {
-                      // تحقق إن لم تكن مضافة مسبقاً
                       posts.push({
                           id: s.id,
                           profileName: profileName,
@@ -2558,7 +2541,7 @@
             const fuelCost = Number(document.getElementById('ship-fuel-cost').value || 0);
             const extraCost = Number(document.getElementById('ship-extra-cost').value || 0);
             const assignedDriver = document.getElementById('ship-assigned-driver').value;
-            const paymentStatus = document.getElementById('ship-payment-status').value; // paid or deferred
+            const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
             if (editId) {
@@ -2582,7 +2565,6 @@
                 };
                 appData.shipments.unshift(newShipmentObj);
 
-                // إذا كانت الشحنة محددة كـ "آجل"، يتم إضافتها تلقائياً إلى قسم الأجل والفواتير الآجلة
                 if (paymentStatus === 'deferred') {
                     if (!appData.deferredInvoices) appData.deferredInvoices = [];
                     let dueDateObj = new Date();
@@ -2809,7 +2791,6 @@
                 let newPost = { id: Date.now(), title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
                 appData.posts.unshift(newPost);
                 
-                // حفظ نسخة أيضاً على حائط البروفايل للسائق لتظهر هناك مباشرة
                 db.collection('profileWalls').add({
                     id: newPost.id,
                     profileName: loggedInDriverName,
@@ -2831,7 +2812,7 @@
             }
 
             for (let i = 0; i < imgFiles.length; i++) {
-                compressImage(imgFiles[i], 1200, 1200, 0.85, (compressedUrl) => {
+                compressImage(imgFiles[i], 800, 800, 0.75, (compressedUrl) => {
                     mediaArr.push({ type: 'image', src: compressedUrl });
                     loaded++; 
                     if(loaded === total) saveToFirestoreAndWall(mediaArr);
@@ -3019,7 +3000,7 @@
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 1200, 1200, 0.85, (compressedUrl) => {
+                        compressImage(file, 800, 800, 0.75, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار وضغط الملفات بجودة عالية ✅`;
@@ -3061,7 +3042,6 @@
             };
             appData.communityPosts.unshift(newCommunityPost);
 
-            // مزامنة تلقائية مع حائط البروفايل الخاص بالسائق
             db.collection('profileWalls').add({
                 id: newCommunityPost.id,
                 profileName: loggedInDriverName,
