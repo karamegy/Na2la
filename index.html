@@ -1129,52 +1129,74 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // دوال تسجيل الدخول عبر Google و Phone مع إنشاء / مطابقة مستند السائق في Firestore تلقائياً
-        function finishOAuthLogin(user, role) {
+        // دالة إنهاء تسجيل الدخول عبر Google أو الهاتف مع الاستعلام السحابي المباشر
+        async function finishOAuthLogin(user, role) {
             currentUserRole = role;
             const userName = user.displayName || user.email || user.phoneNumber || 'سائق جديد';
             const userPhone = user.phoneNumber || '';
             const userPhoto = user.photoURL || '';
 
-            loggedInDriverName = userName;
-            localStorage.setItem('current_user_role', currentUserRole);
-            localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-            viewingProfileName = null;
-            
-            let existingDrv = (appData.drivers || []).find(d => d.name === userName || (userPhone && d.phone === userPhone));
-            if (!existingDrv) {
-                let newId = String(Date.now());
-                let newDrv = {
-                    id: newId,
-                    name: userName,
-                    phone: userPhone || '01000000000',
-                    pin: '01036',
-                    role: 'سائق',
-                    title: 'سائق معتمد',
-                    status: 'متاح 🟢',
-                    avatar: userPhoto,
-                    cover: ''
-                };
-                db.collection('drivers').doc(newId).set(newDrv);
-            } else if (userPhoto && !existingDrv.avatar) {
-                existingDrv.avatar = userPhoto;
-                db.collection('drivers').doc(String(existingDrv.id)).set(existingDrv);
+            try {
+                const snapshot = await db.collection('drivers').get();
+                let existingDrv = null;
+
+                snapshot.forEach(doc => {
+                    let d = doc.data();
+                    if ((userPhone && d.phone === userPhone) || d.name === userName) {
+                        existingDrv = d;
+                    }
+                });
+
+                if (!existingDrv) {
+                    let pinInput = prompt("أهلاً بك! أدعوك لإدخال الرقم السري (PIN) المخصص لحسابك الجديد:");
+                    if (!pinInput) pinInput = "01036";
+
+                    let newId = String(Date.now());
+                    let newDrv = {
+                        id: newId,
+                        name: userName,
+                        phone: userPhone || '01000000000',
+                        pin: pinInput,
+                        role: role || 'سائق',
+                        title: 'سائق معتمد',
+                        status: 'متاح 🟢',
+                        avatar: userPhoto,
+                        cover: ''
+                    };
+                    await db.collection('drivers').doc(newId).set(newDrv);
+                    loggedInDriverName = userName;
+                } else {
+                    loggedInDriverName = existingDrv.name;
+                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد') {
+                        currentUserRole = 'admin';
+                    } else if (existingDrv.role === 'مشرف') {
+                        currentUserRole = 'supervisor';
+                    } else {
+                        currentUserRole = 'driver';
+                    }
+                }
+
+                localStorage.setItem('current_user_role', currentUserRole);
+                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+                viewingProfileName = null;
+                
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+                
+                setupNavigation();
+                if (currentUserRole === 'admin') setAdminUIMode();
+                else if (currentUserRole === 'supervisor') setSupervisorUIMode();
+                else setDriverUIMode();
+                
+                initRealtimeListeners();
+                render();
+                alert('تمت مزامنة رقم الهاتف وتسجيل الدخول بنجاح! 📱🚀');
+            } catch (err) {
+                alert('خطأ أثناء مزامنة بيانات الحساب: ' + err.message);
             }
-            
-            document.getElementById('lock-screen').style.display = 'none';
-            document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
-            
-            setupNavigation();
-            if (currentUserRole === 'admin') setAdminUIMode();
-            else if (currentUserRole === 'supervisor') setSupervisorUIMode();
-            else setDriverUIMode();
-            
-            initRealtimeListeners();
-            render();
-            alert('تم الاتصال بالسحابة وتسجيل الدخول بنجاح! 🚀');
         }
 
-        // تم التحديث لاستخدام Redirect بدلاً من Popup لتجنب خطأ الإغلاق على الهواتف
+        // استخدام Redirect لتجنب خطأ الإغلاق على الهواتف
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
             auth.signInWithRedirect(provider).catch((error) => {
@@ -1182,7 +1204,6 @@
             });
         }
 
-        // معالجة نتيجة العودة من إعادة التوجيه لتسجيل الدخول بجوجل
         auth.getRedirectResult().then((result) => {
             if (result && result.user) {
                 finishOAuthLogin(result.user, 'driver');
@@ -1220,7 +1241,6 @@
                 });
         }
 
-        // ضغط شديد للصور لحماية قاعدة البيانات وتجنب تجاوز حد الـ 1MB
         function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -1405,6 +1425,7 @@
             }
         }
 
+        // دالة تسجيل الدخول الموحدة مع الاستعلام السحابي المباشر لحل مشاكل مزامنة الهاتف وPIN
         async function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
@@ -1422,20 +1443,33 @@
                 currentUserRole = 'admin';
                 loggedInDriverName = 'المدير';
             } else {
-                const matchedUser = (appData.drivers || []).find(d => 
-                    (d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin
-                );
-                if (!matchedUser) {
-                    alert('خطأ في المطابقة: الاسم أو رقم الهاتف أو الرقم السري (PIN) غير متطابقين بدقة!');
+                try {
+                    const snapshot = await db.collection('drivers').get();
+                    let matchedUser = null;
+                    
+                    snapshot.forEach(doc => {
+                        let d = doc.data();
+                        if ((d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin) {
+                            matchedUser = d;
+                        }
+                    });
+
+                    if (!matchedUser) {
+                        alert('خطأ في المطابقة: الاسم أو رقم الهاتف أو الرقم السري (PIN) غير متطابقين بدقة!');
+                        return;
+                    }
+
+                    loggedInDriverName = matchedUser.name;
+                    if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد') {
+                        currentUserRole = 'admin';
+                    } else if (matchedUser.role === 'مشرف') {
+                        currentUserRole = 'supervisor';
+                    } else {
+                        currentUserRole = 'driver';
+                    }
+                } catch (err) {
+                    alert('خطأ في الاتصال بالسحابة لجلب بيانات السائقين: ' + err.message);
                     return;
-                }
-                loggedInDriverName = matchedUser.name;
-                if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد') {
-                    currentUserRole = 'admin';
-                } else if (matchedUser.role === 'مشرف') {
-                    currentUserRole = 'supervisor';
-                } else {
-                    currentUserRole = 'driver';
                 }
             }
 
