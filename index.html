@@ -1128,11 +1128,11 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // دالة إنهاء تسجيل الدخول عبر Google أو الهاتف مع الاستعلام السحابي المباشر
+        // دالة إنهاء ومعالجة تسجيل الدخول عبر Google أو الهاتف مع المطابقة السحابية
         async function finishOAuthLogin(user, role) {
-            currentUserRole = role;
             const userName = user.displayName || user.email || user.phoneNumber || 'سائق جديد';
             const userPhone = user.phoneNumber || '';
+            const userEmail = user.email || '';
             const userPhoto = user.photoURL || '';
 
             try {
@@ -1141,7 +1141,7 @@
 
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    if ((userPhone && d.phone === userPhone) || d.name === userName) {
+                    if ((userEmail && d.email === userEmail) || (userPhone && d.phone === userPhone) || d.name === userName) {
                         existingDrv = d;
                     }
                 });
@@ -1154,6 +1154,7 @@
                     let newDrv = {
                         id: newId,
                         name: userName,
+                        email: userEmail,
                         phone: userPhone || '01000000000',
                         pin: pinInput,
                         role: role || 'سائق',
@@ -1164,6 +1165,7 @@
                     };
                     await db.collection('drivers').doc(newId).set(newDrv);
                     loggedInDriverName = userName;
+                    currentUserRole = role || 'driver';
                 } else {
                     loggedInDriverName = existingDrv.name;
                     if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد') {
@@ -1189,16 +1191,25 @@
                 
                 initRealtimeListeners();
                 render();
-                alert('تمت مزامنة رقم الهاتف وتسجيل الدخول بنجاح! 📱🚀');
             } catch (err) {
-                alert('خطأ أثناء مزامنة بيانات الحساب: ' + err.message);
+                console.error('خطأ أثناء مزامنة بيانات الحساب:', err);
             }
         }
 
+        // تم تحسين دالة تسجيل الدخول بجوجل لتستخدم Popup كخيار أول لتفادي مشاكل إعادة التوجيه
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithRedirect(provider).catch((error) => {
-                alert("فشل تسجيل الدخول بجوجل: " + error.message);
+            auth.signInWithPopup(provider).then((result) => {
+                if (result && result.user) {
+                    finishOAuthLogin(result.user, 'driver');
+                }
+            }).catch((error) => {
+                // إذا تم حظر النافذة المنبثقة يتم التحويل تلقائياً لـ Redirect
+                if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+                    auth.signInWithRedirect(provider);
+                } else {
+                    alert("فشل تسجيل الدخول بجوجل: " + error.message);
+                }
             });
         }
 
@@ -1207,15 +1218,13 @@
                 finishOAuthLogin(result.user, 'driver');
             }
         }).catch((error) => {
-            console.error("خطأ في إعادة توجيه جوجل:", error.message);
+            console.error("خطأ في إعادة توجيه جوجل:", error);
         });
 
-        // تم تحديث الدالة لتنظيف الرقم وإزالة المسافات تلقائياً لمطابقة رقم التجربة في Firebase
         function promptPhoneSignIn() {
             let rawPhone = prompt("أدخل رقم الهاتف متبوعاً برمز الدولة (مثال: +20114099799 بدون مسافات):");
             if (!rawPhone) return;
 
-            // تنظيف الرقم وإزالة المسافات والشرطات لضمان المطابقة تماماً مع رقم التجربة
             let phoneNumber = rawPhone.replace(/[\s-]/g, '').trim();
 
             if (!window.recaptchaVerifier) {
@@ -1364,14 +1373,15 @@
             });
         }
 
-        auth.onAuthStateChanged(user => {
+        // تم تحديث مراقب الجلسة ليكون أكثر مرونة وثباتاً عند العودة للموقع
+        auth.onAuthStateChanged(async user => {
             const savedRole = localStorage.getItem('current_user_role');
-            if (user || savedRole) {
+            if (user) {
+                await finishOAuthLogin(user, savedRole || 'driver');
+            } else if (savedRole) {
+                currentUserRole = savedRole;
+                loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
                 document.getElementById('lock-screen').style.display = 'none';
-                if (savedRole && !currentUserRole) {
-                    currentUserRole = savedRole;
-                    loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
-                }
                 setupNavigation();
                 if (currentUserRole === 'admin') setAdminUIMode();
                 else if (currentUserRole === 'supervisor') setSupervisorUIMode();
@@ -1381,23 +1391,6 @@
             } else {
                 document.getElementById('lock-screen').style.display = 'flex';
             }
-        });
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedRole = localStorage.getItem('current_user_role');
-            if (savedRole) {
-                currentUserRole = savedRole;
-                loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
-                document.getElementById('lock-screen').style.display = 'none';
-                document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
-                setupNavigation();
-                if (currentUserRole === 'admin') setAdminUIMode();
-                else if (currentUserRole === 'supervisor') setSupervisorUIMode();
-                else setDriverUIMode();
-                initRealtimeListeners();
-                render();
-            }
-            renderRSSTicker();
         });
 
         function updateRSSTickerText() {
