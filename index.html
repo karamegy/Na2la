@@ -306,7 +306,7 @@
     </div>
 
     <div class="news-ticker">
-        <marquee scrollamount="5" id="news-ticker-marquee">🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص واستغلال مساحتك السحابية الهائلة بكفاءة 🚀</marquee>
+        <marquee scrollamount="5" id="news-ticker-marquee">🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة والمزامنة اللحظية الشاملة 🚀</marquee>
     </div>
 
     <div id="lock-screen">
@@ -378,7 +378,6 @@
         </div>
     </div>
 
-    <!-- عنصر مخفي لتوليد تصدير الفواتير الآجلة كصورة/PDF -->
     <div id="hidden-deferred-print-area" style="display:none; background:#ffffff; color:#1e293b; padding:20px; width:450px; direction:rtl; font-family: Tahoma, sans-serif;">
         <div style="text-align:center; border-bottom:2px solid #2563eb; padding-bottom:10px; margin-bottom:12px;">
             <h2 style="color:#0f172a; font-size:14px;">🐎 أسطورة الطريق - فاتورة آجل / مستحقة</h2>
@@ -1089,7 +1088,8 @@
         }
         const db = firebase.firestore();
 
-        function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.75, callback) {
+        // ضغط شديد للصور لحماية قاعدة البيانات وتجنب تجاور حد الـ 1MB
+        function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -1162,63 +1162,53 @@
 
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
-            drivers: [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: ''}], 
-            chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [],
+            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [],
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
         };
 
-        // تحميل البيانات من مجموعات Firestore المنفصلة (Multi-Collection Architecture)
-        async function loadAllDataFromFirestore() {
-            try {
-                const [shipSnap, defSnap, conSnap, treasSnap, expSnap, drvSnap, postSnap, commSnap, chatSnap, docSnap, setSnap] = await Promise.all([
-                    db.collection('shipments').get(),
-                    db.collection('deferredInvoices').get(),
-                    db.collection('consolidatedInvoices').get(),
-                    db.collection('treasury').get(),
-                    db.collection('expenses').get(),
-                    db.collection('drivers').get(),
-                    db.collection('posts').get(),
-                    db.collection('communityPosts').get(),
-                    db.collection('chat').get(),
-                    db.collection('docs').get(),
-                    db.collection('systemSettings').doc('config').get()
-                ]);
+        // الربط بالمزامنة اللحظية مع تهيئة القاعدة الفارغة تلقائياً
+        function initRealtimeListeners() {
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+            
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot(snapshot => {
+                    appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // تهيئة حساب المدير عند فراغ قاعدة البيانات
+                    if (colName === 'drivers' && appData.drivers.length === 0) {
+                        const defaultAdmin = {
+                            id: "1",
+                            name: 'المدير',
+                            phone: '01000000000',
+                            pin: storedPin || '01036',
+                            status: 'متاح 🟢',
+                            role: 'مدير نظام',
+                            title: 'أسطورة الطريق',
+                            avatar: '',
+                            cover: ''
+                        };
+                        db.collection('drivers').doc("1").set(defaultAdmin);
+                    }
 
-                appData.shipments = shipSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.deferredInvoices = defSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.consolidatedInvoices = conSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.treasury = treasSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.expenses = expSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.drivers = drvSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.posts = postSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.communityPosts = commSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.chat = chatSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.docs = docSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    localStorage.setItem('transportAppV90', JSON.stringify(appData));
+                    render();
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
 
-                if (setSnap.exists && setSnap.data().newsText) {
-                    appData.newsText = setSnap.data().newsText;
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
                 }
-
-                if (!appData.drivers || appData.drivers.length === 0) {
-                    appData.drivers = [{id: 1, name: 'المدير', phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '', cover: ''}];
-                }
-
-                localStorage.setItem('transportAppV90', JSON.stringify(appData));
-                render();
-                updateGlobalChatNotificationBadge();
-                renderRSSTicker();
-            } catch (error) {
-                console.error("خطأ في جلب البيانات من مجموعات Firestore:", error);
-                const localData = localStorage.getItem('transportAppV90');
-                if (localData) {
-                    try { appData = JSON.parse(localData); } catch(e) {}
-                }
-                render();
-                renderRSSTicker();
-            }
+            });
         }
 
-        loadAllDataFromFirestore();
+        initRealtimeListeners();
 
         window.addEventListener('DOMContentLoaded', () => {
             if (currentUserRole) {
@@ -1382,7 +1372,7 @@
                 alert('غير مسموح لك بتعديل كلمات السر!');
                 return;
             }
-            const targetUser = (appData.drivers || []).find(d => d.id === id);
+            const targetUser = (appData.drivers || []).find(d => String(d.id) === String(id));
             if (!targetUser) return;
             
             const newPin = prompt(`أدخل رمز الدخول (PIN) الجديد للحساب (${targetUser.name}):`);
@@ -1390,7 +1380,6 @@
                 targetUser.pin = newPin;
                 db.collection('drivers').doc(String(targetUser.id)).set(targetUser);
                 alert(`تم تحديث كلمة المرور للحساب (${targetUser.name}) بنجاح! 🔐`);
-                render();
             }
         }
 
@@ -1428,7 +1417,7 @@
                 titleEl.innerText = '📦 تفاصيل الشحنات والرحلات';
                 let html = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
-                    let defBtnModal = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6; padding:2px 6px; font-size:9px;" onclick="convertToDeferred(${s.id})" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
+                    let defBtnModal = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6; padding:2px 6px; font-size:9px;" onclick="convertToDeferred('${s.id}')" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
                     html += `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td><td>${defBtnModal}</td></tr>`;
                 });
                 html += `</tbody></table></div>`;
@@ -1641,7 +1630,7 @@
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     uploadedImgBase64 = compressedUrl;
                 });
             }
@@ -1650,7 +1639,7 @@
         function handleVisitorImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     visitorImgBase64 = compressedUrl;
                 });
             }
@@ -1659,14 +1648,14 @@
         function handleDocImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 800, 0.75, (compressedUrl) => {
+                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                     input.dataset.compressedSrc = compressedUrl;
                 });
             }
         }
 
         function editTreasury(id) {
-            let t = (appData.treasury || []).find(item => item.id == id);
+            let t = (appData.treasury || []).find(item => String(item.id) === String(id));
             if(!t) return;
             let newDesc = prompt('تعديل بيان الخزينة:', t.desc);
             let newAmount = prompt('تعديل المبلغ:', t.amount);
@@ -1674,20 +1663,17 @@
                 t.desc = newDesc;
                 t.amount = Number(newAmount);
                 db.collection('treasury').doc(String(t.id)).set(t);
-                render();
             }
         }
 
         function deleteTreasury(id) {
             if(confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) {
-                appData.treasury = appData.treasury.filter(t => t.id != id);
                 db.collection('treasury').doc(String(id)).delete();
-                render();
             }
         }
 
         function editExpense(id) {
-            let e = (appData.expenses || []).find(item => item.id == id);
+            let e = (appData.expenses || []).find(item => String(item.id) === String(id));
             if(!e) return;
             let newTitle = prompt('تعديل بيان المصروف:', e.title);
             let newAmount = prompt('تعديل المبلغ:', e.amount);
@@ -1695,15 +1681,12 @@
                 e.title = newTitle;
                 e.amount = Number(newAmount);
                 db.collection('expenses').doc(String(e.id)).set(e);
-                render();
             }
         }
 
         function deleteExpense(id) {
             if(confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-                appData.expenses = appData.expenses.filter(e => e.id != id);
                 db.collection('expenses').doc(String(id)).delete();
-                render();
             }
         }
 
@@ -1729,8 +1712,9 @@
             let status = 'pending';
             if (remainingAmount <= 0) status = 'paid';
 
+            const newId = String(Date.now());
             const newInv = {
-                id: Date.now(),
+                id: newId,
                 invoiceId,
                 clientName,
                 clientPhone,
@@ -1743,14 +1727,9 @@
                 issueDate: new Date().toISOString().split('T')[0]
             };
 
-            if (!appData.deferredInvoices) appData.deferredInvoices = [];
-            appData.deferredInvoices.unshift(newInv);
-
-            db.collection('deferredInvoices').doc(String(newInv.id)).set(newInv).then(() => {
+            db.collection('deferredInvoices').doc(newId).set(newInv).then(() => {
                 document.getElementById('deferred-invoice-form').reset();
                 closeModal('addDeferredModal');
-                loadDeferredInvoicesTable();
-                render();
                 alert('تم حفظ وإضافة الفاتورة الآجلة في مجموعتها المستقلة بنجاح! ⏳🚀');
             });
         }
@@ -1760,7 +1739,7 @@
                 alert('عذراً، تحويل الشحنات إلى قسم الأجل مخصص لمدير النظام فقط.');
                 return;
             }
-            let s = (appData.shipments || []).find(item => item.id == shipmentId);
+            let s = (appData.shipments || []).find(item => String(item.id) === String(shipmentId));
             if (!s) return;
 
             document.getElementById('def-inv-code').value = `INV-${s.id}`;
@@ -1782,7 +1761,6 @@
             if (currentUserRole !== 'admin') return;
             const tableBody = document.getElementById('deferredInvoicesTableBody');
             if (!tableBody) return;
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4">جاري التحميل...</td></tr>`;
 
             let invoices = appData.deferredInvoices || [];
             const searchQuery = (document.getElementById('searchDeferredClient')?.value || '').toLowerCase();
@@ -1838,11 +1816,11 @@
                             <td>${statusBadge}</td>
                             <td>
                                 <div style="display:flex; gap:3px; flex-wrap:wrap; justify-content:center;">
-                                    <button type="button" class="btn-success btn-sm" onclick="recordDeferredPayment(${inv.id})">سداد 💵</button>
-                                    <button type="button" class="btn-main btn-sm" style="background:#25d366;" onclick="sendDeferredInvoiceWhatsApp(${inv.id})">واتساب 📱</button>
-                                    <button type="button" class="btn-warning btn-sm" onclick="exportDeferredInvoiceImage(${inv.id})">📷 صوره</button>
-                                    <button type="button" class="btn-purple btn-sm" onclick="exportDeferredInvoicePDF(${inv.id})">📄 PDF</button>
-                                    <button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice(${inv.id})">حذف</button>
+                                    <button type="button" class="btn-success btn-sm" onclick="recordDeferredPayment('${inv.id}')">سداد 💵</button>
+                                    <button type="button" class="btn-main btn-sm" style="background:#25d366;" onclick="sendDeferredInvoiceWhatsApp('${inv.id}')">واتساب 📱</button>
+                                    <button type="button" class="btn-warning btn-sm" onclick="exportDeferredInvoiceImage('${inv.id}')">📷 صوره</button>
+                                    <button type="button" class="btn-purple btn-sm" onclick="exportDeferredInvoicePDF('${inv.id}')">📄 PDF</button>
+                                    <button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice('${inv.id}')">حذف</button>
                                 </div>
                             </td>
                         </tr>
@@ -1855,8 +1833,6 @@
             if(document.getElementById('totalDeferred')) document.getElementById('totalDeferred').innerText = totalDef.toLocaleString() + " ج.م";
             if(document.getElementById('totalOverdue')) document.getElementById('totalOverdue').innerText = totalOvr.toLocaleString() + " ج.م";
             if(document.getElementById('totalCollected')) document.getElementById('totalCollected').innerText = totalCol.toLocaleString() + " ج.م";
-            
-            render();
         }
 
         function populateDeferredPrintArea(inv) {
@@ -1873,7 +1849,7 @@
         }
 
         function exportDeferredInvoiceImage(id) {
-            let inv = (appData.deferredInvoices || []).find(i => i.id == id);
+            let inv = (appData.deferredInvoices || []).find(i => String(i.id) === String(id));
             if (!inv) return;
             populateDeferredPrintArea(inv);
             const area = document.getElementById('hidden-deferred-print-area');
@@ -1893,7 +1869,7 @@
         }
 
         function exportDeferredInvoicePDF(id) {
-            let inv = (appData.deferredInvoices || []).find(i => i.id == id);
+            let inv = (appData.deferredInvoices || []).find(i => String(i.id) === String(id));
             if (!inv) return;
             populateDeferredPrintArea(inv);
             const area = document.getElementById('hidden-deferred-print-area');
@@ -1914,7 +1890,7 @@
         }
 
         function sendDeferredInvoiceWhatsApp(id) {
-            let inv = (appData.deferredInvoices || []).find(i => i.id == id);
+            let inv = (appData.deferredInvoices || []).find(i => String(i.id) === String(id));
             if (!inv) return;
             let statusText = inv.status === 'paid' ? 'مُسدد بالكامل ✅' : (inv.status === 'overdue' ? 'متأخر ومستحق ⚠️' : 'آجل معلق ⏳');
             let msg = `🧾 *تفاصيل فاتورة أسطورة الطريق (قسم الأجل)*\n` +
@@ -1936,7 +1912,7 @@
 
         function recordDeferredPayment(id) {
             if (currentUserRole !== 'admin') return;
-            let inv = (appData.deferredInvoices || []).find(i => i.id == id);
+            let inv = (appData.deferredInvoices || []).find(i => String(i.id) === String(id));
             if (!inv) return;
 
             let payAmount = prompt(`المبلغ المراد سداده للفاتورة (${inv.invoiceId}) - المتبقي: ${inv.remainingAmount} ج.م:`);
@@ -1948,7 +1924,6 @@
                     inv.status = 'paid';
                 }
                 db.collection('deferredInvoices').doc(String(inv.id)).set(inv);
-                loadDeferredInvoicesTable();
                 alert('تم تسجيل الدفع وتحديث المديونية بنجاح! 💵');
             }
         }
@@ -1959,9 +1934,7 @@
                 return;
             }
             if (confirm('هل أنت متأكد من حذف هذه الفاتورة الآجلة؟')) {
-                appData.deferredInvoices = appData.deferredInvoices.filter(i => i.id != id);
                 db.collection('deferredInvoices').doc(String(id)).delete();
-                loadDeferredInvoicesTable();
             }
         }
 
@@ -2003,14 +1976,15 @@
             let selectedShipmentIds = [];
             let totalAmount = 0;
             checkboxes.forEach(chk => {
-                let sId = Number(chk.value);
+                let sId = String(chk.value);
                 selectedShipmentIds.push(sId);
-                let found = (appData.shipments || []).find(s => s.id == sId);
+                let found = (appData.shipments || []).find(s => String(s.id) === String(sId));
                 if(found) totalAmount += Number(found.price || 0);
             });
 
+            const newId = String(Date.now());
             const newConInv = {
-                id: Date.now(),
+                id: newId,
                 client: clientName,
                 notes: notes,
                 shipmentIds: selectedShipmentIds,
@@ -2018,12 +1992,8 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            if(!appData.consolidatedInvoices) appData.consolidatedInvoices = [];
-            appData.consolidatedInvoices.unshift(newConInv);
-
-            db.collection('consolidatedInvoices').doc(String(newConInv.id)).set(newConInv).then(() => {
+            db.collection('consolidatedInvoices').doc(newId).set(newConInv).then(() => {
                 document.getElementById('consolidated-invoice-form').reset();
-                renderConsolidatedInvoicesSection();
                 alert('تم إصدار وتخزين الفاتورة المجمعة في مجموعتها المستقلة بنجاح! 📑🚀');
             });
         }
@@ -2049,8 +2019,8 @@
                     <td style="color:var(--success); font-weight:bold;">${inv.total} ج.م</td>
                     <td>${inv.date}</td>
                     <td>
-                        <button type="button" class="btn-main btn-sm" onclick="printConsolidatedInvoice(${inv.id})">🖨️ طباعة</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteConsolidatedInvoice(${inv.id})">حذف</button>
+                        <button type="button" class="btn-main btn-sm" onclick="printConsolidatedInvoice('${inv.id}')">🖨️ طباعة</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteConsolidatedInvoice('${inv.id}')">حذف</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -2059,10 +2029,10 @@
 
         function printConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
-            let inv = (appData.consolidatedInvoices || []).find(i => i.id == id);
+            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
             if(!inv) return;
 
-            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds.includes(s.id));
+            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds.includes(String(s.id)));
             let rowsHtml = '';
             matchingShipments.forEach((s, idx) => {
                 rowsHtml += `<tr><td>${idx+1}</td><td>${s.item}</td><td>${s.address}</td><td>${s.price} ج.م</td></tr>`;
@@ -2103,9 +2073,7 @@
         function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
             if(confirm('هل أنت متأكد من حذف هذه الفاتورة المجمعة؟')) {
-                appData.consolidatedInvoices = appData.consolidatedInvoices.filter(i => i.id != id);
                 db.collection('consolidatedInvoices').doc(String(id)).delete();
-                renderConsolidatedInvoicesTable();
             }
         }
 
@@ -2113,8 +2081,8 @@
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
             let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
             if (!drv) {
-                drv = { id: Date.now(), name: activeTargetName, phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'سائق', title: 'أسطورة الطريق', avatar: '', cover: '' };
-                appData.drivers.push(drv);
+                drv = { id: String(Date.now()), name: activeTargetName, phone: '01000000000', pin: storedPin, status: 'متاح 🟢', role: 'سائق', title: 'أسطورة الطريق', avatar: '', cover: '' };
+                db.collection('drivers').doc(drv.id).set(drv);
             }
 
             document.getElementById('gplus-name-display').innerText = drv.name;
@@ -2175,12 +2143,11 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 400, 400, 0.75, (compressedUrl) => {
+                compressImage(file, 300, 300, 0.5, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.avatar = compressedUrl;
                         db.collection('drivers').doc(String(drv.id)).set(drv);
-                        renderMyAccount();
                     }
                 });
             }
@@ -2189,12 +2156,11 @@
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 800, 400, 0.75, (compressedUrl) => {
+                compressImage(file, 600, 300, 0.5, (compressedUrl) => {
                     let drv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (drv) {
                         drv.cover = compressedUrl;
                         db.collection('drivers').doc(String(drv.id)).set(drv);
-                        renderMyAccount();
                     }
                 });
             }
@@ -2217,7 +2183,7 @@
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 800, 800, 0.75, (compressedUrl) => {
+                        compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                             profileWallFilesArr.push({ type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار الملفات بنجاح ✅`;
@@ -2238,7 +2204,7 @@
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
             
             let postData = {
-                id: Date.now(),
+                id: String(Date.now()),
                 profileName: activeTargetName,
                 author: loggedInDriverName,
                 text: text,
@@ -2284,7 +2250,7 @@
                       });
                   });
                   
-                  posts.sort((a, b) => b.id - a.id);
+                  posts.sort((a, b) => Number(b.id) - Number(a.id));
 
                   if(posts.length === 0) {
                       container.innerHTML = `<div class="card" style="text-align:center; opacity:0.7; font-size:11px;">لا توجد منشورات على هذا الحائط.</div>`;
@@ -2358,7 +2324,6 @@
                 loggedInDriverName = drv.name;
                 localStorage.setItem('logged_in_driver_name', loggedInDriverName);
                 db.collection('drivers').doc(String(drv.id)).set(drv);
-                renderMyAccount();
                 alert('تم تحديث بروفايلك الشخصي بنجاح! 💾');
             }
         }
@@ -2370,8 +2335,9 @@
             const item = document.getElementById('vis-item').value.trim();
             const price = Number(document.getElementById('vis-price').value);
 
+            let newId = String(Date.now());
             let newShip = {
-                id: Date.now(),
+                id: newId,
                 name: name,
                 phone: phone,
                 address: address,
@@ -2387,13 +2353,11 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            appData.shipments.unshift(newShip);
-            db.collection('shipments').doc(String(newShip.id)).set(newShip).then(() => {
+            db.collection('shipments').doc(newId).set(newShip).then(() => {
                 closeVisitorBooking();
                 alert('تم تقديم طلبك بنجاح وسيتواصل معك فريق الإدارة! 🚀');
                 document.getElementById('visitor-shipment-form').reset();
                 visitorGPS = ''; visitorImgBase64 = '';
-                render();
             });
         }
 
@@ -2402,12 +2366,12 @@
             const phone = document.getElementById('pub-drv-phone').value.trim();
             const pin = document.getElementById('pub-drv-pin').value.trim();
 
-            if(!appData.drivers) appData.drivers = [];
-            let exists = appData.drivers.find(d => d.phone === phone || d.name === name);
+            let exists = (appData.drivers || []).find(d => d.phone === phone || d.name === name);
             if(exists) { alert('هذا الحساب أو الهاتف مسجل بالفعل!'); return; }
 
+            let newId = String(Date.now());
             let newDrv = {
-                id: Date.now(),
+                id: newId,
                 name: name,
                 phone: phone,
                 pin: pin,
@@ -2418,12 +2382,10 @@
                 cover: ''
             };
 
-            appData.drivers.push(newDrv);
-            db.collection('drivers').doc(String(newDrv.id)).set(newDrv).then(() => {
+            db.collection('drivers').doc(newId).set(newDrv).then(() => {
                 closeDriverRegister();
                 alert('تم تسجيل حساب السائق بنجاح!');
                 document.getElementById('public-driver-form').reset();
-                render();
             });
         }
 
@@ -2441,65 +2403,53 @@
             const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            let shipmentObj;
+            let targetId = editId ? String(editId) : String(Date.now());
+            let existingShip = editId ? (appData.shipments || []).find(s => String(s.id) === String(editId)) : null;
 
-            if (editId) {
-                let index = appData.shipments.findIndex(s => s.id == editId);
-                if (index !== -1) {
-                    appData.shipments[index] = {
-                        ...appData.shipments[index],
-                        name, phone, address, item, price, fuelCost, extraCost, assignedDriver, paymentStatus,
-                        gps: currentGPS || appData.shipments[index].gps,
-                        img: uploadedImgBase64 || appData.shipments[index].img,
-                        sig: sigData !== '' ? sigData : appData.shipments[index].sig
-                    };
-                    shipmentObj = appData.shipments[index];
-                }
-                document.getElementById('edit-shipment-id').value = '';
-                document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة';
-            } else {
-                shipmentObj = {
-                    id: Date.now(), name, phone, address, item, price, fuelCost, extraCost,
-                    assignedDriver, paymentStatus, status: 'في الانتظار', gps: currentGPS,
-                    img: uploadedImgBase64, sig: sigData, date: new Date().toLocaleDateString('ar-EG')
+            let shipmentObj = {
+                id: targetId,
+                name, phone, address, item, price, fuelCost, extraCost,
+                assignedDriver, paymentStatus,
+                status: existingShip ? existingShip.status : 'في الانتظار',
+                gps: currentGPS || (existingShip ? existingShip.gps : ''),
+                img: uploadedImgBase64 || (existingShip ? existingShip.img : ''),
+                sig: sigData !== '' ? sigData : (existingShip ? existingShip.sig : ''),
+                date: existingShip ? existingShip.date : new Date().toLocaleDateString('ar-EG')
+            };
+
+            if (!editId && paymentStatus === 'deferred') {
+                let dueDateObj = new Date();
+                dueDateObj.setDate(dueDateObj.getDate() + 7);
+                let defId = String(Date.now() + 1);
+                let defInv = {
+                    id: defId,
+                    invoiceId: `INV-${targetId}`,
+                    clientName: name,
+                    clientPhone: phone,
+                    totalAmount: price,
+                    paidAmount: 0,
+                    remainingAmount: price,
+                    dueDate: dueDateObj.toISOString().split('T')[0],
+                    status: 'pending',
+                    notes: `توليد تلقائي من الشحنة رقم #${targetId} (${item})`,
+                    issueDate: new Date().toISOString().split('T')[0]
                 };
-                appData.shipments.unshift(shipmentObj);
-
-                if (paymentStatus === 'deferred') {
-                    if (!appData.deferredInvoices) appData.deferredInvoices = [];
-                    let dueDateObj = new Date();
-                    dueDateObj.setDate(dueDateObj.getDate() + 7);
-                    let defInv = {
-                        id: Date.now() + 1,
-                        invoiceId: `INV-${shipmentObj.id}`,
-                        clientName: name,
-                        clientPhone: phone,
-                        totalAmount: price,
-                        paidAmount: 0,
-                        remainingAmount: price,
-                        dueDate: dueDateObj.toISOString().split('T')[0],
-                        status: 'pending',
-                        notes: `توليد تلقائي من الشحنة رقم #${shipmentObj.id} (${item})`,
-                        issueDate: new Date().toISOString().split('T')[0]
-                    };
-                    appData.deferredInvoices.unshift(defInv);
-                    db.collection('deferredInvoices').doc(String(defInv.id)).set(defInv);
-                }
+                db.collection('deferredInvoices').doc(defId).set(defInv);
             }
 
-            // حفظ الشحنة في مستندها المستقل داخل مجموعة shipments
-            await db.collection('shipments').doc(String(shipmentObj.id)).set(shipmentObj);
+            await db.collection('shipments').doc(targetId).set(shipmentObj);
 
+            document.getElementById('edit-shipment-id').value = '';
+            document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة';
             document.getElementById('shipment-form').reset();
             clearSignature();
             currentGPS = ''; uploadedImgBase64 = '';
             document.getElementById('gps-status').innerText = '';
-            render();
             alert(paymentStatus === 'deferred' ? 'تم حفظ الرحلة وتوليد فاتورة آجل لها بنجاح ⏳🚀' : 'تم حفظ الرحلة (مسددة) بنجاح 💾');
         }
 
         function editShipment(id) {
-            const s = appData.shipments.find(item => item.id == id);
+            const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             document.getElementById('edit-shipment-id').value = s.id;
             document.getElementById('ship-name').value = s.name;
@@ -2518,20 +2468,17 @@
         }
 
         function updateShipmentStatus(id, newStatus) {
-            let s = appData.shipments.find(item => item.id == id);
+            let s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (s) {
                 s.status = newStatus;
                 db.collection('shipments').doc(String(s.id)).set(s);
-                render();
             }
         }
 
         function deleteShipment(id) {
             if (currentUserRole !== 'admin') { alert('صلاحية المدير فقط'); return; }
             if (confirm('هل أنت متأكد من حذف هذه الشحنة نهائياً؟')) {
-                appData.shipments = appData.shipments.filter(s => s.id != id);
                 db.collection('shipments').doc(String(id)).delete();
-                render();
             }
         }
 
@@ -2559,16 +2506,16 @@
                     <td style="font-weight:bold;">${d.name}</td>
                     <td>${d.phone}</td>
                     <td><span class="badge" style="background:var(--accent);">${d.role || 'سائق'}</span></td>
-                    <td><select onchange="updateDriverTitle(${d.id}, this.value)" style="font-size:10px; padding:3px; font-weight:bold;">${optionsTitle}</select></td>
+                    <td><select onchange="updateDriverTitle('${d.id}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">${optionsTitle}</select></td>
                     <td>
-                        <select onchange="updateDriverStatus(${d.id}, this.value)" style="font-size:10px; padding:3px;">
+                        <select onchange="updateDriverStatus('${d.id}', this.value)" style="font-size:10px; padding:3px;">
                             <option value="متاح 🟢" ${d.status === 'متاح 🟢' ? 'selected' : ''}>متاح 🟢</option>
                             <option value="في رحلة 🚛" ${d.status === 'في رحلة 🚛' ? 'selected' : ''}>في رحلة 🚛</option>
                             <option value="مشغول 🔴" ${d.status === 'مشغول 🔴' ? 'selected' : ''}>مشغول 🔴</option>
                         </select>
                     </td>
                     <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔑 PIN</button>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${d.id}')">🔑 PIN</button>
                         <button type="button" class="btn-main btn-sm" onclick="viewingProfileName='${d.name}'; switchTab('account-tab');">👁️ البروفايل</button>
                     </td>
                 `;
@@ -2577,21 +2524,19 @@
         }
 
         function updateDriverTitle(id, newTitle) {
-            let drv = (appData.drivers || []).find(d => d.id == id);
+            let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.title = newTitle;
                 db.collection('drivers').doc(String(drv.id)).set(drv);
                 alert(`تم تحديث اللقب إلى: ${newTitle} 🎖️`);
-                render();
             }
         }
 
         function updateDriverStatus(id, newStatus) {
-            let drv = (appData.drivers || []).find(d => d.id == id);
+            let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.status = newStatus;
                 db.collection('drivers').doc(String(drv.id)).set(drv);
-                render();
             }
         }
 
@@ -2605,7 +2550,7 @@
                     <td style="font-weight:bold;">${d.name}</td>
                     <td>${d.phone}</td>
                     <td>
-                        <select onchange="updateDriverRoleByAdmin(${d.id}, this.value)" style="font-size:10px; padding:3px; font-weight:bold;">
+                        <select onchange="updateDriverRoleByAdmin('${d.id}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">
                             <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق عادي</option>
                             <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                             <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
@@ -2615,8 +2560,8 @@
                     <td>${d.title || 'سائق'}</td>
                     <td><code>${d.pin || '****'}</code></td>
                     <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin(${d.id})">🔑 تغيير PIN</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount(${d.id})">🗑️ حذف</button>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${d.id}')">🔑 تغيير PIN</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount('${d.id}')">🗑️ حذف</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -2625,21 +2570,18 @@
 
         function updateDriverRoleByAdmin(id, newRole) {
             if(currentUserRole !== 'admin') { alert('صلاحية المدير فقط!'); return; }
-            let drv = (appData.drivers || []).find(d => d.id == id);
+            let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.role = newRole;
                 db.collection('drivers').doc(String(drv.id)).set(drv);
                 alert(`تم تحديث الصلاحية إلى: ${newRole}`);
-                render();
             }
         }
 
         function deleteDriverAccount(id) {
             if(currentUserRole !== 'admin') { alert('صلاحية المدير فقط!'); return; }
             if(confirm('حذف هذا الحساب نهائياً؟')) {
-                appData.drivers = appData.drivers.filter(d => d.id != id);
                 db.collection('drivers').doc(String(id)).delete();
-                render();
             }
         }
 
@@ -2650,17 +2592,17 @@
             const pin = document.getElementById('drv-pin').value.trim();
             const role = document.getElementById('drv-role-select').value;
 
-            let exists = appData.drivers.find(d => d.name === name || d.phone === phone);
+            let exists = (appData.drivers || []).find(d => d.name === name || d.phone === phone);
             if(exists) { alert('هذا الاسم أو الهاتف مسجل بالفعل!'); return; }
 
+            let newId = String(Date.now());
             let newDrv = {
-                id: Date.now(), name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
+                id: newId, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
             };
-            appData.drivers.push(newDrv);
-            db.collection('drivers').doc(String(newDrv.id)).set(newDrv).then(() => {
+            
+            db.collection('drivers').doc(newId).set(newDrv).then(() => {
                 document.getElementById('driver-profile-form').reset();
                 alert('تم إضافة الحساب بنجاح! 🚀');
-                render();
             });
         }
 
@@ -2694,10 +2636,9 @@
             let total = imgFiles.length + videoFiles.length;
 
             const saveToFirestore = (arr) => {
-                let newPost = { id: Date.now(), title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
-                appData.posts.unshift(newPost);
-                db.collection('posts').doc(String(newPost.id)).set(newPost).then(() => {
-                    renderPublicPosts(); 
+                let newId = String(Date.now());
+                let newPost = { id: newId, title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
+                db.collection('posts').doc(newId).set(newPost).then(() => {
                     document.getElementById('public-post-form').reset();
                     alert('تم النشر في لوحة الإعلانات بنجاح! 🚀');
                 });
@@ -2706,7 +2647,7 @@
             if (total === 0) { saveToFirestore([]); return; }
 
             for (let i = 0; i < imgFiles.length; i++) {
-                compressImage(imgFiles[i], 800, 800, 0.75, (compressedUrl) => {
+                compressImage(imgFiles[i], 500, 500, 0.5, (compressedUrl) => {
                     mediaArr.push({ type: 'image', src: compressedUrl });
                     loaded++; 
                     if(loaded === total) saveToFirestore(mediaArr);
@@ -2743,7 +2684,7 @@
                     mediaHtml += `</div>`;
                 }
 
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost(${p.id})">حذف</button>` : '';
+                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost('${p.id}')">حذف</button>` : '';
 
                 let card = document.createElement('div');
                 card.className = 'load-post-card';
@@ -2765,9 +2706,7 @@
 
         function deletePublicPost(id) {
             if (confirm('حذف هذا المنشور؟')) {
-                appData.posts = appData.posts.filter(p => p.id != id);
                 db.collection('posts').doc(String(id)).delete();
-                renderPublicPosts();
             }
         }
 
@@ -2802,20 +2741,17 @@
             const msgText = input.value.trim();
             if(!msgText) return;
 
+            let newId = String(Date.now());
             let newMsg = {
-                id: Date.now(),
+                id: newId,
                 sender: loggedInDriverName,
                 target: currentChatTarget,
                 text: msgText,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            if(!appData.chat) appData.chat = [];
-            appData.chat.push(newMsg);
-            db.collection('chat').doc(String(newMsg.id)).set(newMsg);
-
+            db.collection('chat').doc(newId).set(newMsg);
             input.value = '';
-            renderChatMessages();
         }
 
         function renderChatMessages() {
@@ -2875,21 +2811,18 @@
             const text = input.value.trim();
             if(!text) return;
 
+            let newId = String(Date.now());
             let newMsg = {
-                id: Date.now(),
+                id: newId,
                 sender: loggedInDriverName,
                 target: currentChatTarget || 'general',
                 text: text,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            if(!appData.chat) appData.chat = [];
-            appData.chat.push(newMsg);
-            db.collection('chat').doc(String(newMsg.id)).set(newMsg);
-
+            db.collection('chat').doc(newId).set(newMsg);
             input.value = '';
             alert('تم إرسال الرد بنجاح! ✈️');
-            renderChatNotificationsInbox();
         }
 
         function previewCommunityFiles(input) {
@@ -2901,7 +2834,7 @@
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 800, 800, 0.75, (compressedUrl) => {
+                        compressImage(file, 500, 500, 0.5, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
@@ -2931,8 +2864,9 @@
             const text = document.getElementById('community-post-text').value.trim();
             if(!text && communityFilesArr.length === 0) { alert('الرجاء كتابة نص أو إرفاق ملفات!'); return; }
 
+            let newId = String(Date.now());
             let newCommunityPost = {
-                id: Date.now(),
+                id: newId,
                 author: loggedInDriverName,
                 text: text,
                 files: [...communityFilesArr],
@@ -2941,14 +2875,10 @@
                 date: new Date().toLocaleString('ar-EG')
             };
 
-            if(!appData.communityPosts) appData.communityPosts = [];
-            appData.communityPosts.unshift(newCommunityPost);
-
-            db.collection('communityPosts').doc(String(newCommunityPost.id)).set(newCommunityPost).then(() => {
+            db.collection('communityPosts').doc(newId).set(newCommunityPost).then(() => {
                 document.getElementById('community-post-text').value = '';
                 communityFilesArr = [];
                 document.getElementById('community-files-preview-info').innerText = '';
-                renderCommunityPosts();
                 alert('تم النشر في المجتمع بنجاح! 🚀');
             });
         }
@@ -2976,7 +2906,7 @@
                     mediaHtml += `</div>`;
                 }
 
-                let deleteBtn = (currentUserRole === 'admin' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deleteCommunityPost(${p.id})">حذف</button>` : '';
+                let deleteBtn = (currentUserRole === 'admin' || p.author === loggedInDriverName) ? `<button type="button" class="btn-danger btn-sm" onclick="deleteCommunityPost('${p.id}')">حذف</button>` : '';
 
                 let card = document.createElement('div');
                 card.className = 'community-feed-card';
@@ -2988,7 +2918,7 @@
                     <p style="font-size:11px; line-height:1.4;">${p.text}</p>
                     ${mediaHtml}
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid var(--border-color); padding-top:6px;">
-                        <button type="button" class="btn-sm" style="background:var(--bg); border:1px solid var(--border-color); color:var(--text-color);" onclick="likeCommunityPost(${p.id})">👍 إعجاب (${p.likes || 0})</button>
+                        <button type="button" class="btn-sm" style="background:var(--bg); border:1px solid var(--border-color); color:var(--text-color);" onclick="likeCommunityPost('${p.id}')">👍 إعجاب (${p.likes || 0})</button>
                         ${deleteBtn}
                     </div>
                 `;
@@ -2997,19 +2927,16 @@
         }
 
         function likeCommunityPost(id) {
-            let p = (appData.communityPosts || []).find(post => post.id == id);
+            let p = (appData.communityPosts || []).find(post => String(post.id) === String(id));
             if(p) {
                 p.likes = (p.likes || 0) + 1;
                 db.collection('communityPosts').doc(String(p.id)).set(p);
-                renderCommunityPosts();
             }
         }
 
         function deleteCommunityPost(id) {
             if(confirm('حذف المنشور؟')) {
-                appData.communityPosts = appData.communityPosts.filter(p => p.id != id);
                 db.collection('communityPosts').doc(String(id)).delete();
-                renderCommunityPosts();
             }
         }
 
@@ -3020,13 +2947,11 @@
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
-            let newCash = { id: Date.now(), type, amount, desc, date: new Date().toLocaleString('ar-EG') };
-            if(!appData.treasury) appData.treasury = [];
-            appData.treasury.unshift(newCash);
+            let newId = String(Date.now());
+            let newCash = { id: newId, type, amount, desc, date: new Date().toLocaleString('ar-EG') };
 
-            db.collection('treasury').doc(String(newCash.id)).set(newCash).then(() => {
+            db.collection('treasury').doc(newId).set(newCash).then(() => {
                 document.getElementById('cash-form').reset();
-                render();
                 alert('تم تسجيل الحركة بالخزينة في مجموعتها المستقلة بنجاح! 💵');
             });
         }
@@ -3038,13 +2963,11 @@
             const nextOil = Number(document.getElementById('truck-next-oil').value);
             const expiry = document.getElementById('truck-expiry').value;
 
-            let newTruck = { id: Date.now(), num, driver, km, nextOil, expiry };
-            if(!appData.trucks) appData.trucks = [];
-            appData.trucks.unshift(newTruck);
+            let newId = String(Date.now());
+            let newTruck = { id: newId, num, driver, km, nextOil, expiry };
 
-            db.collection('trucks').doc(String(newTruck.id)).set(newTruck).then(() => {
+            db.collection('trucks').doc(newId).set(newTruck).then(() => {
                 document.getElementById('truck-form').reset();
-                render();
                 alert('تم حفظ بيانات المركبة بنجاح! 🚚');
             });
         }
@@ -3057,13 +2980,11 @@
                 alert('الرجاء الانتظار قليلاً حتى يتم ضغط المستند!');
                 return;
             }
-            let newDoc = { id: Date.now(), title, src: compressedSrc };
-            if(!appData.docs) appData.docs = [];
-            appData.docs.unshift(newDoc);
+            let newId = String(Date.now());
+            let newDoc = { id: newId, title, src: compressedSrc };
 
-            db.collection('docs').doc(String(newDoc.id)).set(newDoc).then(() => {
+            db.collection('docs').doc(newId).set(newDoc).then(() => {
                 document.getElementById('doc-form').reset();
-                renderDocsList();
                 alert('تم حفظ المستند في مجموعة الوثائق بنجاح! 📂');
             });
         }
@@ -3079,7 +3000,7 @@
                     <span>📄 ${d.title}</span>
                     <div>
                         <button type="button" class="btn-main btn-sm" onclick="viewMedia('${d.src}', 'image')">معاينة</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteDoc(${d.id})">حذف</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteDoc('${d.id}')">حذف</button>
                     </div>
                 `;
                 container.appendChild(div);
@@ -3088,9 +3009,7 @@
 
         function deleteDoc(id) {
             if(confirm('حذف المستند؟')) {
-                appData.docs = appData.docs.filter(d => d.id != id);
                 db.collection('docs').doc(String(id)).delete();
-                renderDocsList();
             }
         }
 
@@ -3098,13 +3017,11 @@
             const title = document.getElementById('exp-title').value.trim();
             const amount = Number(document.getElementById('exp-amount').value);
 
-            let newExp = { id: Date.now(), title, amount, date: new Date().toLocaleDateString('ar-EG') };
-            if(!appData.expenses) appData.expenses = [];
-            appData.expenses.unshift(newExp);
+            let newId = String(Date.now());
+            let newExp = { id: newId, title, amount, date: new Date().toLocaleDateString('ar-EG') };
 
-            db.collection('expenses').doc(String(newExp.id)).set(newExp).then(() => {
+            db.collection('expenses').doc(newId).set(newExp).then(() => {
                 document.getElementById('expense-form').reset();
-                render();
                 alert('تم تسجيل المصروف بنجاح! ⛽');
             });
         }
@@ -3116,7 +3033,6 @@
             if (pay && !isNaN(pay)) {
                 cust.debt = Math.max(0, Number(cust.debt) - Number(pay));
                 db.collection('customers').doc(String(cust.id || cust.name)).set(cust);
-                render();
             }
         }
 
@@ -3132,7 +3048,7 @@
                 headersRow.innerHTML = `<th>#</th><th>العميل</th><th>الحمولة</th><th>الأجرة وسداد</th><th>السائق</th><th>الحالة</th><th>إجراءات</th>`;
                 (appData.shipments || []).forEach((s, idx) => {
                     let tr = document.createElement('tr');
-                    let deferredBtnCRUD = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred(${s.id})" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
+                    let deferredBtnCRUD = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred('${s.id}')" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
                     let payBadge = s.paymentStatus === 'deferred' ? `<span class="badge" style="background:#f59e0b;">آجل</span>` : `<span class="badge" style="background:#10b981;">مسدد</span>`;
                     tr.innerHTML = `
                         <td>${idx + 1}</td>
@@ -3142,9 +3058,9 @@
                         <td>${s.assignedDriver || 'عام'}</td>
                         <td>${s.status}</td>
                         <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id}); switchTab('shipments-tab');">تعديل</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editShipment('${s.id}'); switchTab('shipments-tab');">تعديل</button>
                             ${deferredBtnCRUD}
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">حذف</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteShipment('${s.id}')">حذف</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -3160,8 +3076,8 @@
                         <td>${t.desc}</td>
                         <td>${t.date}</td>
                         <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury(${t.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury(${t.id})">حذف</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury('${t.id}')">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury('${t.id}')">حذف</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -3176,8 +3092,8 @@
                         <td>${e.amount} ج.م</td>
                         <td>${e.date}</td>
                         <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense('${e.id}')">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense('${e.id}')">حذف</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -3229,7 +3145,7 @@
                     let payBadge = s.paymentStatus === 'deferred' ? `<span class="badge" style="background:#f59e0b;">آجل ⏳</span>` : `<span class="badge" style="background:#10b981;">مسدد ✅</span>`;
 
                     let tr = document.createElement('tr');
-                    let deferredBtn = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred(${s.id})" title="تحويل الفاتورة إلى قسم الأجل">⏳ أجل</button>` : '';
+                    let deferredBtn = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred('${s.id}')" title="تحويل الفاتورة إلى قسم الأجل">⏳ أجل</button>` : '';
 
                     tr.innerHTML = `
                         <td style="font-weight:bold;">${s.name}</td>
@@ -3238,17 +3154,17 @@
                         <td>${s.price} ج.م<br>${payBadge}</td>
                         <td style="color:var(--success); font-weight:bold;">${net} ج.م</td>
                         <td>
-                            <select onchange="updateShipmentStatus(${s.id}, this.value)" class="badge ${badgeClass}" style="border:none;">
+                            <select onchange="updateShipmentStatus('${s.id}', this.value)" class="badge ${badgeClass}" style="border:none;">
                                 <option value="في الانتظار" ${s.status === 'في الانتظار' ? 'selected' : ''}>في الانتظار</option>
                                 <option value="في الطريق" ${s.status === 'في الطريق' ? 'selected' : ''}>في الطريق</option>
                                 <option value="مكتملة" ${s.status === 'مكتملة' ? 'selected' : ''}>مكتملة</option>
                             </select>
                         </td>
                         <td>
-                            <button type="button" class="btn-main btn-sm" onclick="showQR(${s.id})">📱 QR</button>
-                            <button type="button" class="btn-warning btn-sm" onclick="editShipment(${s.id})">✏️</button>
+                            <button type="button" class="btn-main btn-sm" onclick="showQR('${s.id}')">📱 QR</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editShipment('${s.id}')">✏️</button>
                             ${deferredBtn}
-                            ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment(${s.id})">🗑️</button>` : ''}
+                            ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment('${s.id}')">🗑️</button>` : ''}
                         </td>
                     `;
                     list.appendChild(tr);
@@ -3266,8 +3182,8 @@
                         <td>${t.desc}</td>
                         <td>${t.date}</td>
                         <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury(${t.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury(${t.id})">حذف</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editTreasury('${t.id}')">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury('${t.id}')">حذف</button>
                         </td>
                     `;
                     treasuryList.appendChild(tr);
@@ -3300,8 +3216,8 @@
                         <td>${e.amount} ج.م</td>
                         <td>${e.date}</td>
                         <td>
-                            <button type="button" class="btn-warning btn-sm" onclick="editExpense(${e.id})">تعديل</button>
-                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense(${e.id})">حذف</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="editExpense('${e.id}')">تعديل</button>
+                            <button type="button" class="btn-danger btn-sm" onclick="deleteExpense('${e.id}')">حذف</button>
                         </td>
                     `;
                     expList.appendChild(tr);
@@ -3327,7 +3243,7 @@
         }
 
         function showQR(id) {
-            const s = appData.shipments.find(item => item.id == id);
+            const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
@@ -3356,7 +3272,7 @@
 
         function renderSelectedInvoice() {
             const id = document.getElementById('invoice-select')?.value;
-            const s = (appData.shipments || []).find(item => item.id == id);
+            const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
             document.getElementById('inv-id').innerText = s.id;
@@ -3376,7 +3292,7 @@
 
         function openInvoiceStandalone() {
             const id = document.getElementById('invoice-select').value;
-            const s = appData.shipments.find(item => item.id == id);
+            const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
             const win = window.open('', '_blank');
@@ -3424,15 +3340,15 @@
 
         function sendInvoiceWhatsApp() {
             const id = document.getElementById('invoice-select').value;
-            const s = appData.shipments.find(item => item.id == id);
+            const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const msg = `🧾 *فاتورة شحنة - أسطورة الطريق*\n*العميل:* ${s.name}\n*الحمولة:* ${s.item}\n*الأجرة:* ${s.price} ج.م\n*السداد:* ${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'}`;
             window.open(`https://wa.me/${s.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
         function sendDailySummaryWhatsApp() {
-            let totalRev = appData.shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
-            let msg = `📊 *التقرير اليومي لأسطورة الطريق*\nعدد الشحنات: ${appData.shipments.length}\nالإيرادات: ${totalRev} ج.م`;
+            let totalRev = (appData.shipments || []).reduce((sum, s) => sum + Number(s.price || 0), 0);
+            let msg = `📊 *التقرير اليومي لأسطورة الطريق*\nعدد الشحنات: ${(appData.shipments || []).length}\nالإيرادات: ${totalRev} ج.م`;
             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         }
 
