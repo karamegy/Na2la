@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مجتمع نقلة (Na2la)</title>
+    <title>مجتمع نقلة (Na2la) - V52 PRO</title>
     <style>
         :root {
             --primary-color: #2563eb;
@@ -674,14 +674,14 @@
         <div class="admin-fullscreen-card" id="adminPanelCard">
             <div class="admin-fullscreen-header">
                 <h3 style="color: #38bdf8; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; margin:0;">
-                    <span>🛡️ لوحة إدارة النظام والتحكم الموسعة (المدير)</span>
+                    <span>🛡️ لوحة إدارة النظام والتحكم الموسعة (Auth Active)</span>
                 </h3>
                 <button class="bottom-sheet-close" onclick="closeAdminPanelDirect()">✕</button>
             </div>
             
             <div class="admin-fullscreen-body">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <span id="dbStatusIndicator" style="font-size: 0.8rem; color: #22c55e;">● متصل بقاعدة البيانات الآمنة (Firestore)</span>
+                    <span id="dbStatusIndicator" style="font-size: 0.8rem; color: #22c55e;">● متصل سحابياً بقاعدة البيانات الآمنة (Auth & Firestore)</span>
                 </div>
 
                 <div class="admin-stats-grid">
@@ -789,16 +789,18 @@
 
     </div>
 
+    <!-- سكريبت Firebase والمصادقة التلقائية -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { 
             getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, 
             query, orderBy, onSnapshot, setDoc, getDoc, where 
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -809,25 +811,24 @@
 
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
         window.db = db;
 
-        // إدارة الحساب الحالي والتسجيل التلقائي في قاعدة البيانات
+        // إدارة الحساب الحالي والتسجيل التلقائي في قاعدة البيانات بعد المصادقة السحابية
         window.currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user_haretg')) || {
             name: "عماد",
-            details: "سياىرة ربع نقل - تجهيز حبال",
+            details: "سيارة ربع نقل - تجهيز حبال",
             badge: "أسطورة الطريق",
             isAdmin: true,
             avatar: ""
         };
 
-        // دالة لضمان مزامنة الحسابات الأساسية المسجلة (مثل عماد، Abdo، Ahmed) في سحابة Firestore فوراً
         async function registerUserAutomaticallyInCloud() {
             try {
-                // قائمة الحسابات الافتراضية والمسجلة في النظام
                 const defaultAccounts = [
-                    { name: "عماد", role: "مدير نظام", badge: "أسطورة الطريق", details: "سياىرة ربع نقل - تجهيز حبال", isAdmin: true, avatar: "" },
+                    { name: "عماد", role: "مدير نظام", badge: "أسطورة الطريق", details: "سيارة ربع نقل - تجهيز حبال", isAdmin: true, avatar: "" },
                     { name: "Abdo", role: "سائق", badge: "سائق العام الذهبي", details: "سائق معتمد", isAdmin: false, avatar: "" },
                     { name: "Ahmed", role: "سائق", badge: "سائق معتمد", details: "سائق معتمد", isAdmin: false, avatar: "" }
                 ];
@@ -848,7 +849,6 @@
                     }
                 }
 
-                // تسجيل الحساب الحالي المختار
                 const currentRef = doc(db, "platform_users", window.currentAccount.name);
                 const currentSnap = await getDoc(currentRef);
                 if (!currentSnap.exists()) {
@@ -868,6 +868,20 @@
             }
         }
 
+        // المصادقة التلقائية لضمان عمل كافة القواعد سحابياً دون خطأ Permission Denied
+        signInAnonymously(auth).then(() => {
+            console.log("✅ تم المصادقة سحابياً بنجاح في driver-profile.html");
+            registerUserAutomaticallyInCloud().then(() => {
+                window.updateAccountUI();
+                initRealtimePlatformUsers();
+                initRealtimeFeed();
+            });
+        }).catch((err) => {
+            console.error("⚠️ خطأ في المصادقة السحابية:", err);
+        });
+    </script>
+
+    <script>
         window.toggleAdminPanel = function() {
             const modal = document.getElementById('adminPanelModal');
             modal.style.display = 'flex';
@@ -963,7 +977,7 @@
             const newBadge = document.getElementById('editMemberBadgeInput').value.trim();
             const newRole = document.getElementById('editMemberRoleInput').value.trim();
             try {
-                const userRef = doc(db, "platform_users", memberName);
+                const userRef = doc(window.db, "platform_users", memberName);
                 await updateDoc(userRef, { badge: newBadge, role: newRole });
                 alert(`✔ تم تحديث ألقاب وصلاحيات "${memberName}" بنجاح سحابياً!`);
                 closeBottomSheetDirect();
@@ -1000,7 +1014,7 @@
                 </div>
             `;
 
-            const q = query(collection(db, "private_chats"), where("chatId", "==", chatId), orderBy("timestamp", "asc"));
+            const q = query(collection(window.db, "private_chats"), where("chatId", "==", chatId), orderBy("timestamp", "asc"));
             onSnapshot(q, (snapshot) => {
                 let msgs = [];
                 snapshot.forEach(doc => msgs.push(doc.data()));
@@ -1024,7 +1038,7 @@
             const text = input.value.trim();
             if(!text) return;
             try {
-                await addDoc(collection(db, "private_chats"), {
+                await addDoc(collection(window.db, "private_chats"), {
                     chatId: chatId,
                     sender: window.currentAccount.name,
                     receiver: receiver,
@@ -1114,7 +1128,7 @@
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = async function(e) {
-                    await setDoc(doc(db, "community_settings", "logo"), { url: e.target.result });
+                    await setDoc(doc(window.db, "community_settings", "logo"), { url: e.target.result });
                     document.getElementById('headerLogoImg').src = e.target.result;
                     alert("✔ تم تحديث شعار التطبيق بنجاح!");
                 };
@@ -1124,7 +1138,7 @@
 
         async function loadGlobalLogoFromCloud() {
             try {
-                const docSnap = await getDoc(doc(db, "community_settings", "logo"));
+                const docSnap = await getDoc(doc(window.db, "community_settings", "logo"));
                 if(docSnap.exists() && docSnap.data().url) document.getElementById('headerLogoImg').src = docSnap.data().url;
             } catch(e) {}
         }
@@ -1149,7 +1163,7 @@
 
         async function loadCommunityCoverFromCloud() {
             try {
-                const docSnap = await getDoc(doc(db, "community_settings", "cover"));
+                const docSnap = await getDoc(doc(window.db, "community_settings", "cover"));
                 const coverArea = document.getElementById('communityCoverArea');
                 if (coverArea && docSnap.exists() && docSnap.data().url) coverArea.style.backgroundImage = `url('${docSnap.data().url}')`;
             } catch (e) {}
@@ -1159,7 +1173,7 @@
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = async function(e) {
-                    await setDoc(doc(db, "community_settings", "cover"), { url: e.target.result });
+                    await setDoc(doc(window.db, "community_settings", "cover"), { url: e.target.result });
                     document.getElementById('communityCoverArea').style.backgroundImage = `url('${e.target.result}')`;
                     alert("✔ تم تحديث الغلاف بنجاح!");
                 };
@@ -1167,10 +1181,9 @@
             }
         }
 
-        // جلب وعرض الأعضاء المسجلين تلقائياً في لوحة الإدارة بشكل لحظي من Firestore
         let allCloudUsers = [];
         function initRealtimePlatformUsers() {
-            onSnapshot(collection(db, "platform_users"), (snapshot) => {
+            onSnapshot(collection(window.db, "platform_users"), (snapshot) => {
                 allCloudUsers = [];
                 snapshot.forEach(doc => {
                     allCloudUsers.push(doc.data());
@@ -1214,7 +1227,7 @@
 
         window.refreshAdminStats = async function() {
             try {
-                const querySnapshot = await getDocs(collection(db, "community_posts"));
+                const querySnapshot = await getDocs(collection(window.db, "community_posts"));
                 document.getElementById('adminTotalPosts').innerText = querySnapshot.size;
             } catch(e) {
                 document.getElementById('adminTotalPosts').innerText = "0";
@@ -1234,7 +1247,7 @@
             
             localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
             
-            await setDoc(doc(db, "platform_users", window.currentAccount.name), {
+            await setDoc(doc(window.db, "platform_users", window.currentAccount.name), {
                 name: window.currentAccount.name,
                 role: window.currentAccount.isAdmin ? "مدير نظام" : "سائق",
                 badge: window.currentAccount.badge,
@@ -1249,8 +1262,8 @@
 
         window.clearAllCommunityDataFromCloud = async function() {
             if(confirm("هل تريد حذف جميع منشورات الجروب؟")) {
-                const querySnapshot = await getDocs(collection(db, "community_posts"));
-                await Promise.all(querySnapshot.docs.map(d => deleteDoc(doc(db, "community_posts", d.id))));
+                const querySnapshot = await getDocs(collection(window.db, "community_posts"));
+                await Promise.all(querySnapshot.docs.map(d => deleteDoc(doc(window.db, "community_posts", d.id))));
                 window.refreshAdminStats();
                 alert("تم المسح بنجاح.");
             }
@@ -1270,7 +1283,7 @@
         }
 
         async function savePostToCloud(text, imgData) {
-            await addDoc(collection(db, "community_posts"), {
+            await addDoc(collection(window.db, "community_posts"), {
                 author: window.currentAccount.name,
                 badge: window.currentAccount.badge || 'سائق معتمد',
                 avatar: window.currentAccount.avatar || '',
@@ -1289,7 +1302,7 @@
         }
 
         window.toggleLike = async function(postId, likesCount, likedByArray) {
-            const postRef = doc(db, "community_posts", postId);
+            const postRef = doc(window.db, "community_posts", postId);
             let likedBy = likedByArray || [];
             let isLiked = likedBy.includes(window.currentAccount.name);
             if (isLiked) {
@@ -1312,14 +1325,14 @@
             if(!input || !input.value.trim()) return;
             let comments = existingComments || [];
             comments.push({ author: window.currentAccount.name, text: input.value.trim(), time: "الآن" });
-            await updateDoc(doc(db, "community_posts", postId), { comments: comments });
+            await updateDoc(doc(window.db, "community_posts", postId), { comments: comments });
             input.value = "";
         }
 
         function initRealtimeFeed() {
             const container = document.getElementById('groupFeedStream');
             if(!container) return;
-            onSnapshot(query(collection(db, "community_posts"), orderBy("timestamp", "desc")), (snapshot) => {
+            onSnapshot(query(collection(window.db, "community_posts"), orderBy("timestamp", "desc")), (snapshot) => {
                 let posts = [];
                 snapshot.forEach(d => posts.push({ id: d.id, ...d.data() }));
                 if (posts.length === 0) {
@@ -1359,13 +1372,6 @@
                 }).join('');
             });
         }
-
-        window.onload = async function() {
-            await registerUserAutomaticallyInCloud();
-            window.updateAccountUI();
-            initRealtimePlatformUsers();
-            initRealtimeFeed();
-        };
     </script>
 </body>
 </html>
