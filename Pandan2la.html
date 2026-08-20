@@ -138,7 +138,7 @@
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
         <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.7 PRO SYNC)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً لحظياً عبر Firestore (appStore/mainState)</p>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">متصل بالمنصة الأم سحابياً عبر مجموعات Firestore المستقلة</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;" value="01036">
         
@@ -212,7 +212,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع غرفة باندا العليا عبر Firestore...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع غرفة باندا العليا عبر المجموعات المستقلة...</span>
                 </div>
             </div>
         </div>
@@ -393,7 +393,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت إعدادات ومزامنة Firebase وحفظ الشحنات وصور الحائط -->
+<!-- سكريبت إعدادات ومزامنة Firebase باستخدام المعمارية الجديدة (المجموعات المستقلة) -->
 <script>
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -413,7 +413,7 @@
 
     window._isSavingLocally = false;
 
-    // دالة ضغط الصور لتجنب تجاوز حد 1 ميجابايت لمستند Firestore
+    // دالة ضغط الصور لتجنب تجاوز حد 1 ميجابايت
     function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7, callback) {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -524,69 +524,62 @@
     }
     window.getAllShipments = getAllShipments;
 
-    function getStoredLocalData() {
-        const keys = ['transportAppV89', 'transportAppV88', 'transportAppV87', 'transportApp'];
-        for (let k of keys) {
-            let dataStr = localStorage.getItem(k);
-            if (dataStr) {
-                try {
-                    let parsed = JSON.parse(dataStr);
-                    if (parsed) return parsed;
-                } catch(e) {}
-            }
+    // الاستماع الفوري للتحديثات من المجموعات المستقلة في Firestore (بدون تضخم المستند الواحد)
+    async function loadAllDataFromFirestoreMultiCollection() {
+        try {
+            db.collection("shipments").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                appData.docs = appData.shipments;
+                window.appData = appData;
+                if(typeof renderStats === 'function') renderStats();
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+            });
+
+            db.collection("deferredInvoices").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.deferredInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appData = appData;
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+            });
+
+            db.collection("treasury").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.treasury = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appData = appData;
+                if(typeof renderStats === 'function') renderStats();
+            });
+
+            db.collection("expenses").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appData = appData;
+                if(typeof renderStats === 'function') renderStats();
+            });
+
+            db.collection("drivers").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appData = appData;
+            });
+
+            db.collection("consolidatedInvoices").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.consolidatedInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appData = appData;
+            });
+
+            db.collection("posts").onSnapshot((snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                appData.wallPosts = appData.posts;
+                window.appData = appData;
+            });
+
+        } catch (error) {
+            console.error("خطأ في مزامنة المجموعات المستقلة:", error);
         }
-        return null;
     }
-
-    // الاستماع الفوري للتحديثات من Firestore (مجموعة appStore مستند mainState)
-    db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
-        if (window._isSavingLocally) return;
-
-        let remoteData = docSnap.exists ? docSnap.data() : null;
-        let localData = getStoredLocalData();
-
-        let remoteDocs = remoteData?.docs || [];
-        let remoteShipments = remoteData?.shipments || [];
-        let localDocs = localData?.docs || [];
-        let localShipments = localData?.shipments || [];
-
-        let allRawShipments = [...remoteDocs, ...remoteShipments, ...localDocs, ...localShipments];
-        let uniqueShipmentsMap = new Map();
-        allRawShipments.forEach(item => {
-            if (item && (item.name || item.item)) {
-                let key = item.id || `${item.name}_${item.item}_${item.price}`;
-                uniqueShipmentsMap.set(key, item);
-            }
-        });
-        let rawShipments = Array.from(uniqueShipmentsMap.values());
-
-        appData = {
-            shipments: rawShipments,
-            docs: rawShipments,
-            consolidatedInvoices: remoteData?.consolidatedInvoices || localData?.consolidatedInvoices || defaultInitialData.consolidatedInvoices,
-            deferredInvoices: remoteData?.deferredInvoices || localData?.deferredInvoices || defaultInitialData.deferredInvoices,
-            treasury: remoteData?.treasury || localData?.treasury || defaultInitialData.treasury,
-            expenses: remoteData?.expenses || localData?.expenses || defaultInitialData.expenses,
-            customers: remoteData?.customers || localData?.customers || defaultInitialData.customers,
-            drivers: remoteData?.drivers || localData?.drivers || defaultInitialData.drivers,
-            communityPosts: remoteData?.communityPosts || remoteData?.posts || remoteData?.wallPosts || localData?.communityPosts || defaultInitialData.communityPosts,
-            posts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
-            wallPosts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
-            trucks: remoteData?.trucks || localData?.trucks || defaultInitialData.trucks,
-            maintenanceLogs: remoteData?.maintenanceLogs || localData?.maintenanceLogs || defaultInitialData.maintenanceLogs,
-            chat: appData.chat || [],
-            centralBroadcasts: remoteData?.centralBroadcasts || localData?.centralBroadcasts || defaultInitialData.centralBroadcasts,
-            auditLogs: remoteData?.auditLogs || localData?.auditLogs || defaultInitialData.auditLogs,
-            files: remoteData?.files || localData?.files || []
-        };
-        
-        window.appData = appData;
-        localStorage.setItem('transportAppV89', JSON.stringify(appData));
-
-        if(typeof renderStats === 'function') renderStats();
-        if(typeof refreshActiveSection === 'function') refreshActiveSection();
-        if(typeof updateRSSTicker === 'function') updateRSSTicker();
-    });
 
     function initChatRealtimeListener() {
         db.collection("chatMessages").orderBy("createdAt", "asc").limitToLast(50).onSnapshot((snapshot) => {
@@ -604,42 +597,56 @@
         });
     }
 
-    // دالة الحفظ المركزية لكل البيانات سحابياً لضمان عدم ضياع الشحنات
+    // دالة الحفظ المركزية المحدثة لتخزين كل قسم في مجموعته المستقلة الخاصة به
     window.saveDataAll = function() {
-        let unifiedShipments = getAllShipments(appData);
-        appData.docs = unifiedShipments;
-        appData.shipments = unifiedShipments;
-        appData.wallPosts = appData.posts;
-        
-        if (appData.auditLogs && appData.auditLogs.length > 20) {
-            appData.auditLogs = appData.auditLogs.slice(0, 20);
+        window._isSavingLocally = true;
+
+        if (appData.shipments) {
+            appData.shipments.forEach(s => {
+                if (s.id) {
+                    db.collection('shipments').doc(String(s.id)).set(s, { merge: true }).catch(err => console.error(err));
+                }
+            });
         }
-        if (appData.communityPosts && appData.communityPosts.length > 15) {
-            appData.communityPosts = appData.communityPosts.slice(0, 15);
+
+        if (appData.deferredInvoices) {
+            appData.deferredInvoices.forEach(d => {
+                if (d.id) {
+                    db.collection('deferredInvoices').doc(String(d.id)).set(d, { merge: true }).catch(err => console.error(err));
+                }
+            });
+        }
+
+        if (appData.treasury) {
+            appData.treasury.forEach(t => {
+                if (t.id) {
+                    db.collection('treasury').doc(String(t.id)).set(t, { merge: true }).catch(err => console.error(err));
+                }
+            });
+        }
+
+        if (appData.expenses) {
+            appData.expenses.forEach(ex => {
+                if (ex.id) {
+                    db.collection('expenses').doc(String(ex.id)).set(ex, { merge: true }).catch(err => console.error(err));
+                }
+            });
+        }
+
+        if (appData.drivers) {
+            appData.drivers.forEach(drv => {
+                if (drv.id) {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).catch(err => console.error(err));
+                }
+            });
         }
 
         localStorage.setItem('transportAppV89', JSON.stringify(appData));
-        window._isSavingLocally = true;
+        setTimeout(() => { window._isSavingLocally = false; }, 1000);
 
-        const stateToSave = { ...appData };
-        delete stateToSave.chat;
-
-        db.collection("appStore").doc("mainState").set({
-            ...stateToSave,
-            docs: unifiedShipments,
-            shipments: unifiedShipments,
-            wallPosts: appData.posts,
-            posts: appData.posts
-        }).then(() => {
-            setTimeout(() => { window._isSavingLocally = false; }, 1200);
-            if(typeof renderStats === 'function') renderStats();
-            if(typeof refreshActiveSection === 'function') refreshActiveSection();
-            if(typeof updateRSSTicker === 'function') updateRSSTicker();
-        }).catch((e) => {
-            window._isSavingLocally = false;
-            console.error("خطأ أثناء الحفظ سحابياً:", e);
-            showToast('⚠️ تحذير: فشل الحفظ السحابي، تأكد من حجم الصور المرفقة.', 'warning');
-        });
+        if(typeof renderStats === 'function') renderStats();
+        if(typeof refreshActiveSection === 'function') refreshActiveSection();
+        if(typeof updateRSSTicker === 'function') updateRSSTicker();
     };
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -647,6 +654,7 @@
         if(lockScreen) lockScreen.style.display = 'none';
 
         applyUserPermissionsUI();
+        loadAllDataFromFirestoreMultiCollection();
         initChatRealtimeListener();
         switchSection('deferredInvoices');
         renderStats();
@@ -667,7 +675,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بغرفة باندا والمنصة الأم - إجمالي الشحنات: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بغرفة باندا والمجموعات المستقلة - إجمالي الشحنات: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -892,7 +900,7 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل اللحظي</h3>
-                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو فاتورة أجل يتم إدخالها تظهر هنا وتتزامن مع الحائط فوراً:</p>
+                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو فاتورة أجل يتم إدخالها تتزامن لحظياً عبر مجموعات Firestore المستقلة:</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ إدارة الأجل والفواتير</button>
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
@@ -906,7 +914,7 @@
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>⏳ إجمالي فواتير الأجل: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة مع المنصة الأم: <strong style="color:var(--green-success);">متصل بـ Firestore لحظياً</strong></p>
+                        <p>🟢 حالة المزامنة: <strong style="color:var(--green-success);">متصل بالمجموعات المستقلة لحظياً</strong></p>
                     </div>
                 </div>
             `;
@@ -1045,7 +1053,7 @@
         } else if (sectionId === 'shipments') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--accent-main);">
-                    <h3><span>📦 تسجيل رحلة وشحنة جديدة (مع حفظ الصور للحائط وتلقائي الأجل)</span></h3>
+                    <h3><span>📦 تسجيل رحلة وشحنة جديدة</span></h3>
                     <form onsubmit="saveNewShipment(event)">
                         <input type="text" id="s-name" placeholder="اسم العميل" required>
                         <input type="text" id="s-phone" placeholder="رقم الهاتف">
@@ -1062,7 +1070,7 @@
                             ${(data.drivers || []).map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
                         </select>
                         <div style="margin-bottom: 6px;">
-                            <label style="font-size:9px; font-weight:bold; color:var(--text-muted); display:block; margin-bottom:2px;">📷 إرفاق صورة الشحنة (ستظهر تلقائياً في حائط البروفايل Profile Wall):</label>
+                            <label style="font-size:9px; font-weight:bold; color:var(--text-muted); display:block; margin-bottom:2px;">📷 إرفاق صورة الشحنة:</label>
                             <input type="file" id="s-img-file" accept="image/*" onchange="previewShipmentImage(this)">
                         </div>
                         <label style="display:flex; align-items:center; gap:6px; margin:6px 0; font-size:9px; font-weight:bold; color:var(--yellow-warning); cursor:pointer; background:var(--bg-dark); padding:6px; border-radius:6px; border:1px solid var(--border-color);">
@@ -1074,7 +1082,7 @@
                 <div class="card">
                     <h3><span>📋 قائمة الشحنات المتاحة</span></h3>
                     <div style="margin-bottom:6px;">
-                        <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة (اسم العميل أو الحمولة)..." oninput="filterShipmentsTable()">
+                        <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة..." oninput="filterShipmentsTable()">
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -1239,7 +1247,7 @@
         } else if (sectionId === 'publicFeed') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>📢 لوحة الإعلانات والرحلات العامة (تتزامن مع الحائط Profile Wall)</span></h3>
+                    <h3><span>📢 لوحة الإعلانات والرحلات العامة</span></h3>
                     <form onsubmit="publishFeedPost(); return false;">
                         <textarea id="feed-text" placeholder="اكتب إعلان أو حالة طريق جديدة..." style="height: 50px;" required></textarea>
                         <button type="submit" class="btn-main" style="margin-bottom: 6px;">نشر إعلان 🚀</button>
@@ -1257,7 +1265,7 @@
         } else if (sectionId === 'chat') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💬 المحادثات الفورية للأسطول (بث حقيقي عبر Firestore)</span></h3>
+                    <h3><span>💬 المحادثات الفورية للأسطول</span></h3>
                     <div style="background:var(--bg-dark); height:240px; overflow-y:auto; padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;" id="chat-messages-box">
                         <p style="text-align:center; font-size:9px; color:var(--text-muted);">جاري تحميل الرسائل الحية...</p>
                     </div>
@@ -1265,7 +1273,7 @@
                         <input type="text" id="chat-input" placeholder="اكتب رسالة للأسطول...">
                         <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
                             <label style="font-size:9px; color:var(--text-muted); cursor:pointer; background:var(--bg-dark); border:1px solid var(--border-color); padding:4px 8px; border-radius:6px; flex:1; text-align:center;">
-                                📁 إرفاق صورة (مضغوطة تلقائياً) <input type="file" id="chat-file" accept="image/*" style="display:none;" onchange="previewChatFileName(this)">
+                                📁 إرفاق صورة <input type="file" id="chat-file" accept="image/*" style="display:none;" onchange="previewChatFileName(this)">
                             </label>
                             <span id="file-chosen-label" style="font-size:8px; color:var(--yellow-warning);"></span>
                         </div>
@@ -1467,7 +1475,7 @@
         saveDataAll();
         document.getElementById('feed-text').value = '';
         switchSection('publicFeed');
-        showToast('تم نشر الإعلان بنجاح ومزامنته مع الحائط! 🚀');
+        showToast('تم نشر الإعلان بنجاح! 🚀');
     }
 
     function filterShipmentsTable() {
@@ -1841,7 +1849,6 @@
         showToast('تم إضافة الحساب بنجاح وتحديث باندا!');
     }
 
-    // دالة حفظ الشحنة الجديدة مع حفظ الصورة ومزامنتها تلقائياً مع الحائط (wallPosts)
     function saveNewShipment(e) {
         e.preventDefault();
         const isDeferredChecked = document.getElementById('s-is-deferred')?.checked || false;
@@ -1872,7 +1879,6 @@
         data.shipments = list;
         data.docs = list;
 
-        // مزامنة تلقائية للصورة مع الحائط (wallPosts / posts) لكي تظهر في بروفايل الحائط
         if (temporaryShipmentImageBase64) {
             if(!data.posts) data.posts = [];
             data.posts.unshift({
@@ -1898,7 +1904,7 @@
             });
             showToast('📦 تم حفظ الشحنة وترحيلها كفاتورة أُجل بنجاح!');
         } else {
-            showToast('تم حفظ الشحنة ومزامنة صورتها مع الحائط بنجاح! 🚀');
+            showToast('تم حفظ الشحنة بنجاح! 🚀');
         }
 
         temporaryShipmentImageBase64 = '';
@@ -1909,6 +1915,7 @@
     function saveTreasury(e) {
         e.preventDefault();
         const newT = {
+            id: Date.now(),
             type: document.getElementById('t-type').value,
             amount: Number(document.getElementById('t-amount').value),
             desc: document.getElementById('t-desc').value,
@@ -1953,7 +1960,7 @@
         data.drivers.push(newDrv);
         saveDataAll();
         closeModal('driverRegisterModal');
-        showToast('تم تسجيل السائق وظهوره في غرفة باندا بنجاح!');
+        showToast('تم تسجيل السائق بنجاح!');
     }
 
     function saveVisitorShipment() {
@@ -2004,6 +2011,7 @@
         if(!text) return;
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
         const newPost = {
+            id: Date.now(),
             user: userName,
             text: text,
             time: new Date().toLocaleTimeString('ar-EG')
