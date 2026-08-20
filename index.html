@@ -246,7 +246,7 @@
         #map { height: 300px; width: 100%; border-radius: 10px; margin-top: 10px; border: 2px solid var(--border-color); box-shadow: var(--shadow-3d); }
 
         .gplus-profile-card { background: var(--card-bg); border-radius: 14px; overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 14px; box-shadow: var(--shadow-3d); }
-        .gplus-cover-banner { width: 100%; height: 150px; background-size: cover; background-position: center; background: var(--accent-gradient); position: relative; }
+        .gplus-cover-banner { width: 100%; height: 180px; background-size: cover; background-position: center; background: var(--accent-gradient); position: relative; transition: height 0.2s ease; }
         .gplus-cover-upload-btn { position: absolute; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 5px 10px; border-radius: 8px; font-size: 9px; cursor: pointer; border: 1px solid rgba(255,255,255,0.4); backdrop-filter: blur(4px); }
         
         .gplus-profile-header-area { padding: 0 16px 16px 16px; position: relative; display: flex; flex-direction: column; gap: 8px; }
@@ -538,6 +538,13 @@
     <section id="account-tab" class="app-section">
         <div class="gplus-profile-card">
             <div id="gplus-cover-banner-preview" class="gplus-cover-banner">
+                <!-- أزرار التحكم في حجم وارتفاع الغلاف مباشرة -->
+                <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 8px; backdrop-filter: blur(4px); z-index: 5;">
+                    <button type="button" class="btn-sm" style="background:transparent; color:#fff; border:none; cursor:pointer; font-size:10px; width:auto; padding:2px 4px;" onclick="adjustCoverHeight(-25)" title="تصغير الغلاف">🔽</button>
+                    <span id="cover-height-label" style="font-size:9px; color:#fff; display:flex; align-items:center;">180px</span>
+                    <button type="button" class="btn-sm" style="background:transparent; color:#fff; border:none; cursor:pointer; font-size:10px; width:auto; padding:2px 4px;" onclick="adjustCoverHeight(25)" title="تكبير الغلاف">🔼</button>
+                </div>
+
                 <label id="gplus-cover-upload-btn-container" class="gplus-cover-upload-btn">
                     📷 تغيير الغلاف <input type="file" id="profile-cover-input" accept="image/*" hidden onchange="updateProfileCover(this)">
                 </label>
@@ -1159,7 +1166,8 @@
                         title: 'سائق معتمد',
                         status: 'متاح 🟢',
                         avatar: userPhoto,
-                        cover: ''
+                        cover: '',
+                        coverHeight: 180
                     };
                     await db.collection('drivers').doc(newId).set(newDrv);
                     loggedInDriverName = userName;
@@ -1262,7 +1270,8 @@
             }
         }
 
-        function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
+        // دالة ضغط الصور المحسنة لضمان حفظ البيانات بدقة وجودة عالية جداً (تم رفع الأبعاد والجودة للحفاظ على التفاصيل)
+        function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.9, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -1336,7 +1345,6 @@
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
             drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [],
-            appDataCollection: [], appStoreCollection: [], auditLogsCollection: [], transactionsCollection: [],
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
         };
 
@@ -1345,20 +1353,11 @@
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            // الاستماع لكل مجموعات Firestore المحدثة في قاعدة البيانات الخاصة بك
-            const collections = [
-                'shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 
-                'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'appData', 'appStore', 
-                'artifacts', 'auditLogs', 'centralBroadcasts', 'chatMessages', 'community_posts', 
-                'community_settings', 'community_team', 'order', 'orders', 'platform_users', 
-                'private_chats', 'profileWalls', 'spaceChatV10', 'spacePaymentsV10', 'spacePilots', 
-                'spacePilotsV10', 'space_network_posts', 'transactions', 'viper_logistics'
-            ];
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
             
             collections.forEach(colName => {
                 db.collection(colName).onSnapshot(snapshot => {
-                    const docsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    appData[colName] = docsList;
+                    appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
                     if (colName === 'drivers' && appData.drivers.length === 0) {
                         const defaultAdmin = {
@@ -1370,7 +1369,8 @@
                             role: 'مدير نظام',
                             title: 'أسطورة الطريق',
                             avatar: '',
-                            cover: ''
+                            cover: '',
+                            coverHeight: 180
                         };
                         db.collection('drivers').doc("1").set(defaultAdmin);
                     }
@@ -1854,7 +1854,7 @@
         function handleShipmentImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
                     uploadedImgBase64 = compressedUrl;
                 });
             }
@@ -1863,7 +1863,7 @@
         function handleVisitorImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
                     visitorImgBase64 = compressedUrl;
                 });
             }
@@ -1872,7 +1872,7 @@
         function handleDocImage(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
                     input.dataset.compressedSrc = compressedUrl;
                 });
             }
@@ -2315,7 +2315,8 @@
                     title: 'أسطورة الطريق',
                     status: 'متاح 🟢',
                     avatar: '',
-                    cover: ''
+                    cover: '',
+                    coverHeight: 180
                 };
                 db.collection('drivers').doc(newId).set(drv);
             }
@@ -2367,13 +2368,28 @@
             }
 
             const coverBanner = document.getElementById('gplus-cover-banner-preview');
+            let currentH = drv.coverHeight || 180;
+            coverBanner.style.height = currentH + 'px';
             coverBanner.style.backgroundImage = drv.cover ? `url('${drv.cover}')` : 'none';
+            const heightLabel = document.getElementById('cover-height-label');
+            if(heightLabel) heightLabel.innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
             avatarPreview.innerHTML = drv.avatar ? `<img src="${drv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
 
             loadAndRenderProfileWall(activeTargetName);
             renderProfileDriverSearch();
+        }
+
+        // دالة تعديل حجم وارتفاع صورة الغلاف مباشرة
+        function adjustCoverHeight(delta) {
+            let drv = getOrCreateCurrentDriver();
+            let currentH = drv.coverHeight || 180;
+            let newH = Math.min(450, Math.max(100, currentH + delta));
+            drv.coverHeight = newH;
+            db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+                renderMyAccount();
+            });
         }
 
         function resetToMyProfile() {
@@ -2384,12 +2400,12 @@
         function updateProfileAvatar(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 300, 300, 0.5, (compressedUrl) => {
+                compressImage(file, 600, 600, 0.9, (compressedUrl) => {
                     let drv = getOrCreateCurrentDriver();
                     drv.avatar = compressedUrl;
                     db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
                         renderMyAccount();
-                        alert('تم رفع وتحديث الصورة الشخصية بنجاح! 📷');
+                        alert('تم رفع وتحديث الصورة الشخصية بجودة عالية بنجاح! 📷');
                     });
                 });
             }
@@ -2398,12 +2414,13 @@
         function updateProfileCover(input) {
             const file = input.files[0];
             if (file) {
-                compressImage(file, 600, 300, 0.5, (compressedUrl) => {
+                // استخدام ضغط بجودة عالية ودقة أكبر لصور الغلاف
+                compressImage(file, 1400, 900, 0.92, (compressedUrl) => {
                     let drv = getOrCreateCurrentDriver();
                     drv.cover = compressedUrl;
                     db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
                         renderMyAccount();
-                        alert('تم تحديث صورة الغلاف بنجاح! 🖼️');
+                        alert('تم تحديث صورة الغلاف بجودة عالية بنجاح! 🖼️✨');
                     });
                 });
             }
@@ -2443,7 +2460,7 @@
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                        compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
                             profileWallFilesArr.push({ type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار الملفات بنجاح ✅`;
@@ -2627,7 +2644,8 @@
                     title: 'سائق مستجد',
                     status: 'متاح 🟢',
                     avatar: '',
-                    cover: ''
+                    cover: '',
+                    coverHeight: 180
                 };
 
                 await db.collection('drivers').doc(uid).set(newDrv);
@@ -2848,7 +2866,7 @@
             try {
                 let uid = String(Date.now());
                 let newDrv = {
-                    id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: ''
+                    id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180
                 };
                 
                 await db.collection('drivers').doc(uid).set(newDrv);
@@ -2900,7 +2918,7 @@
             if (total === 0) { saveToFirestore([]); return; }
 
             for (let i = 0; i < imgFiles.length; i++) {
-                compressImage(imgFiles[i], 500, 500, 0.5, (compressedUrl) => {
+                compressImage(imgFiles[i], 1200, 1000, 0.9, (compressedUrl) => {
                     mediaArr.push({ type: 'image', src: compressedUrl });
                     loaded++; 
                     if(loaded === total) saveToFirestore(mediaArr);
@@ -3087,7 +3105,7 @@
                 for(let i=0; i<input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 500, 500, 0.5, (compressedUrl) => {
+                        compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
                             if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
