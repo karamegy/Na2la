@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إدارة الأسطول والسائقين - Global Transport Hub</title>
+    <title>إدارة الأسطول والسائقين - Global Transport Hub V52 PRO</title>
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -241,7 +241,7 @@
 <body data-theme="light">
 
     <header>
-        <div class="logo">🚚 إدارة الأسطول والسائقين</div>
+        <div class="logo">🚚 إدارة الأسطول والسائقين (Auth Active)</div>
         <div class="nav-links">
             <a href="index.html">الرئيسية</a>
             <a href="community.html">المجتمع والشات</a>
@@ -268,7 +268,7 @@
 
         <!-- جدول السائقين والسيارات المتاحة -->
         <div class="card-box">
-            <div class="card-title">📋 سجل السائقين والسيارات المتاحة (مباشر من القاعدة)</div>
+            <div class="card-title">📋 سجل السائقين والسيارات المتاحة (متزامن سحابياً)</div>
             <table class="drivers-table">
                 <thead>
                     <tr>
@@ -279,7 +279,7 @@
                     </tr>
                 </thead>
                 <tbody id="driversTableBody">
-                    <!-- سيتم جلب السائقين وعرضهم هنا تلقائياً لحظة بلحظة -->
+                    <tr><td colspan="4" style="color: var(--secondary-text);">جاري المصادقة وجلب السائقين من السحابة...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -299,13 +299,14 @@
                     <option value="busy">🚚 في رحلة حالياً</option>
                 </select>
             </div>
-            <button class="submit-btn" onclick="addNewDriver()">إضافة سائق جديد للقائمة 🚀</button>
+            <button class="submit-btn" onclick="addNewDriver()">إضافة سائق جديد للقائمة سحابياً 🚀</button>
         </div>
     </div>
 
-    <!-- كود التحكم والربط مع فايربيس -->
+    <!-- كود التحكم والمصادقة والربط مع فايربيس -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -319,6 +320,7 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
         // تبديل الثيم الليلي والنهاري
@@ -330,20 +332,23 @@
             localStorage.setItem("drivers_theme", newTheme);
         };
 
-        // عند تحميل الصفحة
+        // عند تحميل الصفحة وتفعيل المصادقة التلقائية لضمان عمل قواعد الأمان
         window.onload = function() {
             const savedTheme = localStorage.getItem("drivers_theme") || "light";
-            bodyTheme(savedTheme);
-            listenToDrivers();
-        };
+            document.body.setAttribute("data-theme", savedTheme);
 
-        function bodyTheme(theme) {
-            document.body.setAttribute("data-theme", theme);
-        }
+            signInAnonymously(auth).then(() => {
+                console.log("✅ تم المصادقة سحابياً بنجاح في drivers.html");
+                listenToDrivers();
+            }).catch((error) => {
+                console.error("⚠️ خطأ في المصادقة السحابية:", error);
+            });
+        };
 
         // الاستماع الفوري للتحديثات من قاعدة البيانات (drivers)
         function listenToDrivers() {
             const tbody = document.getElementById("driversTableBody");
+            if (!tbody) return;
             
             onSnapshot(collection(db, "drivers"), (snapshot) => {
                 tbody.innerHTML = "";
@@ -353,8 +358,6 @@
 
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
-                    
-                    // تخطي مستند الاختبار إن وجد
                     if (data.test) return;
 
                     total++;
