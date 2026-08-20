@@ -80,7 +80,7 @@
         }
         .news-ticker marquee { font-weight: bold; }
 
-        /* شاشة تسجيل الدخول المحدثة والمضبوطة */
+        /* شاشة تسجيل الدخول المحدثة */
         #lock-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(7, 11, 20, 0.95); z-index: 9999; display: flex;
@@ -106,7 +106,7 @@
         .login-btn-group {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 9px;
             margin-top: 12px;
         }
         .login-btn-group button {
@@ -120,12 +120,25 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
             transition: transform 0.2s, box-shadow 0.2s;
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             margin-bottom: 0;
         }
-        .login-btn-group button:hover { transform: translateY(-2px); }
+        .login-btn-group button:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+        /* أزرار جوجل والهاتف الأنيقة المخصصة */
+        .btn-google-login {
+            background: linear-gradient(135deg, #ffffff, #f1f5f9) !important;
+            color: #1e293b !important;
+            border: 1px solid #cbd5e1 !important;
+            font-weight: 700;
+        }
+        .btn-phone-login {
+            background: linear-gradient(135deg, #0284c7, #0369a1) !important;
+            color: #ffffff !important;
+            font-weight: 700;
+        }
 
         #visitor-booking-container, #driver-register-container, .custom-modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -348,13 +361,13 @@
             <div class="login-btn-group">
                 <button type="button" class="btn-main" onclick="performUnifiedLogin()">تسجيل الدخول السحابي الآمن 🔐</button>
                 
-                <!-- زر تسجيل الدخول بواسطة جوجل (Google) -->
-                <button type="button" onclick="signInWithGoogle()" style="background-color: #db4437; color: white;">
+                <!-- زر تسجيل الدخول بواسطة جوجل (Google) الأنيق -->
+                <button type="button" class="btn-google-login" onclick="signInWithGoogle()">
                     🌐 تسجيل الدخول باستخدام جوجل (Google)
                 </button>
 
-                <!-- زر تسجيل الدخول برقم الهاتف (SMS) -->
-                <button type="button" onclick="promptPhoneSignIn()" style="background-color: #0284c7; color: white;">
+                <!-- زر تسجيل الدخول برقم الهاتف (SMS) الأنيق -->
+                <button type="button" class="btn-phone-login" onclick="promptPhoneSignIn()">
                     📱 تسجيل الدخول برقم الهاتف (SMS)
                 </button>
                 
@@ -660,6 +673,7 @@
                             <th>العميل / الشركة</th>
                             <th>عدد الشحنات</th>
                             <th>إجمالي المبلغ (ج.م)</th>
+                            <th>الحالة</th>
                             <th>التاريخ</th>
                             <th>إدارة وطباعة</th>
                         </tr>
@@ -1337,9 +1351,25 @@
             });
         }
 
+        // مستحدث: منع الخروج التلقائي عند تحديث الصفحة وحفظ الجلسة
         auth.onAuthStateChanged(user => {
-            if (user) {
+            if (user || localStorage.getItem('current_user_role')) {
+                if (!user && localStorage.getItem('current_user_role')) {
+                    auth.signInAnonymously().catch(err => console.log(err));
+                }
+                currentUserRole = localStorage.getItem('current_user_role') || 'driver';
+                loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+                
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+                
+                setupNavigation();
+                if (currentUserRole === 'admin') setAdminUIMode();
+                else if (currentUserRole === 'supervisor') setSupervisorUIMode();
+                else setDriverUIMode();
+                
                 initRealtimeListeners();
+                render();
             } else {
                 document.getElementById('lock-screen').style.display = 'flex';
             }
@@ -2127,6 +2157,7 @@
                 notes: notes,
                 shipmentIds: selectedShipmentIds,
                 total: totalAmount,
+                status: 'pending', // افتراضياً معلقة
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
@@ -2134,6 +2165,16 @@
                 document.getElementById('consolidated-invoice-form').reset();
                 alert('تم إصدار وتخزين الفاتورة المجمعة في مجموعتها المستقلة بنجاح! 📑🚀');
             });
+        }
+
+        function toggleConsolidatedStatus(id) {
+            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
+            if(inv) {
+                inv.status = inv.status === 'paid' ? 'pending' : 'paid';
+                db.collection('consolidatedInvoices').doc(String(inv.id)).set(inv).then(() => {
+                    renderConsolidatedInvoicesTable();
+                });
+            }
         }
 
         function renderConsolidatedInvoicesTable() {
@@ -2144,20 +2185,25 @@
             let invoices = appData.consolidatedInvoices || [];
 
             if(invoices.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; opacity:0.7;">لا توجد فواتير مجمعة مسجلة بعد.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; opacity:0.7;">لا توجد فواتير مجمعة مسجلة بعد.</td></tr>`;
                 return;
             }
 
             invoices.forEach(inv => {
+                let isPaid = inv.status === 'paid';
+                let statusBadge = isPaid ? `<span class="badge" style="background:#10b981; cursor:pointer;" onclick="toggleConsolidatedStatus('${inv.id}')" title="انقر للتبديل">مسددة ✅</span>` : `<span class="badge" style="background:#f59e0b; cursor:pointer;" onclick="toggleConsolidatedStatus('${inv.id}')" title="انقر للتبديل">معلقة ⏳</span>`;
+
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="font-weight:bold;">#${String(inv.id).slice(-6)}</td>
                     <td>${inv.client}</td>
                     <td>${inv.shipmentIds.length} شحنات</td>
                     <td style="color:var(--success); font-weight:bold;">${inv.total} ج.م</td>
+                    <td>${statusBadge}</td>
                     <td>${inv.date}</td>
                     <td>
                         <button type="button" class="btn-main btn-sm" onclick="printConsolidatedInvoice('${inv.id}')">🖨️ طباعة</button>
+                        <button type="button" class="btn-warning btn-sm" onclick="toggleConsolidatedStatus('${inv.id}')">تبديل 🔄</button>
                         <button type="button" class="btn-danger btn-sm" onclick="deleteConsolidatedInvoice('${inv.id}')">حذف</button>
                     </td>
                 `;
