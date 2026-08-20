@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>محطة الفضاء - شبكة الأسطول المتكاملة V52 PRO</title>
+    <title>محطة الفضاء - شبكة الأسطول المتكاملة V52 PRO السحابية</title>
     
-    <!-- مكتبات Firebase V10 الحديثة -->
+    <!-- مكتبات Firebase V10 الحديثة والمزامن اللحظي -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -27,16 +27,29 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // إتاحة الكائنات عالمياً للاستخدام في السكريبت
+        // إتاحة الكائنات عالمياً للنظام
         window.firebaseApp = app;
         window.firebaseAuth = auth;
         window.firebaseDb = db;
+        window.fsCollection = collection;
+        window.fsDoc = doc;
+        window.fsSetDoc = setDoc;
+        window.fsAddDoc = addDoc;
+        window.fsDeleteDoc = deleteDoc;
+        window.fsOnSnapshot = onSnapshot;
+        window.fsGetDocs = getDocs;
 
-        // تسجيل الدخول التلقائي سحابياً لتلبية شرط request.auth != null في قواعد Firestore
+        // تسجيل الدخول التلقائي سحابياً وتفعيل المزامنة
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم تسجيل الدخول السحابي بنجاح (Auth Active)");
-            document.getElementById("cloudStatusBtn").style.opacity = "1";
-            document.getElementById("cloudStatusBtn").innerHTML = "☁️ سحابي متصل وآمن";
+            console.log("✅ تم الاتصال السحابي والمصادقة بنجاح (Auth & Firestore Active)");
+            const statusBtn = document.getElementById("cloudStatusBtn");
+            if(statusBtn) {
+                statusBtn.style.opacity = "1";
+                statusBtn.innerHTML = "☁️ سحابي متصل ومزامن لحظياً";
+            }
+            if (typeof initCloudListeners === 'function') {
+                initCloudListeners();
+            }
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
         });
@@ -607,7 +620,7 @@
 <body data-theme="dark">
 
     <header>
-        <div class="welcome-badge">أهلاً بك يا عماد في النظام المطور V52 | تم تفعيل المصادقة السحابية بنجاح 🚀</div>
+        <div class="welcome-badge">أهلاً بك يا عماد في النظام المطور V52 | تم تفعيل المزامنة السحابية اللحظية عبر Firestore 🚀</div>
         <div class="nav-controls">
             <button class="notification-3d-btn" onclick="toggleNotificationsMenu()" title="إشعارات التطبيق">
                 🔔
@@ -622,7 +635,7 @@
                 <div id="notifBody" class="notifications-body"></div>
             </div>
 
-            <button class="cloud-status-btn" id="cloudStatusBtn" onclick="alert('☁️ النظام متصل سحابياً ومصادق آمن عبر Firebase Auth!')">☁️ جاري الاتصال...</button>
+            <button class="cloud-status-btn" id="cloudStatusBtn" onclick="alert('☁️ النظام متصل سحابياً ومزامن لحظياً عبر مجموعات Firestore المستقلة!')">☁️ جاري الاتصال...</button>
             <div class="nav-links" style="display: inline-flex;">
                 <a href="index.html">الرئيسية</a>
                 <button onclick="toggleTheme()">🌓</button>
@@ -653,7 +666,7 @@
 
                     <label class="media-upload-label">
                         📷 إرفاق صورة
-                        <input type="file" id="postImageInput" accept="image/*">
+                        <input type="file" id="postImageInput" accept="image/*" onchange="compressAndPreviewPostImage(this)">
                     </label>
 
                     <div class="buttons-group">
@@ -661,6 +674,7 @@
                         <button class="submit-btn" onclick="publishCommunityPost(false)">🚀 إرسال إشارة</button>
                     </div>
                 </div>
+                <div id="imagePreviewInfo" style="font-size: 11px; color: var(--cloud-bg); margin-top: 5px; font-weight: bold;"></div>
             </div>
 
             <!-- ميزة البحث الفوري في الإشارات -->
@@ -684,8 +698,8 @@
         <!-- صفحتي الشخصية -->
         <div id="section-profile" class="section-view">
             <div class="card-box">
-                <div class="card-title">👤 ملف الكابتن عماد والمنشورات المرتبطة</div>
-                <p style="font-size: 13px; color: var(--secondary-text); margin-bottom: 15px;">هنا يتم مزامنة كافة إشاراتك ومنشوراتك الشخصية عبر جميع أقسام التطبيق بشكل متكامل:</p>
+                <div class="card-title">👤 ملف الكابتن عماد والمنشورات المرتبطة السحابية</div>
+                <p style="font-size: 13px; color: var(--secondary-text); margin-bottom: 15px;">هنا تتم مزامنة كافة إشاراتك ومنشوراتك الشخصية عبر السحابة بشكل متكامل:</p>
                 <div id="profileFeed"></div>
             </div>
         </div>
@@ -751,6 +765,11 @@
     </div>
 
     <script>
+        let globalPostsCache = [];
+        let globalProfileCache = [];
+        let globalNotifsCache = [];
+        let tempPostImageBase64 = "";
+
         function toggleTheme() {
             const body = document.body;
             const currentTheme = body.getAttribute("data-theme");
@@ -764,57 +783,139 @@
             dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
         }
 
-        function getNotifications() {
-            let notifs = localStorage.getItem("driver_app_notifications_v5");
-            if (!notifs) {
-                const defaultNotifs = [
-                    { id: 1, text: "مرحباً بك في النظام المطور V52 والمصادق سحابياً.", time: "اليوم", unread: true, target: "feed" },
-                    { id: 2, text: "تنبيه: تم رصد حالة طقس ممتازة على طريق العين السخنة.", time: "منذ ساعة", unread: true, target: "feed" }
-                ];
-                localStorage.setItem("driver_app_notifications_v5", JSON.stringify(defaultNotifs));
-                return defaultNotifs;
+        // دالة ضغط الصور بدقة عالية للحفاظ على التفاصيل وتجنب امتلاء التخزين
+        function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.9, callback) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function (event) {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    callback(compressedDataUrl);
+                };
+            };
+        }
+
+        function compressAndPreviewPostImage(input) {
+            if (input.files && input.files[0]) {
+                document.getElementById("imagePreviewInfo").innerText = "جاري معالجة وضغط الصورة...";
+                compressImage(input.files[0], 1200, 1000, 0.9, (compressedUrl) => {
+                    tempPostImageBase64 = compressedUrl;
+                    document.getElementById("imagePreviewInfo").innerText = "تمت معالجة الصورة بنجاح ✅";
+                });
             }
-            return JSON.parse(notifs).map(n => ({ ...n, target: n.target || 'feed' }));
         }
 
-        function saveNotifications(notifs) {
-            localStorage.setItem("driver_app_notifications_v5", JSON.stringify(notifs));
-            updateNotificationBadge();
+        // إعداد المستمعين السحابيين الفعليين عبر Firestore
+        function initCloudListeners() {
+            const db = window.firebaseDb;
+            if(!db) return;
+
+            // 1. مزامنة إشارات رادار الأسطول
+            window.fsOnSnapshot(window.fsCollection(db, "spacePosts"), (snapshot) => {
+                globalPostsCache = [];
+                snapshot.forEach(docSnap => {
+                    globalPostsCache.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                // ترتيب تنازلي حسب الـ id أو التاريخ
+                globalPostsCache.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+                loadPosts();
+            }, (error) => {
+                console.error("خطأ في مزامنة المنشورات السحابية:", error);
+            });
+
+            // 2. مزامنة المنشورات على البروفايل الشخصي
+            window.fsOnSnapshot(window.fsCollection(db, "spaceProfileShares"), (snapshot) => {
+                globalProfileCache = [];
+                snapshot.forEach(docSnap => {
+                    globalProfileCache.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                globalProfileCache.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+                loadProfilePosts();
+            }, (error) => {
+                console.error("خطأ في مزامنة البروفايل السحابي:", error);
+            });
+
+            // 3. مزامنة الإشعارات السحابية
+            window.fsOnSnapshot(window.fsCollection(db, "spaceNotifications"), (snapshot) => {
+                globalNotifsCache = [];
+                snapshot.forEach(docSnap => {
+                    globalNotifsCache.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                globalNotifsCache.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+                
+                if (globalNotifsCache.length === 0) {
+                    // إضافة إشعارات افتراضية إذا كانت السحابة فارغة
+                    const defNotifs = [
+                        { id: Date.now() - 1000, text: "مرحباً بك في النظام المطور V52 والمصادق والمزامن سحابياً.", time: "اليوم", unread: true, target: "feed" },
+                        { id: Date.now(), text: "تنبيه: تم رصد حالة طقس ممتازة على طريق العين السخنة.", time: "منذ ساعة", unread: true, target: "feed" }
+                    ];
+                    defNotifs.forEach(n => {
+                        window.fsSetDoc(window.fsDoc(db, "spaceNotifications", String(n.id)), n);
+                    });
+                } else {
+                    loadNotificationsUI();
+                }
+            }, (error) => {
+                console.error("خطأ في مزامنة الإشعارات السحابية:", error);
+            });
         }
 
-        function addNotification(text, targetSection = 'feed') {
-            let notifs = getNotifications();
-            notifs.unshift({
-                id: Date.now(),
+        function saveNotificationCloud(text, targetSection = 'feed') {
+            const db = window.firebaseDb;
+            if(!db) return;
+            const notifId = String(Date.now());
+            const newNotif = {
+                id: notifId,
                 text: text,
                 time: "الآن",
                 unread: true,
                 target: targetSection
-            });
-            saveNotifications(notifs);
-            loadNotificationsUI();
+            };
+            window.fsSetDoc(window.fsDoc(db, "spaceNotifications", notifId), newNotif);
         }
 
         function updateNotificationBadge() {
-            let notifs = getNotifications();
-            let unreadCount = notifs.filter(n => n.unread).length;
+            let unreadCount = globalNotifsCache.filter(n => n.unread).length;
             const badge = document.getElementById("notifBadge");
-            badge.innerText = unreadCount;
-            badge.style.display = unreadCount > 0 ? "block" : "none";
+            if(badge) {
+                badge.innerText = unreadCount;
+                badge.style.display = unreadCount > 0 ? "block" : "none";
+            }
         }
 
         function loadNotificationsUI() {
             const body = document.getElementById("notifBody");
             if (!body) return;
             body.innerHTML = "";
-            let notifs = getNotifications();
 
-            if(notifs.length === 0) {
+            if(globalNotifsCache.length === 0) {
                 body.innerHTML = `<div style="text-align: center; color: var(--secondary-text); padding: 15px; font-size: 12px;">لا توجد إشعارات جديدة حالياً.</div>`;
                 return;
             }
 
-            notifs.forEach((n, index) => {
+            globalNotifsCache.forEach((n) => {
                 const item = document.createElement("div");
                 item.className = "notif-item";
                 item.style.borderColor = n.unread ? "var(--primary-color)" : "var(--border-color)";
@@ -824,12 +925,11 @@
                 `;
 
                 item.onclick = function() {
-                    n.unread = false;
-                    let allNotifs = getNotifications();
-                    allNotifs[index].unread = false;
-                    saveNotifications(allNotifs);
-                    loadNotificationsUI();
-
+                    const db = window.firebaseDb;
+                    if(db) {
+                        n.unread = false;
+                        window.fsSetDoc(window.fsDoc(db, "spaceNotifications", String(n.id)), n);
+                    }
                     document.getElementById("notifDropdown").style.display = "none";
                     if (n.target) {
                         const targetBtn = document.querySelector(`.sector-btn[onclick*="${n.target}"]`);
@@ -845,18 +945,18 @@
         }
 
         function clearAllNotifications() {
-            let notifs = getNotifications();
-            notifs.forEach(n => n.unread = false);
-            saveNotifications(notifs);
+            const db = window.firebaseDb;
+            if(!db) return;
+            globalNotifsCache.forEach(n => {
+                n.unread = false;
+                window.fsSetDoc(window.fsDoc(db, "spaceNotifications", String(n.id)), n);
+            });
             loadNotificationsUI();
         }
 
         window.onload = function() {
             const savedTheme = localStorage.getItem("space_theme") || "dark";
             document.body.setAttribute("data-theme", savedTheme);
-            loadPosts();
-            loadProfilePosts();
-            loadNotificationsUI();
         };
 
         window.onclick = function(event) {
@@ -875,47 +975,17 @@
             if (btn) btn.classList.add("active");
         }
 
-        function getPosts() {
-            let posts = localStorage.getItem("driver_space_network_v5");
-            if (!posts) {
-                return [
-                    {
-                        id: 1,
-                        author: "الكابتن عماد (قائد الأسطول)",
-                        category: "حالات الطرق",
-                        text: "شبكة المدارات اليوم ممتازة وطريق السخنة سالك تماماً لكل سيارات النقل. رحلة موفقة للجميع! 🚛✨",
-                        image: "",
-                        time: "منذ ساعة",
-                        userReaction: null,
-                        reactions: { "👍 إعجاب": 8, "❤️ قلب": 14, "🚀 هتاف فضائي": 11, "💪 دعم": 5 },
-                        isEmergency: false,
-                        comments: []
-                    }
-                ];
-            }
-            return JSON.parse(posts);
-        }
-
-        function savePosts(posts) {
-            localStorage.setItem("driver_space_network_v5", JSON.stringify(posts));
-        }
-
-        function getProfilePosts() {
-            let posts = localStorage.getItem("driver_profile_shares_v5");
-            return posts ? JSON.parse(posts) : [];
-        }
-
-        function saveProfilePosts(posts) {
-            localStorage.setItem("driver_profile_shares_v5", JSON.stringify(posts));
-        }
-
         function loadPosts() {
             const feedContainer = document.getElementById("communityFeed");
             if (!feedContainer) return;
             feedContainer.innerHTML = "";
-            const posts = getPosts();
 
-            posts.forEach(post => {
+            if(globalPostsCache.length === 0) {
+                feedContainer.innerHTML = `<div style="text-align: center; color: var(--secondary-text); padding: 20px; font-size: 13px;">لا توجد إشارات رادار نشطة حالياً.</div>`;
+                return;
+            }
+
+            globalPostsCache.forEach(post => {
                 const newItem = document.createElement("div");
                 newItem.className = post.isEmergency ? "feed-item emergency" : "feed-item";
                 newItem.setAttribute("data-category", post.category);
@@ -923,15 +993,19 @@
                 const badgeClass = post.isEmergency ? "badge sos-badge" : "badge";
 
                 let commentsHtml = "";
-                post.comments.forEach((c) => {
-                    let imgTag = c.image ? `<img src="${c.image}" class="comment-media" style="width:100px; height:100px; object-fit:cover; border-radius:6px; margin-top:5px; display:block;">` : "";
-                    commentsHtml += `
-                        <div class="comment-item">
-                            <b>${escapeHtml(c.author)}:</b> ${escapeHtml(c.text)}
-                            ${imgTag}
-                        </div>
-                    `;
-                });
+                if(post.comments && post.comments.length > 0) {
+                    post.comments.forEach((c) => {
+                        let imgTag = c.image ? `<img src="${c.image}" class="comment-media" style="width:100px; height:100px; object-fit:cover; border-radius:6px; margin-top:5px; display:block;">` : "";
+                        commentsHtml += `
+                            <div class="comment-item">
+                                <b>${escapeHtml(c.author)}:</b> ${escapeHtml(c.text)}
+                                ${imgTag}
+                            </div>
+                        `;
+                    });
+                }
+
+                let reactions = post.reactions || { "👍 إعجاب": 0, "❤️ قلب": 0, "🚀 هتاف فضائي": 0, "💪 دعم": 0 };
 
                 newItem.innerHTML = `
                     <div class="feed-header">
@@ -943,14 +1017,14 @@
                     ${post.image ? `<img src="${post.image}" class="feed-media">` : ""}
 
                     <div class="reactions-bar">
-                        <button class="reaction-btn ${post.userReaction === '👍 إعجاب' ? 'selected' : ''}" onclick="reactPost(${post.id}, '👍 إعجاب')">👍 إعجاب (${post.reactions["👍 إعجاب"]})</button>
-                        <button class="reaction-btn ${post.userReaction === '❤️ قلب' ? 'selected' : ''}" onclick="reactPost(${post.id}, '❤️ قلب')">❤️ قلب (${post.reactions["❤️ قلب"]})</button>
-                        <button class="reaction-btn ${post.userReaction === '🚀 هتاف فضائي' ? 'selected' : ''}" onclick="reactPost(${post.id}, '🚀 هتاف')">🚀 هتاف (${post.reactions["🚀 هتاف فضائي"]})</button>
-                        <button class="reaction-btn ${post.userReaction === '💪 دعم' ? 'selected' : ''}" onclick="reactPost(${post.id}, '💪 دعم')">💪 دعم (${post.reactions["💪 دعم"]})</button>
+                        <button class="reaction-btn ${post.userReaction === '👍 إعجاب' ? 'selected' : ''}" onclick="reactPost('${post.id}', '👍 إعجاب')">👍 إعجاب (${reactions["👍 إعجاب"] || 0})</button>
+                        <button class="reaction-btn ${post.userReaction === '❤️ قلب' ? 'selected' : ''}" onclick="reactPost('${post.id}', '❤️ قلب')">❤️ قلب (${reactions["❤️ قلب"] || 0})</button>
+                        <button class="reaction-btn ${post.userReaction === '🚀 هتاف فضائي' ? 'selected' : ''}" onclick="reactPost('${post.id}', '🚀 هتاف')">🚀 هتاف (${reactions["🚀 هتاف فضائي"] || 0})</button>
+                        <button class="reaction-btn ${post.userReaction === '💪 دعم' ? 'selected' : ''}" onclick="reactPost('${post.id}', '💪 دعم')">💪 دعم (${reactions["💪 دعم"] || 0})</button>
                         
-                        <button class="share-btn" onclick="shareToProfile(${post.id})">🔗 مشاركة لصفحتي</button>
+                        <button class="share-btn" onclick="shareToProfile('${post.id}')">🔗 مشاركة لصفحتي</button>
                         <button class="reaction-btn" onclick="copyPostText('${escapeHtml(post.text).replace(/'/g, "\\'")}')" title="نسخ النص">📋 نسخ</button>
-                        <button class="reaction-btn" onclick="toggleComments(this)" style="margin-right: auto;">💬 تعليق (${post.comments.length})</button>
+                        <button class="reaction-btn" onclick="toggleComments(this)" style="margin-right: auto;">💬 تعليق (${post.comments ? post.comments.length : 0})</button>
                     </div>
 
                     <div class="comments-section">
@@ -958,7 +1032,7 @@
                         <div class="comment-input-box">
                             <div class="comment-input-row">
                                 <input type="text" class="comment-input" placeholder="اكتب ردك أو إشارتك هنا...">
-                                <button class="comment-btn" onclick="addComment(${post.id}, this)">إرسال</button>
+                                <button class="comment-btn" onclick="addComment('${post.id}', this)">إرسال</button>
                             </div>
                         </div>
                     </div>
@@ -995,27 +1069,26 @@
             const profileContainer = document.getElementById("profileFeed");
             if (!profileContainer) return;
             profileContainer.innerHTML = "";
-            const profilePosts = getProfilePosts();
 
-            if(profilePosts.length === 0) {
-                profileContainer.innerHTML = `<div style="text-align: center; color: var(--secondary-text); padding: 20px; font-size: 13px;">لم تقم بمشاركة أي منشورات لصفحتك الشخصية بعد.</div>`;
+            if(globalProfileCache.length === 0) {
+                profileContainer.innerHTML = `<div style="text-align: center; color: var(--secondary-text); padding: 20px; font-size: 13px;">لم تقم بمشاركة أي منشورات لصفحتك الشخصية عبر السحابة بعد.</div>`;
                 return;
             }
 
-            profilePosts.forEach((post, index) => {
+            globalProfileCache.forEach((post) => {
                 const newItem = document.createElement("div");
                 newItem.className = post.isEmergency ? "feed-item emergency" : "feed-item";
 
                 newItem.innerHTML = `
                     <div class="feed-header">
-                        <span>الكابتن عماد (الملف الشخصي المتصل)</span>
+                        <span>الكابتن عماد (الملف الشخصي المتصل سحابياً)</span>
                         <span class="badge">${post.category}</span>
                     </div>
                     <div class="feed-time">مشاركة في: ${post.time}</div>
                     <div class="feed-text">${escapeHtml(post.text)}</div>
                     ${post.image ? `<img src="${post.image}" class="feed-media">` : ""}
                     <div style="margin-top: 8px; text-align: left;">
-                        <button class="share-btn" style="color: var(--danger-color); border-color: var(--danger-color);" onclick="deleteFromProfile(${index})">🗑️ إزالة من صفحتي</button>
+                        <button class="share-btn" style="color: var(--danger-color); border-color: var(--danger-color);" onclick="deleteFromProfile('${post.id}')">🗑️ إزالة من صفحتي</button>
                     </div>
                 `;
                 profileContainer.appendChild(newItem);
@@ -1023,55 +1096,56 @@
         }
 
         function shareToProfile(postId) {
-            const posts = getPosts();
-            const post = posts.find(p => p.id === postId);
+            const db = window.firebaseDb;
+            if(!db) return;
+            const post = globalPostsCache.find(p => String(p.id) === String(postId));
             if(post) {
-                let profilePosts = getProfilePosts();
-                profilePosts.unshift({
+                const shareId = String(Date.now());
+                const sharedObj = {
                     ...post,
+                    id: shareId,
                     time: new Date().toLocaleDateString('ar-EG') + " - " + new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+                };
+                window.fsSetDoc(window.fsDoc(db, "spaceProfileShares", shareId), sharedObj).then(() => {
+                    saveNotificationCloud("تمت مشاركة منشور جديد بنجاح إلى ملفك الشخصي.", "profile");
+                    alert("🚀 تم ربط ومشاركة المنشور بنجاح على بروفايلك السحابي!");
                 });
-                saveProfilePosts(profilePosts);
-                loadProfilePosts();
-                addNotification("تمت مشاركة منشور جديد بنجاح إلى ملفك الشخصي.", "profile");
-                alert("🚀 تم ربط ومشاركة المنشور بنجاح على بروفايلك!");
             }
         }
 
-        function deleteFromProfile(index) {
-            let profilePosts = getProfilePosts();
-            profilePosts.splice(index, 1);
-            saveProfilePosts(profilePosts);
-            loadProfilePosts();
+        function deleteFromProfile(postId) {
+            const db = window.firebaseDb;
+            if(!db) return;
+            window.fsDeleteDoc(window.fsDoc(db, "spaceProfileShares", String(postId))).then(() => {
+                alert("🗑️ تم حذف المنشور من بروفايلك السحابي بنجاح.");
+            });
         }
 
         function publishCommunityPost(isEmergency) {
             const textInput = document.getElementById("postText");
             const text = textInput.value;
             let category = document.getElementById("postCategory").value;
-            const imageInput = document.getElementById("postImageInput");
 
-            if(text.trim() === "" && imageInput.files.length === 0) {
+            if(text.trim() === "" && !tempPostImageBase64) {
                 alert("يرجى كتابة نص الإشارة أو إرفاق صورة أولاً.");
                 return;
             }
 
             if(isEmergency) category = "طوارئ";
 
-            if(imageInput.files && imageInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    saveNewPost(text, category, isEmergency, e.target.result);
-                };
-                reader.readAsDataURL(imageInput.files[0]);
-            } else {
-                saveNewPost(text, category, isEmergency, "");
-            }
+            saveNewPost(text, category, isEmergency, tempPostImageBase64);
         }
 
         function saveNewPost(text, category, isEmergency, imageUrl) {
+            const db = window.firebaseDb;
+            if(!db) {
+                alert("جاري الاتصال بالسحابة، يرجى المحاولة بعد لحظات...");
+                return;
+            }
+
+            const postId = String(Date.now());
             const newPost = {
-                id: Date.now(),
+                id: postId,
                 author: isEmergency ? "🚨 طوارئ الأسطول الفضائي" : "الكابتن عماد",
                 category: category,
                 text: text,
@@ -1083,53 +1157,60 @@
                 comments: []
             };
 
-            let posts = getPosts();
-            posts.unshift(newPost);
-            savePosts(posts);
-
-            document.getElementById("postText").value = "";
-            document.getElementById("postImageInput").value = "";
-            loadPosts();
-            addNotification(isEmergency ? "🆘 تم إطلاق إشارة طوارئ جديدة بنجاح في الأسطول." : "🚀 تم إرسال إشارة رادار جديدة بنجاح.", "feed");
+            window.fsSetDoc(window.fsDoc(db, "spacePosts", postId), newPost).then(() => {
+                document.getElementById("postText").value = "";
+                document.getElementById("postImageInput").value = "";
+                document.getElementById("imagePreviewInfo").innerText = "";
+                tempPostImageBase64 = "";
+                loadPosts();
+                saveNotificationCloud(isEmergency ? "🆘 تم إطلاق إشارة طوارئ جديدة بنجاح في الأسطول." : "🚀 تم إرسال إشارة رادار جديدة بنجاح.", "feed");
+            }).catch(err => {
+                alert("خطأ أثناء النشر السحابي: " + err.message);
+            });
         }
 
         function reactPost(postId, reactionType) {
-            let posts = getPosts();
-            let post = posts.find(p => p.id === postId);
+            const db = window.firebaseDb;
+            if(!db) return;
+            let post = globalPostsCache.find(p => String(p.id) === String(postId));
             if(post) {
+                if(!post.reactions) post.reactions = { "👍 إعجاب": 0, "❤️ قلب": 0, "🚀 هتاف فضائي": 0, "💪 دعم": 0 };
+                
                 if(post.userReaction === reactionType) {
-                    post.reactions[reactionType] -= 1;
+                    post.reactions[reactionType] = Math.max(0, (post.reactions[reactionType] || 1) - 1);
                     post.userReaction = null;
                 } else {
                     if(post.userReaction) {
-                        post.reactions[post.userReaction] -= 1;
+                        post.reactions[post.userReaction] = Math.max(0, (post.reactions[post.userReaction] || 1) - 1);
                     }
-                    post.reactions[reactionType] += 1;
+                    post.reactions[reactionType] = (post.reactions[reactionType] || 0) + 1;
                     post.userReaction = reactionType;
                 }
-                savePosts(posts);
-                loadPosts();
+                window.fsSetDoc(window.fsDoc(db, "spacePosts", String(post.id)), post);
             }
         }
 
         function addComment(postId, btn) {
+            const db = window.firebaseDb;
+            if(!db) return;
             const box = btn.closest(".comments-section");
             const input = box.querySelector(".comment-input");
             const text = input.value;
 
             if(text.trim() === "") return;
 
-            let posts = getPosts();
-            let post = posts.find(p => p.id === postId);
+            let post = globalPostsCache.find(p => String(p.id) === String(postId));
             if(post) {
+                if(!post.comments) post.comments = [];
                 post.comments.push({
                     author: "الكابتن عماد",
                     text: text,
                     image: ""
                 });
-                savePosts(posts);
-                loadPosts();
-                addNotification("تم إضافة تعليق جديد على أحد المنشورات في رادار الأسطول.", "feed");
+                window.fsSetDoc(window.fsDoc(db, "spacePosts", String(post.id)), post).then(() => {
+                    input.value = "";
+                    saveNotificationCloud("تم إضافة تعليق جديد على أحد المنشورات في رادار الأسطول.", "feed");
+                });
             }
         }
 
@@ -1171,7 +1252,7 @@
             const resBox = document.getElementById("calcResult");
             resBox.style.display = "block";
             resBox.innerHTML = `⛽ إجمالي استهلاك الوقود: ${totalLiters.toFixed(1)} لتر<br>💵 إجمالي تكلفة الرحلة: ${totalCost.toFixed(2)} جنيه`;
-            addNotification(`تم حساب رحلة جديدة مسافتها ${dist} كم بتكلفة ${totalCost.toFixed(2)} جنيه.`, "calculator");
+            saveNotificationCloud(`تم حساب رحلة جديدة مسافتها ${dist} كم بتكلفة ${totalCost.toFixed(2)} جنيه.`, "calculator");
         }
 
         function escapeHtml(text) {
