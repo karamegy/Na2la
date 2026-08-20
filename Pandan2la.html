@@ -223,7 +223,7 @@
                 <div class="avatar" onclick="switchSection('shipments')" id="header-avatar-btn">🐼</div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
-                        <h2 id="header-username" style="font-size: 11px;">كرم حمدي</h2>
+                        <h2 id="header-username" style="font-size: 11px;">المدير</h2>
                         <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل بـ Firestore سحابياً</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">👑 مدير نظام</span>
@@ -426,7 +426,7 @@
 
     function getSafeAmount(item) {
         if (!item) return 0;
-        let val = item.amount ?? item.price ?? item.remaining ?? item.total ?? item.value ?? item.totalAmount ?? 0;
+        let val = item.amount ?? item.price ?? item.remaining ?? item.total ?? item.value ?? item.totalAmount ?? item.remainingAmount ?? 0;
         return Number(val) || 0;
     }
 
@@ -511,7 +511,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { name: 'كرم حمدي', role: 'مدير نظام', title: 'أسطورة الطريق' };
+    let currentLoggedInUser = { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -522,7 +522,7 @@
         treasury: [],
         expenses: [],
         customers: [{ id: 1, name: 'عميل أجل افتراضي', accountOwner: 'عميل أجل افتراضي', phone: '01000000000', debt: 0 }],
-        drivers: [{ id: 1, name: 'كرم حمدي', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق' }],
+        drivers: [{ id: 1, name: 'المدير', phone: '01000000000', pin: '01036', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق' }],
         communityPosts: [],
         posts: [],
         wallPosts: [],
@@ -736,7 +736,7 @@
         let matchedDriver = (data.drivers || []).find(d => d.pin === pin);
         
         if(pin === '01036' || matchedDriver) {
-            window.currentLoggedInUser = pin === '01036' ? { name: 'كرم حمدي', role: 'مدير نظام', title: 'أسطورة الطريق' } : matchedDriver;
+            window.currentLoggedInUser = pin === '01036' ? { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق' } : matchedDriver;
             document.getElementById('lock-screen').style.display = 'none';
             logAction('تسجيل دخول ناجح');
             showToast('مرحباً بك! (' + window.currentLoggedInUser.role + ')');
@@ -749,7 +749,7 @@
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'كرم حمدي', role: 'مدير نظام', title: 'أسطورة الطريق' };
+        let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق' };
         let role = user.role;
         
         document.getElementById('header-username').innerText = user.name;
@@ -1365,6 +1365,7 @@
             amount: amount,
             price: amount,
             remaining: amount,
+            remainingAmount: amount,
             dueDate: document.getElementById('def-inv-date').value,
             status: 'pending',
             date: new Date().toLocaleDateString('ar-EG')
@@ -1583,6 +1584,69 @@
                 showToast('تم ضغط وتحميل صورة الشحنة بنجاح ✅');
             });
         }
+    }
+
+    function saveNewShipment(e) {
+        e.preventDefault();
+        const name = document.getElementById('s-name').value;
+        const phone = document.getElementById('s-phone').value;
+        const address = document.getElementById('s-address').value;
+        const item = document.getElementById('s-item').value;
+        const price = Number(document.getElementById('s-price').value || 0);
+        const priority = document.getElementById('s-priority').value;
+        const driver = document.getElementById('s-driver').value;
+        const isDeferred = document.getElementById('s-is-deferred')?.checked || false;
+
+        const shipmentId = 'INV-' + Date.now();
+        const newShipment = {
+            id: shipmentId,
+            name: name,
+            accountOwner: name,
+            clientName: name,
+            phone: phone,
+            clientPhone: phone,
+            address: address,
+            item: item,
+            description: item,
+            price: price,
+            amount: price,
+            priority: priority,
+            driver: driver,
+            img: temporaryShipmentImageBase64,
+            milestone: 'تم التسجيل',
+            status: 'في الانتظار',
+            gps: '30.0444,31.2357',
+            date: new Date().toLocaleDateString('ar-EG')
+        };
+
+        let data = appStateData();
+        let list = getAllShipments(data);
+        list.unshift(newShipment);
+        data.shipments = list;
+        data.docs = list;
+
+        if (isDeferred) {
+            if(!data.deferredInvoices) data.deferredInvoices = [];
+            data.deferredInvoices.unshift({
+                id: shipmentId,
+                name: name,
+                accountOwner: name,
+                clientName: name,
+                phone: phone,
+                clientPhone: phone,
+                amount: price,
+                price: price,
+                remaining: price,
+                remainingAmount: price,
+                dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
+                status: 'pending'
+            });
+        }
+
+        saveDataAll();
+        temporaryShipmentImageBase64 = '';
+        showToast('تم حفظ الرحلة والشحنة بنجاح! 📦');
+        switchSection('shipments');
     }
 
     function openInvoiceImageModal(index) {
@@ -1941,39 +2005,26 @@
         showToast('تم إضافة الحساب بنجاح وتحديث باندا!');
     }
 
-    function saveTreasury(e) {
-        e.preventDefault();
-        const newT = {
-            id: Date.now(),
-            type: document.getElementById('t-type').value,
-            amount: Number(document.getElementById('t-amount').value),
-            desc: document.getElementById('t-desc').value,
-            date: new Date().toLocaleDateString('ar-EG')
-        };
-        let data = appStateData();
-        if(!data.treasury) data.treasury = [];
-        data.treasury.unshift(newT);
-        saveDataAll();
-        switchSection('treasury');
-        showToast('تم تسجيل الحركة بنجاح!');
-    }
-
-    function saveExpense(e) {
-        e.preventDefault();
-        const title = document.getElementById('exp-title').value;
-        const newEx = {
-            id: Date.now(),
-            title: title,
-            desc: title,
-            amount: Number(document.getElementById('exp-amount').value),
-            date: new Date().toLocaleDateString('ar-EG')
-        };
-        let data = appStateData();
-        if(!data.expenses) data.expenses = [];
-        data.expenses.unshift(newEx);
-        saveDataAll();
-        switchSection('expenses');
-        showToast('تم حفظ المصروف بنجاح!');
+    function deleteItem(type, index) {
+        if(confirm('هل أنت متأكد من الحذف النهائي؟')) {
+            let data = appStateData();
+            if(type === 'shipments') {
+                let list = getAllShipments(data);
+                let deletedItem = list.splice(index, 1)[0];
+                data.shipments = list;
+                data.docs = list;
+                if(deletedItem && deletedItem.id) {
+                    db.collection('shipments').doc(String(deletedItem.id)).delete().catch(e => console.error(e));
+                }
+            } else if(data[type]) {
+                let deletedItem = data[type].splice(index, 1)[0];
+                if(deletedItem && deletedItem.id) {
+                    db.collection(type).doc(String(deletedItem.id)).delete().catch(e => console.error(e));
+                }
+            }
+            saveDataAll();
+            showToast('تم الحذف بنجاح!');
+        }
     }
 
     function registerNewDriverPublic() {
@@ -2040,6 +2091,7 @@
                 amount: vPrice,
                 price: vPrice,
                 remaining: vPrice,
+                remainingAmount: vPrice,
                 dueDate: new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],
                 status: 'pending'
             });
