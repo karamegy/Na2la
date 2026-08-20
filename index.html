@@ -594,8 +594,9 @@
                 <select id="my-edit-title" style="font-weight:bold;"></select>
                 <button type="submit" class="btn-success" style="margin-top: 8px;">حفظ وتحديث البيانات 💾</button>
             </form>
-            <div style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <div style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
                 <button type="button" class="btn-warning btn-sm" onclick="changeAdminPinPrompt()">🔑 تغيير كلمة السر (رمز PIN)</button>
+                <button type="button" class="btn-main btn-sm" onclick="requestPasswordOrPinReset()">🔄 استعادة وتعديل متقدم</button>
             </div>
         </div>
 
@@ -1128,12 +1129,13 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // دالة إنهاء ومعالجة تسجيل الدخول عبر Google أو الهاتف مع المطابقة السحابية
+        // دالة إنهاء تسجيل الدخول عبر Google أو الهاتف مع الاستعلام السحابي المباشر ومزامنة البروفايل
         async function finishOAuthLogin(user, role) {
+            currentUserRole = role;
             const userName = user.displayName || user.email || user.phoneNumber || 'سائق جديد';
             const userPhone = user.phoneNumber || '';
-            const userEmail = user.email || '';
             const userPhoto = user.photoURL || '';
+            const userEmail = user.email || '';
 
             try {
                 const snapshot = await db.collection('drivers').get();
@@ -1141,21 +1143,21 @@
 
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    if ((userEmail && d.email === userEmail) || (userPhone && d.phone === userPhone) || d.name === userName) {
+                    if ((userPhone && d.phone === userPhone) || (userEmail && d.email === userEmail) || d.name === userName) {
                         existingDrv = d;
                     }
                 });
 
                 if (!existingDrv) {
-                    let pinInput = prompt("أهلاً بك! أدعوك لإدخال الرقم السري (PIN) المخصص لحسابك الجديد:");
+                    let pinInput = prompt("أهلاً بك! أدخل الرقم السري (PIN) المخصص لحسابك الجديد:");
                     if (!pinInput) pinInput = "01036";
 
                     let newId = String(Date.now());
                     let newDrv = {
                         id: newId,
                         name: userName,
-                        email: userEmail,
                         phone: userPhone || '01000000000',
+                        email: userEmail,
                         pin: pinInput,
                         role: role || 'سائق',
                         title: 'سائق معتمد',
@@ -1165,9 +1167,13 @@
                     };
                     await db.collection('drivers').doc(newId).set(newDrv);
                     loggedInDriverName = userName;
-                    currentUserRole = role || 'driver';
                 } else {
                     loggedInDriverName = existingDrv.name;
+                    existingDrv.avatar = userPhoto || existingDrv.avatar;
+                    existingDrv.email = userEmail || existingDrv.email;
+                    if(userPhone) existingDrv.phone = userPhone;
+                    await db.collection('drivers').doc(String(existingDrv.id)).set(existingDrv, { merge: true });
+
                     if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد') {
                         currentUserRole = 'admin';
                     } else if (existingDrv.role === 'مشرف') {
@@ -1191,25 +1197,16 @@
                 
                 initRealtimeListeners();
                 render();
+                alert('تمت مزامنة بيانات الحساب والبروفايل بنجاح! 📱🌐🚀');
             } catch (err) {
-                console.error('خطأ أثناء مزامنة بيانات الحساب:', err);
+                alert('خطأ أثناء مزامنة بيانات الحساب: ' + err.message);
             }
         }
 
-        // تم تحسين دالة تسجيل الدخول بجوجل لتستخدم Popup كخيار أول لتفادي مشاكل إعادة التوجيه
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).then((result) => {
-                if (result && result.user) {
-                    finishOAuthLogin(result.user, 'driver');
-                }
-            }).catch((error) => {
-                // إذا تم حظر النافذة المنبثقة يتم التحويل تلقائياً لـ Redirect
-                if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-                    auth.signInWithRedirect(provider);
-                } else {
-                    alert("فشل تسجيل الدخول بجوجل: " + error.message);
-                }
+            auth.signInWithRedirect(provider).catch((error) => {
+                alert("فشل تسجيل الدخول بجوجل: " + error.message);
             });
         }
 
@@ -1218,9 +1215,10 @@
                 finishOAuthLogin(result.user, 'driver');
             }
         }).catch((error) => {
-            console.error("خطأ في إعادة توجيه جوجل:", error);
+            console.error("خطأ في إعادة توجيه جوجل:", error.message);
         });
 
+        // دالة تسجيل الدخول برقم الهاتف مع معالجة الأخطاء والتحقق
         function promptPhoneSignIn() {
             let rawPhone = prompt("أدخل رقم الهاتف متبوعاً برمز الدولة (مثال: +20114099799 بدون مسافات):");
             if (!rawPhone) return;
@@ -1229,14 +1227,15 @@
 
             if (!window.recaptchaVerifier) {
                 window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-                    'size': 'invisible'
+                    'size': 'invisible',
+                    'callback': (response) => {}
                 });
             }
 
             const appVerifier = window.recaptchaVerifier;
             auth.signInWithPhoneNumber(phoneNumber, appVerifier)
                 .then((confirmationResult) => {
-                    let verificationCode = prompt("تم إرسال رمز التحقق التجريبي. أدخل الرمز المكون من 6 أرقام (مثال: 123456):");
+                    let verificationCode = prompt("تم إرسال رمز التحقق. أدخل رمز التحقق المكون من 6 أرقام (أو الرقم التجريبي المضاف في لوحة Firebase):");
                     if (verificationCode) {
                         return confirmationResult.confirm(verificationCode.trim());
                     }
@@ -1248,8 +1247,26 @@
                     }
                 })
                 .catch((error) => {
-                    alert("فشل التحقق من رقم الهاتف: " + error.message);
+                    alert("فشل التحقق من رقم الهاتف: " + error.message + "\nتأكد من إضافة رقم الهاتف كـ Test Phone Number في لوحة Firebase Console.");
                 });
+        }
+
+        // إضافة ميزة طلب تعديل أو استعادة الرقم السري أو كلمة المرور
+        function requestPasswordOrPinReset() {
+            let resetType = prompt("اختر طريقة استعادة/تعديل كلمة السر:\n1. تعديل رقم السري (PIN) المباشر للنظام\n2. إرسال رابط إعادة تعيين كلمة المرور عبر البريد (Google/Email)\n\nاكتب رقم الخيار (1 أو 2):");
+            
+            if (resetType === "1") {
+                changeAdminPinPrompt();
+            } else if (resetType === "2") {
+                let email = prompt("أدخل بريدك الإلكتروني المرتبط بالحساب (مثل بريد جوجل):");
+                if (email) {
+                    auth.sendPasswordResetEmail(email.trim()).then(() => {
+                        alert("تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني بنجاح! 📧");
+                    }).catch((error) => {
+                        alert("فشل إرسال البريد: " + error.message);
+                    });
+                }
+            }
         }
 
         function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
@@ -1373,15 +1390,14 @@
             });
         }
 
-        // تم تحديث مراقب الجلسة ليكون أكثر مرونة وثباتاً عند العودة للموقع
-        auth.onAuthStateChanged(async user => {
+        auth.onAuthStateChanged(user => {
             const savedRole = localStorage.getItem('current_user_role');
-            if (user) {
-                await finishOAuthLogin(user, savedRole || 'driver');
-            } else if (savedRole) {
-                currentUserRole = savedRole;
-                loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+            if (user || savedRole) {
                 document.getElementById('lock-screen').style.display = 'none';
+                if (savedRole && !currentUserRole) {
+                    currentUserRole = savedRole;
+                    loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+                }
                 setupNavigation();
                 if (currentUserRole === 'admin') setAdminUIMode();
                 else if (currentUserRole === 'supervisor') setSupervisorUIMode();
@@ -1391,6 +1407,23 @@
             } else {
                 document.getElementById('lock-screen').style.display = 'flex';
             }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedRole = localStorage.getItem('current_user_role');
+            if (savedRole) {
+                currentUserRole = savedRole;
+                loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+                setupNavigation();
+                if (currentUserRole === 'admin') setAdminUIMode();
+                else if (currentUserRole === 'supervisor') setSupervisorUIMode();
+                else setDriverUIMode();
+                initRealtimeListeners();
+                render();
+            }
+            renderRSSTicker();
         });
 
         function updateRSSTickerText() {
