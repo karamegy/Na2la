@@ -552,25 +552,31 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // الاستماع الفوري المزدوج للوثيقة العامة وللمجموعات المستقلة
+    // الاستماع الفوري المزدوج والمنسق لمنع التضارب بين المجموعات والوثيقة العامة
     async function loadAllDataFromFirestoreMultiCollection() {
         try {
+            // 1. الوثيقة العامة
             db.collection("appStore").doc("mainState").onSnapshot((doc) => {
-                if (window._isSavingLocally) return;
-                if (doc.exists) {
-                    const data = doc.data();
-                    if (data.deferredInvoices && data.deferredInvoices.length > 0) appData.deferredInvoices = data.deferredInvoices;
-                    if (data.shipments && data.shipments.length > 0) { appData.shipments = data.shipments; appData.docs = data.shipments; }
-                    if (data.treasury && data.treasury.length > 0) appData.treasury = data.treasury;
-                    if (data.expenses && data.expenses.length > 0) appData.expenses = data.expenses;
-                    if (data.drivers && data.drivers.length > 0) appData.drivers = data.drivers;
-                    if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
-                    window.appData = appData;
-                    renderStats();
-                    refreshActiveSection();
+                if (window._isSavingLocally || !doc.exists) return;
+                const data = doc.data();
+                if (data.treasury) appData.treasury = data.treasury;
+                if (data.expenses) appData.expenses = data.expenses;
+                if (data.drivers) appData.drivers = data.drivers;
+                if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
+                
+                if (data.deferredInvoices && (!appData.deferredInvoices || appData.deferredInvoices.length === 0)) {
+                    appData.deferredInvoices = data.deferredInvoices;
                 }
+                if (data.shipments && (!appData.shipments || appData.shipments.length === 0)) {
+                    appData.shipments = data.shipments;
+                    appData.docs = data.shipments;
+                }
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
             });
 
+            // 2. الشحنات المباشرة
             db.collection("shipments").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -582,15 +588,18 @@
                 }
             });
 
+            // 3. فواتير الأجل المباشرة
             db.collection("deferredInvoices").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
                     appData.deferredInvoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     window.appData = appData;
+                    renderStats();
                     refreshActiveSection();
                 }
             });
 
+            // 4. الخزينة
             db.collection("treasury").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -600,6 +609,7 @@
                 }
             });
 
+            // 5. المصروفات
             db.collection("expenses").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -609,6 +619,7 @@
                 }
             });
 
+            // 6. السائقون
             db.collection("drivers").onSnapshot((snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -638,7 +649,7 @@
         });
     }
 
-    // الحفظ المزدوج لمنع أي تعارض
+    // الحفظ المزدوج الموحد لمنع تعارض الوثائق
     window.saveDataAll = function() {
         window._isSavingLocally = true;
 
@@ -822,6 +833,7 @@
     }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
+    // تصحيح دالة حساب الإحصائيات لتصفية الفواتير غير المسددة فقط
     function renderStats() {
         let data = appStateData();
         let shipments = getAllShipments(data);
@@ -832,7 +844,11 @@
         let rev = shipments.reduce((s, x) => s + getSafeAmount(x), 0);
         let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
         let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
-        let debts = deferredList.reduce((s, c) => s + getSafeAmount(c), 0);
+        
+        // حساب الديون والأجل المعلق وغير المسدد فقط
+        let debts = deferredList
+            .filter(c => getSafeStatus(c) !== 'paid')
+            .reduce((s, c) => s + getSafeAmount(c), 0);
 
         if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = shipments.length;
         if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = rev.toLocaleString() + ' ج.م';
@@ -856,7 +872,8 @@
         
         if (sectionId === 'deferredInvoices') {
             let deferredList = data.deferredInvoices || [];
-            let totalDeferred = deferredList.reduce((s, x) => s + getSafeAmount(x), 0);
+            let totalDeferred = deferredList.filter(x => getSafeStatus(x) !== 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
+            let totalPaidMonth = deferredList.filter(x => getSafeStatus(x) === 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
 
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
@@ -877,7 +894,7 @@
                         </div>
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--green-success); text-align:center;">
                             <span style="font-size:8px; color:var(--text-muted);">المحصل هذا الشهر</span>
-                            <p style="font-size:11px; font-weight:bold; color:var(--green-success); margin-top:2px;">0 ج.م</p>
+                            <p style="font-size:11px; font-weight:bold; color:var(--green-success); margin-top:2px;">${totalPaidMonth.toLocaleString()} ج.م</p>
                         </div>
                     </div>
 
@@ -919,6 +936,7 @@
                                         <td>${d.dueDate || d.date || '-'}</td>
                                         <td><span class="badge ${st === 'paid' ? 'bg-delivered' : 'bg-pending'}">${st === 'paid' ? 'مسدد' : 'معلق'}</span></td>
                                         <td>
+                                            ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                                             <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                                         </td>
@@ -1349,6 +1367,19 @@
         renderStats();
     }
 
+    // دالة تسديد الفاتورة ومزامنتها فورياً
+    function markDeferredAsPaid(index) {
+        let data = appStateData();
+        if (!data.deferredInvoices || !data.deferredInvoices[index]) return;
+        
+        data.deferredInvoices[index].status = 'paid';
+        data.deferredInvoices[index].remainingAmount = 0;
+        data.deferredInvoices[index].remaining = 0;
+        
+        saveDataAll();
+        showToast('تم تسديد الفاتورة بنجاح ومزامنتها سحابياً! ✅');
+    }
+
     function saveDeferredInvoice(e) {
         e.preventDefault();
         const name = document.getElementById('def-inv-name').value;
@@ -1412,6 +1443,7 @@
                 <td>${d.dueDate || d.date || '-'}</td>
                 <td><span class="badge ${st === 'paid' ? 'bg-delivered' : 'bg-pending'}">${st === 'paid' ? 'مسدد' : 'معلق'}</span></td>
                 <td>
+                    ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                     <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
                     <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                 </td>
