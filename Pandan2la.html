@@ -176,7 +176,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة المستقلة التلقائية للصور والصلاحيات...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة المستقلة التلقائية للصلاحيات...</span>
                 </div>
             </div>
         </div>
@@ -188,9 +188,9 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">جاري المزامنة...</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن مستقل</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن تلقائياً</span>
                     </div>
-                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة مستقلة</span>
+                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة ذكية</span>
                 </div>
             </div>
             <div style="display: flex; gap: 4px;">
@@ -521,39 +521,67 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // المزامنة المستقلة التلقائية الحقيقية لكل مستخدم/سائق على حدة منعاً لتداخل الصلاحيات
+    // المزامنة التلقائية والذكية للحساب عبر الرابط أو التخزين المحلي
     function initIndependentUserSync() {
-        const savedUser = localStorage.getItem('na2la_independent_user_v90');
-        let currentUserId = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
 
+        if (urlUserId) {
+            db.collection("drivers").where("id", "==", urlUserId).get().then(snapshot => {
+                if (!snapshot.empty) {
+                    let docData = snapshot.docs[0].data();
+                    window.currentLoggedInUser = { id: urlUserId, ...docData };
+                    localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                    applyUserPermissionsUI();
+                    showToast(`تم مزامنة حساب (${getSafeName(docData)}) تلقائياً بنجاح! ✅`);
+                } else {
+                    db.collection("drivers").where("phone", "==", urlUserId).get().then(phoneSnapshot => {
+                        if (!phoneSnapshot.empty) {
+                            let docData = phoneSnapshot.docs[0].data();
+                            window.currentLoggedInUser = docData;
+                            localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                            applyUserPermissionsUI();
+                            showToast(`تم مزامنة حساب (${getSafeName(docData)}) تلقائياً بنجاح! ✅`);
+                        } else {
+                            loadFromLocalStorageOrFallback();
+                        }
+                    });
+                }
+            }).catch(err => loadFromLocalStorageOrFallback());
+        } else {
+            loadFromLocalStorageOrFallback();
+        }
+    }
+
+    function loadFromLocalStorageOrFallback() {
+        const savedUser = localStorage.getItem('na2la_independent_user_v90');
         if (savedUser) {
             try {
                 window.currentLoggedInUser = JSON.parse(savedUser);
-                currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
+                let currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
                 applyUserPermissionsUI();
-            } catch(e) {}
-        } else {
-            window.currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
-            applyUserPermissionsUI();
-        }
-
-        if (currentUserId) {
-            db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
-                if (!snapshot.empty) {
-                    let docData = snapshot.docs[0].data();
-                    let name = getSafeName(docData);
-                    let role = docData.role || 'سائق';
-                    let title = docData.title || 'سائق مستقل';
-                    let avatar = docData.avatar || '';
-
-                    window.currentLoggedInUser = { id: currentUserId, name, role, title, avatar };
-                    localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
-                    applyUserPermissionsUI();
+                
+                if (currentUserId) {
+                    db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
+                        if (!snapshot.empty) {
+                            let docData = snapshot.docs[0].data();
+                            window.currentLoggedInUser = { id: currentUserId, ...docData };
+                            localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                            applyUserPermissionsUI();
+                        }
+                    });
                 }
-            }, err => {
-                applyUserPermissionsUI();
-            });
+            } catch(e) {
+                fallbackDefaultUser();
+            }
+        } else {
+            fallbackDefaultUser();
         }
+    }
+
+    function fallbackDefaultUser() {
+        window.currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+        applyUserPermissionsUI();
     }
 
     function loadAllDataFromFirestoreMultiCollection() {
@@ -739,7 +767,6 @@
         showToast('تم تغيير الثيم بنجاح');
     }
 
-    // تطبيق الصلاحيات وعرض الصورة الشخصية الحقيقية (avatar) والاسم والرتبة في الهيدر تلقائياً
     function applyUserPermissionsUI() {
         let user = window.currentLoggedInUser || { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
         let role = user.role;
@@ -2024,7 +2051,6 @@
         showToast('تم التحديث بنجاح');
     }
 
-    // تصحيح دالة حفظ السائق الجديد لإنشاء وثيقة مستقلة في مجموعة drivers سحابياً
     function saveNewDriver(e) {
         e.preventDefault();
         const name = document.getElementById('new-d-name').value;
