@@ -335,7 +335,6 @@
         <marquee scrollamount="5" id="news-ticker-marquee">🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة والمزامنة اللحظية الشاملة 🚀</marquee>
     </div>
 
-    <!-- شاشة تسجيل الدخول المجدولة والمضبوطة لمنع التكرار -->
     <div id="lock-screen">
         <div class="login-gateway-box">
             <h3 style="margin-bottom: 6px; color: #38bdf8; font-size: 17px;">🐎 أسطورة الطريق (Na2la)</h3>
@@ -351,7 +350,6 @@
                     🌐 تسجيل الدخول باستخدام جوجل (Google)
                 </button>
 
-                <!-- زر تسجيل الدخول برقم الهاتف حصرياً من قائمة الهاتف والأرقام بدون لوحة مفاتيح عشوائية -->
                 <button type="button" onclick="promptPhoneSignIn()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white;">
                     📱 تسجيل الدخول برقم الهاتف وإرسال كود التفعيل (SMS)
                 </button>
@@ -1133,7 +1131,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // تحسين دالة تسجيل الدخول عبر الهاتف ومنع التكرار وربطها برقم الهاتف الفعلي مع كود التحقق SMS
         async function finishOAuthLogin(user, role) {
             currentUserRole = role;
             const userName = user.displayName || user.email || user.phoneNumber || 'سائق معتمد';
@@ -1147,14 +1144,12 @@
 
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    // مطابقة دقيقة برقم الهاتف أو البريد الإلكتروني لمنع إنشاء حسابات وهمية مكررة
                     if ((userPhone && d.phone === userPhone) || (userEmail && d.email === userEmail) || (userPhone && d.phone && d.phone.slice(-9) === userPhone.slice(-9))) {
                         existingDrv = d;
                     }
                 });
 
                 if (!existingDrv) {
-                    // إذا كان رقم الهاتف غير موجود، لا نقوم بإنشاء حساب وهمي برقم افتراضي، بل نطلب البيانات الصحيحة
                     let pinInput = prompt("أهلاً بك! أدخل الرقم السري (PIN) المخصص لحسابك:");
                     if (!pinInput) pinInput = "01036";
 
@@ -1224,7 +1219,6 @@
                 });
         }
 
-        // تحسين نافذة وإدخال رقم الهاتف مع حقل هاتف مخصص واختيار رقم الهاتف من الهاتف
         function promptPhoneSignIn() {
             let rawPhone = prompt("أدخل رقم هاتفك المحمول متبوعاً برمز الدولة (مثال: +20114099799):");
             if (!rawPhone) return;
@@ -1278,7 +1272,6 @@
             }
         }
 
-        // دالة ضغط الصور المحسنة لضمان حفظ البيانات بدقة وجودة عالية جداً
         function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.9, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -1371,7 +1364,7 @@
                         const defaultAdmin = {
                             id: "1",
                             name: 'المدير',
-                            phone: '01000000000',
+                            phone: '+201114099799',
                             pin: storedPin || '01036',
                             status: 'متاح 🟢',
                             role: 'مدير نظام',
@@ -2309,35 +2302,56 @@
             }
         }
 
-        function getOrCreateCurrentDriver() {
+        // دالة قراءة بيانات المستخدم فقط بدون إنشاء عشوائي أو تضارب مع كاش محلي
+        function getCurrentDriver() {
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-            let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
+            let drv = null;
+
+            if (appData.drivers && appData.drivers.length > 0) {
+                if (activeTargetName === 'المدير') {
+                    drv = appData.drivers.find(d => d.name === 'المدير' && d.phone && d.phone !== '01000000000');
+                }
+                if (!drv) {
+                    drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
+                }
+            }
+
+            if (!drv && !viewingProfileName) {
+                let cachedData = localStorage.getItem('logged_in_driver_cache');
+                if (cachedData) {
+                    try { drv = JSON.parse(cachedData); } catch(e) {}
+                }
+            }
+
             if (!drv) {
-                let newId = String(Date.now());
                 drv = {
-                    id: newId,
+                    id: 'default_admin_id',
                     name: activeTargetName,
-                    phone: '01000000000',
-                    pin: storedPin,
-                    role: currentUserRole === 'admin' ? 'مدير نظام' : 'سائق',
+                    phone: activeTargetName === 'المدير' ? '+201114099799' : '',
+                    role: activeTargetName === 'المدير' ? 'admin' : 'سائق',
                     title: 'أسطورة الطريق',
                     status: 'متاح 🟢',
                     avatar: '',
                     cover: '',
-                    coverHeight: 180
+                    coverHeight: 180,
+                    advances: 0
                 };
-                db.collection('drivers').doc(newId).set(drv);
+            } else {
+                if (!viewingProfileName) {
+                    localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
+                    localStorage.setItem('logged_in_driver_id', drv.id);
+                    localStorage.setItem('logged_in_driver_name', drv.name);
+                }
             }
             return drv;
         }
 
         function renderMyAccount() {
-            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-            let drv = getOrCreateCurrentDriver();
+            let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name;
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone} | الرتبة: ${drv.role}`;
+            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role}`;
             
             let myShipmentsCount = (appData.shipments || []).filter(s => s.assignedDriver === drv.name).length;
             document.getElementById('gplus-stat-shipments').innerText = myShipmentsCount;
@@ -2363,7 +2377,7 @@
                 document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي';
                 
                 document.getElementById('my-edit-name').value = drv.name;
-                document.getElementById('my-edit-phone').value = drv.phone;
+                document.getElementById('my-edit-phone').value = drv.phone || '';
                 
                 const titleSelect = document.getElementById('my-edit-title');
                 titleSelect.innerHTML = '';
@@ -2385,16 +2399,17 @@
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
             avatarPreview.innerHTML = drv.avatar ? `<img src="${drv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
 
-            loadAndRenderProfileWall(activeTargetName);
+            loadAndRenderProfileWall(drv.name);
             renderProfileDriverSearch();
         }
 
         function adjustCoverHeight(delta) {
-            let drv = getOrCreateCurrentDriver();
+            let drv = getCurrentDriver();
             let currentH = drv.coverHeight || 180;
             let newH = Math.min(450, Math.max(100, currentH + delta));
             drv.coverHeight = newH;
-            db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+            db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                 renderMyAccount();
             });
         }
@@ -2408,9 +2423,10 @@
             const file = input.files[0];
             if (file) {
                 compressImage(file, 600, 600, 0.9, (compressedUrl) => {
-                    let drv = getOrCreateCurrentDriver();
+                    let drv = getCurrentDriver();
                     drv.avatar = compressedUrl;
-                    db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                        localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                         renderMyAccount();
                         alert('تم رفع وتحديث الصورة الشخصية بجودة عالية بنجاح! 📷');
                     });
@@ -2422,9 +2438,10 @@
             const file = input.files[0];
             if (file) {
                 compressImage(file, 1400, 900, 0.92, (compressedUrl) => {
-                    let drv = getOrCreateCurrentDriver();
+                    let drv = getCurrentDriver();
                     drv.cover = compressedUrl;
-                    db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                        localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                         renderMyAccount();
                         alert('تم تحديث صورة الغلاف بجودة عالية بنجاح! 🖼️✨');
                     });
@@ -2433,7 +2450,7 @@
         }
 
         function saveMyProfileChanges() {
-            let drv = getOrCreateCurrentDriver();
+            let drv = getCurrentDriver();
             drv.name = document.getElementById('my-edit-name').value.trim();
             drv.phone = document.getElementById('my-edit-phone').value.trim();
             drv.title = document.getElementById('my-edit-title').value;
@@ -2441,7 +2458,8 @@
             loggedInDriverName = drv.name;
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
             
-            db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+            db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                 alert('تم تحديث بروفايلك الشخصي ورقم الهاتف بنجاح! 💾');
                 renderMyAccount();
             }).catch(err => {
@@ -2801,7 +2819,7 @@
             let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.title = newTitle;
-                db.collection('drivers').doc(String(drv.id)).set(drv);
+                db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true });
                 alert(`تم تحديث اللقب إلى: ${newTitle} 🎖️`);
             }
         }
@@ -2810,7 +2828,7 @@
             let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.status = newStatus;
-                db.collection('drivers').doc(String(drv.id)).set(drv);
+                db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true });
             }
         }
 
@@ -2847,7 +2865,7 @@
             let drv = (appData.drivers || []).find(d => String(d.id) === String(id));
             if(drv) {
                 drv.role = newRole;
-                db.collection('drivers').doc(String(drv.id)).set(drv);
+                db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true });
                 alert(`تم تحديث الصلاحية إلى: ${newRole}`);
             }
         }
@@ -3309,7 +3327,7 @@
             let pay = prompt(`المبلغ المراد تحصيله من (${cust.name}) المتبقي (${cust.debt} ج.م):`);
             if (pay && !isNaN(pay)) {
                 cust.debt = Math.max(0, Number(cust.debt) - Number(pay));
-                db.collection('customers').doc(String(cust.id || cust.name)).set(cust);
+                db.collection('customers').doc(String(cust.id || cust.name)).set(cust, { merge: true });
             }
         }
 
