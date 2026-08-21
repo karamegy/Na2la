@@ -513,7 +513,7 @@
         </div>
     </div>
 
-    <!-- سكريبت المزامنة السحابية المستقلة الحديثة المحدث والمصحح للعزل التام للحسابات (V10 Modular SDK) -->
+    <!-- سكريبت المزامنة السحابية المستقلة المحدث والمدمج لدعم تعدد مفاتيح الجلسة (V10 Modular SDK) -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -581,17 +581,22 @@
             }, 500);
         });
 
+        // تم تحديث الدالة لفحص جميع مفاتيح التخزين المتاحة لضمان تطابق الجلسة مع غرفة العمليات
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
 
             if (urlUserId) {
                 fetchDriverData(urlUserId);
-            } else {
-                const savedUser = localStorage.getItem('na2la_independent_user_v98');
-                if (savedUser) {
+                return;
+            }
+
+            const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
+            for (let key of savedUserKeys) {
+                const saved = localStorage.getItem(key);
+                if (saved) {
                     try {
-                        let parsed = JSON.parse(savedUser);
+                        let parsed = JSON.parse(saved);
                         if (parsed && parsed.id) {
                             window.currentLoggedInUser = parsed;
                             applyUserPermissionsUI();
@@ -599,8 +604,9 @@
                         }
                     } catch(e) {}
                 }
-                applyUserPermissionsUI();
             }
+
+            applyUserPermissionsUI();
         }
 
         async function fetchDriverData(identifier) {
@@ -613,8 +619,9 @@
                     let docData = snapshot.docs[0].data();
                     window.currentLoggedInUser = { id: identifier, ...docData };
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                    localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
                     applyUserPermissionsUI();
-                    initFirestoreSync(); // إعادة تشغيل المستمعات لتعمل حصرياً على بيانات المستخدم الجديد
+                    initFirestoreSync();
                 } else {
                     const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
                     const phoneSnapshot = await getDocs(q2);
@@ -622,10 +629,11 @@
                         let docData = phoneSnapshot.docs[0].data();
                         window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
                         localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                        localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
                         applyUserPermissionsUI();
                         initFirestoreSync();
                     } else {
-                        alert("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
+                        console.warn("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
                     }
                 }
             } catch(err) { console.error(err); }
@@ -710,7 +718,6 @@
             renderAllFinancials();
         }
 
-        // دالة المزامنة السحابية المحدثة للفلترة المخصصة لكل مستخدم لحظياً
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
