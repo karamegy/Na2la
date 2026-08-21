@@ -204,7 +204,7 @@
         </div>
     </div>
 
-    <!-- ميزة جديدة 1: مؤشرات الأداء والتقييمات الحية -->
+    <!-- مؤشرات الأداء والتقييمات الحية -->
     <div class="card" style="border: 2px solid var(--success);">
         <h3 style="color: var(--success);">⭐ مؤشرات الأداء والتقييمات الاحترافية</h3>
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; font-size: 11px;">
@@ -220,7 +220,7 @@
         </div>
     </div>
 
-    <!-- ميزة جديدة 2: متابعة الصيانة الدورية وتراخيص الأسطول -->
+    <!-- حالة الأسطول والصيانة الدورية -->
     <div class="card" style="border: 2px solid var(--warning);">
         <h3 style="color: var(--warning);">🛠️ حالة الأسطول والصيانة الدورية</h3>
         <div style="font-size: 11px; display: flex; flex-direction: column; gap: 6px;">
@@ -353,9 +353,9 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
-        let currentUserRole = localStorage.getItem('current_user_role') || 'driver';
+        let currentUserRole = localStorage.getItem('current_user_role') || 'admin';
         let loggedInDriverId = localStorage.getItem('logged_in_driver_id') || null;
-        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
         let viewingProfileId = null;
         let viewingProfileName = null;
         let appData = { drivers: [], shipments: [] };
@@ -420,8 +420,11 @@
         }
 
         function getOrCreateCurrentDriver() {
+            let savedName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
+            let savedRole = localStorage.getItem('current_user_role') || (savedName === 'المدير' ? 'admin' : 'سائق');
+            
             let activeTargetId = viewingProfileId ? viewingProfileId : loggedInDriverId;
-            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+            let activeTargetName = viewingProfileName ? viewingProfileName : savedName;
             
             let drv = null;
 
@@ -430,25 +433,26 @@
                     drv = appData.drivers.find(d => d.id === activeTargetId);
                 }
                 if (!drv && activeTargetName) {
-                    if (activeTargetName === 'المدير') {
-                        drv = appData.drivers.find(d => d.name === 'المدير' && d.phone && d.phone !== '01000000000');
-                    }
-                    if (!drv) {
-                        drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
-                    }
+                    drv = appData.drivers.find(d => 
+                        (d.name && d.name.trim() === activeTargetName.trim()) || 
+                        (activeTargetName === 'المدير' && (d.role === 'admin' || d.phone === '+201114099799'))
+                    );
                 }
             }
 
+            if (!drv && activeTargetName === 'المدير') {
+                drv = (appData.drivers || []).find(d => d.role === 'admin' || d.phone === '+201114099799');
+            }
+
             if (!drv) {
-                let newId = activeTargetId || (appData.drivers.length > 0 ? String(Date.now()) : (localStorage.getItem('logged_in_driver_id') || String(Date.now())));
-                
+                let newId = activeTargetId || String(Date.now());
                 drv = {
                     id: newId,
                     name: activeTargetName,
-                    phone: activeTargetName === 'المدير' ? '+201114099799' : '01000000000',
+                    phone: activeTargetName === 'المدير' ? '+201114099799' : '01012345678',
                     pin: '01036',
-                    role: activeTargetName === 'المدير' ? 'admin' : 'سائق',
-                    title: 'أسطورة الطريق',
+                    role: savedRole,
+                    title: activeTargetName === 'المدير' ? 'أسطورة الطريق' : 'سائق معتمد',
                     status: 'متاح 🟢',
                     avatar: '',
                     cover: '',
@@ -457,10 +461,13 @@
                 };
                 
                 localStorage.setItem('logged_in_driver_id', newId);
+                localStorage.setItem('logged_in_driver_name', drv.name);
                 db.collection('drivers').doc(newId).set(drv, { merge: true });
             } else {
                 localStorage.setItem('logged_in_driver_id', drv.id);
                 localStorage.setItem('logged_in_driver_name', drv.name);
+                loggedInDriverId = drv.id;
+                loggedInDriverName = drv.name;
             }
             return drv;
         }
@@ -477,12 +484,10 @@
             document.getElementById('gplus-stat-role').innerText = drv.role;
             document.getElementById('gplus-stat-status').innerText = drv.status;
 
-            // حساب الأداء والتقييمات بناءً على عدد الشحنات المنجزة
             let completedCount = myShipments.filter(s => s.status === 'مكتملة').length;
             document.getElementById('perf-rating').innerText = completedCount > 0 ? '5.0 / 5' : '4.9 / 5';
             document.getElementById('perf-on-time').innerText = completedCount > 0 ? '100%' : '98%';
 
-            // محفظة الأرباح
             let totalEarnings = myShipments.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
             document.getElementById('wallet-total-earnings').innerText = totalEarnings.toLocaleString() + ' ج.م';
             document.getElementById('wallet-advances').innerText = (drv.advances || 0).toLocaleString() + ' ج.م';
@@ -798,7 +803,7 @@
                 width: 140,
                 height: 140
             });
-            document.getElementById('driverDriverQRModal') || document.getElementById('driverQRModal').style.display = 'flex';
+            document.getElementById('driverQRModal').style.display = 'flex';
         }
 
         function closeDriverQRModal() {
