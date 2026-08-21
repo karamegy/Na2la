@@ -532,17 +532,28 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة
+    // 🔒 محرك مزامنة الحسابات المستقلة المحدث لضمان جلب السائق المتصل بدقة
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
-        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
+        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
         if (urlUserId) {
             fetchDriverData(urlUserId.trim());
             return;
         }
 
+        // التحقق أولاً من معرف السائق المخزن سابقاً عبر المنصة الأم
+        const savedDriverId = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('na2la_active_driver_id');
+        if (savedDriverId) {
+            fetchDriverData(savedDriverId.trim());
+            return;
+        }
+
         let activeUser = null;
-        const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_active_session', 'na2la_user', 'currentUser', 'user', 'driver'];
+        const savedUserKeys = [
+            'logged_in_driver_id', 'logged_in_driver_name', 'na2la_current_user_name',
+            'na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_active_session', 
+            'na2la_user', 'currentUser', 'user', 'driver'
+        ];
         for (let key of savedUserKeys) {
             const saved = localStorage.getItem(key);
             if (saved) {
@@ -552,7 +563,13 @@
                         activeUser = parsed;
                         break;
                     }
-                } catch(e) {}
+                } catch(e) {
+                    // لو القيمة المخزنة نصية (مثل الاسم أو المعرف مباشرة)
+                    if (typeof saved === 'string' && saved.trim() !== '') {
+                        fetchDriverData(saved.trim());
+                        return;
+                    }
+                }
             }
         }
 
@@ -571,11 +588,13 @@
 
         if (activeUser) {
             window.currentLoggedInUser = activeUser;
+            localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             return;
         }
         
+        // إذا لم توجد أي جلسة سابقة، لا نفترض المدير عشوائياً بل نبحث أو نطلب التحديد
         fetchDriverData('1');
     }
 
@@ -592,12 +611,14 @@
                     window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق' };
                 }
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 applyUserPermissionsUI();
                 loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب المدير بنجاح! 👑`);
                 return;
             }
 
+            // البحث الشامل في مجموعة drivers ومجموعة platform_users بالمعرف أو الهاتف أو الاسم
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
             let snapshot = await getDocs(q);
 
@@ -605,21 +626,32 @@
                 q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
                 snapshot = await getDocs(q);
             }
+            if (snapshot.empty) {
+                q = query(collection(window.db, "drivers"), where("name", "==", identifier));
+                snapshot = await getDocs(q);
+            }
+            if (snapshot.empty) {
+                q = query(collection(window.db, "platform_users"), where("id", "==", identifier));
+                snapshot = await getDocs(q);
+            }
+            if (snapshot.empty) {
+                q = query(collection(window.db, "platform_users"), where("phone", "==", identifier));
+                snapshot = await getDocs(q);
+            }
 
             if (!snapshot.empty) {
                 let docData = snapshot.docs[0].data();
                 window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 applyUserPermissionsUI();
                 loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب، جاري تحميل حساب المدير الافتراضي.", "warning");
-                fetchDriverData('1');
+                showToast("⚠️ لم يتم العثور على الحساب، جاري محاولة الفحص...", "warning");
             }
         } catch(err) { 
             console.error(err);
-            fetchDriverData('1');
         }
     }
 
