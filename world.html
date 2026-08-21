@@ -513,7 +513,7 @@
         </div>
     </div>
 
-    <!-- سكريبت المزامنة السحابية المستقلة الحديثة عبر مجموعات فايربيس المستقلة (V10 Modular SDK) -->
+    <!-- سكريبت المزامنة السحابية المستقلة الحديثة المحدث والمصحح للعزل التام للحسابات (V10 Modular SDK) -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -614,6 +614,7 @@
                     window.currentLoggedInUser = { id: identifier, ...docData };
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
                     applyUserPermissionsUI();
+                    initFirestoreSync(); // إعادة تشغيل المستمعات لتعمل حصرياً على بيانات المستخدم الجديد
                 } else {
                     const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
                     const phoneSnapshot = await getDocs(q2);
@@ -622,6 +623,7 @@
                         window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
                         localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
                         applyUserPermissionsUI();
+                        initFirestoreSync();
                     } else {
                         alert("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
                     }
@@ -708,9 +710,10 @@
             renderAllFinancials();
         }
 
+        // دالة المزامنة السحابية المحدثة للفلترة المخصصة لكل مستخدم لحظياً
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, doc } = window.firebaseModules;
+            const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (docSnap.exists()) {
@@ -722,13 +725,17 @@
                 }
             });
 
+            let user = window.currentLoggedInUser || { id: '1', role: 'admin' };
+            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let currentUserId = String(user.id || '1');
+
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                onSnapshot(collection(window.db, col), (snapshot) => {
-                    if (!snapshot.empty) {
-                        appData[col] = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                        renderAllFinancials();
-                    }
+                let q = isAdmin ? collection(window.db, col) : query(collection(window.db, col), where("userId", "==", currentUserId));
+                
+                onSnapshot(q, (snapshot) => {
+                    appData[col] = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    renderAllFinancials();
                 }, err => console.error(`خطأ مزامنة ${col}:`, err));
             });
         }
@@ -783,7 +790,7 @@
             let amount = parseFloat(document.getElementById("expAmount").value);
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بشكل صحيح");
 
-            let currentUserId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
+            let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
             let newId = String(Date.now());
             let expObj = { 
                 id: newId, 
@@ -814,7 +821,7 @@
             let reason = document.getElementById("treasuryReasonInput").value.trim() || (type === 'deposit' ? 'إيداع نقدي' : 'صرف نقدي');
             if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح للحركة النقدية");
 
-            let currentUserId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
+            let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
             let newId = String(Date.now());
             let tObj = {
                 id: newId,
@@ -854,7 +861,7 @@
             let dueDate = document.getElementById("defDueDate").value;
             if (!name || isNaN(amount)) return alert("أدخل بيانات الآجل صحيحة");
 
-            let currentUserId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
+            let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
             let invId = "INV-" + Math.floor(10000000000 + Math.random() * 90000000000);
             let newId = String(Date.now());
             let record = { 
@@ -894,7 +901,7 @@
             let status = document.getElementById("accPaymentStatus").value;
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بدقة");
 
-            let currentUserId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
+            let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
             let newId = String(Date.now());
             let record = { 
                 id: newId, 
