@@ -503,7 +503,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث والمحكم لربط الجلسة وعزل الحسابات -->
+    <!-- السكريبت المحدث والمحكم لربط الجلسة وعزل الحسابات وتجنب حساب المدير -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -566,7 +566,7 @@
             }, 500);
         });
 
-        // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي دون فرض حساب المدير افتراضياً
+        // 🔒 التحقق الذكي المتزامن مع غرفة العمليات واستبعاد حساب المدير التلقائي
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
@@ -576,13 +576,38 @@
                 return;
             }
 
-            const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
-            for (let key of savedUserKeys) {
-                const saved = localStorage.getItem(key);
+            let activeUser = null;
+
+            // مسح ذاكرة التخزين المؤقت لالتقاط جلسة غرفة العمليات الحالية بدقة
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                try {
+                    let val = JSON.parse(localStorage.getItem(key));
+                    if (val && typeof val === 'object' && (val.id || val.phone || val.name)) {
+                        // استبعاد حساب المدير (id: 1) لكي لا ينعكس في باندا
+                        if (val.name && val.name !== 'مدير' && val.id !== '1') {
+                            activeUser = val;
+                            break;
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            if (activeUser) {
+                window.currentLoggedInUser = activeUser;
+                applyUserPermissionsUI();
+                initFirestoreSync();
+                return;
+            }
+
+            // فحص مفاتيح التخزين الاحتياطية المعتادة للمنصة
+            const specificKeys = ['na2la_user', 'currentUser', 'user', 'driver', 'na2la_independent_user_v98', 'na2la_connected_user_v90'];
+            for (let key of specificKeys) {
+                let saved = localStorage.getItem(key);
                 if (saved) {
                     try {
                         let parsed = JSON.parse(saved);
-                        if (parsed && (parsed.id || parsed.phone)) {
+                        if (parsed && (parsed.id || parsed.phone) && parsed.id !== "1") {
                             window.currentLoggedInUser = parsed;
                             applyUserPermissionsUI();
                             initFirestoreSync();
@@ -592,7 +617,7 @@
                 }
             }
 
-            // إذا لم توجد جلسة محفوظة، يطلب النظام من المستخدم إدخال معرفه أو هاتفه حصرياً
+            // إذا لم توجد جلسة نشطة مطابقة، يتم طلب ربط الحساب برقم الهاتف أو المعرف
             applyUserPermissionsUI();
             setTimeout(() => {
                 openSwitchAccountPrompt();
@@ -616,7 +641,6 @@
                     window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
                     
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
                     
                     applyUserPermissionsUI();
                     initFirestoreSync();
@@ -711,7 +735,7 @@
             renderAllFinancials();
         }
 
-        // 🔒 المزامنة السحابية مع عزل البيانات تماً حسب userId لكل حساب ليرى ثروته ورتبته حصرياً
+        // 🔒 المزامنة السحابية مع منع الكتابة الفوقية لجلسة المستخدم الحالي
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -741,9 +765,11 @@
                     appData[col] = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     
                     if (col === 'drivers' && !isAdmin && appData.drivers.length > 0) {
-                        let updatedUser = appData.drivers[0];
-                        window.currentLoggedInUser = { id: updatedUser.id, ...updatedUser };
-                        applyUserPermissionsUI();
+                        let matchedUser = appData.drivers.find(d => String(d.id) === currentUserId);
+                        if (matchedUser) {
+                            window.currentLoggedInUser = { id: matchedUser.id, ...matchedUser };
+                            applyUserPermissionsUI();
+                        }
                     }
 
                     renderAllFinancials();
