@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.9 PRO MODULAR</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.9 PRO MODULAR SECURE SYNC</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح");
+            console.log("✅ تم المصادقة سحابياً بنجاح في منصة الخزينة المالية V98.9");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -550,11 +550,7 @@
             deferredInvoices: [], 
             treasury: [], 
             drivers: [],
-            rssMessage: "مرحباً بكم في أسطورة الطريق V98.9 PRO - مزامنة مستقلة للثروة والرتبة لكل مستخدم",
-            smsConfig: {
-                senderId: "Test Sender",
-                apiKey: "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27"
-            }
+            rssMessage: "مرحباً بكم في أسطورة الطريق V98.9 PRO - مزامنة مستقلة للثروة والرتبة لكل مستخدم"
         };
         window.appData = appData;
 
@@ -570,7 +566,7 @@
             }, 500);
         });
 
-        // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي دون فرض حساب المدير
+        // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي دون فرض حساب المدير افتراضياً
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
@@ -580,20 +576,23 @@
                 return;
             }
 
-            const savedUser = localStorage.getItem('na2la_independent_user_v98') || localStorage.getItem('na2la_connected_user_v90');
-            if (savedUser) {
-                try {
-                    let parsed = JSON.parse(savedUser);
-                    if (parsed && (parsed.id || parsed.phone)) {
-                        window.currentLoggedInUser = parsed;
-                        applyUserPermissionsUI();
-                        initFirestoreSync();
-                        return;
-                    }
-                } catch(e) {}
+            const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
+            for (let key of savedUserKeys) {
+                const saved = localStorage.getItem(key);
+                if (saved) {
+                    try {
+                        let parsed = JSON.parse(saved);
+                        if (parsed && (parsed.id || parsed.phone)) {
+                            window.currentLoggedInUser = parsed;
+                            applyUserPermissionsUI();
+                            initFirestoreSync();
+                            return;
+                        }
+                    } catch(e) {}
+                }
             }
 
-            // فتح نافذة إدخال المعرف تلقائياً للسائق الجديد لضمان ربط حسابه الحقيقي وثروته ورتبته
+            // إذا لم توجد جلسة محفوظة، يطلب النظام من المستخدم إدخال معرفه أو هاتفه حصرياً
             applyUserPermissionsUI();
             setTimeout(() => {
                 openSwitchAccountPrompt();
@@ -617,6 +616,7 @@
                     window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
                     
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                    localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
                     
                     applyUserPermissionsUI();
                     initFirestoreSync();
@@ -720,7 +720,6 @@
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     if (data.rssMessage) appData.rssMessage = data.rssMessage;
-                    if (data.smsConfig) appData.smsConfig = data.smsConfig;
                     const ticker = document.getElementById("rssTickerText");
                     if (ticker) ticker.innerText = appData.rssMessage;
                 }
@@ -757,8 +756,7 @@
             const { doc, setDoc } = window.firebaseModules;
             try {
                 await setDoc(doc(window.db, "appStore", "mainState"), {
-                    rssMessage: appData.rssMessage,
-                    smsConfig: appData.smsConfig
+                    rssMessage: appData.rssMessage
                 }, { merge: true });
             } catch (err) { console.error(err); }
         }
