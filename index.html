@@ -1045,25 +1045,15 @@
 
     <!-- صفحة التقارير والفواتير -->
     <section id="reports-tab" class="app-section">
-        <!-- بطاقة إدارة الاشتراكات والتراخيص (SaaS) -->
+        <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء (Per-Member SaaS) -->
         <div class="card" style="border: 2px solid var(--purple); margin-bottom: 12px;">
-            <h3 style="color: var(--purple);">💳 إدارة الاشتراكات والتراخيص (SaaS Licensing)</h3>
-            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">تحكم في حالة اشتراك العميل، نوع الباقة، وتاريخ الانتهاء:</p>
+            <h3 style="color: var(--purple);">🔍 البحث عن الأعضاء وتعيين الاشتراكات الشهرية (Per-Member SaaS)</h3>
+            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">ابحث عن أي عضو أو سائق لتحديث باقته وتاريخ انتهاء اشتراكه الشهري:</p>
             
-            <div style="background: var(--bg); padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border-color); font-size: 11px;">
-                <p><strong>الباقة الحالية:</strong> <span id="sub-plan-badge" style="color: var(--accent); font-weight: bold;">-</span></p>
-                <p><strong>حالة الاشتراك:</strong> <span id="sub-status-badge" style="font-weight: bold;">-</span></p>
-                <p><strong>تاريخ انتهاء الصلاحية:</strong> <span id="sub-expiry-date" style="color: var(--danger); font-weight: bold;">-</span></p>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
-                <select id="saas-plan-select" style="font-weight: bold; margin-bottom:0;">
-                    <option value="monthly">اشتراك شهري (30 يوم) 🗓️</option>
-                    <option value="yearly">اشتراك سنوي (365 يوم) 🌟</option>
-                    <option value="lifetime">ترخيص دائم (مدى الحياة) ♾️</option>
-                    <option value="trial">باقة تجريبية (7 أيام) ⏳</option>
-                </select>
-                <button type="button" class="btn-success btn-sm" onclick="updateClientSubscription()" style="margin-bottom:0;">تحديث وتفعيل الباقة 🚀</button>
+            <input type="text" id="member-sub-search" class="search-box" placeholder="ابحث باسم العضو أو رقم الهاتف..." onkeyup="renderMemberSubscriptionsList()">
+            
+            <div style="max-height: 300px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container">
+                <!-- سيتم تعبئة النتائج ديناميكياً -->
             </div>
         </div>
 
@@ -1187,7 +1177,10 @@
                         status: 'متاح 🟢',
                         avatar: userPhoto,
                         cover: '',
-                        coverHeight: 180
+                        coverHeight: 180,
+                        subPlan: 'monthly',
+                        subStatus: 'active',
+                        subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                     };
                     await db.collection('drivers').doc(newId).set(newDrv);
                     loggedInDriverName = newDrv.name;
@@ -1368,7 +1361,6 @@
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
             drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [],
-            subscription: null,
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
         };
 
@@ -1392,7 +1384,10 @@
                             status: 'متاح 🟢',
                             role: 'مدير نظام',
                             title: 'أسطورة الطريق',
-                            coverHeight: 180
+                            coverHeight: 180,
+                            subPlan: 'monthly',
+                            subStatus: 'active',
+                            subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                         };
                         db.collection('drivers').doc("1").set(defaultAdmin, { merge: true });
                     }
@@ -1402,6 +1397,7 @@
                     if (typeof renderChatMessages === 'function') renderChatMessages();
                     if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
                     if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) renderMemberSubscriptionsList();
                 }, error => {
                     console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
                 });
@@ -1413,86 +1409,79 @@
                     renderRSSTicker();
                 }
             });
-
-            // تفعيل مستمع نظام الاشتراكات السحابي (SaaS)
-            initSubscriptionListener();
         }
 
-        // دوال نظام الاشتراكات والتراخيص (SaaS Licensing)
-        function initSubscriptionListener() {
-            db.collection('systemSettings').doc('subscription').onSnapshot(doc => {
-                if (doc.exists) {
-                    appData.subscription = doc.data();
-                    checkSubscriptionValidity();
-                    renderSubscriptionUI();
-                } else {
-                    const defaultSub = {
-                        plan: 'monthly',
-                        status: 'active',
-                        expiryDate: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
-                    };
-                    db.collection('systemSettings').doc('subscription').set(defaultSub);
-                }
-            });
-        }
+        // دوال نظام البحث عن الأعضاء وتعيين الاشتراكات الشهرية والفردية (Per-Member SaaS)
+        function renderMemberSubscriptionsList() {
+            if (currentUserRole !== 'admin') return;
+            const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
+            const container = document.getElementById('members-subscriptions-container');
+            if (!container) return;
+            container.innerHTML = '';
 
-        function checkSubscriptionValidity() {
-            if (!appData.subscription) return;
-            const sub = appData.subscription;
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            
-            if (sub.plan === 'lifetime') return;
+            let drivers = appData.drivers || [];
+            let filtered = drivers.filter(d => d.name.toLowerCase().includes(query) || (d.phone && d.phone.includes(query)));
 
-            const expiry = new Date(sub.expiryDate);
-            expiry.setHours(0,0,0,0);
-
-            const alertBanner = document.getElementById('license-alert');
-            if (expiry < today || sub.status === 'expired') {
-                if (alertBanner) {
-                    alertBanner.style.display = 'block';
-                    alertBanner.innerHTML = `⚠️ انتهت صلاحية اشتراك المنصة (${sub.plan === 'monthly' ? 'شهري' : 'سنوي'}). يرجى تجديد الاشتراك لاستمرار عمل العمليات التشغيلية بكفاءة!`;
-                }
-            } else {
-                if (alertBanner) alertBanner.style.display = 'none';
-            }
-        }
-
-        function renderSubscriptionUI() {
-            if (!appData.subscription) return;
-            const sub = appData.subscription;
-            const planText = { 'monthly': 'شهري 🗓️', 'yearly': 'سنوي 🌟', 'lifetime': 'دائم (مدى الحياة) ♾️', 'trial': 'تجريبي ⏳' };
-            
-            if(document.getElementById('sub-plan-badge')) document.getElementById('sub-plan-badge').innerText = planText[sub.plan] || sub.plan;
-            if(document.getElementById('sub-status-badge')) document.getElementById('sub-status-badge').innerHTML = sub.status === 'active' ? '<span style="color:var(--success);">نشط وساري ✅</span>' : '<span style="color:var(--danger);">منتهي الصلاحية ⚠️</span>';
-            if(document.getElementById('sub-expiry-date')) document.getElementById('sub-expiry-date').innerText = sub.plan === 'lifetime' ? 'دائم غير محدود' : sub.expiryDate;
-        }
-
-        function updateClientSubscription() {
-            if (currentUserRole !== 'admin') {
-                alert('عذراً، تعديل الاشتراكات والتراخيص مخصص لمالك المنصة ومدير النظام فقط.');
+            if (filtered.length === 0) {
+                container.innerHTML = `<p style="font-size: 10px; text-align: center; opacity: 0.8;">لا توجد نتائج مطابقة للبحث.</p>`;
                 return;
             }
 
-            const selectedPlan = document.getElementById('saas-plan-select').value;
+            filtered.forEach(d => {
+                let plan = d.subPlan || 'monthly';
+                let expiry = d.subExpiry || 'لم يُحدد';
+                let status = d.subStatus || 'active';
+                let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
+
+                let itemDiv = document.createElement('div');
+                itemDiv.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px; font-size:11px;';
+                itemDiv.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <strong>👤 ${d.name} (${d.role || 'سائق'})</strong>
+                        <span style="font-size:9px;">${statusBadge}</span>
+                    </div>
+                    <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${d.phone || 'غير مسجل'} | الباقة: <strong>${plan}</strong> | الانتهاء: <span style="color:var(--danger);">${expiry}</span></p>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        <select id="plan-select-${d.id}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
+                            <option value="monthly" ${plan==='monthly'?'selected':''}>اشتراك شهري (30 يوم) 🗓️</option>
+                            <option value="yearly" ${plan==='yearly'?'selected':''}>اشتراك سنوي (365 يوم) 🌟</option>
+                            <option value="lifetime" ${plan==='lifetime'?'selected':''}>ترخيص دائم ♾️</option>
+                            <option value="trial" ${plan==='trial'?'selected':''}>تجريبي (7 أيام) ⏳</option>
+                        </select>
+                        <button type="button" class="btn-success btn-sm" style="width:auto; margin-bottom:0;" onclick="updateMemberSub('${d.id}')">تفعيل الباقة 🚀</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
+        }
+
+        function updateMemberSub(driverId) {
+            if (currentUserRole !== 'admin') {
+                alert('عذراً، التحكم في الاشتراكات مخصص لمدير النظام فقط.');
+                return;
+            }
+            let driver = (appData.drivers || []).find(d => String(d.id) === String(driverId));
+            if (!driver) return;
+
+            let planSelect = document.getElementById(`plan-select-${driverId}`);
+            let selectedPlan = planSelect ? planSelect.value : 'monthly';
+
             let daysToAdd = 30;
             if (selectedPlan === 'yearly') daysToAdd = 365;
             if (selectedPlan === 'trial') daysToAdd = 7;
             if (selectedPlan === 'lifetime') daysToAdd = 36500;
 
-            const newExpiryDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            let newExpiryDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-            const newSubData = {
-                plan: selectedPlan,
-                status: 'active',
-                expiryDate: newExpiryDate,
-                updatedAt: new Date().toLocaleDateString('ar-EG')
-            };
+            driver.subPlan = selectedPlan;
+            driver.subStatus = 'active';
+            driver.subExpiry = newExpiryDate;
 
-            db.collection('systemSettings').doc('subscription').set(newSubData, { merge: true }).then(() => {
-                alert(`تم تجديد وتفعيل باقة الاشتراك (${selectedPlan}) بنجاح حتى تاريخ: ${newExpiryDate} 🚀✨`);
+            db.collection('drivers').doc(String(driver.id)).set(driver, { merge: true }).then(() => {
+                alert(`تم تحديث وتفعيل اشتراك العضو (${driver.name}) بنجاح حتى تاريخ: ${newExpiryDate} 🚀✨`);
+                renderMemberSubscriptionsList();
             }).catch(err => {
-                alert('حدث خطأ أثناء تحديث الاشتراك: ' + err.message);
+                alert('حدث خطأ أثناء التحديث السحابي: ' + err.message);
             });
         }
 
@@ -1649,7 +1638,7 @@
                     <button type="button" onclick="switchTab('fleet-tab', this); toggleSidebar();">🚚 الأسطول</button>
                     <button type="button" onclick="switchTab('drivers-tab', this); toggleSidebar();">👨‍✈️ السائقين والحسابات</button>
                     <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
-                    <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشريط RSS</button>
+                    <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير واشتراكات الأعضاء</button>
                 `;
             } else if (currentUserRole === 'supervisor') {
                 nav.innerHTML = `
@@ -1942,7 +1931,10 @@
             }
 
             if(tabId === 'map-tab') setTimeout(initMap, 200);
-            if(tabId === 'reports-tab') updateInvoiceDropdown();
+            if(tabId === 'reports-tab') {
+                updateInvoiceDropdown();
+                renderMemberSubscriptionsList();
+            }
             if(tabId === 'consolidated-invoices-tab') renderConsolidatedInvoicesSection();
             if(tabId === 'deferred-invoices-tab') loadDeferredInvoicesTable();
             if(tabId === 'crud-tab' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) renderCRUDTable();
@@ -2290,7 +2282,7 @@
 
         function saveConsolidatedInvoice() {
             if (currentUserRole !== 'admin') {
-                alert('عذراً، الفواتير المجمعة مخصصة للمدير فقط.');
+                alert('عذراً، والفواتير المجمعة مخصصة للمدير فقط.');
                 return;
             }
             const clientName = document.getElementById('con-client-name').value.trim();
@@ -2770,7 +2762,10 @@
                     status: 'متاح 🟢',
                     avatar: '',
                     cover: '',
-                    coverHeight: 180
+                    coverHeight: 180,
+                    subPlan: 'monthly',
+                    subStatus: 'active',
+                    subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
 
                 await db.collection('drivers').doc(uid).set(newDrv);
@@ -2991,7 +2986,8 @@
             try {
                 let uid = String(Date.now());
                 let newDrv = {
-                    id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180
+                    id: uid, name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180,
+                    subPlan: 'monthly', subStatus: 'active', subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
                 
                 await db.collection('drivers').doc(uid).set(newDrv);
@@ -3500,6 +3496,9 @@
         function render() {
             renderDriverDropdownOptions();
             renderRSSTicker();
+            if (currentUserRole === 'admin') {
+                renderMemberSubscriptionsList();
+            }
             
             let shipments = appData.shipments || [];
             let totalShipments = shipments.length;
