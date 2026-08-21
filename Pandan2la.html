@@ -531,6 +531,7 @@
     }
     window.getAllShipments = getAllShipments;
 
+    // تم تحديث هذه الدالة للبحث في جميع مفاتيح التخزين المحلية للمنصة وغرفة العمليات لضمان مطابقة الحساب
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
@@ -542,17 +543,21 @@
     }
 
     function checkLocalStorageUser() {
-        const savedUser = localStorage.getItem('na2la_connected_user_v90');
-        if (savedUser) {
-            try {
-                let parsed = JSON.parse(savedUser);
-                if (parsed && parsed.id) {
-                    window.currentLoggedInUser = parsed;
-                    applyUserPermissionsUI();
-                    return;
-                }
-            } catch(e) {}
+        const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
+        for (let key of savedUserKeys) {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                try {
+                    let parsed = JSON.parse(saved);
+                    if (parsed && parsed.id) {
+                        window.currentLoggedInUser = parsed;
+                        applyUserPermissionsUI();
+                        return;
+                    }
+                } catch(e) {}
+            }
         }
+        // في حال عدم وجود جلسة مخزنة، يتم الافتراض بحذر أو البقاء على المدير
         window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
         applyUserPermissionsUI();
     }
@@ -567,9 +572,10 @@
                 let docData = snapshot.docs[0].data();
                 window.currentLoggedInUser = { id: identifier, ...docData };
                 localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
                 applyUserPermissionsUI();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
-                loadAllDataFromFirestoreMultiCollection(); // إعادة تشغيل الاستماع بعد تغيير الحساب
+                loadAllDataFromFirestoreMultiCollection();
             } else {
                 const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
                 const phoneSnapshot = await getDocs(q2);
@@ -577,6 +583,7 @@
                     let docData = phoneSnapshot.docs[0].data();
                     window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
                     localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
+                    localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
                     applyUserPermissionsUI();
                     showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
                     loadAllDataFromFirestoreMultiCollection();
@@ -596,17 +603,15 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // دالة المزامنة السحابية المحدثة مع عزل وفلترة الحسابات تلقائياً
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
         let currentUser = window.currentLoggedInUser || { id: '1', role: 'سائق' };
-        let isAdmin = (currentUser.role === 'مدير نظام' || currentUser.role === 'admin');
+        let isAdmin = (currentUser.role === 'مدير نظام' || currentUser.role === 'admin' || currentUser.id === '1');
         let currentUserId = String(currentUser.id || '1');
 
         try {
-            // حالة المتجر العام
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (window._isSavingLocally || !docSnap.exists()) return;
                 const data = docSnap.data();
@@ -617,7 +622,6 @@
                 refreshActiveSection();
             });
 
-            // السائقون (المدير يرى الكل، والسائق يرى حسابه فقط)
             let driversQuery = isAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("id", "==", currentUserId));
             onSnapshot(driversQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
@@ -627,7 +631,6 @@
                 }
             });
 
-            // الشحنات (المدير يرى الكل، والسائق يرى شحناته المرتبطة بـ userId حصرياً)
             let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("userId", "==", currentUserId));
             onSnapshot(shipmentsQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
@@ -638,7 +641,6 @@
                 refreshActiveSection();
             });
 
-            // فواتير الأجل (حسب الصلاحية أو المعرف)
             let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("userId", "==", currentUserId));
             onSnapshot(deferredQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
@@ -648,7 +650,6 @@
                 refreshActiveSection();
             });
 
-            // الخزينة والمصروفات تظهر للمدير أو الحساب الصلاحيات العليا
             if (isAdmin) {
                 onSnapshot(collection(window.db, "treasury"), (snapshot) => {
                     if (window._isSavingLocally) return;
@@ -694,7 +695,6 @@
         });
     }
 
-    // حفظ مستقل مع إرفاق الـ userId لضمان العزل الصحيح
     window.saveDataAll = async function() {
         if (!window.db || !window.firebaseModules) return;
         window._isSavingLocally = true;
@@ -816,7 +816,7 @@
         let role = user.role;
         
         document.getElementById('header-username').innerText = user.name;
-        document.getElementById('header-role-badge').innerText = (role === 'مدير نظام' || role === 'admin') ? '👑 مدير نظام (تحكم كامل وشامل)' : (role === 'مشرف' ? '⭐ مشرف' : `👨‍✈️ ${user.title || 'سائق معتمد'}`);
+        document.getElementById('header-role-badge').innerText = (role === 'مدير نظام' || role === 'admin' || user.id === '1') ? '👑 مدير نظام (تحكم كامل وشامل)' : (role === 'مشرف' ? '⭐ مشرف' : `👨‍✈️ ${user.title || 'سائق معتمد'}`);
 
         const avatarEl = document.getElementById('header-avatar-btn');
         if (user.avatar && user.avatar.trim() !== '') {
@@ -835,10 +835,13 @@
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
 
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
-        if(sidebarTitle) sidebarTitle.innerText = (role === 'مدير نظام' || role === 'admin') ? '👑 لوحة المدير (تحكم كامل)' : '👨‍✈️ قائمة حساب السائق المتصل';
+        let user = window.currentLoggedInUser || {};
+        let role = user.role;
+        let isAdmin = (role === 'مدير نظام' || role === 'admin' || user.id === '1');
+        
+        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : '👨‍✈️ قائمة حساب السائق المتصل';
 
-        if (role === 'مدير نظام' || role === 'admin') {
+        if (isAdmin) {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ إدارة الأجل والفواتير المتأخرة</button>
                 <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة الشحنات وبوليصات النقل</button>
@@ -873,9 +876,11 @@
     function renderBottomNavbarByRole() {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        let user = window.currentLoggedInUser || {};
+        let role = user.role;
+        let isAdmin = (role === 'مدير نظام' || role === 'admin' || user.id === '1');
 
-        if (role === 'مدير نظام' || role === 'admin') {
+        if (isAdmin) {
             navbar.innerHTML = `
                 <div class="nav-item active" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
                 <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
@@ -940,9 +945,11 @@
         if(!content) return;
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        let user = window.currentLoggedInUser || {};
+        let userRole = user.role;
+        let isAdmin = (userRole === 'مدير نظام' || userRole === 'admin' || user.id === '1');
 
-        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && userRole !== 'مدير نظام' && userRole !== 'admin') {
+        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && !isAdmin) {
             showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
             sectionId = 'shipments';
         }
@@ -1015,7 +1022,7 @@
                                         <td>
                                             ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                                             <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
-                                            ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
+                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
                                         </td>
                                     </tr>
                                 `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة</td></tr>'}
@@ -1080,7 +1087,7 @@
                                         <td>
                                             <button class="btn-success btn-sm" onclick="openConsolidatedImageModal('${ci.id}')" title="صورة">🖼️</button>
                                             <button class="btn-warning btn-sm" onclick="exportConsolidatedWhatsApp('${ci.id}')" title="واتساب">💬</button>
-                                            ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>` : ''}
+                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>` : ''}
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة</td></tr>'}
@@ -1225,7 +1232,7 @@
                                             <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                                             <button class="btn-success btn-sm" onclick="openInvoiceImageModal(${idx})" title="صورة الفاتورة">🖼️</button>
                                             <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
-                                            ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
+                                            ${isAdmin ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات</td></tr>'}
@@ -1238,7 +1245,7 @@
             content.innerHTML = `
                 <div class="card">
                     <h3><span>🚚 إدارة الأسطول وصيانة المركبات</span></h3>
-                    ${userRole === 'مدير نظام' || userRole === 'admin' ? `
+                    ${isAdmin ? `
                     <form onsubmit="saveTruck(event)">
                         <input type="text" id="tr-num" placeholder="اسم أو رقم الشاحنة" required>
                         <input type="text" id="tr-driver" placeholder="السائق المسؤول" required>
@@ -1249,7 +1256,7 @@
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td>${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
+                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1336,7 +1343,7 @@
                                         <td><span class="badge bg-danger">${(c.debt ?? getSafeAmount(c)).toLocaleString()} ج.م</span></td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="payCustomerDebt(${idx})" title="سداد">سداد</button>
-                                            ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>` : ''}
+                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>` : ''}
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء</td></tr>'}
@@ -1383,7 +1390,7 @@
                         ${(data.posts || data.wallPosts || []).map((p, idx) => `
                             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; justify-content:space-between; align-items:center;">
                                 <div><strong>${getSafeName(p)}</strong>: <p style="margin-top:2px;">${getSafeDesc(p)}</p></div>
-                                ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>` : ''}
+                                ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>` : ''}
                             </div>
                         `).join('') || '<p style="font-size:9px; color:var(--text-muted);">لا توجد إعلانات</p>'}
                     </div>
@@ -1493,7 +1500,8 @@
         const filter = document.getElementById('def-filter').value;
         let data = appStateData();
         let list = data.deferredInvoices || [];
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        let user = window.currentLoggedInUser || {};
+        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
         
         let filtered = list.filter(d => {
             let name = getSafeName(d).toLowerCase();
@@ -1523,7 +1531,7 @@
                 <td>
                     ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                     <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
-                    ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
+                    ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
                 </td>
             </tr>
         `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير مطابقة للبحث</td></tr>';
@@ -1679,7 +1687,8 @@
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
+        let user = window.currentLoggedInUser || {};
+        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
         const tbody = document.getElementById('shipments-table-body');
         const filtered = shipmentsList.filter(s => getSafeName(s).toLowerCase().includes(query) || getSafeDesc(s).toLowerCase().includes(query));
         
@@ -1693,7 +1702,7 @@
                     <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                     <button class="btn-success btn-sm" onclick="openInvoiceImageModal(${idx})" title="صورة الفاتورة">🖼️</button>
                     <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
-                    ${userRole === 'مدير نظام' || userRole === 'admin' ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
+                    ${isAdmin ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد نتائج مطابقة</td></tr>';
@@ -2146,8 +2155,9 @@
     }
 
     async function deleteItem(type, index) {
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
-        if(userRole !== 'مدير نظام' && userRole !== 'admin') {
+        let user = window.currentLoggedInUser || {};
+        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+        if(!isAdmin) {
             showToast('الحذف مقتصر على مدير النظام فقط! 👑', 'danger');
             return;
         }
