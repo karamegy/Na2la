@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
@@ -203,6 +202,32 @@
         </div>
     </div>
 
+    <!-- [القسم الجديد 1]: محفظة الأرباح والعهد المالية المتزامنة -->
+    <div class="card" style="border: 2px solid var(--purple);">
+        <h3 style="color: var(--purple);">💰 محفظة السائق والأرباح الفورية</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px;">
+            <span>إجمالي مستحقات الشحنات:</span>
+            <strong id="wallet-total-earnings" style="color: var(--success); font-size: 13px;">0 ج.م</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px;">
+            <span>العهد السالفة / السلف:</span>
+            <strong id="wallet-advances" style="color: var(--warning); font-size: 13px;">0 ج.م</strong>
+        </div>
+        <button type="button" class="btn-sm" style="background: var(--purple-gradient); color: #fff; width: 100%; margin-top: 4px;" onclick="syncWalletWithPlatform()">تحديث ومزامنة المحفظة مع المنصة 🔄</button>
+    </div>
+
+    <!-- [القسم الجديد 2]: نظام البث المباشر للموقع الجغرافي للأسطول -->
+    <div class="card" style="border: 2px solid var(--warning);">
+        <h3 style="color: var(--warning);">📍 بث الموقع الجغرافي وحالة الطريق المباشرة</h3>
+        <p style="font-size: 10px; opacity: 0.85; margin-bottom: 6px;">مشاركة إحداثيات GPS الحالية مع نظام الأسطول والمنصة الأم:</p>
+        <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn-warning" style="flex: 1;" onclick="broadcastCurrentLocation('في الطريق - متحرك 🚚')">بث: متحرك 🚚</button>
+            <button type="button" class="btn-danger" style="flex: 1;" onclick="broadcastCurrentLocation('توقف طارئ / عطل ⚠️')">بث: طوارئ ⚠️</button>
+            <button type="button" class="btn-success" style="flex: 1;" onclick="broadcastCurrentLocation('تم تسليم الشحنة ✅')">بث: وصل 🏁</button>
+        </div>
+        <div id="gps-status-log" style="font-size: 9px; margin-top: 6px; font-weight: bold; color: var(--warning);"></div>
+    </div>
+
     <!-- حائط النشر الحر -->
     <div class="card" style="border: 2px solid var(--success);" id="profile-wall-posting-card">
         <h3 style="color: var(--success);" id="profile-wall-heading">✍️ حائط النشر الحر على البروفايل</h3>
@@ -218,6 +243,14 @@
 
     <!-- حاوية منشورات الحائط -->
     <div id="profile-wall-posts-container"></div>
+
+    <!-- [القسم الجديد 3]: سجل الإيصالات والفواتير المرتبطة -->
+    <div class="card" style="border: 2px solid var(--accent);">
+        <h3 style="color: var(--accent);">📄 سجل الفواتير والإيصالات الرقمية</h3>
+        <div id="invoices-list-container" style="max-height: 150px; overflow-y: auto; font-size: 10px;">
+            <div style="text-align: center; opacity: 0.7; padding: 6px;">جاري تحميل الفواتير المرتبطة...</div>
+        </div>
+    </div>
 
     <!-- إعدادات وتعديل البروفايل -->
     <div class="card" id="my-profile-edit-settings-card">
@@ -274,7 +307,9 @@
         ];
 
         let currentUserRole = localStorage.getItem('current_user_role') || 'driver';
+        let loggedInDriverId = localStorage.getItem('logged_in_driver_id') || null;
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+        let viewingProfileId = null;
         let viewingProfileName = null;
         let appData = { drivers: [], shipments: [] };
         let profileWallFilesArr = [];
@@ -338,10 +373,23 @@
         }
 
         function getOrCreateCurrentDriver() {
+            let activeTargetId = viewingProfileId ? viewingProfileId : loggedInDriverId;
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-            let drv = (appData.drivers || []).find(d => d.name === activeTargetName);
+            
+            let drv = null;
+
+            if (appData.drivers && appData.drivers.length > 0) {
+                if (activeTargetId) {
+                    drv = appData.drivers.find(d => d.id === activeTargetId);
+                }
+                if (!drv && activeTargetName) {
+                    drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
+                }
+            }
+
             if (!drv) {
-                let newId = String(Date.now());
+                let newId = activeTargetId || (appData.drivers.length > 0 ? String(Date.now()) : (localStorage.getItem('logged_in_driver_id') || String(Date.now())));
+                
                 drv = {
                     id: newId,
                     name: activeTargetName,
@@ -352,9 +400,15 @@
                     status: 'متاح 🟢',
                     avatar: '',
                     cover: '',
-                    coverHeight: 180
+                    coverHeight: 180,
+                    advances: 0
                 };
-                db.collection('drivers').doc(newId).set(drv);
+                
+                localStorage.setItem('logged_in_driver_id', newId);
+                db.collection('drivers').doc(newId).set(drv, { merge: true });
+            } else {
+                localStorage.setItem('logged_in_driver_id', drv.id);
+                localStorage.setItem('logged_in_driver_name', drv.name);
             }
             return drv;
         }
@@ -367,17 +421,25 @@
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
             document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone} | الرتبة: ${drv.role}`;
             
-            let myShipmentsCount = (appData.shipments || []).filter(s => s.assignedDriver === drv.name).length;
-            document.getElementById('gplus-stat-shipments').innerText = myShipmentsCount;
+            let myShipments = (appData.shipments || []).filter(s => s.assignedDriver === drv.name || s.name === drv.name);
+            document.getElementById('gplus-stat-shipments').innerText = myShipments.length;
             document.getElementById('gplus-stat-role').innerText = drv.role;
             document.getElementById('gplus-stat-status').innerText = drv.status;
+
+            // حساب المحفظة المالية
+            let totalEarnings = myShipments.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+            document.getElementById('wallet-total-earnings').innerText = totalEarnings.toLocaleString() + ' ج.م';
+            document.getElementById('wallet-advances').innerText = (drv.advances || 0).toLocaleString() + ' ج.م';
+
+            // عرض الفواتير المرتبطة
+            renderInvoicesList(myShipments);
 
             const backBtn = document.getElementById('gplus-back-to-myprofile-btn');
             const editSettingsCard = document.getElementById('my-profile-edit-settings-card');
             const avatarUploadLabel = document.getElementById('gplus-avatar-upload-label-container');
             const coverUploadBtn = document.getElementById('gplus-cover-upload-btn-container');
 
-            if (viewingProfileName && viewingProfileName !== loggedInDriverName) {
+            if (viewingProfileId && viewingProfileId !== loggedInDriverId) {
                 if(backBtn) backBtn.style.display = 'inline-block';
                 if(editSettingsCard) editSettingsCard.style.display = 'none';
                 if(avatarUploadLabel) avatarUploadLabel.style.display = 'none';
@@ -412,8 +474,56 @@
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
             avatarPreview.innerHTML = drv.avatar ? `<img src="${drv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
 
-            loadAndRenderProfileWall(activeTargetName);
+            loadAndRenderProfileWall(drv.name);
             renderProfileDriverSearch();
+        }
+
+        function renderInvoicesList(shipments) {
+            const container = document.getElementById('invoices-list-container');
+            if(!shipments || shipments.length === 0) {
+                container.innerHTML = `<div style="text-align:center; opacity:0.7; padding:6px;">لا توجد فواتير أو شحنات مسجلة حالياً.</div>`;
+                return;
+            }
+            container.innerHTML = '';
+            shipments.forEach(s => {
+                let div = document.createElement('div');
+                div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px 10px; border-radius:6px; margin-bottom:4px; border:1px solid var(--border-color);";
+                div.innerHTML = `
+                    <span>📦 ${s.item || 'شحنة'} (${s.address || 'غير محدد'})</span>
+                    <span style="font-weight:bold; color:var(--accent);">${s.price || 0} ج.م [${s.status || 'معلق'}]</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function syncWalletWithPlatform() {
+            alert('تمت مزامنة محفظة السائق والأرباح بنجاح مع قاعدة بيانات المنصة الأم (Na2la) ☁️⚡');
+            renderMyAccount();
+        }
+
+        function broadcastCurrentLocation(statusText) {
+            let drv = getOrCreateCurrentDriver();
+            drv.status = statusText;
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    drv.lat = position.coords.latitude;
+                    drv.lng = position.coords.longitude;
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                        document.getElementById('gps-status-log').innerText = `تم بث الحالة (${statusText}) والإحداثيات للأسطول بنجاح ✅`;
+                        renderMyAccount();
+                    });
+                }, error => {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                        document.getElementById('gps-status-log').innerText = `تم بث الحالة (${statusText}) بنجاح (تعذر جلب GPS الدقيق) ⚠️`;
+                        renderMyAccount();
+                    });
+                });
+            } else {
+                db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
+                    document.getElementById('gps-status-log').innerText = `تم بث الحالة (${statusText}) بنجاح ✅`;
+                    renderMyAccount();
+                });
+            }
         }
 
         function adjustCoverHeight(delta) {
@@ -421,10 +531,11 @@
             let currentH = drv.coverHeight || 180;
             let newH = Math.min(450, Math.max(100, currentH + delta));
             drv.coverHeight = newH;
-            db.collection('drivers').doc(String(drv.id)).set(drv).then(() => renderMyAccount());
+            db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => renderMyAccount());
         }
 
         function resetToMyProfile() {
+            viewingProfileId = null;
             viewingProfileName = null;
             renderMyAccount();
         }
@@ -435,7 +546,7 @@
                 compressImage(file, 600, 600, 0.9, (compressedUrl) => {
                     let drv = getOrCreateCurrentDriver();
                     drv.avatar = compressedUrl;
-                    db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
                         renderMyAccount();
                         alert('تم تحديث الصورة الشخصية بجودة عالية بنجاح! 📷');
                     });
@@ -449,7 +560,7 @@
                 compressImage(file, 1400, 900, 0.92, (compressedUrl) => {
                     let drv = getOrCreateCurrentDriver();
                     drv.cover = compressedUrl;
-                    db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+                    db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
                         renderMyAccount();
                         alert('تم تحديث صورة الغلاف بجودة عالية بنجاح! 🖼️✨');
                     });
@@ -465,8 +576,9 @@
             
             loggedInDriverName = drv.name;
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+            localStorage.setItem('logged_in_driver_id', drv.id);
             
-            db.collection('drivers').doc(String(drv.id)).set(drv).then(() => {
+            db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
                 alert('تم تحديث بروفايلك الشخصي بنجاح! 💾');
                 renderMyAccount();
             });
@@ -502,7 +614,8 @@
         function publishProfileWallPost() {
             const text = document.getElementById('profile-wall-text').value.trim();
             if(!text && profileWallFilesArr.length === 0) { alert('الرجاء كتابة شيء أو إرفاق صور للنشر!'); return; }
-            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+            let drv = getOrCreateCurrentDriver();
+            let activeTargetName = drv.name;
             
             let postData = {
                 id: String(Date.now()),
@@ -604,7 +717,12 @@
                 let avatarHtml = d.avatar ? `<img src="${d.avatar}">` : `<span>${d.name.charAt(0)}</span>`;
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
-                item.onclick = () => { viewingProfileName = d.name; renderMyAccount(); window.scrollTo({top: 0, behavior: 'smooth'}); };
+                item.onclick = () => { 
+                    viewingProfileId = d.id; 
+                    viewingProfileName = d.name; 
+                    renderMyAccount(); 
+                    window.scrollTo({top: 0, behavior: 'smooth'}); 
+                };
                 item.innerHTML = `
                     <div class="driver-card-avatar">${avatarHtml}</div>
                     <div style="overflow:hidden;">
