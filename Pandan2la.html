@@ -388,7 +388,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة السحابية وإدارة الحسابات المستقلة -->
+<!-- سكريبت المزامنة السحابية وإدارة الحسابات المستقلة تماماً مثل غرفة العمليات -->
 <script>
     window._isSavingLocally = false;
 
@@ -532,7 +532,7 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم دون فرض حساب المدير افتراضياً
+    // 🔒 المحرك الديناميكي المطابق لغرفة العمليات: مسح شامل لكل الذاكرة وتجاهل حساب المدير تماماً
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
@@ -540,17 +540,39 @@
             fetchDriverData(urlUserId);
             return;
         }
-        checkLocalStorageUser();
-    }
 
-    function checkLocalStorageUser() {
-        const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
+        let activeUser = null;
+
+        // 1. البحث الديناميكي الشامل في جميع مفاتيح المتصفح لالتقاط جلسة غرفة العمليات فوراً
+        for (let i = 0; i < localStorage.length; i++) {
+            let key = localStorage.key(i);
+            try {
+                let val = JSON.parse(localStorage.getItem(key));
+                if (val && typeof val === 'object' && (val.id || val.phone || val.name)) {
+                    // استبعاد حساب المدير (id: 1) لكي لا يظهر أبداً للسائق
+                    if (val.name && val.name !== 'مدير' && val.id !== '1' && String(val.role).toLowerCase() !== 'admin') {
+                        activeUser = val;
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (activeUser) {
+            window.currentLoggedInUser = activeUser;
+            applyUserPermissionsUI();
+            loadAllDataFromFirestoreMultiCollection();
+            return;
+        }
+
+        // 2. فحص المفاتيح الاحتياطية المعتادة للمنصة
+        const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user', 'currentUser', 'user', 'driver'];
         for (let key of savedUserKeys) {
             const saved = localStorage.getItem(key);
             if (saved) {
                 try {
                     let parsed = JSON.parse(saved);
-                    if (parsed && (parsed.id || parsed.phone)) {
+                    if (parsed && (parsed.id || parsed.phone) && parsed.id !== '1' && String(parsed.role).toLowerCase() !== 'admin') {
                         window.currentLoggedInUser = parsed;
                         applyUserPermissionsUI();
                         loadAllDataFromFirestoreMultiCollection();
@@ -560,7 +582,7 @@
             }
         }
         
-        // إذا لم توجد جلسة محفوظة، يطلب النظام من السائق إدخال معرفه أو هاتفه حصرياً
+        // إذا لم توجد جلسة نشطة، يتم طلب ربط الحساب برقم الهاتف أو المعرف حصرياً
         applyUserPermissionsUI();
         setTimeout(() => {
             openSwitchAccountPrompt();
@@ -602,7 +624,7 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // 🔒 المزامنة السحابية مع عزل البيانات تماً حسب userId لكل حساب
+    // 🔒 المزامنة السحابية المعزولة تماماً حسب معرف المستخدم الحالي (userId)
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
