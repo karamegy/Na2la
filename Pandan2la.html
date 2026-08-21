@@ -184,16 +184,17 @@
         <header class="app-header">
             <div class="user-info">
                 <button type="button" class="settings-btn" onclick="toggleSidebar()" style="width:32px; height:32px;"><i class="fa-solid fa-bars"></i></button>
-                <div class="avatar" onclick="switchSection('shipments')" id="header-avatar-btn">🐼</div>
+                <div class="avatar" onclick="openSwitchAccountPrompt()" id="header-avatar-btn" title="تبديل الحساب المستقل">🐼</div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">جاري المزامنة...</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن تلقائياً</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن مستقل</span>
                     </div>
-                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة ذكية</span>
+                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة مستقلة</span>
                 </div>
             </div>
             <div style="display: flex; gap: 4px;">
+                <button class="settings-btn" onclick="openSwitchAccountPrompt()" title="تبديل الحساب برقم الهاتف أو المعرف" style="background-color: var(--yellow-warning); color: #000;"><i class="fa-solid fa-user-gear"></i></button>
                 <button class="settings-btn" onclick="goToMotherPlatform()" title="الرجوع للمنصة الأم" style="background-color: var(--accent-main); color: white;"><i class="fa-solid fa-house-laptop"></i></button>
                 <button class="settings-btn" onclick="openModal('driversCommunityModal')" title="المجتمع"><i class="fa-solid fa-users"></i></button>
                 <button class="settings-btn" onclick="openModal('visitorBookingModal')" title="حجز زائر"><i class="fa-solid fa-box-archive"></i></button>
@@ -481,7 +482,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+    let currentLoggedInUser = { name: 'سائق مستقل', role: 'سائق', title: 'سائق مستقل', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -521,68 +522,62 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // المزامنة التلقائية والذكية للحساب عبر الرابط أو التخزين المحلي
+    // المزامنة المستقلة المنضبطة لمنع التداخل مع حساب المدير تلقائياً
     function initIndependentUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
 
         if (urlUserId) {
-            db.collection("drivers").where("id", "==", urlUserId).get().then(snapshot => {
-                if (!snapshot.empty) {
-                    let docData = snapshot.docs[0].data();
-                    window.currentLoggedInUser = { id: urlUserId, ...docData };
-                    localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
-                    applyUserPermissionsUI();
-                    showToast(`تم مزامنة حساب (${getSafeName(docData)}) تلقائياً بنجاح! ✅`);
-                } else {
-                    db.collection("drivers").where("phone", "==", urlUserId).get().then(phoneSnapshot => {
-                        if (!phoneSnapshot.empty) {
-                            let docData = phoneSnapshot.docs[0].data();
-                            window.currentLoggedInUser = docData;
-                            localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
-                            applyUserPermissionsUI();
-                            showToast(`تم مزامنة حساب (${getSafeName(docData)}) تلقائياً بنجاح! ✅`);
-                        } else {
-                            loadFromLocalStorageOrFallback();
-                        }
-                    });
-                }
-            }).catch(err => loadFromLocalStorageOrFallback());
+            fetchDriverData(urlUserId);
         } else {
-            loadFromLocalStorageOrFallback();
-        }
-    }
-
-    function loadFromLocalStorageOrFallback() {
-        const savedUser = localStorage.getItem('na2la_independent_user_v90');
-        if (savedUser) {
-            try {
-                window.currentLoggedInUser = JSON.parse(savedUser);
-                let currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
-                applyUserPermissionsUI();
-                
-                if (currentUserId) {
-                    db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
-                        if (!snapshot.empty) {
-                            let docData = snapshot.docs[0].data();
-                            window.currentLoggedInUser = { id: currentUserId, ...docData };
-                            localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
-                            applyUserPermissionsUI();
-                        }
-                    });
-                }
-            } catch(e) {
-                fallbackDefaultUser();
+            const savedUser = localStorage.getItem('na2la_independent_user_v90');
+            if (savedUser) {
+                try {
+                    let parsed = JSON.parse(savedUser);
+                    if (parsed && parsed.id !== "1" && parsed.role !== "admin" && parsed.role !== "مدير نظام") {
+                        window.currentLoggedInUser = parsed;
+                        applyUserPermissionsUI();
+                        return;
+                    }
+                } catch(e) {}
             }
-        } else {
-            fallbackDefaultUser();
+            // إذا لم يوجد مستخدم في الرابط أو التخزين، نبقي الحساب افتراضياً كسائق مستقل
+            window.currentLoggedInUser = { id: 'guest', name: 'سائق مستقل', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+            applyUserPermissionsUI();
         }
     }
 
-    function fallbackDefaultUser() {
-        window.currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
-        applyUserPermissionsUI();
+    function fetchDriverData(identifier) {
+        db.collection("drivers").where("id", "==", identifier).get().then(snapshot => {
+            if (!snapshot.empty) {
+                let docData = snapshot.docs[0].data();
+                window.currentLoggedInUser = { id: identifier, ...docData };
+                localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                applyUserPermissionsUI();
+                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
+            } else {
+                db.collection("drivers").where("phone", "==", identifier).get().then(phoneSnapshot => {
+                    if (!phoneSnapshot.empty) {
+                        let docData = phoneSnapshot.docs[0].data();
+                        window.currentLoggedInUser = docData;
+                        localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                        applyUserPermissionsUI();
+                        showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
+                    } else {
+                        showToast("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف", "danger");
+                    }
+                });
+            }
+        }).catch(err => console.error(err));
     }
+
+    function openSwitchAccountPrompt() {
+        let inputId = prompt("أدخل معرف السائق (ID) أو رقم الهاتف للتحويل إلى حسابه المستقل:");
+        if (inputId && inputId.trim() !== "") {
+            fetchDriverData(inputId.trim());
+        }
+    }
+    window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
     function loadAllDataFromFirestoreMultiCollection() {
         try {
@@ -768,7 +763,7 @@
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'سائق', title: 'سائق مستقل', avatar: '' };
         let role = user.role;
         
         document.getElementById('header-username').innerText = user.name;
