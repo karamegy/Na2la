@@ -567,39 +567,68 @@
             initFirestoreSync();
         });
 
-        // التزامن المستقل الآمن والمخصص لكل حساب دون تداخل مع حساب المدير
+        // المزامنة المستقلة التلقائية الذكية عبر الرابط أو التخزين المحلي لدعم مجموعة drivers
         function initIndependentUserSync() {
-            const savedUser = localStorage.getItem('na2la_independent_user_v98');
-            let currentUserId = null;
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
 
+            if (urlUserId) {
+                // البحث التلقائي بالـ ID في مجموعة drivers
+                db.collection("drivers").where("id", "==", urlUserId).get().then(snapshot => {
+                    if (!snapshot.empty) {
+                        let docData = snapshot.docs[0].data();
+                        window.currentLoggedInUser = { id: urlUserId, ...docData };
+                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                        applyUserPermissionsUI();
+                    } else {
+                        // البحث برقم الهاتف إذا لم يتم العثور بالـ ID
+                        db.collection("drivers").where("phone", "==", urlUserId).get().then(phoneSnapshot => {
+                            if (!phoneSnapshot.empty) {
+                                let docData = phoneSnapshot.docs[0].data();
+                                window.currentLoggedInUser = docData;
+                                localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                                applyUserPermissionsUI();
+                            } else {
+                                loadFromLocalStorageOrFallback();
+                            }
+                        }).catch(err => loadFromLocalStorageOrFallback());
+                    }
+                }).catch(err => loadFromLocalStorageOrFallback());
+            } else {
+                loadFromLocalStorageOrFallback();
+            }
+        }
+
+        function loadFromLocalStorageOrFallback() {
+            const savedUser = localStorage.getItem('na2la_independent_user_v98');
             if (savedUser) {
                 try {
                     window.currentLoggedInUser = JSON.parse(savedUser);
-                    currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
+                    let currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
                     applyUserPermissionsUI();
-                } catch(e) {}
-            }
-
-            // الاستماع فقط لبيانات هذا المستخدم بناءً على معرفه أو هاتفه (وليس جلب أول مستخدم في القاعدة عبر limit(1))
-            if (currentUserId) {
-                db.collection("drivers").doc(String(currentUserId)).onSnapshot(docSnap => {
-                    if (docSnap.exists) {
-                        let docData = docSnap.data();
-                        let name = getSafeName(docData);
-                        let role = docData.role || 'سائق';
-                        let title = docData.title || 'سائق مستقل';
-                        let avatar = docData.avatar || '';
-
-                        window.currentLoggedInUser = { ...window.currentLoggedInUser, name, role, title, avatar };
-                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                        applyUserPermissionsUI();
+                    
+                    // الاستماع اللحظي لتحديثات بيانات هذا السائق تحديداً من Firestore
+                    if (currentUserId) {
+                        db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
+                            if (!snapshot.empty) {
+                                let docData = snapshot.docs[0].data();
+                                window.currentLoggedInUser = { id: currentUserId, ...docData };
+                                localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                                applyUserPermissionsUI();
+                            }
+                        });
                     }
-                }, err => {
-                    applyUserPermissionsUI();
-                });
+                } catch(e) {
+                    fallbackDefaultUser();
+                }
             } else {
-                applyUserPermissionsUI();
+                fallbackDefaultUser();
             }
+        }
+
+        function fallbackDefaultUser() {
+            window.currentLoggedInUser = { name: 'المستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+            applyUserPermissionsUI();
         }
 
         function applyUserPermissionsUI() {
