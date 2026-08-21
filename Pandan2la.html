@@ -522,31 +522,42 @@
     window.getAllShipments = getAllShipments;
 
     // المزامنة المستقلة التلقائية للحساب بدون شاشة اختيار
-    function initIndependentUserSync() {
-        const savedUser = localStorage.getItem('na2la_independent_user_v90');
-        if (savedUser) {
-            try {
-                window.currentLoggedInUser = JSON.parse(savedUser);
-                applyUserPermissionsUI();
-            } catch(e) {}
-        }
+    // التزامن المستقل المحدث لكل حساب على حدة
+function initIndependentUserSync() {
+    const savedUser = localStorage.getItem('na2la_independent_user_v90');
+    let currentUserId = null;
 
-        db.collection("drivers").limit(1).onSnapshot(snapshot => {
+    if (savedUser) {
+        try {
+            window.currentLoggedInUser = JSON.parse(savedUser);
+            currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
+            applyUserPermissionsUI();
+        } catch(e) {}
+    }
+
+    // إذا كان هناك معرف محدد للمستخدم النشط، نقوم بمتابعة وثيقته هو فقط وليس الـ limit(1) العام
+    if (currentUserId) {
+        db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
             if (!snapshot.empty) {
                 let docData = snapshot.docs[0].data();
                 let name = getSafeName(docData);
-                let role = docData.role || 'مدير نظام';
-                let title = docData.title || 'أسطورة الطريق';
+                let role = docData.role || 'سائق';
+                let title = docData.title || 'سائق مستقل';
                 let avatar = docData.avatar || '';
 
-                window.currentLoggedInUser = { name, role, title, avatar };
+                window.currentLoggedInUser = { id: currentUserId, name, role, title, avatar };
                 localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
                 applyUserPermissionsUI();
             }
         }, err => {
             applyUserPermissionsUI();
         });
+    } else {
+        // إذا لم يكن هناك مستخدم مسجل محلياً، نكتفي بالواجهة الافتراضية
+        applyUserPermissionsUI();
     }
+}
+
 
     function loadAllDataFromFirestoreMultiCollection() {
         try {
