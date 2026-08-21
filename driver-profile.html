@@ -102,7 +102,6 @@
         .btn { background: var(--primary-gradient); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.3); border-radius: 8px; padding: 9px 12px; font-size: 11px; }
         .btn-success { background: linear-gradient(135deg, #34d399, #059669); color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 8px; }
         .btn-danger { background: linear-gradient(135deg, #f87171, #dc2626); color: white; border: none; font-weight: bold; cursor: pointer; border-radius: 8px; }
-        .btn-sm { padding: 5px 10px; font-size: 10px; width: auto; display: inline-block; border-radius: 6px; cursor: pointer; font-weight: bold; }
 
         .load-post-media { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 6px; }
         .load-post-media img { width: 220px; height: 150px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0; }
@@ -358,7 +357,7 @@
         </div>
     </div>
 
-    <!-- نافذة Bottom Sheet للبروفايل والشات الخاص ومكالمات الصوت والفيديو -->
+    <!-- نافذة Bottom Sheet للبروفايل والشات الخاص -->
     <div id="bottomSheetModal" class="bottom-sheet-overlay" onclick="closeBottomSheet(event)">
         <div class="bottom-sheet-content" id="bottomSheetBody">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px;">
@@ -425,8 +424,8 @@
         const db = getFirestore(app);
 
         window.db = db;
+        window.colRef = (path) => collection(db, path);
 
-        // إدارة الحساب الحالي والتسجيل التلقائي
         window.currentAccount = JSON.parse(localStorage.getItem('na2la_logged_user_haretg')) || {
             name: localStorage.getItem("logged_in_driver_name") || "عماد",
             details: "سيارة ربع نقل - تجهيز حبال",
@@ -449,20 +448,86 @@
                         avatar: window.currentAccount.avatar || "",
                         lastActive: new Date()
                     });
+                } else {
+                    const data = userSnap.data();
+                    if(data.avatar) window.currentAccount.avatar = data.avatar;
                 }
                 localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
             } catch (e) { console.error(e); }
         }
 
+        async function loadSavedSettings() {
+            try {
+                const coverSnap = await getDoc(doc(db, "community_settings", "cover"));
+                if (coverSnap.exists() && coverSnap.data().url) {
+                    document.getElementById('communityCoverArea').style.backgroundImage = `url('${coverSnap.data().url}')`;
+                }
+
+                const logoSnap = await getDoc(doc(db, "community_settings", "logo"));
+                if (logoSnap.exists() && logoSnap.data().url) {
+                    document.getElementById('headerLogoImg').src = logoSnap.data().url;
+                }
+            } catch(e) { console.error("Error loading settings:", e); }
+        }
+
         signInAnonymously(auth).then(() => {
             console.log("✅ تم المصادقة سحابياً بنجاح");
             registerUserAutomaticallyInCloud().then(() => {
-                updateAccountUI();
+                loadSavedSettings();
                 initRealtimePlatformUsers();
                 loadCommunityPosts();
                 loadMyCargoFromShipments();
             });
         }).catch((err) => { console.error("⚠️ خطأ في المصادقة السحابية:", err); });
+
+        window.publishCommunityPostCloud = async function(postData) {
+            try {
+                const newId = String(Date.now());
+                await setDoc(doc(db, 'space_network_posts', newId), {
+                    id: newId, ...postData
+                });
+                document.getElementById('community-post-text').value = '';
+                communityFilesArr = [];
+                document.getElementById('community-files-preview-info').innerText = '';
+                alert('تم نشر الإشارة بنجاح في رادار الأسطول 🚀');
+            } catch(e) {
+                console.error("Publish error:", e);
+                alert("فشل النشر: " + e.message);
+            }
+        }
+
+        window.listenCommunityPosts = function(callback) {
+            return onSnapshot(collection(db, 'space_network_posts'), callback);
+        }
+
+        window.updatePostLikesCloud = async function(id, newLikes) {
+            await updateDoc(doc(db, 'space_network_posts', String(id)), { likes: newLikes });
+        }
+
+        window.updatePostCommentsCloud = async function(id, commentsArr) {
+            await updateDoc(doc(db, 'space_network_posts', String(id)), { comments: commentsArr });
+        }
+
+        window.listenShipmentsCloud = function(callback) {
+            return onSnapshot(collection(db, 'shipments'), callback);
+        }
+
+        window.saveTransactionCloud = async function(txData) {
+            const newId = String(Date.now());
+            await setDoc(doc(db, 'transactions', newId), { id: newId, ...txData });
+        }
+
+        window.listenPlatformUsersCloud = function(callback) {
+            return onSnapshot(collection(db, 'platform_users'), callback);
+        }
+
+        window.saveUserProfileCloud = async function(accData) {
+            await setDoc(doc(db, 'platform_users', accData.name), accData);
+        }
+
+        window.saveSettingCloud = async function(docName, urlVal) {
+            await setDoc(doc(db, 'community_settings', docName), { url: urlVal });
+        }
     </script>
 
     <script>
@@ -494,7 +559,13 @@
         const savedColor = localStorage.getItem('na2la_theme_color');
         if(savedColor) document.documentElement.style.setProperty('--primary-color', savedColor);
 
-        // إدارة لوحة المدير
+        window.addEventListener('DOMContentLoaded', () => {
+            if(window.currentAccount && window.currentAccount.isAdmin) {
+                const coverUploadDiv = document.getElementById('coverUploadWrapper');
+                if(coverUploadDiv) coverUploadDiv.style.display = 'block';
+            }
+        });
+
         window.toggleAdminPanel = function() {
             document.getElementById('adminPanelModal').style.display = 'flex';
             refreshAdminStats();
@@ -504,7 +575,6 @@
         }
         window.closeAdminPanelDirect = function() { document.getElementById('adminPanelModal').style.display = 'none'; }
 
-        // إدارة Bottom Sheet للبروفايل والشات
         window.openBottomSheet = function(type, memberData = null) {
             const modal = document.getElementById('bottomSheetModal');
             const titleEl = document.getElementById('bottomSheetTitle');
@@ -513,11 +583,15 @@
 
             if(type === 'profile') {
                 titleEl.innerText = "👤 ملف حساب السائق والتشغيل";
+                let avatarHtml = window.currentAccount.avatar ? 
+                    `<img src="${window.currentAccount.avatar}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">` :
+                    `<div style="width:50px; height:50px; border-radius:50%; background:var(--primary-color); color:white; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:bold;">${window.currentAccount.name.charAt(0)}</div>`;
+
                 contentEl.innerHTML = `
                     <div style="padding: 10px; font-size: 0.9rem;">
                         <div class="card" style="border-right: 4px solid var(--primary-color);">
                             <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-                                <div style="width:50px; height:50px; border-radius:50%; background:var(--primary-color); color:white; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:bold;">${window.currentAccount.name.charAt(0)}</div>
+                                ${avatarHtml}
                                 <div>
                                     <h4 style="font-size:1rem; color:var(--text-color);">${window.currentAccount.name}</h4>
                                     <span style="font-size:0.75rem; color:var(--secondary-text);">${window.currentAccount.details}</span>
@@ -525,6 +599,12 @@
                             </div>
                             <p style="margin-bottom: 4px;"><strong>🏅 الألقاب:</strong> <span style="color: var(--primary-color);">${window.currentAccount.badge || 'سائق معتمد'}</span></p>
                             <p style="margin-bottom: 4px;"><strong>🛡️ الصلاحية:</strong> ${window.currentAccount.isAdmin ? 'مدير النظام ومشرف عام' : 'عضو مسجل'}</p>
+                            <div style="margin-top: 10px;">
+                                <label style="background:var(--primary-color); color:white; padding:6px 12px; border-radius:6px; font-size:10px; cursor:pointer; display:inline-block;">
+                                    📷 تغيير صورة البروفايل الشخصية
+                                    <input type="file" accept="image/*" hidden onchange="handleUserAvatarUpload(this)">
+                                </label>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -544,20 +624,22 @@
                     </div>
                 `;
 
-                const q = query(collection(window.db, "private_chats"), where("chatId", "==", chatId));
-                onSnapshot(q, (snapshot) => {
-                    let msgs = [];
-                    snapshot.forEach(doc => msgs.push(doc.data()));
-                    msgs.sort((a, b) => (a.timestamp?.toMillis ? a.timestamp.toMillis() : 0) - (b.timestamp?.toMillis ? b.timestamp.toMillis() : 0));
-                    const container = document.getElementById('privateChatMessages');
-                    if(!container) return;
-                    if(msgs.length === 0) { container.innerHTML = "<p style='text-align:center; color:var(--secondary-text); font-size:0.75rem;'>لا توجد رسائل سابقة.</p>"; return; }
-                    container.innerHTML = msgs.map(m => `
-                        <div class="chat-bubble ${m.sender === window.currentAccount.name ? 'sent' : 'received'}">
-                            <strong>${m.sender}:</strong> ${m.text}
-                        </div>
-                    `).join('');
-                    container.scrollTop = container.scrollHeight;
+                import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(({ query, where, onSnapshot }) => {
+                    const q = query(window.colRef("private_chats"), where("chatId", "==", chatId));
+                    onSnapshot(q, (snapshot) => {
+                        let msgs = [];
+                        snapshot.forEach(docSnap => msgs.push(docSnap.data()));
+                        msgs.sort((a, b) => (a.timestamp?.toMillis ? a.timestamp.toMillis() : 0) - (b.timestamp?.toMillis ? b.timestamp.toMillis() : 0));
+                        const container = document.getElementById('privateChatMessages');
+                        if(!container) return;
+                        if(msgs.length === 0) { container.innerHTML = "<p style='text-align:center; color:var(--secondary-text); font-size:0.75rem;'>لا توجد رسائل سابقة.</p>"; return; }
+                        container.innerHTML = msgs.map(m => `
+                            <div class="chat-bubble ${m.sender === window.currentAccount.name ? 'sent' : 'received'}">
+                                <strong>${m.sender}:</strong> ${m.text}
+                            </div>
+                        `).join('');
+                        container.scrollTop = container.scrollHeight;
+                    });
                 });
             }
         }
@@ -568,13 +650,12 @@
         window.sendPrivateMessage = async function(chatId, receiver) {
             const input = document.getElementById('privateMsgInput');
             if(!input || !input.value.trim()) return;
-            await addDoc(collection(window.db, "private_chats"), {
+            await addDoc(window.colRef("private_chats"), {
                 chatId, sender: window.currentAccount.name, receiver, text: input.value.trim(), timestamp: new Date()
             });
             input.value = "";
         }
 
-        // ضغط الصور ونشرها
         function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.8, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -618,27 +699,22 @@
 
             if (!text && communityFilesArr.length === 0) { alert('الرجاء كتابة نص أو إرفاق صورة!'); return; }
 
-            let newId = String(Date.now());
             let newPost = {
-                id: newId, author: window.currentAccount.name, authorTitle: window.currentAccount.badge,
+                author: window.currentAccount.name, authorTitle: window.currentAccount.badge,
                 category: category, text: text, files: [...communityFilesArr], likes: 0, comments: [],
                 isEmergency: isEmergency, date: new Date().toLocaleString('ar-EG'), timestamp: Date.now()
             };
 
-            window.db.collection('space_network_posts').doc(newId).set(newPost).then(() => {
-                document.getElementById('community-post-text').value = '';
-                communityFilesArr = [];
-                document.getElementById('community-files-preview-info').innerText = '';
-                alert('تم نشر الإشارة بنجاح في رادار الأسطول 🚀');
-            });
+            window.publishCommunityPostCloud(newPost);
         }
 
         function loadCommunityPosts() {
-            window.db.collection('space_network_posts').onSnapshot(snapshot => {
+            window.listenCommunityPosts(snapshot => {
                 const container = document.getElementById('community-posts-container');
                 if(!container) return;
                 container.innerHTML = '';
-                let posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                let posts = [];
+                snapshot.forEach(docSnap => posts.push({ id: docSnap.id, ...docSnap.data() }));
                 posts.sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
 
                 if (posts.length === 0) {
@@ -688,9 +764,13 @@
             });
         }
 
-        window.likePost = function(id) {
-            window.db.collection('space_network_posts').doc(String(id)).get().then(doc => {
-                if(doc.exists) window.db.collection('space_network_posts').doc(String(id)).update({ likes: (doc.data().likes || 0) + 1 });
+        window.likePost = async function(id) {
+            import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(async ({ doc, getDoc }) => {
+                const docRefVal = doc(window.db, 'space_network_posts', String(id));
+                const docSnap = await getDoc(docRefVal);
+                if(docSnap.exists()) {
+                    await window.updatePostLikesCloud(id, (docSnap.data().likes || 0) + 1);
+                }
             });
         }
 
@@ -699,15 +779,18 @@
             box.style.display = box.style.display === 'block' ? 'none' : 'block';
         }
 
-        window.addComment = function(id) {
+        window.addComment = async function(id) {
             let input = document.getElementById(`comment-input-${id}`);
             let text = input.value.trim();
             if(!text) return;
-            window.db.collection('space_network_posts').doc(String(id)).get().then(doc => {
-                if(doc.exists) {
-                    let comments = doc.data().comments || [];
+            import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(async ({ doc, getDoc }) => {
+                const docRefVal = doc(window.db, 'space_network_posts', String(id));
+                const docSnap = await getDoc(docRefVal);
+                if(docSnap.exists()) {
+                    let comments = docSnap.data().comments || [];
                     comments.push({ author: window.currentAccount.name, text: text, time: new Date().toLocaleTimeString('ar-EG') });
-                    window.db.collection('space_network_posts').doc(String(id)).update({ comments: comments }).then(() => { input.value = ''; });
+                    await window.updatePostCommentsCloud(id, comments);
+                    input.value = '';
                 }
             });
         }
@@ -718,17 +801,16 @@
         }
         window.closeMediaViewer = function() { document.getElementById('mediaViewerModal').style.display = 'none'; }
 
-        // شحنات الحساب
         function loadMyCargoFromShipments() {
-            window.db.collection('shipments').onSnapshot(snapshot => {
+            window.listenShipmentsCloud(snapshot => {
                 const container = document.getElementById('my-cargo-container');
                 if(!container) return;
                 container.innerHTML = '';
                 let myCargos = [];
-                snapshot.forEach(doc => {
-                    let data = doc.data();
+                snapshot.forEach(docSnap => {
+                    let data = docSnap.data();
                     if (data.assignedDriver === window.currentAccount.name || data.driver === window.currentAccount.name || data.name === window.currentAccount.name) {
-                        myCargos.push({ id: doc.id, ...data });
+                        myCargos.push({ id: docSnap.id, ...data });
                     }
                 });
                 if (myCargos.length === 0) {
@@ -749,7 +831,6 @@
             });
         }
 
-        // حاسبة الرحلة
         window.calculateTrip = function() {
             const dist = parseFloat(document.getElementById('calcDistance').value) || 0;
             const fuelP = parseFloat(document.getElementById('calcFuelPrice').value) || 0;
@@ -764,22 +845,19 @@
             resBox.innerHTML = `⛽ إجمالي الوقود: ${totalLiters.toFixed(1)} لتر<br>💵 إجمالي التكلفة التشغيلية: ${totalCost.toFixed(2)} جنيه`;
         }
 
-        // الخزنة والمالية
         window.saveCashHandler = function(e) {
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
-            let newId = String(Date.now());
-            window.db.collection('transactions').doc(newId).set({
-                id: newId, type, amount, desc, category: 'treasury', date: new Date().toLocaleString('ar-EG')
+            window.saveTransactionCloud({
+                type, amount, desc, category: 'treasury', date: new Date().toLocaleString('ar-EG')
             }).then(() => { alert('تم تسجيل الحركة بنجاح! 💵'); });
         }
 
-        // إدارة لوحة المدير ودليل الأعضاء
         function initRealtimePlatformUsers() {
-            window.db.collection("platform_users").onSnapshot((snapshot) => {
+            window.listenPlatformUsersCloud((snapshot) => {
                 let users = [];
-                snapshot.forEach(doc => users.push(doc.data()));
+                snapshot.forEach(docSnap => users.push(docSnap.data()));
                 document.getElementById('adminTotalUsers').innerText = users.length;
                 renderPlatformAccountsDirectory(users);
             });
@@ -799,14 +877,14 @@
             `).join('');
         }
 
-        window.filterPlatformAccounts = function() {
-            // يمكن إضافة تصفية حسب البحث هنا
-        }
+        window.filterPlatformAccounts = function() {}
 
         window.refreshAdminStats = async function() {
             try {
-                const qs = await window.db.collection("space_network_posts").get();
-                document.getElementById('adminTotalPosts').innerText = qs.size;
+                import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(async ({ getDocs, collection }) => {
+                    const qs = await getDocs(collection(window.db, "space_network_posts"));
+                    document.getElementById('adminTotalPosts').innerText = qs.size;
+                });
             } catch(e) { document.getElementById('adminTotalPosts').innerText = "0"; }
             document.getElementById('activeAccountName').value = window.currentAccount.name;
             document.getElementById('activeAccountDetails').value = window.currentAccount.details;
@@ -822,34 +900,49 @@
             window.currentAccount.isAdmin = document.getElementById('activeAccountIsAdmin').checked;
             
             localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
-            await window.db.collection("platform_users").doc(window.currentAccount.name).set({
+            await window.saveUserProfileCloud({
                 name: window.currentAccount.name, role: window.currentAccount.isAdmin ? "مدير نظام" : "سائق",
-                badge: window.currentAccount.badge, details: window.currentAccount.details, isAdmin: window.currentAccount.isAdmin
+                badge: window.currentAccount.badge, details: window.currentAccount.details, isAdmin: window.currentAccount.isAdmin,
+                avatar: window.currentAccount.avatar || ""
             });
             alert("✔ تم تحديث وحفظ بيانات الحساب بنجاح!");
         }
 
         window.triggerLogoUpload = function() { if(window.currentAccount.isAdmin) document.getElementById('globalLogoFileInput').click(); }
+        
         window.handleGlobalLogoUpload = function(input) {
             if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = async function(e) {
-                    await window.db.collection("community_settings").doc("logo").set({ url: e.target.result });
-                    document.getElementById('headerLogoImg').src = e.target.result;
-                    alert("✔ تم تحديث شعار التطبيق بنجاح!");
-                };
-                reader.readAsDataURL(input.files[0]);
+                compressImage(input.files[0], 300, 300, 0.8, async (url) => {
+                    await window.saveSettingCloud("logo", url);
+                    document.getElementById('headerLogoImg').src = url;
+                    alert("✔ تم تحديث شعار التطبيق وحفظه بنجاح!");
+                });
             }
         }
+
         window.handleCoverUpload = function(input) {
             if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = async function(e) {
-                    await window.db.collection("community_settings").doc("cover").set({ url: e.target.result });
-                    document.getElementById('communityCoverArea').style.backgroundImage = `url('${e.target.result}')`;
-                    alert("✔ تم تحديث الغلاف بنجاح!");
-                };
-                reader.readAsDataURL(input.files[0]);
+                compressImage(input.files[0], 1200, 600, 0.8, async (url) => {
+                    await window.saveSettingCloud("cover", url);
+                    document.getElementById('communityCoverArea').style.backgroundImage = `url('${url}')`;
+                    alert("✔ تم تحديث غلاف المجتمع وحفظه بنجاح!");
+                });
+            }
+        }
+
+        window.handleUserAvatarUpload = function(input) {
+            if (input.files && input.files[0]) {
+                compressImage(input.files[0], 300, 300, 0.8, async (url) => {
+                    window.currentAccount.avatar = url;
+                    localStorage.setItem('na2la_logged_user_haretg', JSON.stringify(window.currentAccount));
+                    await window.saveUserProfileCloud({
+                        name: window.currentAccount.name, role: window.currentAccount.isAdmin ? "مدير نظام" : "سائق",
+                        badge: window.currentAccount.badge, details: window.currentAccount.details, isAdmin: window.currentAccount.isAdmin,
+                        avatar: url
+                    });
+                    alert("✔ تم تحديث صورتك الشخصية بنجاح!");
+                    openBottomSheet('profile');
+                });
             }
         }
     </script>
