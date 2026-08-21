@@ -491,7 +491,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { id: '1', name: 'جاري التحميل...', role: 'driver', title: 'سائق', avatar: '' };
+    let currentLoggedInUser = { id: '', name: 'يرجى ربط الحساب', role: 'driver', title: 'سائق', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -502,7 +502,7 @@
         treasury: [],
         expenses: [],
         customers: [{ id: 1, name: 'عميل أجل افتراضي', accountOwner: 'عميل أجل افتراضي', phone: '01000000000', debt: 0 }],
-        drivers: [{ id: '1', name: 'المدير', phone: '01000000000', status: 'متاح 🟢', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' }],
+        drivers: [],
         communityPosts: [],
         posts: [],
         wallPosts: [],
@@ -531,7 +531,7 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي
+    // 🔒 التحقق الدقيق من الجلسة ومنع تحميل حساب المدير افتراضياً
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
@@ -558,7 +558,12 @@
                 } catch(e) {}
             }
         }
-        fetchDriverData('1');
+        
+        // إذا لم توجد جلسة محفوظة، يطلب النظام من المستخدم تسجيل الدخول فوراً برقم أو المعرف الخاص به
+        applyUserPermissionsUI();
+        setTimeout(() => {
+            openSwitchAccountPrompt();
+        }, 300);
     }
 
     async function fetchDriverData(identifier) {
@@ -582,9 +587,8 @@
                 loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                console.warn("⚠️ لم يتم العثور على السائق، استخدام الافتراضي.");
-                applyUserPermissionsUI();
-                loadAllDataFromFirestoreMultiCollection();
+                showToast("⚠️ لم يتم العثور على الحساب، يرجى إدخال معرف صحيح.", "danger");
+                openSwitchAccountPrompt();
             }
         } catch(err) { console.error(err); }
     }
@@ -602,10 +606,10 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
-        let currentUser = window.currentLoggedInUser || { id: '1', role: 'driver' };
+        let currentUser = window.currentLoggedInUser || { id: '', role: 'driver' };
         let role = String(currentUser.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || currentUser.id === '1');
-        let currentUserId = String(currentUser.id || '1');
+        let currentUserId = String(currentUser.id || '');
 
         try {
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
@@ -695,7 +699,7 @@
         if (!window.db || !window.firebaseModules) return;
         window._isSavingLocally = true;
         const { doc, setDoc } = window.firebaseModules;
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
         try {
             if (appData.shipments) {
@@ -903,10 +907,10 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function renderStats() {
-        let user = window.currentLoggedInUser || { id: '1', role: 'driver' };
+        let user = window.currentLoggedInUser || { id: '', role: 'driver' };
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipments = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -943,7 +947,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
 
@@ -1467,7 +1471,7 @@
         const name = document.getElementById('def-inv-name').value;
         const phone = document.getElementById('def-inv-phone').value;
         const amount = Number(document.getElementById('def-inv-amount').value || 0);
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
         const newInv = {
             id: document.getElementById('def-inv-id').value,
@@ -1502,7 +1506,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let list = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
         
@@ -1627,7 +1631,7 @@
     function saveCustomer(e) {
         e.preventDefault();
         const name = document.getElementById('cust-name').value;
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
         const newCust = {
             id: Date.now(),
             userId: currentUserId,
@@ -1646,7 +1650,7 @@
 
     function saveTruck(e) {
         e.preventDefault();
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
         const newTruck = {
             id: Date.now(),
             userId: currentUserId,
@@ -1666,7 +1670,7 @@
         const text = document.getElementById('feed-text').value;
         if(!text) return;
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
         const newPost = {
             id: Date.now(),
             userId: currentUserId,
@@ -1692,7 +1696,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const tbody = document.getElementById('shipments-table-body');
@@ -1734,7 +1738,7 @@
         const priority = document.getElementById('s-priority').value;
         const driver = document.getElementById('s-driver').value;
         const isDeferred = document.getElementById('s-is-deferred')?.checked || false;
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
         const shipmentId = 'INV-' + Date.now();
         const newShipment = {
@@ -1794,7 +1798,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -1850,7 +1854,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -1889,7 +1893,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let targetList = type === 'shipments' ? (isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId)) : (isAdmin ? data[type] : (data[type] || []).filter(x => String(x.userId || '') === currentUserId));
@@ -1985,7 +1989,7 @@
         const clientName = document.getElementById('ci-client').value;
         const checkboxes = document.querySelectorAll('input[name="ci-shipment-chk"]:checked');
         const discount = Number(document.getElementById('ci-discount').value || 0);
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
         if(checkboxes.length === 0) {
             showToast('الرجاء اختيار شحنة واحدة على الأقل!', 'warning');
@@ -2083,7 +2087,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2113,7 +2117,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2227,7 +2231,7 @@
         const vPhone = document.getElementById('vis-phone').value;
         const vPrice = Number(document.getElementById('vis-price').value);
         const vItem = document.getElementById('vis-item').value;
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
         const newShipment = {
             id: shipmentId,
@@ -2282,7 +2286,7 @@
         const text = document.getElementById('community-post-text').value;
         if(!text) return;
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
-        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '1';
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
         const newPost = {
             id: Date.now(),
             userId: currentUserId,
@@ -2331,7 +2335,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2372,7 +2376,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2388,7 +2392,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2410,7 +2414,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
@@ -2425,7 +2429,7 @@
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '1');
+        let currentUserId = String(user.id || '');
 
         let data = appStateData();
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
