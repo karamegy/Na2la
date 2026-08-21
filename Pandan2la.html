@@ -481,7 +481,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+    let currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -521,43 +521,40 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // المزامنة المستقلة التلقائية للحساب بدون شاشة اختيار
-    // التزامن المستقل المحدث لكل حساب على حدة
-function initIndependentUserSync() {
-    const savedUser = localStorage.getItem('na2la_independent_user_v90');
-    let currentUserId = null;
+    // المزامنة المستقلة التلقائية الحقيقية لكل مستخدم/سائق على حدة منعاً لتداخل الصلاحيات
+    function initIndependentUserSync() {
+        const savedUser = localStorage.getItem('na2la_independent_user_v90');
+        let currentUserId = null;
 
-    if (savedUser) {
-        try {
-            window.currentLoggedInUser = JSON.parse(savedUser);
-            currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
-            applyUserPermissionsUI();
-        } catch(e) {}
-    }
-
-    // إذا كان هناك معرف محدد للمستخدم النشط، نقوم بمتابعة وثيقته هو فقط وليس الـ limit(1) العام
-    if (currentUserId) {
-        db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
-            if (!snapshot.empty) {
-                let docData = snapshot.docs[0].data();
-                let name = getSafeName(docData);
-                let role = docData.role || 'سائق';
-                let title = docData.title || 'سائق مستقل';
-                let avatar = docData.avatar || '';
-
-                window.currentLoggedInUser = { id: currentUserId, name, role, title, avatar };
-                localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+        if (savedUser) {
+            try {
+                window.currentLoggedInUser = JSON.parse(savedUser);
+                currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
                 applyUserPermissionsUI();
-            }
-        }, err => {
+            } catch(e) {}
+        } else {
+            window.currentLoggedInUser = { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
             applyUserPermissionsUI();
-        });
-    } else {
-        // إذا لم يكن هناك مستخدم مسجل محلياً، نكتفي بالواجهة الافتراضية
-        applyUserPermissionsUI();
-    }
-}
+        }
 
+        if (currentUserId) {
+            db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
+                if (!snapshot.empty) {
+                    let docData = snapshot.docs[0].data();
+                    let name = getSafeName(docData);
+                    let role = docData.role || 'سائق';
+                    let title = docData.title || 'سائق مستقل';
+                    let avatar = docData.avatar || '';
+
+                    window.currentLoggedInUser = { id: currentUserId, name, role, title, avatar };
+                    localStorage.setItem('na2la_independent_user_v90', JSON.stringify(window.currentLoggedInUser));
+                    applyUserPermissionsUI();
+                }
+            }, err => {
+                applyUserPermissionsUI();
+            });
+        }
+    }
 
     function loadAllDataFromFirestoreMultiCollection() {
         try {
@@ -744,7 +741,7 @@ function initIndependentUserSync() {
 
     // تطبيق الصلاحيات وعرض الصورة الشخصية الحقيقية (avatar) والاسم والرتبة في الهيدر تلقائياً
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+        let user = window.currentLoggedInUser || { name: 'مستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
         let role = user.role;
         
         document.getElementById('header-username').innerText = user.name;
@@ -767,7 +764,7 @@ function initIndependentUserSync() {
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
 
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if(sidebarTitle) sidebarTitle.innerText = (role === 'مدير نظام' || role === 'admin') ? '👑 لوحة المدير (تحكم كامل)' : '👨‍✈️ قائمة حساب السائق المستقل';
 
         if (role === 'مدير نظام' || role === 'admin') {
@@ -805,7 +802,7 @@ function initIndependentUserSync() {
     function renderBottomNavbarByRole() {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
 
         if (role === 'مدير نظام' || role === 'admin') {
             navbar.innerHTML = `
@@ -872,7 +869,7 @@ function initIndependentUserSync() {
         if(!content) return;
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
 
         if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && userRole !== 'مدير نظام' && userRole !== 'admin') {
             showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
@@ -1423,7 +1420,7 @@ function initIndependentUserSync() {
         const filter = document.getElementById('def-filter').value;
         let data = appStateData();
         let list = data.deferredInvoices || [];
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         
         let filtered = list.filter(d => {
             let name = getSafeName(d).toLowerCase();
@@ -1599,7 +1596,7 @@ function initIndependentUserSync() {
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         const tbody = document.getElementById('shipments-table-body');
         const filtered = shipmentsList.filter(s => getSafeName(s).toLowerCase().includes(query) || getSafeDesc(s).toLowerCase().includes(query));
         
@@ -2027,29 +2024,38 @@ function initIndependentUserSync() {
         showToast('تم التحديث بنجاح');
     }
 
+    // تصحيح دالة حفظ السائق الجديد لإنشاء وثيقة مستقلة في مجموعة drivers سحابياً
     function saveNewDriver(e) {
         e.preventDefault();
         const name = document.getElementById('new-d-name').value;
+        const phone = document.getElementById('new-d-phone').value;
+        const role = document.getElementById('new-d-role').value;
+        const driverId = String(Date.now());
+
         const newDrv = {
-            id: Date.now(),
+            id: driverId,
             name: name,
             driverName: name,
-            phone: document.getElementById('new-d-phone').value,
-            role: document.getElementById('new-d-role').value,
-            title: 'سائق معتمد',
+            phone: phone,
+            role: role,
+            title: role === 'مدير نظام' ? 'أسطورة الطريق' : 'سائق معتمد',
             status: 'متاح 🟢',
             avatar: ''
         };
+
         let data = appStateData();
         if(!data.drivers) data.drivers = [];
         data.drivers.push(newDrv);
+
+        db.collection("drivers").doc(driverId).set(newDrv, { merge: true }).catch(err => console.error(err));
+
         saveDataAll();
         switchSection('driversControl');
         showToast('تم إضافة الحساب بنجاح وتحديث باندا!');
     }
 
     function deleteItem(type, index) {
-        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+        let userRole = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if(userRole !== 'مدير نظام' && userRole !== 'admin') {
             showToast('الحذف مقتصر على مدير النظام فقط! 👑', 'danger');
             return;
