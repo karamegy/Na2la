@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المتقدمة V98.4 PRO SYNC</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المتقدمة V98.5 PRO SYNC</title>
     
-    <!-- مكتبات Firebase V8 (متضمنة Firestore و Auth للمصادقة الآمنة) -->
+    <!-- مكتبات Firebase V8 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -13,6 +13,7 @@
     <!-- مكتبات توليد PDF والصور -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
@@ -61,7 +62,8 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
         body { background-color: var(--bg-color); color: var(--text-color); padding-bottom: 105px; overflow-x: hidden; direction: rtl; }
 
-        #adminLoginOverlay {
+        /* شاشة اختيار الحساب والمزامنة التلقائية بدون كلمات سر */
+        #lock-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(5, 6, 15, 0.98); z-index: 99999; display: flex;
             justify-content: center; align-items: center; backdrop-filter: blur(25px); padding: 16px;
@@ -193,22 +195,26 @@
 </head>
 <body data-theme="3d-vibrant">
 
-    <!-- بوابة قفل الأمان للمدير المتوافقة مع Firebase Auth -->
-    <div id="adminLoginOverlay" style="display: flex;">
+    <!-- شاشة اختيار الحساب والمزامنة التلقائية بدون كلمة سر وبدون رموز دخول -->
+    <div id="lock-screen" style="display: flex;">
         <div class="login-box-card">
-            <div style="font-size: 44px; margin-bottom: 10px;">🐼🔒</div>
-            <h2 style="color: var(--primary-orange); font-size: 20px; font-weight: 900; margin-bottom: 8px;">بوابة الإدارة الكبرى - أسطورة الطريق V98.4 PRO</h2>
-            <p style="color: var(--secondary-text); font-size: 12px; margin-bottom: 20px;">أدخل كلمة المرور لتفعيل المصادقة السحابية والوصول إلى لوحة التحكم:</p>
-            <div style="position: relative; margin-bottom: 14px;">
-                <input type="password" id="managerPasswordInput" placeholder="كلمة المرور السرية..." class="calc-input" style="text-align: center; font-size: 16px; letter-spacing: 2px; margin-bottom: 0;" onkeydown="if(event.key === 'Enter') verifyManagerLogin()">
-                <span onclick="togglePasswordVisibility()" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px;">👁️</span>
+            <div style="font-size: 44px; margin-bottom: 10px;">🐼🚀</div>
+            <h2 style="color: var(--primary-orange); font-size: 18px; font-weight: 900; margin-bottom: 8px;">مزامنة الحسابات المستقيلة - أسطورة الطريق V98.5</h2>
+            <p style="color: var(--secondary-text); font-size: 12px; margin-bottom: 20px;">اختر حسابك المسجل للبدء فوراً (بدون كلمة سر) مع عرض الأقسام حسب رتبتك:</p>
+            
+            <div style="margin-bottom: 14px; text-align: right;">
+                <label style="font-size: 11px; font-weight: bold; color: var(--secondary-text); display: block; margin-bottom: 6px;">اختر الحساب المسجل:</label>
+                <select id="dynamic-account-select" class="calc-input" style="font-size: 13px;">
+                    <option value="">جاري تحميل الحسابات من قاعدة البيانات...</option>
+                </select>
             </div>
-            <button onclick="verifyManagerLogin()" class="submit-btn" style="width: 100%; padding: 12px; font-size: 15px;">دخول المدير سحابياً 🚀</button>
+
+            <button onclick="dynamicSyncAndLogin()" class="submit-btn" style="width: 100%; padding: 12px; font-size: 14px;">دخول ومزامنة الحساب 🚀</button>
             <button onclick="goToMotherPlatform()" class="submit-btn" style="width: 100%; margin-top: 8px; padding: 10px; background: var(--primary-blue);">🏠 العودة للمنصة الأم</button>
         </div>
     </div>
 
-    <!-- شريط الإشعارات المتحرك RSS -->
+    <!-- شاشة الإشعارات المتحرك RSS -->
     <div class="rss-ticker-bar">
         <div style="font-weight: 900; color: var(--primary-orange);">📡 إشعار RSS:</div>
         <div class="rss-content" id="rssTickerText">جاري مزامنة الشحنات، الفواتير الآجلة، وحركة الخزينة لحظياً عبر مجموعات Firestore سحابياً دون تضارب...</div>
@@ -218,20 +224,19 @@
     <!-- شريط العنوان العلوي -->
     <header>
         <div class="brand-container-panda">
-            <div class="header-profile-avatar" onclick="triggerProfileAvatarChange()" title="انقر لرفع صورة بروفايل مخصصة">
+            <div class="header-profile-avatar" onclick="switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'))" title="الملف الشخصي">
                 <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none; width:100%; height:100%; border-radius:50%; object-fit:cover;">
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
-            <input type="file" id="localAvatarUploadInput" accept="image/*" style="display: none;" onchange="handleLocalAvatarUpload(event)">
             <div>
-                <div class="brand-text-styled">أسطورة الطريق (Na2la)</div>
-                <div style="font-size: 10px; color: var(--secondary-text);">الخزينة والإدارة المالية V98.4 PRO 🐎</div>
+                <div class="brand-text-styled" id="header-username">أسطورة الطريق</div>
+                <div style="font-size: 10px; color: var(--warning-color);" id="header-role-badge">👑 مدير نظام</div>
             </div>
         </div>
 
         <div class="header-actions-group">
             <button onclick="goToMotherPlatform()" style="background: var(--primary-blue); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="العودة للصفحة الرئيسية الأم">🏠 المنصة الأم</button>
-            <button onclick="openSmsSettingsModal()" style="background: var(--primary-orange); color:#fff; border:none; padding:7px 10px; border-radius:10px; font-weight:bold; font-size:11px; cursor:pointer;" title="إعدادات SMS API">⚙️ SMS API</button>
+            <button onclick="lockSystem()" style="background: var(--danger-color); color:#fff; border:none; padding:7px 10px; border-radius:10px; font-weight:bold; font-size:11px; cursor:pointer;" title="تبديل الحساب">🔄 تبديل الحساب</button>
             <div class="theme-circles-bar">
                 <div class="theme-circle" style="background:#ffffff;" onclick="setTheme('light')" title="فاتح"></div>
                 <div class="theme-circle" style="background:#05050a;" onclick="setTheme('cyberpunk')" title="سايبربانك"></div>
@@ -248,10 +253,10 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h2 style="font-size: 18px; font-weight: 900; color: var(--primary-orange);">🏛️ لوحة القيادة والملخص المالي الشامل</h2>
-                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">مزامنة سحابية تامة وآمنة مع توحيد مفاتيح البيانات لجميع الشاشات والمجموعات.</p>
+                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">مزامنة تلقائية للحسابات، عرض الأقسام والصلاحيات حسب رتبة الحساب.</p>
                     </div>
-                    <div style="background: rgba(0,242,254,0.15); color: var(--primary-blue); padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 900;">
-                        🔒 مصادق سحابياً (Auth Active ☁️)
+                    <div style="background: rgba(0,242,254,0.15); color: var(--primary-blue); padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 900;" id="sync-status-badge">
+                        🟢 متزامن تلقائياً (Auto-Synced)
                     </div>
                 </div>
 
@@ -292,7 +297,7 @@
             </div>
         </div>
 
-        <!-- القسم الثاني: المصروفات -->
+        <!-- القسم الثاني: المصروفات (مخصص للمدير) -->
         <div id="section-expenses" class="app-section">
             <div class="card-box" style="border: 2px solid var(--danger-color);">
                 <h2 style="font-size: 18px; font-weight: 900; color: var(--danger-color); margin-bottom: 12px;">📤 إدارة المصروفات والبنود النقدية</h2>
@@ -319,7 +324,7 @@
             </div>
         </div>
 
-        <!-- القسم الثالث: الخزينة -->
+        <!-- القسم الثالث: الخزينة (مخصص للمدير) -->
         <div id="section-treasury" class="app-section">
             <div class="card-box" style="border: 2px solid var(--warning-color);">
                 <h2 style="font-size: 18px; font-weight: 900; color: var(--warning-color); margin-bottom: 12px;">💰 الخزينة المركزية وحركة السيولة</h2>
@@ -484,14 +489,8 @@
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي -->
-    <nav class="bottom-nav-bar">
-        <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
-        <button class="nav-item-btn" onclick="switchSection('expenses', this)"><span class="icon">📤</span><span>المصروفات</span></button>
-        <button class="nav-item-btn" onclick="switchSection('treasury', this)"><span class="icon">💰</span><span>الخزينة</span></button>
-        <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الحسابات</span></button>
-        <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التحليلات</span></button>
-    </nav>
+    <!-- شريط التنقل السفلي الديناميكي حسب الرتبة -->
+    <nav class="bottom-nav-bar" id="bottom-navbar"></nav>
 
     <!-- قالب الفاتورة الخفي -->
     <div id="invoiceExportTemplate">
@@ -519,7 +518,7 @@
         </div>
     </div>
 
-    <!-- سكريبت الجافاسكريبت الموحد والمزود بالمصادقة السحابية الفعّالة -->
+    <!-- سكريبت الجافاسكريبت الموحد مع المزامنة الديناميكية المستقلة -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -539,13 +538,11 @@
 
         let currentAccountFilter = 'all';
 
-        // دالة الانتقال للمنصة الأم
         function goToMotherPlatform() {
             window.location.href = "https://karamegy.github.io/Na2la/";
         }
         window.goToMotherPlatform = goToMotherPlatform;
 
-        // دوال الحماية من ظهور undefined وقراءة البيانات بدقة
         function getSafeName(item) {
             if (!item) return 'غير محدد';
             return item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل غير محدد';
@@ -574,6 +571,9 @@
             return 'paid';
         }
 
+        let currentLoggedInUser = { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+        window.currentLoggedInUser = currentLoggedInUser;
+
         let appData = { 
             accounts: [], 
             shipments: [], 
@@ -587,90 +587,137 @@
             deferredInvoices: [], 
             treasury: [], 
             trucks: [], 
-            userAvatar: "", 
-            rssMessage: "مرحباً بكم في أسطورة الطريق V98.4 PRO - مزامنة تامة دون تضارب",
+            rssMessage: "مرحباً بكم في أسطورة الطريق V98.5 PRO - مزامنة تامة دون تضارب",
             smsConfig: {
                 senderId: "Test Sender",
                 apiKey: "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27"
             }
         };
 
-        // مراقبة حالة المصادقة السحابية الفعّالة لضمان توافقها مع Firestore Rules
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                document.getElementById("adminLoginOverlay").style.display = "none";
-                sessionStorage.setItem("na2la_manager_auth", "true");
-                initFirestoreSync();
-            } else {
-                document.getElementById("adminLoginOverlay").style.display = "flex";
+        window.addEventListener('DOMContentLoaded', () => {
+            initFirestoreSync();
+            const savedUser = localStorage.getItem('auto_synced_user_v98');
+            if (savedUser) {
+                try {
+                    const uObj = JSON.parse(savedUser);
+                    window.currentLoggedInUser = uObj;
+                    document.getElementById('lock-screen').style.display = 'none';
+                    applyUserPermissionsUI();
+                    switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'));
+                } catch(e) {}
             }
         });
 
-        function togglePasswordVisibility() {
-            const pwdInput = document.getElementById("managerPasswordInput");
-            pwdInput.type = pwdInput.type === "password" ? "text" : "password";
-        }
-
-        async function verifyManagerLogin() {
-            const pwd = document.getElementById("managerPasswordInput").value.trim();
-            if (pwd === "0103" || pwd === "01036") {
-                let email = "admin@na2la.com";
-                let password = pwd + "9988";
-                try {
-                    await auth.signInWithEmailAndPassword(email, password);
-                    document.getElementById("adminLoginOverlay").style.display = "none";
-                    sessionStorage.setItem("na2la_manager_auth", "true");
-                    initFirestoreSync();
-                    alert("✅ تم الدخول بنجاح وتفعيل المصادقة السحابية والمزامنة التامة!");
-                } catch (err) {
-                    try {
-                        await auth.createUserWithEmailAndPassword(email, password);
-                        await auth.signInWithEmailAndPassword(email, password);
-                        document.getElementById("adminLoginOverlay").style.display = "none";
-                        sessionStorage.setItem("na2la_manager_auth", "true");
-                        initFirestoreSync();
-                        alert("✅ تم إنشاء الحساب والمصادقة بنجاح!");
-                    } catch (createErr) {
-                        alert("⚠️ خطأ في مصادقة Firebase Auth: " + createErr.message);
-                    }
+        function loadDriversForDropdown() {
+            db.collection("drivers").onSnapshot(snapshot => {
+                let driversList = [];
+                if (!snapshot.empty) {
+                    driversList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } else {
+                    driversList = [
+                        { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' },
+                        { name: 'سائق الأسطول', role: 'سائق', title: 'سائق معتمد', avatar: '' }
+                    ];
                 }
-            } else {
-                alert("⚠️ كلمة المرور غير صحيحة.");
+                populateDynamicAccountSelect(driversList);
+            }, err => {
+                populateDynamicAccountSelect([
+                    { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' },
+                    { name: 'سائق الأسطول', role: 'سائق', title: 'سائق معتمد', avatar: '' }
+                ]);
+            });
+        }
+
+        function populateDynamicAccountSelect(driversList) {
+            const select = document.getElementById('dynamic-account-select');
+            if (!select) return;
+            select.innerHTML = driversList.map((d) => {
+                let name = getSafeName(d);
+                let role = d.role || 'سائق';
+                let title = d.title || 'سائق معتمد';
+                let avatar = d.avatar || '';
+                let val = encodeURIComponent(JSON.stringify({ name, role, title, avatar }));
+                return `<option value="${val}">${role === 'مدير نظام' || role === 'admin' ? '👑' : '👨‍✈️'} ${name} (${role}) - ${title}</option>`;
+            }).join('');
+        }
+
+        function dynamicSyncAndLogin() {
+            const select = document.getElementById('dynamic-account-select');
+            if(!select || !select.value) {
+                alert('الرجاء اختيار الحساب أولاً!');
+                return;
+            }
+            try {
+                const userObj = JSON.parse(decodeURIComponent(select.value));
+                window.currentLoggedInUser = userObj;
+                localStorage.setItem('auto_synced_user_v98', JSON.stringify(window.currentLoggedInUser));
+
+                document.getElementById('lock-screen').style.display = 'none';
+                alert('مرحباً بك يا ' + userObj.name + ' (' + userObj.role + ')');
+                
+                applyUserPermissionsUI();
+                switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'));
+            } catch(e) {
+                alert('حدث خطأ أثناء مزامنة الحساب');
             }
         }
 
-        function triggerProfileAvatarChange() {
-            document.getElementById("localAvatarUploadInput").click();
+        function lockSystem() {
+            localStorage.removeItem('auto_synced_user_v98');
+            document.getElementById('lock-screen').style.display = 'flex';
+            loadDriversForDropdown();
         }
 
-        function handleLocalAvatarUpload(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    appData.userAvatar = e.target.result;
-                    saveDataAll();
-                    updateProfileAvatarUI();
-                    alert("✅ تم رفع الصورة بنجاح وتثبيتها سحابياً!");
-                };
-                reader.readAsDataURL(file);
-            }
-        }
+        function applyUserPermissionsUI() {
+            let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+            let role = user.role;
+            
+            document.getElementById('header-username').innerText = user.name;
+            document.getElementById('header-role-badge').innerText = (role === 'مدير نظام' || role === 'admin') ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || 'سائق الأسطول'}`;
 
-        function updateProfileAvatarUI() {
             const imgEl = document.getElementById("userHeaderAvatarImg");
             const emojiEl = document.getElementById("userHeaderAvatarEmoji");
-            if (appData.userAvatar && appData.userAvatar.trim() !== "") {
-                imgEl.src = appData.userAvatar;
+            if (user.avatar && user.avatar.trim() !== "") {
+                imgEl.src = user.avatar;
                 imgEl.style.display = "block";
                 emojiEl.style.display = "none";
             } else {
                 imgEl.style.display = "none";
                 emojiEl.style.display = "block";
             }
+
+            renderBottomNavbarByRole();
+        }
+
+        function renderBottomNavbarByRole() {
+            const navbar = document.getElementById('bottom-navbar');
+            if(!navbar) return;
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+
+            if (role === 'مدير نظام' || role === 'admin') {
+                navbar.innerHTML = `
+                    <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
+                    <button class="nav-item-btn" onclick="switchSection('expenses', this)"><span class="icon">📤</span><span>المصروفات</span></button>
+                    <button class="nav-item-btn" onclick="switchSection('treasury', this)"><span class="icon">💰</span><span>الخزينة</span></button>
+                    <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الحسابات</span></button>
+                    <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التحليلات</span></button>
+                `;
+            } else {
+                // صلاحيات السائق أو المستخدم العادي (إخفاء الخزينة والمصروفات والتحليلات الحساسة)
+                navbar.innerHTML = `
+                    <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
+                    <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الشحنات والآجل</span></button>
+                `;
+            }
         }
 
         function switchSection(name, btn) {
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            if ((name === 'treasury' || name === 'expenses' || name === 'analytics') && role !== 'مدير نظام' && role !== 'admin') {
+                alert('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑');
+                return;
+            }
+
             document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(`section-${name}`).classList.add('active');
@@ -689,8 +736,9 @@
             renderAllFinancials();
         }
 
-        // الاستماع الفوري المزدوج لكافة المجموعات السحابية الظاهرة في قاعدة بياناتك
         function initFirestoreSync() {
+            loadDriversForDropdown();
+
             db.collection("appStore").doc("mainState").onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
@@ -699,12 +747,10 @@
                     if (data.expenses) appData.expenses = data.expenses;
                     if (data.deferredInvoices) appData.deferredInvoices = data.deferredInvoices;
                     if (data.treasury) appData.treasury = data.treasury;
-                    if (data.userAvatar !== undefined) appData.userAvatar = data.userAvatar;
                     if (data.rssMessage) appData.rssMessage = data.rssMessage;
                     if (data.smsConfig) appData.smsConfig = data.smsConfig;
                     
                     document.getElementById("rssTickerText").innerText = appData.rssMessage;
-                    updateProfileAvatarUI();
                     renderAllFinancials();
                 }
             });
@@ -830,7 +876,7 @@
             document.getElementById("treasuryInputAmount").value = "";
             document.getElementById("treasuryReasonInput").value = "";
             renderAllFinancials();
-            alert(`✅ تمت عملية ${type === 'deposit' ? 'الإيداع' : 'الصرف'} بالخزينة بنجاح وتمت المزامنة!`);
+            alert(`✅ تمت عملية ${type === 'deposit' ? 'الإيداع' : 'الصرف'} بالخزينة بنجاح وتمت والمزامنة!`);
         }
 
         function deleteTreasuryItem(id) {
@@ -921,6 +967,11 @@
         }
 
         function deleteRecord(id, collectionType) {
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            if (role !== 'مدير نظام' && role !== 'admin') {
+                alert('الحذف مقتصر على مدير النظام فقط! 👑');
+                return;
+            }
             if (confirm("هل أنت متأكد من الحذف النهائي والمزامنة السحابية؟")) {
                 let targetCol = collectionType;
                 if (collectionType === 'accounts') appData.accounts = appData.accounts.filter(x => String(x.id) !== String(id));
@@ -936,6 +987,11 @@
         }
 
         function purgeCorruptedRecords() {
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            if (role !== 'مدير نظام' && role !== 'admin') {
+                alert('هذه الصلاحية للمدير فقط!');
+                return;
+            }
             if (confirm("🧹 تنظيف السجلات وإزالة أي بيانات فارغة؟")) {
                 appData.shipments = (appData.shipments || []).filter(s => s && s.id !== undefined);
                 appData.accounts = (appData.accounts || []).filter(a => a && a.id !== undefined);
@@ -1199,6 +1255,14 @@
                     let desc = getSafeDesc(item);
                     let amt = getSafeAmount(item);
 
+                    let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+                    let controlButtons = (role === 'مدير نظام' || role === 'admin') ? `
+                        <div class="action-btn-group">
+                            <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
+                            <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>
+                        </div>
+                    ` : '<span style="font-size:10px; color:var(--secondary-text);">عرض فقط</span>';
+
                     return `
                         <tr>
                             <td><b>${item.invoiceId || safeId}</b><br><span style="font-size:10px; color:var(--secondary-text);">${item.date || '-'}</span></td>
@@ -1215,12 +1279,7 @@
                                     <button class="pdf-btn" onclick='downloadInvoiceAsPDF(${JSON.stringify(item)})'>📄 PDF</button>
                                 </div>
                             </td>
-                            <td>
-                                <div class="action-btn-group">
-                                    <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
-                                    <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>
-                                </div>
-                            </td>
+                            <td>${controlButtons}</td>
                         </tr>
                     `;
                 }).join('') || `<tr><td colspan="8" style="text-align:center; color:var(--secondary-text);">لا توجد بيانات مطابقة</td></tr>`;
