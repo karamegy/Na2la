@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - مجتمع السائقين واللوحة العامة (Community)</title>
+    <title>أسطورة الطريق - مجتمع السائقين والدردشة (Community & Chat)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -11,8 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
         :root {
@@ -70,6 +68,17 @@
             border: 1px solid rgba(255,255,255,0.1);
         }
 
+        .header-profile-section { display: flex; align-items: center; gap: 10px; }
+        .header-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; background: var(--card-bg); display: flex; justify-content: center; align-items: center; font-weight: bold; color: var(--accent); }
+
+        .nav-tabs { display: flex; gap: 8px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .nav-tab-btn { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; white-space: nowrap; flex: 1; text-align: center; }
+        .nav-tab-btn.active { background: var(--accent-gradient); color: white; border-color: transparent; }
+
+        .section-container { display: none; }
+        .section-container.active { display: block; animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
         .card { 
             background: var(--card-bg); padding: 16px; border-radius: 12px; 
             box-shadow: var(--shadow-3d); margin-bottom: 12px; border: 1px solid var(--border-color); 
@@ -81,74 +90,108 @@
         }
         .card h3 { margin-bottom: 10px; font-size: 14px; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; color: var(--accent); }
 
-        input, select, textarea, button { width: 100%; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 11px; background: var(--card-bg); color: var(--text-color); margin-bottom: 8px; }
+        input, select, textarea, button { width: 100%; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 11px; background: var(--bg); color: var(--text-color); margin-bottom: 8px; outline: none; }
         
         .btn-main { background: var(--accent-gradient); color: white; border: none; font-weight: bold; cursor: pointer; }
         .btn-success { background: var(--success-gradient); color: white; border: none; font-weight: bold; cursor: pointer; }
         .btn-danger { background: var(--danger-gradient); color: white; border: none; font-weight: bold; cursor: pointer; }
         .btn-sm { padding: 5px 10px; font-size: 10px; width: auto; display: inline-block; margin: 2px; border-radius: 6px; }
 
-        .load-post-media { 
-            display: flex; gap: 12px; margin-top: 10px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; 
-        }
-        .load-post-media img, .load-post-media video { 
-            width: 220px; height: 160px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0; 
-        }
+        .load-post-media { display: flex; gap: 12px; margin-top: 10px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+        .load-post-media img, .load-post-media video { width: 220px; height: 160px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border-color); cursor: pointer; flex-shrink: 0; }
         
-        .custom-modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.9); z-index: 10000; justify-content: center; align-items: center; padding: 15px;
-            backdrop-filter: blur(5px);
-        }
+        /* تصميم الدردشة (Chat Layout) */
+        .chat-layout { display: grid; grid-template-columns: 200px 1fr; gap: 10px; height: 450px; }
+        @media(max-width: 600px) { .chat-layout { grid-template-columns: 1fr; height: auto; display: flex; flex-direction: column; } }
+        
+        .chat-sidebar { border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg); padding: 8px; overflow-y: auto; max-height: 200px; }
+        .chat-account-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 6px; font-size: 11px; display: flex; align-items: center; gap: 8px; background: var(--card-bg); border: 1px solid var(--border-color); }
+        .chat-account-item.active, .chat-account-item:hover { background: var(--accent-gradient); color: white; }
+        .chat-account-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #cbd5e1; }
+
+        .chat-main-box { display: flex; flex-direction: column; height: 100%; min-height: 300px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg); overflow: hidden; }
+        .chat-messages { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .chat-bubble { max-width: 80%; padding: 8px 12px; border-radius: 10px; font-size: 11px; line-height: 1.4; position: relative; display: flex; flex-direction: column; }
+        .chat-bubble.mine { background: var(--accent-gradient); color: white; align-self: flex-start; border-bottom-right-radius: 0; }
+        .chat-bubble.other { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); align-self: flex-end; border-bottom-left-radius: 0; }
+        .chat-bubble-meta { font-size: 8px; opacity: 0.7; margin-top: 4px; text-align: left; }
+        
+        .chat-input-area { display: flex; padding: 8px; background: var(--card-bg); border-top: 1px solid var(--border-color); gap: 6px; }
+
+        .custom-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 10000; justify-content: center; align-items: center; padding: 15px; }
     </style>
 </head>
 <body>
 
     <div class="app-3d-logo-container">
-        <div class="logo-3d">
-            أسطورة الطريق <span>Community 3D Hub</span>
-        </div>
-    </div>
-
-    <div class="theme-selector-bar">
-        <div class="theme-btn" style="background: #2563eb;" onclick="setAppTheme('default')"></div>
-        <div class="theme-btn" style="background: #059669;" onclick="setAppTheme('emerald')"></div>
-        <div class="theme-btn" style="background: #d97706;" onclick="setAppTheme('amber')"></div>
-        <div class="theme-btn" style="background: #7c3aed;" onclick="setAppTheme('purple')"></div>
+        <div class="logo-3d">أسطورة الطريق <span>Community Hub</span></div>
     </div>
 
     <header>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div id="header-avatar-container" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; border: 2px solid #fff; background: #cbd5e1; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 12px;">صورة</div>
+        <div class="header-profile-section">
+            <div id="header-avatar-container" class="header-avatar">جاري</div>
             <div>
-                <h2 style="font-size: 13px;" id="header-username-title">مجتمع السائقين واللوحة العامة</h2>
+                <h2 style="font-size: 13px;" id="header-username-title">المجتمع والدردشة</h2>
                 <small style="opacity: 0.85; font-size: 9px;" id="logged-user-label">جاري مزامنة الحساب...</small>
             </div>
         </div>
         <div style="display: flex; gap: 6px; align-items: center;">
-            <a href="index.html" class="btn-sm" style="background: #0284c7; color: #fff; text-decoration: none;">🏠 الرئيسية</a>
+            <a href="index.html" class="btn-sm" style="background: #0284c7; color: #fff; text-decoration: none;">🏠 الرئيسية (نقله)</a>
             <button type="button" onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌙/☀️</button>
         </div>
     </header>
 
-    <!-- صندوق النشر في المجتمع -->
-    <div class="card" style="border: 2px solid var(--success);">
-        <h3 style="color: var(--success);">✍️ شارك يومياتك أو حالة الطريق مع زملائك</h3>
-        <input type="text" id="comm-author-name" readonly placeholder="اسم الكابتن..." style="margin-bottom: 6px; background: rgba(0,0,0,0.05); font-weight: bold;" title="مزامنة تلقائية من المنصة الأم">
-        <textarea id="community-post-text" placeholder="بما تفكر يا كابتن؟ شارك حالة الطريق أو ملاحظات الرحلة..." style="height: 65px; resize: none;"></textarea>
-        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
-            <label style="background: var(--bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: bold;">
-                📷 صور / فيديو <input type="file" id="community-media-file" accept="image/*,video/*" multiple hidden onchange="previewCommunityFiles(this)">
-            </label>
-            <button type="button" class="btn-success" onclick="publishCommunityPost()" style="margin-right: auto; width: auto; padding: 6px 16px;">نشر في المجتمع 🚀</button>
-        </div>
-        <div id="community-files-preview-info" style="font-size: 9px; color: var(--success); margin-top: 4px; font-weight: bold;"></div>
+    <div class="nav-tabs">
+        <button class="nav-tab-btn active" onclick="switchSection('community-sec', this)">👥 حائط المجتمع</button>
+        <button class="nav-tab-btn" onclick="switchSection('chat-sec', this)">💬 غرف الدردشة</button>
     </div>
 
-    <!-- لوحة المنشورات والتفاعل -->
-    <div class="card">
-        <h3>📢 منشورات ورحلات الأسطول العامة</h3>
-        <div id="community-posts-container"></div>
+    <!-- قسم المجتمع (Community Wall) -->
+    <div id="community-sec" class="section-container active">
+        <div class="card" style="border: 2px solid var(--success);">
+            <h3 style="color: var(--success);">✍️ شارك يومياتك أو حالة الطريق</h3>
+            <textarea id="community-post-text" placeholder="بما تفكر يا كابتن؟ شارك حالة الطريق أو ملاحظات الرحلة..." style="height: 65px; resize: none; background: var(--bg);"></textarea>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
+                <label style="background: var(--bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: bold;">
+                    📷 إرفاق صور/فيديو <input type="file" id="community-media-file" accept="image/*,video/*" multiple hidden onchange="previewCommunityFiles(this)">
+                </label>
+                <button type="button" class="btn-success" onclick="publishCommunityPost()" style="margin-right: auto; width: auto; padding: 6px 16px;">نشر الآن 🚀</button>
+            </div>
+            <div id="community-files-preview-info" style="font-size: 9px; color: var(--success); margin-top: 4px; font-weight: bold;"></div>
+        </div>
+
+        <div class="card">
+            <h3>📢 منشورات وحالات الأسطول</h3>
+            <div id="community-posts-container">جاري جلب المنشورات...</div>
+        </div>
+    </div>
+
+    <!-- قسم الدردشة (Chat Room) -->
+    <div id="chat-sec" class="section-container">
+        <div class="card" style="border: 2px solid var(--accent); height: calc(100vh - 200px); min-height: 500px; display: flex; flex-direction: column;">
+            <h3 style="color: var(--accent);">💬 المراسلات والدردشة الحية</h3>
+            <div class="chat-layout" style="flex: 1;">
+                <div class="chat-sidebar">
+                    <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 8px;">غرف المحادثة:</h4>
+                    <div class="chat-account-item active" onclick="selectChatRoom('general', this)">
+                        <div class="chat-account-avatar" style="display:flex; justify-content:center; align-items:center;">🌍</div>
+                        <span>المحادثة العامة</span>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 6px 0;">
+                    <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 8px;">الأعضاء المتصلين:</h4>
+                    <div id="chat-users-list">جاري جلب السائقين...</div>
+                </div>
+
+                <div class="chat-main-box">
+                    <div id="chat-room-title" style="padding: 8px 12px; font-size: 11px; font-weight: bold; border-bottom: 1px solid var(--border-color); background: var(--card-bg);">🌍 المحادثة العامة للأسطول</div>
+                    <div class="chat-messages" id="chat-messages-box"></div>
+                    <form class="chat-input-area" onsubmit="event.preventDefault(); sendChatMessage();">
+                        <input type="text" id="chat-input-msg" required placeholder="اكتب رسالتك..." style="margin-bottom:0; flex:1;">
+                        <button type="submit" class="btn-success" style="width: 80px; margin-bottom:0;">إرسال ✈️</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- نافذة معاينة الوسائط -->
@@ -160,6 +203,7 @@
     </div>
 
     <script>
+        // إعدادات Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -172,30 +216,37 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        let communityFilesArr = [];
+        // بيانات السائق الحالي
         let currentDriverProfile = {
-            name: localStorage.getItem('logged_in_driver_name') || 'المدير',
+            name: localStorage.getItem('logged_in_driver_name') || 'سائق أسطورة الطريق',
             avatar: '',
-            title: 'أسطورة الطريق'
+            title: 'كابتن',
+            role: localStorage.getItem('current_user_role') || 'driver'
         };
 
+        let currentChatTarget = 'general';
+        let allDrivers = [];
+
+        // المزامنة التلقائية لبيانات السائق من المنصة الأم
         async function syncProfileAndLoad() {
             try {
                 const snapshot = await db.collection('drivers').get();
+                allDrivers = [];
                 snapshot.forEach(doc => {
                     let d = doc.data();
+                    allDrivers.push(d);
                     if (d.name === currentDriverProfile.name) {
                         if (d.avatar) currentDriverProfile.avatar = d.avatar;
                         if (d.title) currentDriverProfile.title = d.title;
+                        if (d.role) currentDriverProfile.role = d.role;
                     }
                 });
             } catch (e) {
-                console.error("خطأ في مزامنة بيانات الكابتن:", e);
+                console.error("خطأ في مزامنة البيانات:", e);
             }
 
-            document.getElementById('comm-author-name').value = currentDriverProfile.name;
-            document.getElementById('logged-user-label').innerText = `متصل كـ: ${currentDriverProfile.name} (${currentDriverProfile.title})`;
-            
+            // تحديث واجهة الهيدر
+            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${currentDriverProfile.title}`;
             const avatarContainer = document.getElementById('header-avatar-container');
             if (currentDriverProfile.avatar) {
                 avatarContainer.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">`;
@@ -204,22 +255,30 @@
             }
 
             loadCommunityPosts();
+            renderChatUsersList();
+            loadChatMessages();
         }
 
-        function setAppTheme(themeName) {
-            document.body.classList.remove('theme-emerald', 'theme-amber', 'theme-purple');
-            if (themeName !== 'default') document.body.classList.add(`theme-${themeName}`);
-            localStorage.setItem('app_theme', themeName);
+        // التبديل بين الأقسام
+        function switchSection(secId, btn) {
+            document.querySelectorAll('.section-container').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(secId).classList.add('active');
+            btn.classList.add('active');
         }
-        if (localStorage.getItem('app_theme')) setAppTheme(localStorage.getItem('app_theme'));
 
+        // الثيم المظلم/الفاتح
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
             localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode'));
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
-        function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.9, callback) {
+        /* ====== قسم المجتمع (Community Wall) ====== */
+        let communityFilesArr = [];
+
+        function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.8, callback) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = function (event) {
@@ -227,13 +286,9 @@
                 img.src = event.target.result;
                 img.onload = function () {
                     const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    if (width > height) {
-                        if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
-                    } else {
-                        if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
-                    }
+                    let width = img.width; let height = img.height;
+                    if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; } }
+                    else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
                     canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
@@ -251,19 +306,11 @@
                 for (let i = 0; i < input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('image')) {
-                        compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
+                        compressImage(file, 1000, 1000, 0.8, (compressedUrl) => {
                             communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
                             processed++;
-                            if (processed === input.files.length) info.innerText = `تم اختيار الملفات بنجاح ✅`;
+                            if (processed === input.files.length) info.innerText = `تم اختيار الصور جاهزة للنشر ✅`;
                         });
-                    } else if (file.type.startsWith('video')) {
-                        let reader = new FileReader();
-                        reader.onload = (e) => {
-                            communityFilesArr.push({ name: file.name, type: 'video', src: e.target.result });
-                            processed++;
-                            if (processed === input.files.length) info.innerText = `تم اختيار الملفات بنجاح ✅`;
-                        };
-                        reader.readAsDataURL(file);
                     }
                 }
             } else { info.innerText = ''; }
@@ -271,7 +318,7 @@
 
         function publishCommunityPost() {
             const text = document.getElementById('community-post-text').value.trim();
-            if (!text && communityFilesArr.length === 0) { alert('الرجاء كتابة نص أو إرفاق صور للنشر!'); return; }
+            if (!text && communityFilesArr.length === 0) { alert('الرجاء كتابة نص أو إرفاق صورة!'); return; }
 
             let newId = String(Date.now());
             let newPost = {
@@ -289,7 +336,6 @@
                 document.getElementById('community-post-text').value = '';
                 communityFilesArr = [];
                 document.getElementById('community-files-preview-info').innerText = '';
-                alert('تم نشر التحديث في مجتمع السائقين بنجاح! 🚀');
             });
         }
 
@@ -301,7 +347,7 @@
                 posts.sort((a, b) => Number(b.id) - Number(a.id));
 
                 if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:10px; text-align:center; opacity:0.8;">لا توجد منشورات في المجتمع بعد. كن أول المشاركين!</p>`;
+                    container.innerHTML = `<p style="font-size:11px; text-align:center; opacity:0.7;">لا توجد منشورات.</p>`;
                     return;
                 }
 
@@ -310,13 +356,12 @@
                     if (p.files && p.files.length > 0) {
                         mediaHtml += `<div class="load-post-media">`;
                         p.files.forEach(f => {
-                            if (f.type === 'video') mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                            else mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')"/>`;
+                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
                         });
                         mediaHtml += `</div>`;
                     }
 
-                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-size:11px; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ع'}</div>`;
+                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ع'}</div>`;
 
                     let card = document.createElement('div');
                     card.className = 'card';
@@ -325,16 +370,16 @@
                             <div style="display:flex; align-items:center; gap:8px;">
                                 ${avatarHtml}
                                 <div>
-                                    <strong style="font-size:11px; color:var(--accent);">${p.author || 'سائق'}</strong>
-                                    <span style="font-size:8px; display:block; opacity:0.7;">${p.authorTitle || 'سائق معتمد'}</span>
+                                    <strong style="font-size:12px; color:var(--text-color);">${p.author}</strong>
+                                    <span style="font-size:9px; display:block; opacity:0.8; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
                                 </div>
                             </div>
-                            <span style="font-size:8px; opacity:0.7;">${p.date}</span>
+                            <span style="font-size:9px; opacity:0.7;">${p.date}</span>
                         </div>
-                        <p style="font-size:11px; line-height:1.4;">${p.text}</p>
+                        <p style="font-size:12px; line-height:1.5;">${p.text}</p>
                         ${mediaHtml}
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid var(--border-color); padding-top:6px;">
-                            <button type="button" class="btn-sm" style="background:var(--bg); border:1px solid var(--border-color); color:var(--text-color);" onclick="likePost('${p.id}')">👍 إعجاب (${p.likes || 0})</button>
+                        <div style="margin-top:10px; border-top:1px solid var(--border-color); padding-top:8px;">
+                            <button type="button" class="btn-sm" style="background:var(--bg); border:1px solid var(--border-color); color:var(--accent); font-weight:bold;" onclick="likePost('${p.id}')">👍 إعجاب (${p.likes || 0})</button>
                         </div>
                     `;
                     container.appendChild(card);
@@ -345,22 +390,112 @@
         function likePost(id) {
             db.collection('communityPosts').doc(String(id)).get().then(doc => {
                 if(doc.exists) {
-                    let data = doc.data();
-                    let currentLikes = data.likes || 0;
-                    db.collection('communityPosts').doc(String(id)).update({ likes: currentLikes + 1 });
+                    db.collection('communityPosts').doc(String(id)).update({ likes: (doc.data().likes || 0) + 1 });
                 }
             });
         }
 
-        function viewMedia(src, type) {
+        function viewMedia(src) {
             const modal = document.getElementById('mediaViewerModal');
-            const content = document.getElementById('mediaViewerContent');
-            content.innerHTML = type === 'video' ? `<video controls autoplay src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px;"></video>` : `<img src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px; object-fit:contain;"/>`;
+            document.getElementById('mediaViewerContent').innerHTML = `<img src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px; object-fit:contain;"/>`;
             modal.style.display = 'flex';
         }
-        function closeMediaViewer() {
-            document.getElementById('mediaViewerModal').style.display = 'none';
-            document.getElementById('mediaViewerContent').innerHTML = '';
+        function closeMediaViewer() { document.getElementById('mediaViewerModal').style.display = 'none'; }
+
+
+        /* ====== قسم الدردشة (Chat Section) ====== */
+        function renderChatUsersList() {
+            const listContainer = document.getElementById('chat-users-list');
+            listContainer.innerHTML = '';
+            
+            allDrivers.forEach(drv => {
+                if(drv.name === currentDriverProfile.name) return; // استبعاد النفس
+
+                let avatarHtml = drv.avatar ? `<img src="${drv.avatar}" class="chat-account-avatar">` : `<div class="chat-account-avatar" style="display:flex; justify-content:center; align-items:center; font-size:10px; color:#fff; background:var(--accent);">${drv.name.charAt(0)}</div>`;
+                
+                let div = document.createElement('div');
+                div.className = 'chat-account-item';
+                div.innerHTML = `${avatarHtml} <span>${drv.name}</span>`;
+                div.onclick = function() { selectChatRoom(drv.name, this); };
+                listContainer.appendChild(div);
+            });
+        }
+
+        function selectChatRoom(targetName, element) {
+            currentChatTarget = targetName;
+            document.querySelectorAll('.chat-account-item').forEach(el => el.classList.remove('active'));
+            if(element) element.classList.add('active');
+
+            const titleText = targetName === 'general' ? '🌍 المحادثة العامة للأسطول' : `💬 محادثة خاصة مع: ${targetName}`;
+            document.getElementById('chat-room-title').innerText = titleText;
+            
+            loadChatMessages();
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input-msg');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            let newMsg = {
+                id: String(Date.now()),
+                sender: currentDriverProfile.name,
+                receiver: currentChatTarget,
+                text: msg,
+                time: new Date().toLocaleString('ar-EG')
+            };
+
+            db.collection('chat').doc(newMsg.id).set(newMsg).then(() => {
+                input.value = '';
+                // التمرير للأسفل
+                setTimeout(() => {
+                    const box = document.getElementById('chat-messages-box');
+                    box.scrollTop = box.scrollHeight;
+                }, 100);
+            });
+        }
+
+        function loadChatMessages() {
+            db.collection('chat').onSnapshot(snapshot => {
+                const box = document.getElementById('chat-messages-box');
+                box.innerHTML = '';
+                
+                let msgs = snapshot.docs.map(doc => doc.data());
+                msgs.sort((a, b) => Number(a.id) - Number(b.id));
+
+                let filteredMsgs = [];
+                if (currentChatTarget === 'general') {
+                    filteredMsgs = msgs.filter(m => m.receiver === 'general');
+                } else {
+                    filteredMsgs = msgs.filter(m => 
+                        (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || 
+                        (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name)
+                    );
+                }
+
+                if (filteredMsgs.length === 0) {
+                    box.innerHTML = `<div style="text-align:center; font-size:11px; opacity:0.6; margin-top:20px;">لا توجد رسائل حالياً.</div>`;
+                    return;
+                }
+
+                filteredMsgs.forEach(m => {
+                    let isMine = m.sender === currentDriverProfile.name;
+                    let bubble = document.createElement('div');
+                    bubble.className = `chat-bubble ${isMine ? 'mine' : 'other'}`;
+                    
+                    let senderNameHtml = !isMine && currentChatTarget === 'general' ? `<strong style="font-size:9px; color:var(--accent); margin-bottom:2px;">${m.sender}</strong>` : '';
+                    
+                    bubble.innerHTML = `
+                        ${senderNameHtml}
+                        <span>${m.text}</span>
+                        <span class="chat-bubble-meta">${m.time}</span>
+                    `;
+                    box.appendChild(bubble);
+                });
+
+                // التمرير التلقائي لأسفل المحادثة
+                box.scrollTop = box.scrollHeight;
+            });
         }
 
         window.onload = syncProfileAndLoad;
