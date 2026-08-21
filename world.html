@@ -190,7 +190,7 @@
         <button class="rss-btn" onclick="editRssMessage()">✏️ تعديل</button>
     </div>
 
-    <!-- شريط العنوان العلوي (مزامنة مستقلة لاسم المستخدم، الرتبة، والصورة تلقائياً) -->
+    <!-- شريط العنوان العلوي -->
     <header>
         <div class="brand-container-panda">
             <div class="header-profile-avatar" onclick="switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'))" title="الملف الشخصي المستقل">
@@ -486,7 +486,7 @@
         </div>
     </div>
 
-    <!-- سكريبت الجافاسكريبت للمزامنة المستقلة التلقائية -->
+    <!-- سكريبت الجافاسكريبت للمزامنة المستقلة التلقائية المحدثة -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -539,7 +539,7 @@
             return 'paid';
         }
 
-        let currentLoggedInUser = { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+        let currentLoggedInUser = { name: 'المستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -567,38 +567,43 @@
             initFirestoreSync();
         });
 
-        // المزامنة المستقلة التلقائية للحساب بدون اختيار يدوي
+        // التزامن المستقل الآمن والمخصص لكل حساب دون تداخل مع حساب المدير
         function initIndependentUserSync() {
-            // التحقق من وجود حساب مستقل مخزن محلياً للمتصفح/الجهاز
             const savedUser = localStorage.getItem('na2la_independent_user_v98');
+            let currentUserId = null;
+
             if (savedUser) {
                 try {
                     window.currentLoggedInUser = JSON.parse(savedUser);
+                    currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
                     applyUserPermissionsUI();
                 } catch(e) {}
             }
 
-            // الاستماع السحابي المستقل لجلب بيانات الحساب المحدثة من Firestore (مجموعة drivers أو platform_users)
-            db.collection("drivers").limit(1).onSnapshot(snapshot => {
-                if (!snapshot.empty) {
-                    let docData = snapshot.docs[0].data();
-                    let name = getSafeName(docData);
-                    let role = docData.role || 'مدير نظام';
-                    let title = docData.title || 'أسطورة الطريق';
-                    let avatar = docData.avatar || '';
+            // الاستماع فقط لبيانات هذا المستخدم بناءً على معرفه أو هاتفه (وليس جلب أول مستخدم في القاعدة عبر limit(1))
+            if (currentUserId) {
+                db.collection("drivers").doc(String(currentUserId)).onSnapshot(docSnap => {
+                    if (docSnap.exists) {
+                        let docData = docSnap.data();
+                        let name = getSafeName(docData);
+                        let role = docData.role || 'سائق';
+                        let title = docData.title || 'سائق مستقل';
+                        let avatar = docData.avatar || '';
 
-                    window.currentLoggedInUser = { name, role, title, avatar };
-                    localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                        window.currentLoggedInUser = { ...window.currentLoggedInUser, name, role, title, avatar };
+                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                        applyUserPermissionsUI();
+                    }
+                }, err => {
                     applyUserPermissionsUI();
-                }
-            }, err => {
-                // استخدام القيم الافتراضية المستقلة في حال عدم الاتصال المؤقت
+                });
+            } else {
                 applyUserPermissionsUI();
-            });
+            }
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+            let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
             let role = user.role;
             
             document.getElementById('header-username').innerText = user.name;
@@ -621,7 +626,7 @@
         function renderBottomNavbarByRole() {
             const navbar = document.getElementById('bottom-navbar');
             if(!navbar) return;
-            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
 
             if (role === 'مدير نظام' || role === 'admin') {
                 navbar.innerHTML = `
@@ -632,7 +637,6 @@
                     <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التحليلات</span></button>
                 `;
             } else {
-                // صلاحيات السائق أو المستخدم المستقل (إخفاء الأقسام الإدارية والمالية الحساسة)
                 navbar.innerHTML = `
                     <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
                     <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الشحنات والآجل</span></button>
@@ -641,7 +645,7 @@
         }
 
         function switchSection(name, btn) {
-            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
             if ((name === 'treasury' || name === 'expenses' || name === 'analytics') && role !== 'مدير نظام' && role !== 'admin') {
                 alert('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑');
                 return;
@@ -894,7 +898,7 @@
         }
 
         function deleteRecord(id, collectionType) {
-            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
             if (role !== 'مدير نظام' && role !== 'admin') {
                 alert('الحذف مقتصر على مدير النظام فقط! 👑');
                 return;
@@ -914,7 +918,7 @@
         }
 
         function purgeCorruptedRecords() {
-            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+            let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
             if (role !== 'مدير نظام' && role !== 'admin') {
                 alert('هذه الصلاحية للمدير فقط!');
                 return;
@@ -1182,7 +1186,7 @@
                     let desc = getSafeDesc(item);
                     let amt = getSafeAmount(item);
 
-                    let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'مدير نظام';
+                    let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
                     let controlButtons = (role === 'مدير نظام' || role === 'admin') ? `
                         <div class="action-btn-group">
                             <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
