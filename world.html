@@ -193,7 +193,7 @@
     <!-- شريط العنوان العلوي -->
     <header>
         <div class="brand-container-panda">
-            <div class="header-profile-avatar" onclick="switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'))" title="الملف الشخصي المستقل">
+            <div class="header-profile-avatar" onclick="openSwitchAccountPrompt()" title="تبديل الحساب المستقل">
                 <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none; width:100%; height:100%; border-radius:50%; object-fit:cover;">
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
@@ -204,6 +204,7 @@
         </div>
 
         <div class="header-actions-group">
+            <button onclick="openSwitchAccountPrompt()" style="background: var(--warning-color); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="تبديل الحساب برقم الهاتف أو المعرف">👤 تبديل الحساب</button>
             <button onclick="goToMotherPlatform()" style="background: var(--primary-blue); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="العودة للصفحة الرئيسية الأم">🏠 المنصة الأم</button>
             <div class="theme-circles-bar">
                 <div class="theme-circle" style="background:#ffffff;" onclick="setTheme('light')" title="فاتح"></div>
@@ -229,11 +230,11 @@
                 </div>
 
                 <div class="financial-stats-grid">
-                    <div class="stat-card shipments" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)')); setAccountFilter('shipments');">
+                    <div class="stat-card shipments" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)') || document.querySelector('.bottom-nav-bar button:nth-child(2)')); setAccountFilter('shipments');">
                         <div class="stat-title">إجمالي الشحنات 📦</div>
                         <div class="stat-value" id="totalShipmentsCountDisplay" style="color: var(--primary-blue);">0</div>
                     </div>
-                    <div class="stat-card credit" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)')); setAccountFilter('all');">
+                    <div class="stat-card credit" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)') || document.querySelector('.bottom-nav-bar button:nth-child(2)')); setAccountFilter('all');">
                         <div class="stat-title">إجمالي الإيرادات (المحصلة) 📥</div>
                         <div class="stat-value" id="totalCreditDisplay" style="color: var(--success-color);">0.00 ج.م</div>
                     </div>
@@ -241,7 +242,7 @@
                         <div class="stat-title">إجمالي المصروفات 📤</div>
                         <div class="stat-value" id="totalDebitDisplay" style="color: var(--danger-color);">0.00 ج.م</div>
                     </div>
-                    <div class="stat-card deferred" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)')); setAccountFilter('deferred');">
+                    <div class="stat-card deferred" onclick="switchSection('accounts', document.querySelector('.bottom-nav-bar button:nth-child(4)') || document.querySelector('.bottom-nav-bar button:nth-child(2)')); setAccountFilter('deferred');">
                         <div class="stat-title">إجمالي الآجل المستحق ⏳</div>
                         <div class="stat-value" id="totalDeferredDisplay" style="color: var(--warning-color);">0.00 ج.م</div>
                     </div>
@@ -486,7 +487,7 @@
         </div>
     </div>
 
-    <!-- سكريبت الجافاسكريبت للمزامنة المستقلة التلقائية المحدثة -->
+    <!-- سكريبت الجافاسكريبت للمزامنة المستقلة التلقائية المحدثة والمضادة لتداخل الحسابات -->
     <script>
         const firebaseConfig = {
           apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -567,69 +568,61 @@
             initFirestoreSync();
         });
 
-        // المزامنة المستقلة التلقائية الذكية عبر الرابط أو التخزين المحلي لدعم مجموعة drivers
+        // المزامنة المستقلة المنضبطة لمنع التداخل مع حساب المدير تلقائياً
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
 
             if (urlUserId) {
-                // البحث التلقائي بالـ ID في مجموعة drivers
-                db.collection("drivers").where("id", "==", urlUserId).get().then(snapshot => {
-                    if (!snapshot.empty) {
-                        let docData = snapshot.docs[0].data();
-                        window.currentLoggedInUser = { id: urlUserId, ...docData };
-                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                        applyUserPermissionsUI();
-                    } else {
-                        // البحث برقم الهاتف إذا لم يتم العثور بالـ ID
-                        db.collection("drivers").where("phone", "==", urlUserId).get().then(phoneSnapshot => {
-                            if (!phoneSnapshot.empty) {
-                                let docData = phoneSnapshot.docs[0].data();
-                                window.currentLoggedInUser = docData;
-                                localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                                applyUserPermissionsUI();
-                            } else {
-                                loadFromLocalStorageOrFallback();
-                            }
-                        }).catch(err => loadFromLocalStorageOrFallback());
-                    }
-                }).catch(err => loadFromLocalStorageOrFallback());
+                fetchDriverData(urlUserId);
             } else {
-                loadFromLocalStorageOrFallback();
-            }
-        }
-
-        function loadFromLocalStorageOrFallback() {
-            const savedUser = localStorage.getItem('na2la_independent_user_v98');
-            if (savedUser) {
-                try {
-                    window.currentLoggedInUser = JSON.parse(savedUser);
-                    let currentUserId = window.currentLoggedInUser.id || window.currentLoggedInUser.phone;
-                    applyUserPermissionsUI();
-                    
-                    // الاستماع اللحظي لتحديثات بيانات هذا السائق تحديداً من Firestore
-                    if (currentUserId) {
-                        db.collection("drivers").where("id", "==", currentUserId).onSnapshot(snapshot => {
-                            if (!snapshot.empty) {
-                                let docData = snapshot.docs[0].data();
-                                window.currentLoggedInUser = { id: currentUserId, ...docData };
-                                localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                                applyUserPermissionsUI();
-                            }
-                        });
-                    }
-                } catch(e) {
-                    fallbackDefaultUser();
+                const savedUser = localStorage.getItem('na2la_independent_user_v98');
+                if (savedUser) {
+                    try {
+                        let parsed = JSON.parse(savedUser);
+                        // منع تحميل حساب المدير افتراضياً إن لم يكن مطلوباً في الرابط
+                        if (parsed && parsed.id !== "1" && parsed.role !== "admin") {
+                            window.currentLoggedInUser = parsed;
+                            applyUserPermissionsUI();
+                            return;
+                        }
+                    } catch(e) {}
                 }
-            } else {
-                fallbackDefaultUser();
+                // إذا لم يوجد مستخدم في الرابط أو التخزين، نطلب تحديد الحساب أو نعرض سائق افتراضي
+                window.currentLoggedInUser = { id: 'guest', name: 'سائق مستقل', role: 'driver', title: 'سائق', avatar: '' };
+                applyUserPermissionsUI();
             }
         }
 
-        function fallbackDefaultUser() {
-            window.currentLoggedInUser = { name: 'المستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
-            applyUserPermissionsUI();
+        function fetchDriverData(identifier) {
+            db.collection("drivers").where("id", "==", identifier).get().then(snapshot => {
+                if (!snapshot.empty) {
+                    let docData = snapshot.docs[0].data();
+                    window.currentLoggedInUser = { id: identifier, ...docData };
+                    localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                    applyUserPermissionsUI();
+                } else {
+                    db.collection("drivers").where("phone", "==", identifier).get().then(phoneSnapshot => {
+                        if (!phoneSnapshot.empty) {
+                            let docData = phoneSnapshot.docs[0].data();
+                            window.currentLoggedInUser = docData;
+                            localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                            applyUserPermissionsUI();
+                        } else {
+                            alert("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، يرجى التأكد من الرابط.");
+                        }
+                    }).catch(err => console.error(err));
+                }
+            }).catch(err => console.error(err));
         }
+
+        function openSwitchAccountPrompt() {
+            let inputId = prompt("أدخل معرف السائق (ID) أو رقم الهاتف للتحويل إلى حسابه:");
+            if (inputId && inputId.trim() !== "") {
+                fetchDriverData(inputId.trim());
+            }
+        }
+        window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'سائق', title: 'سائق مستقل', avatar: '' };
@@ -748,17 +741,6 @@
         function editRssMessage() {
             let msg = prompt("نص الإشعار:", appData.rssMessage);
             if (msg) { appData.rssMessage = msg; saveDataAll(); }
-        }
-
-        function openSmsSettingsModal() {
-            let currentSender = appData.smsConfig?.senderId || "Test Sender";
-            let sender = prompt(`أدخل اسم المرسل (SMS Sender ID):`, currentSender);
-            if (sender) {
-                if(!appData.smsConfig) appData.smsConfig = {};
-                appData.smsConfig.senderId = sender.trim();
-                saveDataAll();
-                alert("✅ تم تحديث اسم المرسل بنجاح!");
-            }
         }
 
         function sendClientSMSAPI(phone, desc, amount) {
