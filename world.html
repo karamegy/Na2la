@@ -3,12 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.7 PRO</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.8 PRO MODULAR</title>
     
-    <!-- مكتبات Firebase V8 -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+          authDomain: "n2la-642d3.firebaseapp.com",
+          projectId: "n2la-642d3",
+          storageBucket: "n2la-642d3.firebasestorage.app",
+          messagingSenderId: "1085749997466",
+          appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+          measurementId: "G-KH4ZYFB8LC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.db = db;
+        window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where };
+
+        signInAnonymously(auth).then(() => {
+            console.log("✅ تم المصادقة سحابياً بنجاح في الخزينة المستقلة V98.8");
+            window.dispatchEvent(new Event('firebase-ready'));
+        }).catch((error) => {
+            console.error("⚠️ خطأ في المصادقة السحابية:", error);
+            window.dispatchEvent(new Event('firebase-ready'));
+        });
+    </script>
 
     <!-- مكتبات توليد PDF والصور -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -486,24 +513,8 @@
         </div>
     </div>
 
-    <!-- سكريبت الجافاسكريبت المحدث للمزامنة المستقلة لكل حساب -->
+    <!-- سكريبت المزامنة السحابية المستقلة الحديثة عبر مجموعات فايربيس المستقلة (V10 Modular SDK) -->
     <script>
-        const firebaseConfig = {
-          apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
-          authDomain: "n2la-642d3.firebaseapp.com",
-          projectId: "n2la-642d3",
-          storageBucket: "n2la-642d3.firebasestorage.app",
-          messagingSenderId: "1085749997466",
-          appId: "1:1085749997466:web:13e5535dc6d2312397d423",
-          measurementId: "G-KH4ZYFB8LC"
-        };
-
-        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-        const db = firebase.firestore();
-        const auth = firebase.auth();
-        window.db = db;
-        window.auth = auth;
-
         let currentAccountFilter = 'all';
 
         function goToMotherPlatform() {
@@ -548,19 +559,28 @@
             expenses: [], 
             deferredInvoices: [], 
             treasury: [], 
-            rssMessage: "مرحباً بكم في أسطورة الطريق V98.7 PRO - مزامنة مستقلة لكل مستخدم",
+            rssMessage: "مرحباً بكم في أسطورة الطريق V98.8 PRO - مزامنة مستقلة لكل مستخدم",
             smsConfig: {
                 senderId: "Test Sender",
                 apiKey: "b611afb996655a94c8e942a823f1421de42bf8335d24ba1f84c437b2ab11ca27"
             }
         };
+        window.appData = appData;
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('firebase-ready', () => {
             initIndependentUserSync();
             initFirestoreSync();
         });
 
-        // مزامنة الحساب المستقل عبر الرابط أو الـ localStorage
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                if(window.db && window.firebaseModules) {
+                    initIndependentUserSync();
+                    initFirestoreSync();
+                }
+            }, 500);
+        });
+
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
@@ -579,31 +599,34 @@
                         }
                     } catch(e) {}
                 }
-                // افتراضي كمدير نظام أو سائق افتراضي
                 applyUserPermissionsUI();
             }
         }
 
-        function fetchDriverData(identifier) {
-            db.collection("drivers").where("id", "==", identifier).get().then(snapshot => {
+        async function fetchDriverData(identifier) {
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, getDocs, query, where } = window.firebaseModules;
+            try {
+                const q = query(collection(window.db, "drivers"), where("id", "==", identifier));
+                const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
                     let docData = snapshot.docs[0].data();
                     window.currentLoggedInUser = { id: identifier, ...docData };
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
                     applyUserPermissionsUI();
                 } else {
-                    db.collection("drivers").where("phone", "==", identifier).get().then(phoneSnapshot => {
-                        if (!phoneSnapshot.empty) {
-                            let docData = phoneSnapshot.docs[0].data();
-                            window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
-                            localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                            applyUserPermissionsUI();
-                        } else {
-                            alert("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
-                        }
-                    }).catch(err => console.error(err));
+                    const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                    const phoneSnapshot = await getDocs(q2);
+                    if (!phoneSnapshot.empty) {
+                        let docData = phoneSnapshot.docs[0].data();
+                        window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
+                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                        applyUserPermissionsUI();
+                    } else {
+                        alert("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
+                    }
                 }
-            }).catch(err => console.error(err));
+            } catch(err) { console.error(err); }
         }
 
         function openSwitchAccountPrompt() {
@@ -686,43 +709,55 @@
         }
 
         function initFirestoreSync() {
-            // مزامنة مستودع الحالة العامة للإشعارات
-            db.collection("appStore").doc("mainState").onSnapshot((doc) => {
-                if (doc.exists) {
-                    const data = doc.data();
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, onSnapshot, doc } = window.firebaseModules;
+
+            onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
                     if (data.rssMessage) appData.rssMessage = data.rssMessage;
                     if (data.smsConfig) appData.smsConfig = data.smsConfig;
-                    document.getElementById("rssTickerText").innerText = appData.rssMessage;
+                    const ticker = document.getElementById("rssTickerText");
+                    if (ticker) ticker.innerText = appData.rssMessage;
                 }
             });
 
-            // الاستماع للمجموعات السحابية بشكل مستقل
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                db.collection(col).onSnapshot(snapshot => {
+                onSnapshot(collection(window.db, col), (snapshot) => {
                     if (!snapshot.empty) {
-                        appData[col] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        appData[col] = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                         renderAllFinancials();
                     }
                 }, err => console.error(`خطأ مزامنة ${col}:`, err));
             });
         }
 
-        function saveDataAll() {
-            db.collection("appStore").doc("mainState").set({
-                rssMessage: appData.rssMessage,
-                smsConfig: appData.smsConfig
-            }, { merge: true }).catch(err => console.error(err));
+        async function saveDataAll() {
+            if (!window.db || !window.firebaseModules) return;
+            const { doc, setDoc } = window.firebaseModules;
+            try {
+                await setDoc(doc(window.db, "appStore", "mainState"), {
+                    rssMessage: appData.rssMessage,
+                    smsConfig: appData.smsConfig
+                }, { merge: true });
+            } catch (err) { console.error(err); }
         }
 
-        function syncItemToCollection(colName, item) {
-            if (!item || !item.id) return;
-            db.collection(colName).doc(String(item.id)).set(item, { merge: true }).catch(err => console.error(err));
+        async function syncItemToCollection(colName, item) {
+            if (!item || !item.id || !window.db || !window.firebaseModules) return;
+            const { doc, setDoc } = window.firebaseModules;
+            try {
+                await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
+            } catch (err) { console.error(err); }
         }
 
-        function deleteItemFromCollection(colName, id) {
-            if (!id) return;
-            db.collection(colName).doc(String(id)).delete().catch(err => console.error(err));
+        async function deleteItemFromCollection(colName, id) {
+            if (!id || !window.db || !window.firebaseModules) return;
+            const { doc, deleteDoc } = window.firebaseModules;
+            try {
+                await deleteDoc(doc(window.db, colName, String(id)));
+            } catch (err) { console.error(err); }
         }
 
         function editRssMessage() {
@@ -741,7 +776,6 @@
             resultBox.innerHTML = `🚚 <b>عمولة السائق المستحقة (${rate}%):</b> ${driverCommission.toLocaleString()} ج.م<br>🏛️ <b>صافي حصة الشركة:</b> <span style="color:var(--success-color); font-weight:bold;">${companyNet.toLocaleString()} ج.م</span>`;
         }
 
-        // إضافة مصروف مرتبط بمعرف المستخدم الحالي
         function addExpenseRecord() {
             let owner = document.getElementById("expOwner").value;
             let category = document.getElementById("expCategory").value;
@@ -753,7 +787,7 @@
             let newId = String(Date.now());
             let expObj = { 
                 id: newId, 
-                userId: currentUserId, // ⬅️ ربط المصروف بمعرف المستخدم المستقل
+                userId: currentUserId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
@@ -775,7 +809,6 @@
             alert("تم حفظ المصروف وترحيله سحابياً لحسابك بنجاح!");
         }
 
-        // حركات الخزينة مرتبطة بمعرف المستخدم الحالي
         function treasuryAction(type) {
             let amt = parseFloat(document.getElementById("treasuryInputAmount").value);
             let reason = document.getElementById("treasuryReasonInput").value.trim() || (type === 'deposit' ? 'إيداع نقدي' : 'صرف نقدي');
@@ -785,7 +818,7 @@
             let newId = String(Date.now());
             let tObj = {
                 id: newId,
-                userId: currentUserId, // ⬅️ ربط حركة الخزينة بالمستخدم المستقل
+                userId: currentUserId, 
                 type: type === 'deposit' ? 'in' : 'out',
                 amount: amt,
                 price: amt,
@@ -814,7 +847,6 @@
 
         function openAddDeferredModal() { document.getElementById("addDeferredModal").style.display = 'flex'; }
 
-        // إضافة فاتورة أجل مرتبطة بمعرف المستخدم
         function saveDeferredInvoice() {
             let name = document.getElementById("defClientName").value;
             let phone = document.getElementById("defPhone").value;
@@ -827,7 +859,7 @@
             let newId = String(Date.now());
             let record = { 
                 id: newId,
-                userId: currentUserId, // ⬅️ ربط الآجل بالمستخدم المستقل
+                userId: currentUserId, 
                 invoiceId: invId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: name, 
@@ -853,7 +885,6 @@
             alert("تم حفظ فاتورة الآجل ومزامنتها لحسابك المستقل!");
         }
 
-        // إضافة قيد مالي مرتبط بمعرف المستخدم
         function addFinancialRecord() {
             let owner = document.getElementById("accAccountOwner").value;
             let phone = document.getElementById("accClientPhone").value;
@@ -867,7 +898,7 @@
             let newId = String(Date.now());
             let record = { 
                 id: newId, 
-                userId: currentUserId, // ⬅️ ربط القيد المالي بالمستخدم المستقل
+                userId: currentUserId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
@@ -1040,12 +1071,10 @@
             alert("📊 تم تصدير البيانات إلى CSV بنجاح!");
         }
 
-        // دالة عرض وتصفية البيانات بناءً على هوية المستخدم المستقل
         function renderAllFinancials() {
             let user = window.currentLoggedInUser || { id: '1', role: 'admin' };
             let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
 
-            // تصفية البيانات لتخصيص الحساب الحالي فقط إذا لم يكن مديراً
             let userShipments = isAdmin ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === String(user.id));
             let userAccounts = isAdmin ? (appData.accounts || []) : (appData.accounts || []).filter(a => String(a.userId || '') === String(user.id));
             let userExpenses = isAdmin ? (appData.expenses || []) : (appData.expenses || []).filter(e => String(e.userId || '') === String(user.id));
@@ -1155,7 +1184,8 @@
                     combined.push(...userAccounts.map(a => ({ ...a, collectionSource: 'accounts' })));
                 }
 
-                let searchQuery = document.getElementById("accountsSearchInput").value.trim().toLowerCase();
+                let searchInputEl = document.getElementById("accountsSearchInput");
+                let searchQuery = searchInputEl ? searchInputEl.value.trim().toLowerCase() : "";
                 if (searchQuery) {
                     combined = combined.filter(item => 
                         getSafeName(item).toLowerCase().includes(searchQuery) || 
@@ -1164,7 +1194,8 @@
                     );
                 }
 
-                document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
+                let recordCountEl = document.getElementById("recordCountIndicator");
+                if (recordCountEl) recordCountEl.innerText = `إجمالي المعاملات: ${combined.length}`;
 
                 accTbody.innerHTML = combined.map(item => {
                     let badge = item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : (item.type === 'deferred' ? '<span class="badge-deferred">⏳ آجل</span>' : '<span class="badge-credit">📥 قيد</span>');
