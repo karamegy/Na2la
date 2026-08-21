@@ -2,11 +2,11 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90.5 PRO MODULAR SYNC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90.5 PRO MODULAR SECURE SYNC</title>
     
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#0f111a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -215,9 +215,9 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">جاري مزامنة الحساب...</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن متصل</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن مستقل</span>
                     </div>
-                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة فورية</span>
+                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة الرتبة والثروة</span>
                 </div>
             </div>
             <div style="display: flex; gap: 4px;">
@@ -276,6 +276,7 @@
             <button type="button" onclick="toggleSidebar()" class="btn-danger btn-sm">✕</button>
         </div>
         <button onclick="goToMotherPlatform()" style="background:var(--accent-main); color:white; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:10px; margin-bottom:6px; width:100%; text-align:right;"><i class="fa-solid fa-house-laptop"></i> 🏠 العودة للمنصة الأم</button>
+        <button onclick="openSwitchAccountPrompt()" style="background:var(--yellow-warning); color:#000; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:10px; margin-bottom:6px; width:100%; text-align:right;"><i class="fa-solid fa-user-gear"></i> 👤 تبديل الحساب المستقل</button>
         <div class="sidebar-nav-list"></div>
     </div>
 
@@ -387,7 +388,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة السحابية وعزل الحسابات التام المستقل -->
+<!-- سكريبت المزامنة السحابية وإدارة الحسابات المستقلة -->
 <script>
     window._isSavingLocally = false;
 
@@ -531,7 +532,7 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 التحقق الدقيق من الجلسة ومنع تحميل حساب المدير افتراضياً
+    // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم دون فرض حساب المدير افتراضياً
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
@@ -559,7 +560,7 @@
             }
         }
         
-        // إذا لم توجد جلسة محفوظة، يطلب النظام من المستخدم تسجيل الدخول فوراً برقم أو المعرف الخاص به
+        // إذا لم توجد جلسة محفوظة، يطلب النظام من السائق إدخال معرفه أو هاتفه حصرياً
         applyUserPermissionsUI();
         setTimeout(() => {
             openSwitchAccountPrompt();
@@ -628,6 +629,11 @@
                 if (!snapshot.empty) {
                     appData.drivers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     window.appData = appData;
+                    if (!isAdmin && appData.drivers.length > 0) {
+                        let updatedUser = appData.drivers[0];
+                        window.currentLoggedInUser = { id: updatedUser.id, ...updatedUser };
+                        applyUserPermissionsUI();
+                    }
                 }
             });
 
@@ -650,21 +656,23 @@
                 refreshActiveSection();
             });
 
-            if (isAdmin) {
-                onSnapshot(collection(window.db, "treasury"), (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.appData = appData;
-                    renderStats();
-                });
+            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("userId", "==", currentUserId));
+            onSnapshot(treasuryQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
-                onSnapshot(collection(window.db, "expenses"), (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.appData = appData;
-                    renderStats();
-                });
-            }
+            let expensesQuery = isAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("userId", "==", currentUserId));
+            onSnapshot(expensesQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
         } catch (error) {
             console.error("خطأ في المزامنة المخصصة للحساب:", error);
@@ -783,7 +791,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getAllShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بغرفة باندا والمزامنة الفورية - إجمالي الشحنات: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بغرفة باندا والمزامنة المستقلة - إجمالي شحناتك: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -811,7 +819,7 @@
         showToast('تم تغيير الثيم بنجاح');
     }
 
-    // 🖼️ تطبيق اسم المستخدم والصورة الشخصية والرتبة بدقة في الواجهة
+    // 🖼️ تطبيق اسم المستخدم والصورة والرتبة والصلاحيات بدقة تامة في الواجهة
     function applyUserPermissionsUI() {
         let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', title: 'سائق مستقل', avatar: '' };
         let role = String(user.role || '').toLowerCase();
@@ -863,6 +871,7 @@
         } else {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي</button>
+                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
                 <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تحديث مراحل الشحنة</button>
                 <button onclick="switchSection('chat'); toggleSidebar();">💬 شات الأسطول الفوري</button>
                 <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
@@ -1024,10 +1033,10 @@
                                         <td>
                                             ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                                             <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
-                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة</td></tr>'}
+                                `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1051,7 +1060,7 @@
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>⏳ إجمالي فواتير الأجل: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة المتصلة: <strong style="color:var(--green-success);">يعمل بكفاءة تامة ومعزول لكل حساب</strong></p>
+                        <p>🟢 حالة المزامنة المستقلة: <strong style="color:var(--green-success);">يعمل بكفاءة وعزل سحابي تام حسب معرف المستخدم</strong></p>
                     </div>
                 </div>
             `;
@@ -1089,7 +1098,7 @@
                                         <td>
                                             <button class="btn-success btn-sm" onclick="openConsolidatedImageModal('${ci.id}')" title="صورة">🖼️</button>
                                             <button class="btn-warning btn-sm" onclick="exportConsolidatedWhatsApp('${ci.id}')" title="واتساب">💬</button>
-                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>` : ''}
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة</td></tr>'}
@@ -1216,7 +1225,7 @@
                     </form>
                 </div>
                 <div class="card">
-                    <h3><span>📋 قائمة الشحنات الخاصة بي</span></h3>
+                    <h3><span>📋 قائمة الشحنات الخاصة بك</span></h3>
                     <div style="margin-bottom:6px;">
                         <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة..." oninput="filterShipmentsTable()">
                     </div>
@@ -1234,10 +1243,11 @@
                                             <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                                             <button class="btn-success btn-sm" onclick="openInvoiceImageModal(${idx})" title="صورة الفاتورة">🖼️</button>
                                             <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
-                                            ${isAdmin ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
+                                            <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1247,18 +1257,17 @@
             content.innerHTML = `
                 <div class="card">
                     <h3><span>🚚 إدارة الأسطول وصيانة المركبات</span></h3>
-                    ${isAdmin ? `
                     <form onsubmit="saveTruck(event)">
                         <input type="text" id="tr-num" placeholder="اسم أو رقم الشاحنة" required>
                         <input type="text" id="tr-driver" placeholder="السائق المسؤول" required>
                         <input type="number" id="tr-km" placeholder="عداد KM الحالي" required>
                         <button type="submit" class="btn-main">حفظ المركبة بالأسطول</button>
-                    </form>` : ''}
+                    </form>
                     <div class="table-responsive" style="margin-top:8px;">
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
+                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1268,7 +1277,7 @@
             let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💵 الخزينة والمقبوضات المركزية</span></h3>
+                    <h3><span>💵 الخزينة والمقبوضات الخاصة بحسابك</span></h3>
                     <form onsubmit="saveTreasury(event)">
                         <select id="t-type"><option value="in">إيداع (+)</option><option value="out">سحب (-)</option></select>
                         <input type="number" id="t-amount" placeholder="المبلغ (ج.م)" required>
@@ -1290,7 +1299,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1320,7 +1329,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات</td></tr>'}
+                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1347,7 +1356,7 @@
                                         <td><span class="badge bg-danger">${(c.debt ?? getSafeAmount(c)).toLocaleString()} ج.م</span></td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="payCustomerDebt(${idx})" title="سداد">سداد</button>
-                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>` : ''}
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء</td></tr>'}
@@ -1394,7 +1403,7 @@
                         ${(data.posts || data.wallPosts || []).map((p, idx) => `
                             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; justify-content:space-between; align-items:center;">
                                 <div><strong>${getSafeName(p)}</strong>: <p style="margin-top:2px;">${getSafeDesc(p)}</p></div>
-                                ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>` : ''}
+                                <button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>
                             </div>
                         `).join('') || '<p style="font-size:9px; color:var(--text-muted);">لا توجد إعلانات</p>'}
                     </div>
@@ -1538,7 +1547,7 @@
                 <td>
                     ${st !== 'paid' ? `<button class="btn-success btn-sm" onclick="markDeferredAsPaid(${idx})" title="تسديد">✓ سداد</button>` : ''}
                     <button class="btn-success btn-sm" onclick="sendDeferredWhatsApp(${idx})" title="واتساب">💬</button>
-                    ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>` : ''}
+                    <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                 </td>
             </tr>
         `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير مطابقة للبحث</td></tr>';
@@ -1666,6 +1675,44 @@
         showToast('تم حفظ المركبة بالأسطول بنجاح! 🚚');
     }
 
+    function saveTreasury(e) {
+        e.preventDefault();
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
+        const tObj = {
+            id: String(Date.now()),
+            userId: currentUserId,
+            type: document.getElementById('t-type').value,
+            amount: Number(document.getElementById('t-amount').value || 0),
+            desc: document.getElementById('t-desc').value,
+            date: new Date().toLocaleDateString('ar-EG')
+        };
+        let data = appStateData();
+        if(!data.treasury) data.treasury = [];
+        data.treasury.unshift(tObj);
+        saveDataAll();
+        switchSection('treasury');
+        showToast('تم حفظ الحركة النقدية وترحيلها لحسابك بنجاح! 💵');
+    }
+
+    function saveExpense(e) {
+        e.preventDefault();
+        let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
+        const expObj = {
+            id: String(Date.now()),
+            userId: currentUserId,
+            title: document.getElementById('exp-title').value,
+            description: document.getElementById('exp-title').value,
+            amount: Number(document.getElementById('exp-amount').value || 0),
+            date: new Date().toLocaleDateString('ar-EG')
+        };
+        let data = appStateData();
+        if(!data.expenses) data.expenses = [];
+        data.expenses.unshift(expObj);
+        saveDataAll();
+        switchSection('expenses');
+        showToast('تم حفظ المصروف وترحيله لحسابك بنجاح! ⛽');
+    }
+
     function publishFeedPost() {
         const text = document.getElementById('feed-text').value;
         if(!text) return;
@@ -1712,7 +1759,8 @@
                     <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                     <button class="btn-success btn-sm" onclick="openInvoiceImageModal(${idx})" title="صورة الفاتورة">🖼️</button>
                     <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
-                    ${isAdmin ? `<button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button><button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>` : ''}
+                    <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
+                    <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
                 </td>
             </tr>
         `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد نتائج مطابقة</td></tr>';
@@ -1790,7 +1838,7 @@
 
         saveDataAll();
         temporaryShipmentImageBase64 = '';
-        showToast('تم حفظ الرحلة والشحنة بنجاح! 📦');
+        showToast('تم حفظ الرحلة والشحنة وترحيلها لحسابك! 📦');
         switchSection('shipments');
     }
 
@@ -1860,24 +1908,24 @@
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
 
         if (type === 'shipments') {
-            title.innerText = '📦 تفاصيل الشحنات والرحلات';
+            title.innerText = '📦 تفاصيل شحناتك الحالية';
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th></tr></thead><tbody>` +
                 shipmentsList.map((s) => `<tr><td>${getSafeName(s)}</td><td>${getSafeDesc(s)}</td><td>${getSafeAmount(s).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'cash') {
-            title.innerText = '💵 تفاصيل حركات الخزينة';
+            title.innerText = '💵 تفاصيل حركات الخزينة الخاصة بك';
             let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>` +
                 userTreasury.map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'debts') {
-            title.innerText = '⚠️ تفاصيل ديون العملاء والأجل';
+            title.innerText = '⚠️ فواتير الأجل والديون المعلقة';
             let userDeferred = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>الديون والأجل</th></tr></thead><tbody>` +
                 userDeferred.map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
-            title.innerText = '📈 تحليل الإيرادات والمصروفات والأرباح';
+            title.innerText = '📈 تحليل إيراداتك وأرباحك';
             let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
             let userExpenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
             let exp = userExpenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
@@ -2193,35 +2241,26 @@
     }
 
     async function deleteItem(type, index) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        if(!isAdmin) {
-            showToast('الحذف مقتصر على مدير النظام فقط! 👑', 'danger');
-            return;
-        }
-        if(confirm('هل أنت متأكد من الحذف النهائي؟')) {
-            let data = appStateData();
-            if (window.db && window.firebaseModules) {
-                const { doc, deleteDoc } = window.firebaseModules;
-                if(type === 'shipments') {
-                    let list = getAllShipments(data);
-                    let deletedItem = list.splice(index, 1)[0];
-                    data.shipments = list;
-                    data.docs = list;
-                    if(deletedItem && deletedItem.id) {
-                        await deleteDoc(doc(window.db, 'shipments', String(deletedItem.id))).catch(e => console.error(e));
-                    }
-                } else if(data[type]) {
-                    let deletedItem = data[type].splice(index, 1)[0];
-                    if(deletedItem && deletedItem.id) {
-                        await deleteDoc(doc(window.db, type, String(deletedItem.id))).catch(e => console.error(e));
-                    }
+        let data = appStateData();
+        if (window.db && window.firebaseModules) {
+            const { doc, deleteDoc } = window.firebaseModules;
+            if(type === 'shipments') {
+                let list = getAllShipments(data);
+                let deletedItem = list.splice(index, 1)[0];
+                data.shipments = list;
+                data.docs = list;
+                if(deletedItem && deletedItem.id) {
+                    await deleteDoc(doc(window.db, 'shipments', String(deletedItem.id))).catch(e => console.error(e));
+                }
+            } else if(data[type]) {
+                let deletedItem = data[type].splice(index, 1)[0];
+                if(deletedItem && deletedItem.id) {
+                    await deleteDoc(doc(window.db, type, String(deletedItem.id))).catch(e => console.error(e));
                 }
             }
-            saveDataAll();
-            showToast('تم الحذف بنجاح!');
         }
+        saveDataAll();
+        showToast('تم الحذف بنجاح!');
     }
 
     function saveVisitorShipment() {
