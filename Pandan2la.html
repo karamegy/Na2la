@@ -387,7 +387,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة السحابية المحدث والمخصص لعزل وصيانة حسابات المستخدمين (V10 Modular SDK) -->
+<!-- سكريبت المزامنة السحابية وعزل الحسابات التام المستقل -->
 <script>
     window._isSavingLocally = false;
 
@@ -491,7 +491,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { id: '1', name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
+    let currentLoggedInUser = { id: '1', name: 'جاري التحميل...', role: 'driver', title: 'سائق', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -531,10 +531,10 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // تم تحديث هذه الدالة للبحث في جميع مفاتيح التخزين المحلية للمنصة وغرفة العمليات لضمان مطابقة الحساب
+    // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
-        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
+        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
         if (urlUserId) {
             fetchDriverData(urlUserId);
             return;
@@ -549,48 +549,42 @@
             if (saved) {
                 try {
                     let parsed = JSON.parse(saved);
-                    if (parsed && parsed.id) {
+                    if (parsed && (parsed.id || parsed.phone)) {
                         window.currentLoggedInUser = parsed;
                         applyUserPermissionsUI();
+                        loadAllDataFromFirestoreMultiCollection();
                         return;
                     }
                 } catch(e) {}
             }
         }
-        // في حال عدم وجود جلسة مخزنة، يتم الافتراض بحذر أو البقاء على المدير
-        window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'مدير نظام', title: 'أسطورة الطريق', avatar: '' };
-        applyUserPermissionsUI();
+        fetchDriverData('1');
     }
 
     async function fetchDriverData(identifier) {
         if (!window.db || !window.firebaseModules) return;
         const { collection, getDocs, query, where } = window.firebaseModules;
         try {
-            const q = query(collection(window.db, "drivers"), where("id", "==", identifier));
-            const snapshot = await getDocs(q);
+            let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
+            let snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                snapshot = await getDocs(q);
+            }
+
             if (!snapshot.empty) {
                 let docData = snapshot.docs[0].data();
-                window.currentLoggedInUser = { id: identifier, ...docData };
-                localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
+                window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
                 localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
                 applyUserPermissionsUI();
-                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
                 loadAllDataFromFirestoreMultiCollection();
+                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
-                const phoneSnapshot = await getDocs(q2);
-                if (!phoneSnapshot.empty) {
-                    let docData = phoneSnapshot.docs[0].data();
-                    window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
-                    localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                    applyUserPermissionsUI();
-                    showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
-                    loadAllDataFromFirestoreMultiCollection();
-                } else {
-                    showToast("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف", "danger");
-                    checkLocalStorageUser();
-                }
+                console.warn("⚠️ لم يتم العثور على السائق، استخدام الافتراضي.");
+                applyUserPermissionsUI();
+                loadAllDataFromFirestoreMultiCollection();
             }
         } catch(err) { console.error(err); }
     }
@@ -603,12 +597,14 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
+    // 🔒 المزامنة السحابية مع عزل البيانات تماً حسب userId لكل حساب
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
-        let currentUser = window.currentLoggedInUser || { id: '1', role: 'سائق' };
-        let isAdmin = (currentUser.role === 'مدير نظام' || currentUser.role === 'admin' || currentUser.id === '1');
+        let currentUser = window.currentLoggedInUser || { id: '1', role: 'driver' };
+        let role = String(currentUser.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || currentUser.id === '1');
         let currentUserId = String(currentUser.id || '1');
 
         try {
@@ -811,33 +807,31 @@
         showToast('تم تغيير الثيم بنجاح');
     }
 
+    // 🖼️ تطبيق اسم المستخدم والصورة الشخصية والرتبة بدقة في الواجهة
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'سائق', title: 'سائق مستقل', avatar: '' };
-        let role = user.role;
+        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', title: 'سائق مستقل', avatar: '' };
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
         
-        document.getElementById('header-username').innerText = user.name;
-        document.getElementById('header-role-badge').innerText = (role === 'مدير نظام' || role === 'admin' || user.id === '1') ? '👑 مدير نظام (تحكم كامل وشامل)' : (role === 'مشرف' ? '⭐ مشرف' : `👨‍✈️ ${user.title || 'سائق معتمد'}`);
+        document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
+        document.getElementById('header-role-badge').innerText = isAdmin ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || user.role || 'سائق مستقل'}`;
 
         const avatarEl = document.getElementById('header-avatar-btn');
-        if (user.avatar && user.avatar.trim() !== '') {
+        if (user.avatar && String(user.avatar).trim() !== '') {
             avatarEl.innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
         } else {
-            avatarEl.innerHTML = '🐼';
+            avatarEl.innerHTML = isAdmin ? '🐼' : '👨‍✈️';
         }
 
-        renderSidebarByRole();
-        renderBottomNavbarByRole();
+        renderSidebarByRole(isAdmin);
+        renderBottomNavbarByRole(isAdmin);
         renderStats();
     }
 
-    function renderSidebarByRole() {
+    function renderSidebarByRole(isAdmin) {
         const sidebarList = document.querySelector('.sidebar-nav-list');
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
-
-        let user = window.currentLoggedInUser || {};
-        let role = user.role;
-        let isAdmin = (role === 'مدير نظام' || role === 'admin' || user.id === '1');
         
         if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : '👨‍✈️ قائمة حساب السائق المتصل';
 
@@ -873,12 +867,9 @@
         }
     }
 
-    function renderBottomNavbarByRole() {
+    function renderBottomNavbarByRole(isAdmin) {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
-        let user = window.currentLoggedInUser || {};
-        let role = user.role;
-        let isAdmin = (role === 'مدير نظام' || role === 'admin' || user.id === '1');
 
         if (isAdmin) {
             navbar.innerHTML = `
@@ -912,11 +903,16 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function renderStats() {
+        let user = window.currentLoggedInUser || { id: '1', role: 'driver' };
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipments = getAllShipments(data);
-        let expenses = data.expenses || [];
-        let treasury = data.treasury || [];
-        let deferredList = data.deferredInvoices || [];
+        let shipments = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let expenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
+        let treasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
+        let deferredList = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
 
         let rev = shipments.reduce((s, x) => s + getSafeAmount(x), 0);
         let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
@@ -944,10 +940,12 @@
         const content = document.getElementById('main-content');
         if(!content) return;
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
         let user = window.currentLoggedInUser || {};
-        let userRole = user.role;
-        let isAdmin = (userRole === 'مدير نظام' || userRole === 'admin' || user.id === '1');
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
 
         if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && !isAdmin) {
             showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
@@ -955,7 +953,7 @@
         }
         
         if (sectionId === 'deferredInvoices') {
-            let deferredList = data.deferredInvoices || [];
+            let deferredList = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
             let totalDeferred = deferredList.filter(x => getSafeStatus(x) !== 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
             let totalPaidMonth = deferredList.filter(x => getSafeStatus(x) === 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
 
@@ -1263,6 +1261,7 @@
                 </div>
             `;
         } else if (sectionId === 'treasury') {
+            let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
             content.innerHTML = `
                 <div class="card">
                     <h3><span>💵 الخزينة والمقبوضات المركزية</span></h3>
@@ -1276,7 +1275,7 @@
                         <table>
                             <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.treasury || []).map((t, idx) => `
+                                ${userTreasury.map((t, idx) => `
                                     <tr>
                                         <td><span class="badge ${t.type === 'in' ? 'bg-delivered' : 'bg-danger'}">${t.type === 'in' ? 'إيداع' : 'سحب'}</span></td>
                                         <td>${getSafeAmount(t).toLocaleString()} ج.م</td>
@@ -1294,6 +1293,7 @@
                 </div>
             `;
         } else if (sectionId === 'expenses') {
+            let userExpenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
             content.innerHTML = `
                 <div class="card">
                     <h3><span>⛽ المصروفات التشغيلية والوقود</span></h3>
@@ -1306,7 +1306,7 @@
                         <table>
                             <thead><tr><th>البند</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.expenses || []).map((ex, idx) => `
+                                ${userExpenses.map((ex, idx) => `
                                     <tr>
                                         <td>${getSafeDesc(ex)}</td>
                                         <td>${getSafeAmount(ex).toLocaleString()} ج.م</td>
@@ -1499,9 +1499,12 @@
         const query = document.getElementById('def-search').value.toLowerCase();
         const filter = document.getElementById('def-filter').value;
         let data = appStateData();
-        let list = data.deferredInvoices || [];
         let user = window.currentLoggedInUser || {};
-        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
+        let list = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
         
         let filtered = list.filter(d => {
             let name = getSafeName(d).toLowerCase();
@@ -1686,9 +1689,12 @@
     function filterShipmentsTable() {
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
         let user = window.currentLoggedInUser || {};
-        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const tbody = document.getElementById('shipments-table-body');
         const filtered = shipmentsList.filter(s => getSafeName(s).toLowerCase().includes(query) || getSafeDesc(s).toLowerCase().includes(query));
         
@@ -1785,8 +1791,13 @@
     }
 
     function openInvoiceImageModal(index) {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let list = getAllShipments(data);
+        let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const s = list[index];
         if(!s) return;
         document.getElementById('inv-id').innerText = `#${String(s.id || index).slice(-4)}`;
@@ -1836,8 +1847,13 @@
         const title = document.getElementById('stat-modal-title');
         const body = document.getElementById('stat-modal-body');
         modal.style.display = 'flex';
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
 
         if (type === 'shipments') {
             title.innerText = '📦 تفاصيل الشحنات والرحلات';
@@ -1846,18 +1862,21 @@
                 `</tbody></table></div>`;
         } else if (type === 'cash') {
             title.innerText = '💵 تفاصيل حركات الخزينة';
+            let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>` +
-                (data.treasury || []).map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
+                userTreasury.map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'debts') {
             title.innerText = '⚠️ تفاصيل ديون العملاء والأجل';
+            let userDeferred = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>الديون والأجل</th></tr></thead><tbody>` +
-                (data.deferredInvoices || []).map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
+                userDeferred.map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
             title.innerText = '📈 تحليل الإيرادات والمصروفات والأرباح';
             let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
-            let exp = (data.expenses || []).reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
+            let userExpenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
+            let exp = userExpenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
             body.innerHTML = `<div style="font-size:11px; line-height:1.6;">
                 <p>💰 إجمالي الإيرادات: <strong>${rev.toLocaleString()} ج.م</strong></p>
                 <p>⛽ إجمالي المصروفات: <strong>${exp.toLocaleString()} ج.م</strong></p>
@@ -1867,8 +1886,13 @@
     }
 
     function openEditModal(type, index) {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let targetList = type === 'shipments' ? getAllShipments(data) : data[type];
+        let targetList = type === 'shipments' ? (isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId)) : (isAdmin ? data[type] : (data[type] || []).filter(x => String(x.userId || '') === currentUserId));
         let item = targetList ? targetList[index] : null;
         if(!item) return;
 
@@ -2056,8 +2080,13 @@
     function renderTrackingDetails() {
         const index = document.getElementById('track-shipment-select').value;
         const container = document.getElementById('tracking-timeline-view');
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         if(index === '') {
             container.innerHTML = '<p style="font-size:9px; text-align:center; color:var(--text-muted);">الرجاء اختيار شحنة لعرض الخط الزمني</p>';
             return;
@@ -2081,8 +2110,13 @@
 
     function updateShipmentMilestone(index) {
         const newMilestone = document.getElementById('next-milestone').value;
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let list = getAllShipments(data);
+        let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         list[index].milestone = newMilestone;
         data.shipments = list;
         data.docs = list;
@@ -2156,7 +2190,8 @@
 
     async function deleteItem(type, index) {
         let user = window.currentLoggedInUser || {};
-        let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
         if(!isAdmin) {
             showToast('الحذف مقتصر على مدير النظام فقط! 👑', 'danger');
             return;
@@ -2293,8 +2328,13 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         shipmentsList.forEach(s => {
             if(s.gps) {
                 const coords = s.gps.split(',').map(Number);
@@ -2329,8 +2369,13 @@
     }
 
     function showQR(index) {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const s = shipmentsList[index];
         if(!s) return;
         const box = document.getElementById('qrcode');
@@ -2340,8 +2385,13 @@
     }
 
     function exportInvoicePDF(index) {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const s = shipmentsList[index];
         if(!s) return;
         const { jsPDF } = window.jspdf;
@@ -2357,8 +2407,13 @@
     }
 
     function exportToExcel() {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
@@ -2367,8 +2422,13 @@
     }
 
     function exportSummaryWhatsApp() {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let currentUserId = String(user.id || '1');
+
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
         let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
         let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev.toLocaleString()} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
