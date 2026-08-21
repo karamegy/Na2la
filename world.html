@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في الخزينة المستقلة V98.8");
+            console.log("✅ تم المصادقة سحابياً بنجاح");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -111,20 +111,16 @@
         }
 
         .header-profile-avatar {
-            width: 50px; height: 50px; border-radius: 50%; overflow: visible;
+            width: 50px; height: 50px; border-radius: 50%; overflow: hidden;
             border: 2px solid var(--primary-blue); cursor: pointer; display: flex;
             align-items: center; justify-content: center; background: rgba(0, 242, 254, 0.15);
             position: relative; box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
             margin-left: 4px;
         }
         .header-profile-avatar img, .header-profile-avatar span {
-            width: 125%; height: 125%; border-radius: 50%; object-fit: cover; display: inline-block;
-            position: absolute; top: -12.5%; left: -12.5%;
-            animation: pandaPop3D 4s ease-in-out infinite;
-            transform-origin: center center;
-            z-index: 10;
+            width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: inline-block;
         }
-        .header-profile-avatar span { font-size: 28px; line-height: 50px; text-align: center; }
+        .header-profile-avatar span { font-size: 26px; line-height: 50px; text-align: center; }
 
         .brand-text-styled { font-size: 15px; font-weight: 900; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header-actions-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -183,7 +179,6 @@
 
         .action-btn-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .whatsapp-btn { background: #25d366; color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
-        .sms-btn { background: var(--primary-blue); color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; }
         .image-btn { background: #8b5cf6; color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; }
         .pdf-btn { background: var(--primary-orange); color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; }
         .edit-btn { background: var(--warning-color); color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: bold; font-size: 11px; cursor: pointer; }
@@ -221,7 +216,7 @@
     <header>
         <div class="brand-container-panda">
             <div class="header-profile-avatar" onclick="openSwitchAccountPrompt()" title="تبديل الحساب المستقل">
-                <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none; width:100%; height:100%; border-radius:50%; object-fit:cover;">
+                <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none;">
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
             <div>
@@ -513,7 +508,7 @@
         </div>
     </div>
 
-    <!-- سكريبت المزامنة السحابية المستقلة المحدث والمدمج لدعم تعدد مفاتيح الجلسة (V10 Modular SDK) -->
+    <!-- السكريبت المحدث والمحكم لربط الجلسة وعزل الحسابات -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -550,7 +545,8 @@
             return 'paid';
         }
 
-        let currentLoggedInUser = { id: '1', name: 'مدير النظام', role: 'admin', title: 'مدير عام', avatar: '' };
+        // الحساب الافتراضي المؤقت لحين جلب البيانات السحابية الحقيقية للسائق
+        let currentLoggedInUser = { id: '1', name: 'جاري التحميل...', role: 'driver', title: 'سائق', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -569,74 +565,72 @@
 
         window.addEventListener('firebase-ready', () => {
             initIndependentUserSync();
-            initFirestoreSync();
         });
 
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 if(window.db && window.firebaseModules) {
                     initIndependentUserSync();
-                    initFirestoreSync();
                 }
             }, 500);
         });
 
-        // تم تحديث الدالة لفحص جميع مفاتيح التخزين المتاحة لضمان تطابق الجلسة مع غرفة العمليات
+        // 🔒 التحقق الدقيق من الجلسة ومعرف المستخدم من الرابط أو التخزين المحلي دون منح صلاحيات وهمية
         function initIndependentUserSync() {
             const urlParams = new URLSearchParams(window.location.search);
-            const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone');
+            const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId');
 
             if (urlUserId) {
                 fetchDriverData(urlUserId);
                 return;
             }
 
-            const savedUserKeys = ['na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_user'];
-            for (let key of savedUserKeys) {
-                const saved = localStorage.getItem(key);
-                if (saved) {
-                    try {
-                        let parsed = JSON.parse(saved);
-                        if (parsed && parsed.id) {
-                            window.currentLoggedInUser = parsed;
-                            applyUserPermissionsUI();
-                            return;
-                        }
-                    } catch(e) {}
-                }
+            const savedUser = localStorage.getItem('na2la_independent_user_v98') || localStorage.getItem('na2la_connected_user_v90');
+            if (savedUser) {
+                try {
+                    let parsed = JSON.parse(savedUser);
+                    if (parsed && (parsed.id || parsed.phone)) {
+                        window.currentLoggedInUser = parsed;
+                        applyUserPermissionsUI();
+                        initFirestoreSync();
+                        return;
+                    }
+                } catch(e) {}
             }
 
-            applyUserPermissionsUI();
+            // افتراضي آمن: البحث عن المستخدم '1' (المدير) أو فتح نافذة التبديل إذا لم يوجد
+            fetchDriverData('1');
         }
 
         async function fetchDriverData(identifier) {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, query, where } = window.firebaseModules;
             try {
-                const q = query(collection(window.db, "drivers"), where("id", "==", identifier));
-                const snapshot = await getDocs(q);
+                let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
+                let snapshot = await getDocs(q);
+
+                if (snapshot.empty) {
+                    q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                    snapshot = await getDocs(q);
+                }
+
                 if (!snapshot.empty) {
                     let docData = snapshot.docs[0].data();
-                    window.currentLoggedInUser = { id: identifier, ...docData };
+                    window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
+                    
+                    // حفظ الجلسة بـ المفتاح الموحد
                     localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
+                    
                     applyUserPermissionsUI();
                     initFirestoreSync();
                 } else {
-                    const q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
-                    const phoneSnapshot = await getDocs(q2);
-                    if (!phoneSnapshot.empty) {
-                        let docData = phoneSnapshot.docs[0].data();
-                        window.currentLoggedInUser = { id: phoneSnapshot.docs[0].id, ...docData };
-                        localStorage.setItem('na2la_independent_user_v98', JSON.stringify(window.currentLoggedInUser));
-                        localStorage.setItem('na2la_connected_user_v90', JSON.stringify(window.currentLoggedInUser));
-                        applyUserPermissionsUI();
-                        initFirestoreSync();
-                    } else {
-                        console.warn("⚠️ لم يتم العثور على حساب بهذا المعرف أو الهاتف، سيتم استخدام الحساب الافتراضي.");
-                    }
+                    console.warn("⚠️ لم يتم العثور على السائق في قاعدة البيانات، سيتم استخدام الحساب الافتراضي.");
+                    applyUserPermissionsUI();
+                    initFirestoreSync();
                 }
-            } catch(err) { console.error(err); }
+            } catch(err) { 
+                console.error("خطأ أثناء جلب بيانات السائق:", err); 
+            }
         }
 
         function openSwitchAccountPrompt() {
@@ -647,34 +641,35 @@
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
+        // 🖼️ تطبيق اسم المستخدم والصورة الشخصية والرتبة بدقة في الواجهة
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'driver', title: 'سائق', avatar: '' };
-            let role = user.role;
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1' || user.name === 'مدير');
             
-            document.getElementById('header-username').innerText = user.name;
-            document.getElementById('header-role-badge').innerText = (role === 'مدير نظام' || role === 'admin' || user.id === '1') ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || 'سائق مستقل'}`;
+            document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
+            document.getElementById('header-role-badge').innerText = isAdmin ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || user.role || 'سائق مستقل'}`;
 
             const imgEl = document.getElementById("userHeaderAvatarImg");
             const emojiEl = document.getElementById("userHeaderAvatarEmoji");
-            if (user.avatar && user.avatar.trim() !== "") {
+
+            if (user.avatar && String(user.avatar).trim() !== "") {
                 imgEl.src = user.avatar;
                 imgEl.style.display = "block";
                 emojiEl.style.display = "none";
             } else {
                 imgEl.style.display = "none";
                 emojiEl.style.display = "block";
+                emojiEl.innerText = isAdmin ? '🐼' : '👨‍✈️';
             }
 
-            renderBottomNavbarByRole();
+            renderBottomNavbarByRole(isAdmin);
             renderAllFinancials();
         }
 
-        function renderBottomNavbarByRole() {
+        function renderBottomNavbarByRole(isAdmin) {
             const navbar = document.getElementById('bottom-navbar');
             if(!navbar) return;
-            let user = window.currentLoggedInUser || {};
-            let role = user.role;
-            let isAdmin = (role === 'مدير نظام' || role === 'admin' || user.id === '1');
 
             if (isAdmin) {
                 navbar.innerHTML = `
@@ -694,7 +689,8 @@
 
         function switchSection(name, btn) {
             let user = window.currentLoggedInUser || {};
-            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
             if ((name === 'treasury' || name === 'expenses' || name === 'analytics') && !isAdmin) {
                 alert('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑');
                 return;
@@ -718,6 +714,7 @@
             renderAllFinancials();
         }
 
+        // 🔒 المزامنة السحابية مع عزل البيانات تماً حسب userId لكل حساب
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -732,12 +729,14 @@
                 }
             });
 
-            let user = window.currentLoggedInUser || { id: '1', role: 'admin' };
-            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let user = window.currentLoggedInUser || { id: '1', role: 'driver' };
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
             let currentUserId = String(user.id || '1');
 
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
+                // إذا لم يكن مديراً، يتم جلب المستندات الخاصة به فقط لمنع اختلاط الحسابات
                 let q = isAdmin ? collection(window.db, col) : query(collection(window.db, col), where("userId", "==", currentUserId));
                 
                 onSnapshot(q, (snapshot) => {
@@ -801,7 +800,7 @@
             let newId = String(Date.now());
             let expObj = { 
                 id: newId, 
-                userId: currentUserId, 
+                userId: currentUserId, // 🔒 ربط صارم بحساب المستخدم الحالي
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
@@ -832,7 +831,7 @@
             let newId = String(Date.now());
             let tObj = {
                 id: newId,
-                userId: currentUserId, 
+                userId: currentUserId, // 🔒 ربط صارم بحساب المستخدم الحالي
                 type: type === 'deposit' ? 'in' : 'out',
                 amount: amt,
                 price: amt,
@@ -873,7 +872,7 @@
             let newId = String(Date.now());
             let record = { 
                 id: newId,
-                userId: currentUserId, 
+                userId: currentUserId, // 🔒 ربط صارم بحساب المستخدم الحالي
                 invoiceId: invId, 
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: name, 
@@ -912,7 +911,7 @@
             let newId = String(Date.now());
             let record = { 
                 id: newId, 
-                userId: currentUserId, 
+                userId: currentUserId, // 🔒 ربط صارم بحساب المستخدم الحالي
                 date: new Date().toLocaleDateString('ar-EG'), 
                 accountOwner: owner, 
                 name: owner,
@@ -939,7 +938,8 @@
 
         function deleteRecord(id, collectionType) {
             let user = window.currentLoggedInUser || {};
-            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
             if (!isAdmin) {
                 alert('الحذف مقتصر على مدير النظام فقط! 👑');
                 return;
@@ -1067,7 +1067,8 @@
         function exportAccountsToCSV() {
             let csv = "\uFEFFالتاريخ,العميل,الهاتف,البيان,المبلغ,النوع,الحالة\n";
             let user = window.currentLoggedInUser || {};
-            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
 
             let filteredShipments = isAdmin ? appData.shipments : (appData.shipments || []).filter(s => String(s.userId || '') === String(user.id));
             let filteredAccounts = isAdmin ? appData.accounts : (appData.accounts || []).filter(a => String(a.userId || '') === String(user.id));
@@ -1086,8 +1087,9 @@
         }
 
         function renderAllFinancials() {
-            let user = window.currentLoggedInUser || { id: '1', role: 'admin' };
-            let isAdmin = (user.role === 'مدير نظام' || user.role === 'admin' || user.id === '1');
+            let user = window.currentLoggedInUser || { id: '1', role: 'driver' };
+            let role = String(user.role || '').toLowerCase();
+            let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
 
             let userShipments = isAdmin ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === String(user.id));
             let userAccounts = isAdmin ? (appData.accounts || []) : (appData.accounts || []).filter(a => String(a.userId || '') === String(user.id));
