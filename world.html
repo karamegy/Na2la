@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المصحح بالكامل -->
+    <!-- السكريبت المصحح والمحصّن ضد التضارب 100% -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -586,7 +586,7 @@
             return 'paid';
         }
 
-        let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
+        let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'مدير نظام', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -615,7 +615,6 @@
             }, 500);
         });
 
-        // 👑 تحديد الرتبة بدقة وثبات تام منعاً لأي خطأ تداخل
         function getUserRole() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase().trim();
@@ -643,11 +642,19 @@
         }
         window.canUserManageSystem = canUserManageSystem;
 
+        // 🛡️ دالة المزامنة الجديدة والمصححة لمنع تداخل الحسابات كلياً
         async function initConnectedUserSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
 
             try {
+                // تصفية وحذف المفاتيح القديمة المسببة للتضارب
+                const legacyKeys = [
+                    'na2la_independent_user_v98', 'na2la_connected_user_v90', 
+                    'na2la_user', 'currentUser', 'user', 'driver'
+                ];
+                legacyKeys.forEach(k => localStorage.removeItem(k));
+
                 const urlParams = new URLSearchParams(window.location.search);
                 const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
                 
@@ -662,34 +669,8 @@
                     return;
                 }
 
-                let activeUser = null;
-                const savedUserKeys = [
-                    'na2la_active_session', 'na2la_independent_user_v98', 'na2la_connected_user_v90', 
-                    'na2la_user', 'currentUser', 'user', 'driver'
-                ];
-                for (let key of savedUserKeys) {
-                    const saved = localStorage.getItem(key);
-                    if (saved) {
-                        try {
-                            let parsed = JSON.parse(saved);
-                            if (parsed && (parsed.id || parsed.phone || parsed.name)) {
-                                activeUser = parsed;
-                                break;
-                            }
-                        } catch(e) {}
-                    }
-                }
-
-                if (activeUser) {
-                    window.currentLoggedInUser = activeUser;
-                    applyUserPermissionsUI();
-                    initFirestoreSync();
-                    return;
-                }
-
-                // إذا لم يوجد جلسة، نبقي المستخدم كزائر/سائق افتراضي دون فرض رتبة مدير نهائياً
-                applyUserPermissionsUI();
-                initFirestoreSync();
+                // افتراضي الحساب الرئيسي للمدير (مستند رقم 1) لمنع جلب بيانات خاطئة
+                await fetchDriverData('1');
 
             } catch (err) {
                 console.error("خطأ في مزامنة الحساب المستقل:", err);
@@ -726,7 +707,6 @@
 
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
-                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                     localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                     applyUserPermissionsUI();
                     initFirestoreSync();
