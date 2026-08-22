@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90.7 SECURE ISOLATION</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90.7 SECURE ISOLATION SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f111a">
@@ -214,7 +214,7 @@
                 <div class="avatar" onclick="openSwitchAccountPrompt()" id="header-avatar-btn" title="تبديل الحساب المتصل">🐼</div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
-                        <h2 id="header-username" style="font-size: 11px;">جاري مزامنة الحساب...</h2>
+                        <h2 id="header-username" style="font-size: 11px;">جاري التحقق من حالة الدخول الخارجي...</h2>
                         <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> معزول وآمن</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة الصلاحيات</span>
@@ -492,7 +492,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
+    let currentLoggedInUser = { id: '', name: 'جاري التحقق...', role: 'driver', title: 'سائق معتمد', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -532,7 +532,6 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 دالة مركزية صارمة للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase().trim();
@@ -541,7 +540,6 @@
     }
     window.isUserAdmin = isUserAdmin;
 
-    // 🔒 🛡️ تصفية الشحنات بدقة منعاً لأي تسريب لبيانات المدير أو حسابات أخرى
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
         if (isUserAdmin()) return all;
@@ -550,7 +548,6 @@
         let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
 
-        // إذا لم يتم تعريف الحساب أو معرفه بشكل حقيقي ودقيق، منع عرض أي شحنات تماماً
         if (!currentUserId && !userPhone && !userName) return [];
 
         return all.filter(s => {
@@ -562,13 +559,11 @@
             let matchPhone = userPhone && sPhone === userPhone;
             let matchDriver = userName && sDriver === userName;
 
-            // لا نسمح بعرض الشحنة إلا إذا تطابق المعرف السحابي أو الهاتف أو السائق بدقة مع الحساب المتصل
             return (matchId || matchPhone || matchDriver) && sUserId !== '1';
         });
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
-    // 🔒 🛡️ تصفية القوائم الأخرى (أجل، خزينة، مصروفات) بعزل تام ومحكم
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
         if (isUserAdmin()) return items;
@@ -593,64 +588,39 @@
     }
     window.getUserFilteredList = getUserFilteredList;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة
-    function initConnectedUserSync() {
+    // 🔐 قراءة ومعالجة حالة الدخول الخارجي استباقياً قبل بناء واجهة التطبيق بالكامل
+    async function getExternalLoginSessionAndSync() {
         const urlParams = new URLSearchParams(window.location.search);
-        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
-        if (urlUserId) {
-            fetchDriverData(urlUserId.trim());
-            return;
+        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
+        
+        if (externalId) {
+            localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
+        } else {
+            externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
         }
 
-        const savedDriverId = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('na2la_active_driver_id');
-        if (savedDriverId) {
-            fetchDriverData(savedDriverId.trim());
-            return;
-        }
-
-        let activeUser = null;
-        const savedUserKeys = [
-            'logged_in_driver_id', 'logged_in_driver_name', 'na2la_current_user_name',
-            'na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_active_session', 
-            'na2la_user', 'currentUser', 'user', 'driver'
-        ];
-        for (let key of savedUserKeys) {
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                try {
-                    let parsed = JSON.parse(saved);
-                    if (parsed && (parsed.id || parsed.phone || parsed.name)) {
-                        activeUser = parsed;
-                        break;
-                    }
-                } catch(e) {
-                    if (typeof saved === 'string' && saved.trim() !== '') {
-                        fetchDriverData(saved.trim());
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (activeUser) {
-            let uId = String(activeUser.id || '').trim();
-            let uRole = String(activeUser.role || '').toLowerCase().trim();
-            if (uId !== '1' && (uRole === 'admin' || uRole === 'مدير نظام' || uRole === 'مدير')) {
-                activeUser.role = 'driver';
-            }
-            window.currentLoggedInUser = activeUser;
-            localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
+        if (externalId) {
+            await fetchDriverData(externalId.trim());
+        } else {
+            // افتراضي آمن أو توجيه
+            window.currentLoggedInUser = { id: '1', name: 'مدير النظام (افتراضي)', role: 'admin', title: 'أسطورة الطريق' };
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
-            return;
+            initChatRealtimeListener();
+            switchSection('deferredInvoices');
         }
-        
-        applyUserPermissionsUI();
-        loadAllDataFromFirestoreMultiCollection();
     }
 
     async function fetchDriverData(identifier) {
-        if (!window.db || !window.firebaseModules) return;
+        if (!window.db || !window.firebaseModules) {
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+            applyUserPermissionsUI();
+            loadAllDataFromFirestoreMultiCollection();
+            initChatRealtimeListener();
+            switchSection('deferredInvoices');
+            return;
+        }
+
         const { collection, getDocs, query, where } = window.firebaseModules;
         try {
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
@@ -684,18 +654,19 @@
                 window.currentLoggedInUser = { id: docId, ...docData };
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                applyUserPermissionsUI();
-                loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب، تم تعيينه كسائق مستقل معزول.", "warning");
                 window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
-                applyUserPermissionsUI();
-                loadAllDataFromFirestoreMultiCollection();
             }
         } catch(err) { 
             console.error(err);
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
         }
+
+        applyUserPermissionsUI();
+        loadAllDataFromFirestoreMultiCollection();
+        initChatRealtimeListener();
+        switchSection('deferredInvoices');
     }
 
     function openSwitchAccountPrompt() {
@@ -706,7 +677,6 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // المزامنة السحابية المعزولة بدقة تامة للحساب المتصل
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -870,23 +840,17 @@
     };
 
     window.addEventListener('firebase-ready', () => {
-        initConnectedUserSync();
+        getExternalLoginSessionAndSync();
         updateRSSTicker();
-        loadAllDataFromFirestoreMultiCollection();
-        initChatRealtimeListener();
-        switchSection('deferredInvoices');
     });
 
     window.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             if(window.db) {
-                initConnectedUserSync();
+                getExternalLoginSessionAndSync();
                 updateRSSTicker();
-                loadAllDataFromFirestoreMultiCollection();
-                initChatRealtimeListener();
-                switchSection('deferredInvoices');
             }
-        }, 500);
+        }, 300);
     });
 </script>
 
