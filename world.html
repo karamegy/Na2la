@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المصحح للتحقق من حالة الدخول الخارجي فوراً -->
+    <!-- السكريبت المصحح للاستعادة الفورية للجلسة ومنع ظهور "زائر" -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -586,7 +586,7 @@
             return 'paid';
         }
 
-        // 🔐 قراءة ومعالجة حالة الدخول الخارجي (من خارج التطبيق أو الرابط أو التخزين الخارجي) فوراً قبل البناء
+        // 🔐 التهيئة الفورية واستعادة الحساب المسجل من الخارج منعاً لظهور زائر أو تضارب
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -601,13 +601,24 @@
                 return savedExternalId.trim();
             }
 
-            // افتراضي المدير العام في حال عدم وجود جلسة خارجية مسجلة مسبقاً
-            return '1';
+            return null;
         }
 
         let activeExternalSessionId = getExternalLoginSession();
         
-        let currentLoggedInUser = { id: activeExternalSessionId, name: 'جاري مزامنة الجلسة الخارجية...', role: 'driver', title: 'مستخدم النظام', avatar: '' };
+        // محاولة الاستعادة الفورية من التخزين المحلي المحفوظ مسبقاً لتجنب أي تأخير أو وميض
+        let initialUserObj = { id: activeExternalSessionId || '1', name: 'جاري تحميل الحساب...', role: 'driver', title: 'مستخدم النظام', avatar: '' };
+        let cachedSession = localStorage.getItem('na2la_active_session');
+        if (cachedSession) {
+            try {
+                let parsed = JSON.parse(cachedSession);
+                if (parsed && parsed.id) {
+                    initialUserObj = parsed;
+                }
+            } catch(e) {}
+        }
+
+        let currentLoggedInUser = initialUserObj;
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -622,25 +633,27 @@
         };
         window.appData = appData;
 
-        // تنفيذ المزامنة فور جاهزية قاعدة البيانات أو عند تحميل المستند
-        window.addEventListener('firebase-ready', () => {
-            executeExternalSyncSession();
-        });
-
+        // تنفيذ عند التحميل وتطبيق واجهة الصلاحيات فوراً
         window.addEventListener('DOMContentLoaded', () => {
             applyUserPermissionsUI();
-            setTimeout(() => {
-                if(window.db && window.firebaseModules) {
-                    executeExternalSyncSession();
-                }
-            }, 300);
+            if (activeExternalSessionId || cachedSession) {
+                setTimeout(() => {
+                    if(window.db && window.firebaseModules) {
+                        executeExternalSyncSession();
+                    }
+                }, 200);
+            }
+        });
+
+        window.addEventListener('firebase-ready', () => {
+            executeExternalSyncSession();
         });
 
         async function executeExternalSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
             try {
-                let identifier = activeExternalSessionId;
+                let identifier = activeExternalSessionId || (window.currentLoggedInUser ? window.currentLoggedInUser.id : '1');
                 let foundDoc = null;
 
                 let q1 = query(collection(window.db, "drivers"), where("id", "==", identifier));
@@ -659,7 +672,7 @@
                     if (!snap3.empty) foundDoc = { id: snap3.docs[0].id, ...snap3.docs[0].data() };
                 }
 
-                if (!foundDoc) {
+                if (!foundDoc && identifier) {
                     let docRef = doc(window.db, "drivers", String(identifier));
                     let docSnap = await getDoc(docRef);
                     if (docSnap.exists()) foundDoc = { id: docSnap.id, ...docSnap.data() };
@@ -668,7 +681,8 @@
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
                     localStorage.setItem('na2la_external_logged_user_id', foundDoc.id);
-                } else {
+                    localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
+                } else if (!window.currentLoggedInUser.name || window.currentLoggedInUser.name.includes('جاري')) {
                     window.currentLoggedInUser = { id: identifier, name: "حساب " + identifier, role: 'driver', title: 'سائق مستقل' };
                 }
 
@@ -1279,8 +1293,8 @@
                                     <a href="https://wa.me/" target="_blank" class="whatsapp-btn">💬 واتساب</a>
                                     <button class="image-btn" onclick='downloadInvoiceAsImage(${JSON.stringify(item)})'>🖼️</button>
                                     <button class="pdf-btn" onclick='downloadInvoiceAsPDF(${JSON.stringify(item)})'>📄</button>
-                                }
-                            </div>
+                                </div>
+                            </td>
                             <td>
                                 ${role === 'admin' ? `<button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button> <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>` : ''}
                             </td>
