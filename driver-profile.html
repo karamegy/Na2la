@@ -128,6 +128,7 @@
         }
         .load-post-media img:hover { transform: scale(1.02); }
 
+        /* تفاعلات الحائط (إعجاب، تعليق، مشاركة) */
         .post-actions-bar { display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); padding: 8px 0; margin-top: 10px; font-size: 11px; }
         .post-action-btn { background: none; border: none; color: var(--text-color); cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; opacity: 0.8; transition: 0.2s; width: auto; padding: 4px 8px; box-shadow: none; margin: 0; }
         .post-action-btn:hover { opacity: 1; color: var(--accent); }
@@ -366,10 +367,11 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
-        let currentUserRole = localStorage.getItem('current_user_role') || 'driver';
+        let currentUserRole = localStorage.getItem('current_user_role') || 'admin';
         let loggedInDriverId = localStorage.getItem('logged_in_driver_id') || null;
-        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'سائق';
+        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
         
+        // حفظ واسترجاع البروفايل المستعرض لمنع ضياعه عند تنشيط الصفحة (Refresh)
         let viewingProfileId = localStorage.getItem('viewing_profile_id') || null;
         let viewingProfileName = localStorage.getItem('viewing_profile_name') || null;
 
@@ -448,8 +450,11 @@
         }
 
         function getOrCreateCurrentDriver() {
+            let savedName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
+            let savedRole = localStorage.getItem('current_user_role') || (savedName === 'المدير' ? 'admin' : 'سائق');
+            
             let activeTargetId = viewingProfileId ? viewingProfileId : loggedInDriverId;
-            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+            let activeTargetName = viewingProfileName ? viewingProfileName : savedName;
             
             let drv = null;
 
@@ -458,24 +463,59 @@
                     drv = appData.drivers.find(d => d.id === activeTargetId);
                 }
                 if (!drv && activeTargetName) {
-                    drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
+                    drv = appData.drivers.find(d => 
+                        (d.name && d.name.trim() === activeTargetName.trim()) || 
+                        (activeTargetName === 'المدير' && (d.role === 'admin' || d.phone === '+201114099799'))
+                    );
                 }
             }
 
-            // الاعتماد حصرياً على البيانات المخزنة محلياً إذا لم تصل بيانات السحاب فوراً، ودون فرض بيانات المدير
+            if (!drv && activeTargetName === 'المدير') {
+                drv = (appData.drivers || []).find(d => d.role === 'admin' || d.phone === '+201114099799');
+            }
+
             if (!drv) {
-                return {
-                    id: activeTargetId || '1',
+                if (!appData.drivers || appData.drivers.length === 0) {
+                    return {
+                        id: activeTargetId || '1',
+                        name: activeTargetName,
+                        phone: '+201114099799',
+                        role: savedRole,
+                        title: 'أسطورة الطريق',
+                        status: 'متاح 🟢',
+                        avatar: localStorage.getItem('cached_avatar') || '',
+                        cover: localStorage.getItem('cached_cover') || '',
+                        coverHeight: 180,
+                        advances: 0
+                    };
+                }
+
+                let newId = activeTargetId || String(Date.now());
+                drv = {
+                    id: newId,
                     name: activeTargetName,
-                    phone: localStorage.getItem('logged_in_driver_phone') || '',
-                    role: localStorage.getItem('current_user_role') || 'driver',
-                    title: 'سائق معتمد',
+                    phone: activeTargetName === 'المدير' ? '+201114099799' : '01012345678',
+                    pin: '01036',
+                    role: savedRole,
+                    title: activeTargetName === 'المدير' ? 'أسطورة الطريق' : 'سائق معتمد',
                     status: 'متاح 🟢',
-                    avatar: localStorage.getItem('cached_avatar') || '',
-                    cover: localStorage.getItem('cached_cover') || '',
+                    avatar: '',
+                    cover: '',
                     coverHeight: 180,
                     advances: 0
                 };
+                
+                localStorage.setItem('logged_in_driver_id', newId);
+                localStorage.setItem('logged_in_driver_name', drv.name);
+                db.collection('drivers').doc(newId).set(drv, { merge: true });
+            } else {
+                localStorage.setItem('logged_in_driver_id', drv.id);
+                localStorage.setItem('logged_in_driver_name', drv.name);
+                loggedInDriverId = drv.id;
+                loggedInDriverName = drv.name;
+                
+                if (drv.avatar) localStorage.setItem('cached_avatar', drv.avatar);
+                if (drv.cover) localStorage.setItem('cached_cover', drv.cover);
             }
             return drv;
         }
@@ -485,7 +525,7 @@
 
             document.getElementById('gplus-name-display').innerText = drv.name;
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role}`;
+            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone} | الرتبة: ${drv.role}`;
             
             let myShipments = (appData.shipments || []).filter(s => s.assignedDriver === drv.name || s.name === drv.name);
             document.getElementById('gplus-stat-shipments').innerText = myShipments.length;
@@ -521,7 +561,7 @@
                 document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي';
                 
                 document.getElementById('my-edit-name').value = drv.name;
-                document.getElementById('my-edit-phone').value = drv.phone || '';
+                document.getElementById('my-edit-phone').value = drv.phone;
                 
                 const titleSelect = document.getElementById('my-edit-title');
                 titleSelect.innerHTML = '';
@@ -651,7 +691,6 @@
             
             loggedInDriverName = drv.name;
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-            localStorage.setItem('logged_in_driver_phone', drv.phone);
             localStorage.setItem('logged_in_driver_id', drv.id);
             
             db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
@@ -943,6 +982,7 @@
                 item.onclick = () => { 
                     viewingProfileId = d.id; 
                     viewingProfileName = d.name; 
+                    // حفظ البروفايل المستعرض في الذاكرة الدائمة لمنع ضياعه عند الـ Refresh
                     localStorage.setItem('viewing_profile_id', d.id);
                     localStorage.setItem('viewing_profile_name', d.name);
                     renderMyAccount(); 
