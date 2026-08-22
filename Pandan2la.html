@@ -173,7 +173,7 @@
             <label style="display:flex; align-items:center; gap:6px; margin:6px 0; font-size:9px; cursor:pointer;">
                 <input type="checkbox" id="vis-is-deferred" style="width:auto; margin:0;"> ⏳ ترحيل هذه الرحلة كفاتورة أجل (قسم الأجل)
             </label>
-            <button type="submit" class="btn-success" style="margin-top: 4px;">حجز وإرسال للإدارة 🚀</button>
+            <button type="submit" class="btn-success" style="margin-top: 4px;">حجز وإرسال للحساب 🚀</button>
         </form>
     </div>
 </div>
@@ -203,7 +203,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع مزامنة الحساب المستقل وعزل البيانات...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع العزل التام وحماية الخصوصية لكل حساب...</span>
                 </div>
             </div>
         </div>
@@ -215,9 +215,9 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">جاري مزامنة الحساب...</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متزامن مستقل</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> معزول وآمن</span>
                     </div>
-                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة الرتبة والثروة</span>
+                    <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة الصلاحيات</span>
                 </div>
             </div>
             <div style="display: flex; gap: 4px;">
@@ -239,11 +239,11 @@
 
         <div class="stats-grid" id="admin-stats">
             <div class="stat-card" onclick="openStatDetailModal('shipments')">
-                <h4>الشحنات</h4>
+                <h4>شحناتك</h4>
                 <p id="stat-shipments">0</p>
             </div>
             <div class="stat-card" style="border-right-color: var(--green-success);" onclick="openStatDetailModal('revenue')">
-                <h4>الإيرادات</h4>
+                <h4>إيراداتك</h4>
                 <p id="stat-revenue">0</p>
             </div>
             <div class="stat-card" style="border-right-color: var(--purple-color);" onclick="openStatDetailModal('net_profit')">
@@ -251,11 +251,11 @@
                 <p id="stat-net-profit">0</p>
             </div>
             <div class="stat-card" style="border-right-color: var(--red-danger);" onclick="switchSection('deferredInvoices')">
-                <h4>الديون والأجل</h4>
+                <h4>أجلك وديونك</h4>
                 <p id="stat-debts">0</p>
             </div>
             <div class="stat-card" style="border-right-color: var(--green-success);" onclick="openStatDetailModal('cash')">
-                <h4>الخزينة</h4>
+                <h4>خزينتك</h4>
                 <p id="stat-cash">0</p>
             </div>
         </div>
@@ -388,7 +388,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تاما لكل مستخدم -->
+<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تاما لكل مستخدم ومدير ومشرف -->
 <script>
     window._isSavingLocally = false;
 
@@ -532,7 +532,45 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة المحدث لضمان جلب السائق المتصل بدقة
+    // 🔒 دالة مركزية للتحقق مما إذا كان المستخدم الحالي مديراً أم لا
+    function isUserAdmin() {
+        let user = window.currentLoggedInUser || {};
+        let role = String(user.role || '').toLowerCase();
+        return (role === 'admin' || role === 'مدير نظام' || role === 'مدير' || user.id === '1');
+    }
+    window.isUserAdmin = isUserAdmin;
+
+    // 🔒 دالة لتصفية الشحنات بناءً على المستخدم الحالي (للمدير تظهر الكل، وللمشرف والسائق تظهر شحناته الخاصة فقط)
+    function getUserFilteredShipments(dataObj) {
+        let all = getAllShipments(dataObj);
+        if (isUserAdmin()) return all;
+        let user = window.currentLoggedInUser || {};
+        let currentUserId = String(user.id || '');
+        let userName = String(user.name || '').trim();
+        return all.filter(s => {
+            let sUserId = String(s.userId || '');
+            let sDriver = String(s.driver || '').trim();
+            return (currentUserId && sUserId === currentUserId) || (userName && sDriver === userName);
+        });
+    }
+    window.getUserFilteredShipments = getUserFilteredShipments;
+
+    // 🔒 دالة لتصفية أي قوائم أخرى (مثل الخزينة والمصروفات والأجل) لكل مستخدم بشكل آمن
+    function getUserFilteredList(list, dataKey) {
+        let items = list || appStateData()[dataKey] || [];
+        if (isUserAdmin()) return items;
+        let user = window.currentLoggedInUser || {};
+        let currentUserId = String(user.id || '');
+        let userName = String(user.name || '').trim();
+        return items.filter(item => {
+            let itemUserId = String(item.userId || '');
+            let itemName = String(item.name || item.accountOwner || item.driver || '').trim();
+            return (currentUserId && itemUserId === currentUserId) || (userName && itemName === userName);
+        });
+    }
+    window.getUserFilteredList = getUserFilteredList;
+
+    // 🔒 محرك مزامنة الحسابات المستقلة المحدث
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -541,7 +579,6 @@
             return;
         }
 
-        // التحقق أولاً من معرف السائق المخزن سابقاً عبر المنصة الأم
         const savedDriverId = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('na2la_active_driver_id');
         if (savedDriverId) {
             fetchDriverData(savedDriverId.trim());
@@ -564,7 +601,6 @@
                         break;
                     }
                 } catch(e) {
-                    // لو القيمة المخزنة نصية (مثل الاسم أو المعرف مباشرة)
                     if (typeof saved === 'string' && saved.trim() !== '') {
                         fetchDriverData(saved.trim());
                         return;
@@ -594,7 +630,6 @@
             return;
         }
         
-        // إذا لم توجد أي جلسة سابقة، لا نفترض المدير عشوائياً بل نبحث أو نطلب التحديد
         fetchDriverData('1');
     }
 
@@ -618,7 +653,6 @@
                 return;
             }
 
-            // البحث الشامل في مجموعة drivers ومجموعة platform_users بالمعرف أو الهاتف أو الاسم
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
             let snapshot = await getDocs(q);
 
@@ -656,29 +690,30 @@
     }
 
     function openSwitchAccountPrompt() {
-        let inputId = prompt("أدخل معرف السائق (ID) أو رقم الهاتف لمزامنة الحساب (أو '1' للمدير):");
+        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة (أو '1' للمدير):");
         if (inputId && inputId.trim() !== "") {
             fetchDriverData(inputId.trim());
         }
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // 🔒 المزامنة السحابية المفصولة والآمنة حسب معرف المستخدم الحالي (userId)
+    // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة وحساب المستخدم
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
         let currentUser = window.currentLoggedInUser || { id: '', role: 'driver' };
-        let role = String(currentUser.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || currentUser.id === '1');
+        let isAdmin = isUserAdmin();
         let currentUserId = String(currentUser.id || '');
 
         try {
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (window._isSavingLocally || !docSnap.exists()) return;
                 const data = docSnap.data();
-                if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
-                if (data.customers) appData.customers = data.customers;
+                if (isAdmin) {
+                    if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
+                    if (data.customers) appData.customers = data.customers;
+                }
                 window.appData = appData;
                 renderStats();
                 refreshActiveSection();
@@ -807,7 +842,9 @@
                 }
             }
 
-            await setDoc(doc(window.db, "appStore", "mainState"), appData, { merge: true });
+            if (isUserAdmin()) {
+                await setDoc(doc(window.db, "appStore", "mainState"), appData, { merge: true });
+            }
         } catch (err) { console.error(err); }
 
         localStorage.setItem('transportAppV90_6', JSON.stringify(appData));
@@ -851,8 +888,8 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بغرفة باندا والمزامنة المستقلة - إجمالي شحناتك: ${shipmentsList.length}</span>`];
+        let shipmentsList = getUserFilteredShipments(data);
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بنظام العزل التام - إجمالي شحناتك الخاصة: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -881,18 +918,23 @@
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', title: 'سائق مستقل', avatar: '' };
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
+        let user = window.currentLoggedInUser || { name: 'مستقل', role: 'driver', title: 'سائق', avatar: '' };
+        let isAdmin = isUserAdmin();
+        let roleName = String(user.role || '').toLowerCase();
         
         document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
-        document.getElementById('header-role-badge').innerText = isAdmin ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || user.role || 'سائق مستقل'}`;
+        
+        let roleBadgeText = '👨‍✈️ سائق';
+        if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
+        else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
+        
+        document.getElementById('header-role-badge').innerText = roleBadgeText;
 
         const avatarEl = document.getElementById('header-avatar-btn');
         if (user.avatar && String(user.avatar).trim() !== '') {
             avatarEl.innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
         } else {
-            avatarEl.innerHTML = isAdmin ? '🐼' : '👨‍✈️';
+            avatarEl.innerHTML = isAdmin ? '🐼' : (roleName.includes('مشرف') ? '🛡️' : '👨‍✈️');
         }
 
         renderSidebarByRole(isAdmin);
@@ -905,34 +947,41 @@
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
         
-        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : '👨‍✈️ قائمة حساب السائق المتصل';
+        let user = window.currentLoggedInUser || {};
+        let roleName = String(user.role || '').toLowerCase();
+        let isSupervisor = roleName.includes('مشرف') || roleName === 'supervisor';
+
+        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : (isSupervisor ? '🛡️ لوحة المشرف (بيانات معزولة)' : '👨‍✈️ قائمة السائق المتصل');
 
         if (isAdmin) {
             sidebarList.innerHTML = `
-                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ إدارة الأجل والفواتير المتأخرة</button>
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة الشحنات وبوليصات النقل</button>
-                <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا والتحكم الشامل</button>
-                <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة للشحنات</button>
+                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ إدارة الأجل والفواتير</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة جميع الشحنات</button>
+                <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا والتحكم</button>
+                <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة</button>
                 <button onclick="switchSection('centralChat'); toggleSidebar();">📢 الشات المركزي وبث الرسائل</button>
-                <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة الألقاب وتعيين الحسابات</button>
-                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة الخطي</button>
+                <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة الألقاب والصلاحيات</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
                 <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول وصيانة السيارات</button>
-                <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والمقبوضات والحسابات</button>
-                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات التشغيلية والوقود</button>
-                <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون المستحقة</button>
-                <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل الذكية</button>
-                <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي للصيانة</button>
-                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات والرحلات العامة</button>
+                <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والحسابات</button>
+                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات والوقود</button>
+                <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون</button>
+                <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل</button>
+                <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي</button>
+                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
                 <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
-                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية ومقرات الشحنات</button>
+                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
                 <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
-                <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات والأحداث</button>
+                <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات</button>
             `;
         } else {
+            // المشرف أو السائق يرى فقط شحناته وأجله وخدماته الخاصة دون تداخل
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي فقط</button>
                 <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
-                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تحديث مراحل الشحنة</button>
+                <button onclick="switchSection('treasury'); toggleSidebar();">💵 خزينتي وحساباتي النقدية</button>
+                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ مصروفاتي التشغيلية</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع ومراسلة الشحنات</button>
                 <button onclick="switchSection('chat'); toggleSidebar();">💬 شات الأسطول الفوري</button>
                 <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
                 <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
@@ -953,7 +1002,8 @@
             `;
         } else {
             navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
+                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>شحناتي</span></div>
+                <div class="nav-item" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
                 <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-location-crosshairs"></i><span>التتبع</span></div>
                 <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
             `;
@@ -976,16 +1026,11 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function renderStats() {
-        let user = window.currentLoggedInUser || { id: '', role: 'driver' };
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipments = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
-        let expenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
-        let treasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
-        let deferredList = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
+        let shipments = getUserFilteredShipments(data);
+        let expenses = getUserFilteredList(data.expenses, 'expenses');
+        let treasury = getUserFilteredList(data.treasury, 'treasury');
+        let deferredList = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
 
         let rev = shipments.reduce((s, x) => s + getSafeAmount(x), 0);
         let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
@@ -1013,42 +1058,39 @@
         const content = document.getElementById('main-content');
         if(!content) return;
         let data = appStateData();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
+        let isAdmin = isUserAdmin();
 
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
 
-        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && !isAdmin) {
+        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl') && !isAdmin) {
             showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
             sectionId = 'shipments';
         }
         
         if (sectionId === 'deferredInvoices') {
-            let deferredList = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
+            let deferredList = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
             let totalDeferred = deferredList.filter(x => getSafeStatus(x) !== 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
             let totalPaidMonth = deferredList.filter(x => getSafeStatus(x) === 'paid').reduce((s, x) => s + getSafeAmount(x), 0);
 
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <h3 style="margin:0; color:var(--yellow-warning);">⏳ إدارة الأجل والفواتير المتأخرة</h3>
-                        <button class="btn-warning btn-sm" style="color:#000; font-weight:bold;" onclick="openModal('deferredModal')">+ إضافة فاتورة أجل جديدة</button>
+                        <h3 style="margin:0; color:var(--yellow-warning);">⏳ فواتير الأجل الخاصة بحسابك</h3>
+                        <button class="btn-warning btn-sm" style="color:#000; font-weight:bold;" onclick="openModal('deferredModal')">+ إضافة فاتورة أجل</button>
                     </div>
-                    <p style="font-size:9px; color:var(--text-muted); margin-bottom:8px;">متابعة حسابات العملاء الآجلة، فحص المتأخرات تلقائياً، وإرسال تنبيهات السداد الفورية عبر واتساب:</p>
+                    <p style="font-size:9px; color:var(--text-muted); margin-bottom:8px;">متابعة حساباتك الآجلة، فحص المستحقات وتنبيهات السداد عبر واتساب:</p>
                     
                     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--yellow-warning); text-align:center;">
-                            <span style="font-size:8px; color:var(--text-muted);">إجمالي الأجل المستحق</span>
+                            <span style="font-size:8px; color:var(--text-muted);">الأجل المستحق</span>
                             <p style="font-size:11px; font-weight:bold; color:var(--yellow-warning); margin-top:2px;">${totalDeferred.toLocaleString()} ج.م</p>
                         </div>
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--red-danger); text-align:center;">
-                            <span style="font-size:8px; color:var(--text-muted);">المتأخرات الخطيرة</span>
+                            <span style="font-size:8px; color:var(--text-muted);">المتأخرات</span>
                             <p style="font-size:11px; font-weight:bold; color:var(--red-danger); margin-top:2px;">0 ج.م</p>
                         </div>
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--green-success); text-align:center;">
-                            <span style="font-size:8px; color:var(--text-muted);">المحصل هذا الشهر</span>
+                            <span style="font-size:8px; color:var(--text-muted);">المحصل</span>
                             <p style="font-size:11px; font-weight:bold; color:var(--green-success); margin-top:2px;">${totalPaidMonth.toLocaleString()} ج.م</p>
                         </div>
                     </div>
@@ -1064,7 +1106,7 @@
                 </div>
 
                 <div class="card">
-                    <h3><span>📋 قائمة فواتير الأجل المتأخرة</span></h3>
+                    <h3><span>📋 قائمة فواتير الأجل المعزولة</span></h3>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -1118,9 +1160,9 @@
                     <h3><span>📊 ملخص غرفة باندا للبيانات الحية</span></h3>
                     <div style="font-size: 10px; line-height: 1.6;">
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
-                        <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
-                        <p>⏳ إجمالي فواتير الأجل: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة المستقلة: <strong style="color:var(--green-success);">يعمل بكفاءة وعزل سحابي تام حسب معرف المستخدم</strong></p>
+                        <p>📦 إجمالي الشحنات في المنصة: <strong>${getAllShipments(data).length} شحنة</strong></p>
+                        <p>⏳ إجمالي فواتير الأجل العامة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
+                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">يعمل بكفاءة تامة لكل حساب مستقل</strong></p>
                     </div>
                 </div>
             `;
@@ -1128,7 +1170,7 @@
             const uniqueClients = [...new Set(shipmentsList.map(s => getSafeName(s)))];
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--green-success);">
-                    <h3 style="color:var(--green-success);">📑 قسم الفواتير المجمعة للشحنات</h3>
+                    <h3 style="color:var(--green-success);">📑 قسم الفواتير المجمعة لشحناتك</h3>
                     <form onsubmit="generateConsolidatedInvoice(event)">
                         <label style="font-size:9px; font-weight:bold;">اختر العميل:</label>
                         <select id="ci-client" onchange="loadClientShipmentsForConsolidation()" required style="margin-bottom:5px;">
@@ -1144,12 +1186,12 @@
                 </div>
 
                 <div class="card">
-                    <h3><span>📂 سجل الفواتير المجمعة المصدرة</span></h3>
+                    <h3><span>📂 سجل الفواتير المجمعة الخاصة بك</span></h3>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>عدد الشحنات</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.consolidatedInvoices || []).map((ci, index) => `
+                                ${(getUserFilteredList(data.consolidatedInvoices, 'consolidatedInvoices')).map((ci, index) => `
                                     <tr>
                                         <td>#${String(ci.id || index).slice(-4)}</td>
                                         <td>${getSafeName(ci)}</td>
@@ -1161,7 +1203,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1177,7 +1219,7 @@
                             <option value="إعلان رسمي 🔵">إعلان رسمي 🔵</option>
                             <option value="توجيه تشغيلي 🟢">توجيه تشغيلي 🟢</option>
                         </select>
-                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات المنصة وغرفة باندا..." required style="height: 60px;"></textarea>
+                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات المنصة..." required style="height: 60px;"></textarea>
                         <button type="submit" class="btn-success">إرسال وبث فوري لكافة الحسابات 📡</button>
                     </form>
                 </div>
@@ -1198,7 +1240,7 @@
         } else if (sectionId === 'cargoTracking') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--purple-color);">
-                    <h3 style="color:var(--purple-color);">📍 نظام تتبع مراحل الشحنة الخطي (Live Timeline)</h3>
+                    <h3 style="color:var(--purple-color);">📍 نظام تتبع مراحل الشحنة الخاص بك (Live Timeline)</h3>
                     <select id="track-shipment-select" onchange="renderTrackingDetails()" style="margin-bottom:8px;">
                         <option value="">-- اختر الشحنة للتتبع --</option>
                         ${shipmentsList.map((s, idx) => `<option value="${idx}">${getSafeName(s)} - ${getSafeDesc(s)}</option>`).join('')}
@@ -1285,7 +1327,7 @@
                     </form>
                 </div>
                 <div class="card">
-                    <h3><span>📋 قائمة الشحنات الخاصة بك</span></h3>
+                    <h3><span>📋 قائمة شحناتك الخاصة</span></h3>
                     <div style="margin-bottom:6px;">
                         <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة..." oninput="filterShipmentsTable()">
                     </div>
@@ -1327,17 +1369,17 @@
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
+                                ${(getUserFilteredList(data.trucks, 'trucks')).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
                 </div>
             `;
         } else if (sectionId === 'treasury') {
-            let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
+            let userTreasury = getUserFilteredList(data.treasury, 'treasury');
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💵 الخزينة والمقبوضات الخاصة بحسابك</span></h3>
+                    <h3><span>💵 خزينتك وحركاتك النقدية المعزولة</span></h3>
                     <form onsubmit="saveTreasury(event)">
                         <select id="t-type"><option value="in">إيداع (+)</option><option value="out">سحب (-)</option></select>
                         <input type="number" id="t-amount" placeholder="المبلغ (ج.م)" required>
@@ -1366,10 +1408,10 @@
                 </div>
             `;
         } else if (sectionId === 'expenses') {
-            let userExpenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
+            let userExpenses = getUserFilteredList(data.expenses, 'expenses');
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>⛽ المصروفات التشغيلية والوقود</span></h3>
+                    <h3><span>⛽ مصروفاتك التشغيلية والوقود الخاصة بك</span></h3>
                     <form onsubmit="saveExpense(event)">
                         <input type="text" id="exp-title" placeholder="عنوان المصروف (مثال: تمويل سولار)" required>
                         <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
@@ -1398,7 +1440,7 @@
         } else if (sectionId === 'customers') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>👥 العملاء والديون المستحقة</span></h3>
+                    <h3><span>👥 العملاء والديون المرتبطة بك</span></h3>
                     <form onsubmit="saveCustomer(event)">
                         <input type="text" id="cust-name" placeholder="اسم العميل" required>
                         <input type="tel" id="cust-phone" placeholder="رقم الهاتف" required>
@@ -1409,7 +1451,7 @@
                         <table>
                             <thead><tr><th>العميل</th><th>الهاتف</th><th>الديون المستحقة</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.customers || []).map((c, idx) => `
+                                ${(getUserFilteredList(data.customers, 'customers')).map((c, idx) => `
                                     <tr>
                                         <td>${getSafeName(c)}</td>
                                         <td>${getSafePhone(c)}</td>
@@ -1419,7 +1461,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء</td></tr>'}
+                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1492,7 +1534,7 @@
         } else if (sectionId === 'map') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>🗺️ الخريطة الحية ومقرات التوصيل والشحنات</span></h3>
+                    <h3><span>🗺️ الخريطة الحية ومقرات شحناتك</span></h3>
                     <div id="map"></div>
                 </div>
             `;
@@ -1501,8 +1543,8 @@
             content.innerHTML = `
                 <div class="card">
                     <h3><span>📊 التقارير والفواتير وتصدير Excel</span></h3>
-                    <button class="btn-success" onclick="exportToExcel()" style="margin-bottom:6px;">📊 تصدير البيانات إلى Excel</button>
-                    <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال التقرير اليومي عبر واتساب</button>
+                    <button class="btn-success" onclick="exportToExcel()" style="margin-bottom:6px;">📊 تصدير شحناتك إلى Excel</button>
+                    <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال تقريرك اليومي عبر واتساب</button>
                 </div>
             `;
         } else if (sectionId === 'auditLogs') {
@@ -1525,14 +1567,18 @@
 
     function markDeferredAsPaid(index) {
         let data = appStateData();
-        if (!data.deferredInvoices || !data.deferredInvoices[index]) return;
+        let deferredList = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
+        let item = deferredList[index];
+        if(!item) return;
         
-        data.deferredInvoices[index].status = 'paid';
-        data.deferredInvoices[index].remainingAmount = 0;
-        data.deferredInvoices[index].remaining = 0;
-        
-        saveDataAll();
-        showToast('تم تسديد الفاتورة بنجاح ومزامنتها سحابياً! ✅');
+        let globalIndex = data.deferredInvoices.findIndex(d => d.id === item.id);
+        if(globalIndex !== -1) {
+            data.deferredInvoices[globalIndex].status = 'paid';
+            data.deferredInvoices[globalIndex].remainingAmount = 0;
+            data.deferredInvoices[globalIndex].remaining = 0;
+            saveDataAll();
+            showToast('تم تسديد الفاتورة بنجاح ومزامنتها سحابياً! ✅');
+        }
     }
 
     function saveDeferredInvoice(e) {
@@ -1572,14 +1618,9 @@
         const query = document.getElementById('def-search').value.toLowerCase();
         const filter = document.getElementById('def-filter').value;
         let data = appStateData();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
-        let list = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
+        let deferredList = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
         
-        let filtered = list.filter(d => {
+        let filtered = deferredList.filter(d => {
             let name = getSafeName(d).toLowerCase();
             let id = String(d.id || '').toLowerCase();
             let matchesQuery = name.includes(query) || id.includes(query);
@@ -1615,7 +1656,8 @@
 
     function sendDeferredWhatsApp(index) {
         let data = appStateData();
-        const d = (data.deferredInvoices || [])[index];
+        let deferredList = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
+        const d = deferredList[index];
         if(!d) return;
         let name = getSafeName(d);
         let phone = getSafePhone(d);
@@ -1800,12 +1842,7 @@
     function filterShipmentsTable() {
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         let data = appStateData();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         const tbody = document.getElementById('shipments-table-body');
         const filtered = shipmentsList.filter(s => getSafeName(s).toLowerCase().includes(query) || getSafeDesc(s).toLowerCase().includes(query));
         
@@ -1844,7 +1881,7 @@
         const item = document.getElementById('s-item').value;
         const price = Number(document.getElementById('s-price').value || 0);
         const priority = document.getElementById('s-priority').value;
-        const driver = document.getElementById('s-driver').value;
+        const driver = document.getElementById('s-driver').value || (window.currentLoggedInUser ? window.currentLoggedInUser.name : '');
         const isDeferred = document.getElementById('s-is-deferred')?.checked || false;
         let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
 
@@ -1872,10 +1909,10 @@
         };
 
         let data = appStateData();
-        let list = getAllShipments(data);
-        list.unshift(newShipment);
-        data.shipments = list;
-        data.docs = list;
+        if(!data.shipments) data.shipments = [];
+        if(!data.docs) data.docs = [];
+        data.shipments.unshift(newShipment);
+        data.docs.unshift(newShipment);
 
         if (isDeferred) {
             if(!data.deferredInvoices) data.deferredInvoices = [];
@@ -1903,14 +1940,9 @@
     }
 
     function openInvoiceImageModal(index) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
-        const s = list[index];
+        let shipmentsList = getUserFilteredShipments(data);
+        const s = shipmentsList[index];
         if(!s) return;
         document.getElementById('inv-id').innerText = `#${String(s.id || index).slice(-4)}`;
         document.getElementById('inv-name').innerText = getSafeName(s);
@@ -1944,13 +1976,20 @@
 
     function payCustomerDebt(index) {
         let data = appStateData();
+        let customersList = getUserFilteredList(data.customers, 'customers');
+        let customer = customersList[index];
+        if(!customer) return;
+
         let amount = prompt('أدخل المبلغ المراد سداده:', '0');
         if(amount && !isNaN(amount)) {
-            let currentDebt = data.customers[index].debt ?? getSafeAmount(data.customers[index]);
-            data.customers[index].debt = Math.max(0, Number(currentDebt) - Number(amount));
-            saveDataAll();
-            showToast('تم سداد جزء من الدين بنجاح!');
-            switchSection('customers');
+            let globalIndex = data.customers.findIndex(c => c.id === customer.id);
+            if(globalIndex !== -1) {
+                let currentDebt = data.customers[globalIndex].debt ?? getSafeAmount(data.customers[globalIndex]);
+                data.customers[globalIndex].debt = Math.max(0, Number(currentDebt) - Number(amount));
+                saveDataAll();
+                showToast('تم سداد جزء من الدين بنجاح!');
+                switchSection('customers');
+            }
         }
     }
 
@@ -1959,13 +1998,9 @@
         const title = document.getElementById('stat-modal-title');
         const body = document.getElementById('stat-modal-body');
         modal.style.display = 'flex';
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
 
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
 
         if (type === 'shipments') {
             title.innerText = '📦 تفاصيل شحناتك الحالية';
@@ -1974,20 +2009,20 @@
                 `</tbody></table></div>`;
         } else if (type === 'cash') {
             title.innerText = '💵 تفاصيل حركات الخزينة الخاصة بك';
-            let userTreasury = isAdmin ? (data.treasury || []) : (data.treasury || []).filter(t => String(t.userId || '') === currentUserId);
+            let userTreasury = getUserFilteredList(data.treasury, 'treasury');
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>` +
                 userTreasury.map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'debts') {
             title.innerText = '⚠️ فواتير الأجل والديون المعلقة';
-            let userDeferred = isAdmin ? (data.deferredInvoices || []) : (data.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
+            let userDeferred = getUserFilteredList(data.deferredInvoices, 'deferredInvoices');
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>الديون والأجل</th></tr></thead><tbody>` +
                 userDeferred.map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
             title.innerText = '📈 تحليل إيراداتك وأرباحك';
             let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
-            let userExpenses = isAdmin ? (data.expenses || []) : (data.expenses || []).filter(e => String(e.userId || '') === currentUserId);
+            let userExpenses = getUserFilteredList(data.expenses, 'expenses');
             let exp = userExpenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
             body.innerHTML = `<div style="font-size:11px; line-height:1.6;">
                 <p>💰 إجمالي الإيرادات: <strong>${rev.toLocaleString()} ج.م</strong></p>
@@ -1998,13 +2033,8 @@
     }
 
     function openEditModal(type, index) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let targetList = type === 'shipments' ? (isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId)) : (isAdmin ? data[type] : (data[type] || []).filter(x => String(x.userId || '') === currentUserId));
+        let targetList = type === 'shipments' ? getUserFilteredShipments(data) : getUserFilteredList(data[type], type);
         let item = targetList ? targetList[index] : null;
         if(!item) return;
 
@@ -2051,22 +2081,43 @@
         let data = appStateData();
 
         if(type === 'shipments') {
-            let list = getAllShipments(data);
-            list[index].name = document.getElementById('edit-name').value;
-            list[index].accountOwner = list[index].name;
-            list[index].address = document.getElementById('edit-address').value;
-            list[index].item = document.getElementById('edit-item').value;
-            list[index].description = list[index].item;
-            list[index].price = Number(document.getElementById('edit-price').value);
-            list[index].amount = list[index].price;
-            data.shipments = list;
-            data.docs = list;
+            let filteredList = getUserFilteredShipments(data);
+            let targetItem = filteredList[index];
+            if(targetItem) {
+                let globalIndex = getAllShipments(data).findIndex(s => s.id === targetItem.id);
+                if(globalIndex !== -1) {
+                    let list = getAllShipments(data);
+                    list[globalIndex].name = document.getElementById('edit-name').value;
+                    list[globalIndex].accountOwner = list[globalIndex].name;
+                    list[globalIndex].address = document.getElementById('edit-address').value;
+                    list[globalIndex].item = document.getElementById('edit-item').value;
+                    list[globalIndex].description = list[globalIndex].item;
+                    list[globalIndex].price = Number(document.getElementById('edit-price').value);
+                    list[globalIndex].amount = list[globalIndex].price;
+                    data.shipments = list;
+                    data.docs = list;
+                }
+            }
         } else if(type === 'treasury') {
-            data.treasury[index].desc = document.getElementById('edit-desc').value;
-            data.treasury[index].amount = Number(document.getElementById('edit-amount').value);
+            let filteredList = getUserFilteredList(data.treasury, 'treasury');
+            let targetItem = filteredList[index];
+            if(targetItem) {
+                let globalIndex = data.treasury.findIndex(t => t.id === targetItem.id);
+                if(globalIndex !== -1) {
+                    data.treasury[globalIndex].desc = document.getElementById('edit-desc').value;
+                    data.treasury[globalIndex].amount = Number(document.getElementById('edit-amount').value);
+                }
+            }
         } else if(type === 'expenses') {
-            data.expenses[index].title = document.getElementById('edit-title').value;
-            data.expenses[index].amount = Number(document.getElementById('edit-amount').value);
+            let filteredList = getUserFilteredList(data.expenses, 'expenses');
+            let targetItem = filteredList[index];
+            if(targetItem) {
+                let globalIndex = data.expenses.findIndex(ex => ex.id === targetItem.id);
+                if(globalIndex !== -1) {
+                    data.expenses[globalIndex].title = document.getElementById('edit-title').value;
+                    data.expenses[globalIndex].amount = Number(document.getElementById('edit-amount').value);
+                }
+            }
         }
 
         saveDataAll();
@@ -2078,7 +2129,7 @@
         const clientName = document.getElementById('ci-client').value;
         const container = document.getElementById('ci-shipments-checkboxes');
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = getUserFilteredShipments(data);
         if(!clientName) {
             container.innerHTML = '<p style="color:var(--text-muted); text-align:center;">اختر العميل أولاً لعرض شحناته</p>';
             return;
@@ -2118,7 +2169,7 @@
         totalAmount = Math.max(0, totalAmount - discount);
 
         let data = appStateData();
-        let shipmentsList = getAllShipments(data);
+        let shipmentsList = getUserFilteredShipments(data);
         const matchedShipment = shipmentsList.find(s => getSafeName(s) === clientName);
         if(matchedShipment) clientPhone = getSafePhone(matchedShipment);
 
@@ -2192,13 +2243,8 @@
     function renderTrackingDetails() {
         const index = document.getElementById('track-shipment-select').value;
         const container = document.getElementById('tracking-timeline-view');
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         if(index === '') {
             container.innerHTML = '<p style="font-size:9px; text-align:center; color:var(--text-muted);">الرجاء اختيار شحنة لعرض الخط الزمني</p>';
             return;
@@ -2222,19 +2268,21 @@
 
     function updateShipmentMilestone(index) {
         const newMilestone = document.getElementById('next-milestone').value;
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let list = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
-        list[index].milestone = newMilestone;
-        data.shipments = list;
-        data.docs = list;
-        saveDataAll();
-        showToast('تم تحديث مرحلة الشحنة بنجاح!');
-        renderTrackingDetails();
+        let shipmentsList = getUserFilteredShipments(data);
+        let target = shipmentsList[index];
+        if(!target) return;
+
+        let globalIndex = getAllShipments(data).findIndex(s => s.id === target.id);
+        if(globalIndex !== -1) {
+            let list = getAllShipments(data);
+            list[globalIndex].milestone = newMilestone;
+            data.shipments = list;
+            data.docs = list;
+            saveDataAll();
+            showToast('تم تحديث مرحلة الشحنة بنجاح!');
+            renderTrackingDetails();
+        }
     }
 
     function sendCentralBroadcast(e) {
@@ -2305,17 +2353,31 @@
         if (window.db && window.firebaseModules) {
             const { doc, deleteDoc } = window.firebaseModules;
             if(type === 'shipments') {
-                let list = getAllShipments(data);
-                let deletedItem = list.splice(index, 1)[0];
-                data.shipments = list;
-                data.docs = list;
-                if(deletedItem && deletedItem.id) {
-                    await deleteDoc(doc(window.db, 'shipments', String(deletedItem.id))).catch(e => console.error(e));
+                let filteredList = getUserFilteredShipments(data);
+                let target = filteredList[index];
+                if(target) {
+                    let list = getAllShipments(data);
+                    let globalIndex = list.findIndex(s => s.id === target.id);
+                    if(globalIndex !== -1) {
+                        let deletedItem = list.splice(globalIndex, 1)[0];
+                        data.shipments = list;
+                        data.docs = list;
+                        if(deletedItem && deletedItem.id) {
+                            await deleteDoc(doc(window.db, 'shipments', String(deletedItem.id))).catch(e => console.error(e));
+                        }
+                    }
                 }
             } else if(data[type]) {
-                let deletedItem = data[type].splice(index, 1)[0];
-                if(deletedItem && deletedItem.id) {
-                    await deleteDoc(doc(window.db, type, String(deletedItem.id))).catch(e => console.error(e));
+                let filteredList = getUserFilteredList(data[type], type);
+                let target = filteredList[index];
+                if(target) {
+                    let globalIndex = data[type].findIndex(x => x.id === target.id);
+                    if(globalIndex !== -1) {
+                        let deletedItem = data[type].splice(globalIndex, 1)[0];
+                        if(deletedItem && deletedItem.id) {
+                            await deleteDoc(doc(window.db, type, String(deletedItem.id))).catch(e => console.error(e));
+                        }
+                    }
                 }
             }
         }
@@ -2352,10 +2414,10 @@
             date: new Date().toLocaleDateString('ar-EG')
         };
         let data = appStateData();
-        let list = getAllShipments(data);
-        list.unshift(newShipment);
-        data.shipments = list;
-        data.docs = list;
+        if(!data.shipments) data.shipments = [];
+        if(!data.docs) data.docs = [];
+        data.shipments.unshift(newShipment);
+        data.docs.unshift(newShipment);
 
         if (isDeferred) {
             if(!data.deferredInvoices) data.deferredInvoices = [];
@@ -2378,7 +2440,7 @@
 
         saveDataAll();
         closeModal('visitorBookingModal');
-        showToast('تم حجز الرحلة وترحيلها بنجاح!');
+        showToast('تم حجز الرحلة وترحيلها لحسابك بنجاح!');
     }
 
     function publishCommunityPost() {
@@ -2431,13 +2493,8 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         shipmentsList.forEach(s => {
             if(s.gps) {
                 const coords = s.gps.split(',').map(Number);
@@ -2472,13 +2529,8 @@
     }
 
     function showQR(index) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         const s = shipmentsList[index];
         if(!s) return;
         const box = document.getElementById('qrcode');
@@ -2488,13 +2540,8 @@
     }
 
     function exportInvoicePDF(index) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         const s = shipmentsList[index];
         if(!s) return;
         const { jsPDF } = window.jspdf;
@@ -2510,32 +2557,22 @@
     }
 
     function exportToExcel() {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v90_6.xlsx");
-        showToast('تم تصدير البيانات إلى Excel بنجاح!');
+        XLSX.utils.book_append_sheet(wb, ws, "شحناتي");
+        XLSX.writeFile(wb, "na2la_my_shipments_v90_6.xlsx");
+        showToast('تم تصدير بياناتك إلى Excel بنجاح!');
     }
 
     function exportSummaryWhatsApp() {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        let currentUserId = String(user.id || '');
-
         let data = appStateData();
-        let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
+        let shipmentsList = getUserFilteredShipments(data);
         let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
-        let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev.toLocaleString()} ج.م`;
+        let msg = `📊 *تقريرك اليومي - أسطورة الطريق*\n\nإجمالي شحناتك: ${shipmentsList.length}\nإجمالي إيراداتك: ${rev.toLocaleString()} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 </script>
 </body>
-    </html>
+</html>
