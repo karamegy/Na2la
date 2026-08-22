@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.9 PRO SECURE UNIFIED SYNC</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة V98.10 SECURE ROLES</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في منصة الخزينة المالية V98.9");
+            console.log("✅ تم المصادقة سحابياً بنجاح في منصة الخزينة المالية V98.10");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -215,8 +215,8 @@
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
             <div>
-                <div class="brand-text-styled" id="header-username">جاري مزامنة الحساب...</div>
-                <div style="font-size: 10px; color: var(--warning-color);" id="header-role-badge">🔄 مزامنة الرتبة والثروة</div>
+                <div class="brand-text-styled" id="header-username">جاري التحقق الأمني من الرتبة...</div>
+                <div style="font-size: 10px; color: var(--warning-color);" id="header-role-badge">🔄 التحقق من الصلاحيات السحابية</div>
             </div>
         </div>
 
@@ -573,21 +573,20 @@
             }, 500);
         });
 
-        // 🔒 دالة مركزية صارمة للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
+        // 🔒 دالة مركزية صارمة للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط من واقع قاعدة البيانات
         function isUserAdmin() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase().trim();
             let userId = String(user.id || '').trim();
             
-            // المدير الرئيسي حصراً هو من يملك معرف '1' أو رتبة 'admin' صريحة
-            return (userId === '1' || role === 'admin' || role === 'مدير نظام' || role === 'مدير');
+            // المدير الرئيسي حصراً هو من يملك معرف '1' أو رتبة 'admin' صريحة موثقة
+            return (userId === '1' && (role === 'admin' || role === 'مدير نظام' || role === 'مدير' || role === 'مدير النظام'));
         }
         window.isUserAdmin = isUserAdmin;
 
-        // 🔒 محرك مزامنة وجلب الحساب مع القيود الصارمة حسب الرتبة
+        // 🔒 محرك مزامنة وجلب الحساب مع التحقق الأمني الصارم من قاعدة البيانات لمنع أي تلاعب محلي
         async function initConnectedUserSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
 
             try {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -604,7 +603,7 @@
                     return;
                 }
 
-                let activeUser = null;
+                let activeIdentifier = '';
                 const savedUserKeys = [
                     'logged_in_driver_id', 'logged_in_driver_name', 'na2la_current_user_name',
                     'na2la_independent_user_v98', 'na2la_connected_user_v90', 'na2la_active_session', 
@@ -616,34 +615,26 @@
                         try {
                             let parsed = JSON.parse(saved);
                             if (parsed && (parsed.id || parsed.phone || parsed.name)) {
-                                activeUser = parsed;
+                                activeIdentifier = parsed.id || parsed.phone || parsed.name;
                                 break;
                             }
                         } catch(e) {
                             if (typeof saved === 'string' && saved.trim() !== '') {
-                                await fetchDriverData(saved.trim());
-                                return;
+                                activeIdentifier = saved.trim();
+                                break;
                             }
                         }
                     }
                 }
 
-                if (activeUser) {
-                    let userId = String(activeUser.id || '').trim();
-                    let roleStr = String(activeUser.role || '').toLowerCase().trim();
-                    if (userId !== '1' && roleStr !== 'admin' && roleStr !== 'مدير نظام' && roleStr !== 'مدير') {
-                        activeUser.role = 'driver'; // قفل أمني لمنع أي تلاعب محلي
-                    }
-                    window.currentLoggedInUser = activeUser;
-                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
+                if (activeIdentifier) {
+                    await fetchDriverData(activeIdentifier);
+                } else {
+                    // افتراضي: سائق غير مسجل (معزول تماماً وبدون أي صلاحيات مدير)
+                    window.currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد' };
                     applyUserPermissionsUI();
                     initFirestoreSync();
-                    return;
                 }
-
-                applyUserPermissionsUI();
-                initFirestoreSync();
 
             } catch (err) {
                 console.error("خطأ في مزامنة الحساب المستقل:", err);
@@ -652,56 +643,67 @@
 
         async function fetchDriverData(identifier) {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
             try {
-                let snapshot = null;
                 let foundData = null;
                 let foundId = identifier;
 
-                // البحث في مجموعة drivers
-                let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
-                snapshot = await getDocs(q);
+                // 1. محاولة جلب المستند مباشرة من مجموعة drivers إذا كان المعرف مطابقاً
+                try {
+                    let docRef = doc(window.db, "drivers", String(identifier));
+                    let docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        foundData = docSnap.data();
+                        foundId = docSnap.id;
+                    }
+                } catch(e) {}
 
-                if (snapshot.empty) {
-                    q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
-                    snapshot = await getDocs(q);
-                }
-                if (snapshot.empty) {
-                    q = query(collection(window.db, "drivers"), where("name", "==", identifier));
-                    snapshot = await getDocs(q);
-                }
-                // البحث في platform_users كخيار بديل
-                if (snapshot.empty) {
-                    q = query(collection(window.db, "platform_users"), where("id", "==", identifier));
-                    snapshot = await getDocs(q);
-                }
-                if (snapshot.empty) {
-                    q = query(collection(window.db, "platform_users"), where("phone", "==", identifier));
-                    snapshot = await getDocs(q);
-                }
+                // 2. البحث بالاستعلامات في مجموعة drivers و platform_users
+                if (!foundData) {
+                    let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
+                    let snapshot = await getDocs(q);
 
-                if (!snapshot.empty) {
-                    let docSnap = snapshot.docs[0];
-                    foundId = docSnap.id;
-                    foundData = docSnap.data();
+                    if (snapshot.empty) {
+                        q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                        snapshot = await getDocs(q);
+                    }
+                    if (snapshot.empty) {
+                        q = query(collection(window.db, "drivers"), where("name", "==", identifier));
+                        snapshot = await getDocs(q);
+                    }
+                    if (snapshot.empty) {
+                        q = query(collection(window.db, "platform_users"), where("id", "==", identifier));
+                        snapshot = await getDocs(q);
+                    }
+                    if (snapshot.empty) {
+                        q = query(collection(window.db, "platform_users"), where("phone", "==", identifier));
+                        snapshot = await getDocs(q);
+                    }
+
+                    if (!snapshot.empty) {
+                        let docSnap = snapshot.docs[0];
+                        foundId = docSnap.id;
+                        foundData = docSnap.data();
+                    }
                 }
 
                 if (foundData) {
-                    let realRole = String(foundData.role || '').toLowerCase().trim();
-                    // قفل أمني: الحساب لا يصبح مديراً إلا إذا كان معرفه '1' أو رتبته 'admin' صراحة في القاعدة
-                    if (foundId !== '1' && realRole !== 'admin' && realRole !== 'مدير نظام' && realRole !== 'مدير') {
-                        foundData.role = 'driver';
-                    } else {
-                        foundData.role = 'admin';
-                    }
-                    window.currentLoggedInUser = { id: foundId, ...foundData };
+                    // التحقق الصارم من الرتبة المعتمدة في قاعدة البيانات سحابياً
+                    let dbRole = String(foundData.role || '').toLowerCase().trim();
+                    let isTrueAdmin = (foundId === '1' && (dbRole === 'admin' || dbRole === 'مدير نظام' || dbRole === 'مدير' || dbRole === 'مدير النظام'));
+                    
+                    window.currentLoggedInUser = { 
+                        id: foundId, 
+                        ...foundData,
+                        role: isTrueAdmin ? 'admin' : 'driver' // حظر أي رتبة مدير وهمية لم يتم توثيقها بالمعرف '1' في السحابة
+                    };
                 } else {
-                    // إذا لم يوجد في القاعدة، يتم تقييده كسائق مستقل افتراضياً
+                    // إذا لم يوجد الحساب في قاعدة البيانات السحابية، يمنع منعاً باتاً منحه صلاحيات الإدارة ويبقى سائقاً مستقلاً
                     window.currentLoggedInUser = { 
                         id: identifier, 
                         name: identifier, 
                         role: 'driver', 
-                        title: 'سائق معتمد' 
+                        title: 'سائق مستقل' 
                     };
                 }
 
@@ -711,19 +713,19 @@
                 initFirestoreSync();
 
             } catch(err) { 
-                console.error("خطأ في جلب بيانات المستخدم:", err);
+                console.error("خطأ في التحقق الأمني من الرتبة:", err);
             }
         }
 
         function openSwitchAccountPrompt() {
-            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة برتبته الحقيقية (أو '1' للمدير):");
+            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة برتبته الحقيقية المعتمدة:");
             if (inputId && inputId.trim() !== "") {
                 fetchDriverData(inputId.trim());
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-        // 🖼️ تطبيق الصلاحيات والواجهة حسب الرتبة الحقيقية
+        // 🖼️ تطبيق الصلاحيات والواجهة حصرياً حسب الرتبة الموثقة
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', avatar: '' };
             let isAdmin = isUserAdmin();
@@ -731,7 +733,7 @@
             
             document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
             
-            let roleBadgeText = '👨‍✈️ سائق مستقل';
+            let roleBadgeText = '👨‍✈️ سائق مستقل معزول';
             if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
             else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
 
@@ -757,7 +759,7 @@
 
             renderBottomNavbarByRole(isAdmin);
             
-            // إذا لم يكن مديراً وحاول فتح قسم مقصور على الإدارة، يتم إرجاعه للرئيسية فوراً
+            // حماية الأقسام: إعادة التوجيه للرئيسية فوراً إذا حاول مستخدم عادي الدخول لأقسام المدير
             let activeSec = document.querySelector('.app-section.active');
             if (activeSec) {
                 let secId = activeSec.id;
@@ -815,7 +817,7 @@
             renderAllFinancials();
         }
 
-        // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة المستخدم
+        // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة المستخدم الحقيقية
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -836,7 +838,7 @@
 
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                // إذا لم يكن مديراً، يتم جلب البيانات الخاصة بمعرفه أو اسمه فقط من السحابة لضمان الخصوصية
+                // إذا لم يكن مديراً، يتم جلب البيانات الخاصة بمعرفه أو اسمه فقط من السحابة لضمان الخصوصية التامة
                 let q = isAdmin ? collection(window.db, col) : query(collection(window.db, col), where("userId", "==", currentUserId));
                 
                 onSnapshot(q, (snapshot) => {
@@ -1081,7 +1083,6 @@
 
             if (!item) return alert("العنصر غير موجود.");
 
-            // إذا لم يكن مديراً، نتحقق أن العنصر يخصه فعلاً قبل السماح بالتعديل
             let user = window.currentLoggedInUser || {};
             if (!isAdmin && String(item.userId || '') !== String(user.id || '')) {
                 alert('عذراً، لا تملك صلاحية تعديل بيانات حساب آخر!');
@@ -1382,4 +1383,4 @@
         function setTheme(theme) { document.body.setAttribute('data-theme', theme); }
     </script>
 </body>
-    </html>
+</html>
