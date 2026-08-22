@@ -144,13 +144,9 @@
         }
         .search-box { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 12px; font-size: 12px; background: var(--card-bg); color: var(--text-color); }
         
-        /* عارض الوسائط المنزلق (Gallery Slider) */
-        .media-slider-container { position: relative; max-width: 100%; max-height: 85vh; display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        .slider-nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.6); color: white; border: none; font-size: 20px; padding: 10px 15px; cursor: pointer; border-radius: 50%; z-index: 10005; transition: 0.2s; }
-        .slider-nav-btn:hover { background: var(--accent); }
-        .slider-prev { right: 10px; }
-        .slider-next { left: 10px; }
-        .slider-counter { color: white; margin-top: 10px; font-size: 12px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 12px; }
+        /* عارض الوسائط بالسحب (Swipe Gallery) */
+        .media-slider-container { position: relative; max-width: 100%; max-height: 85vh; display: flex; justify-content: center; align-items: center; flex-direction: column; width: 100%; height: 100%; user-select: none; }
+        .slider-counter { color: white; margin-top: 15px; font-size: 12px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 12px; }
     </style>
 </head>
 <body>
@@ -338,13 +334,11 @@
         </div>
     </div>
 
-    <!-- نافذة معاينة الوسائط المنزلقة (Gallery Slider Modal) -->
+    <!-- عارض الوسائط بالسحب (Swipe Gallery Modal بدون أزرار) -->
     <div id="mediaViewerModal" class="custom-modal" onclick="closeMediaViewer()">
         <div class="media-slider-container" onclick="event.stopPropagation()">
-            <button type="button" onclick="closeMediaViewer()" class="btn-danger btn-sm" style="position: absolute; top: -40px; right: 0; z-index: 10006;">✕ إغلاق</button>
-            <button type="button" class="slider-nav-btn slider-prev" onclick="slideMedia(-1)">❯</button>
-            <button type="button" class="slider-nav-btn slider-next" onclick="slideMedia(1)">❮</button>
-            <div id="mediaViewerContent" style="text-align: center; width: 100%; display: flex; justify-content: center; align-items: center;"></div>
+            <button type="button" onclick="closeMediaViewer()" class="btn-danger btn-sm" style="position: absolute; top: -10px; left: 0; z-index: 10006;">✕ إغلاق</button>
+            <div id="mediaViewerContent" style="text-align: center; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; flex: 1;"></div>
             <div id="mediaSliderCounter" class="slider-counter">1 / 1</div>
         </div>
     </div>
@@ -382,7 +376,7 @@
         let appData = { drivers: [], shipments: [] };
         let profileWallFilesArr = [];
 
-        // متغيرات عارض الصور المنزلق
+        // متغيرات عارض الصور المنزلق بالسحب
         let currentGalleryFiles = [];
         let currentGalleryIndex = 0;
 
@@ -402,7 +396,6 @@
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
-        // استماع فوري فائق السرعة للتزامن مع قاعدة البيانات السحابية
         db.collection('drivers').onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
@@ -413,7 +406,6 @@
             renderMyAccount();
         });
 
-        // مزامنة فورية لحائط النشورات
         let unsubscribeWall = null;
         function setupWallListener(profileName) {
             if (unsubscribeWall) unsubscribeWall();
@@ -427,6 +419,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             document.getElementById('user-role-badge').innerText = `الحساب: ${loggedInDriverName} (${currentUserRole})`;
             renderMyAccount();
+            setupTouchSwipeListeners();
         });
 
         function compressImage(file, maxWidth = 1200, maxHeight = 1000, quality = 0.9, callback) {
@@ -751,7 +744,6 @@
                 document.getElementById('profile-wall-text').value = '';
                 profileWallFilesArr = [];
                 document.getElementById('profile-wall-files-info').innerText = '';
-                // يتم التحديث فورياً عبر الـ onSnapshot
             });
         }
 
@@ -792,7 +784,6 @@
                 let mediaHtml = '';
                 if(p.files && p.files.length > 0) {
                     mediaHtml += `<div class="load-post-media">`;
-                    // تجهيز قائمة ملفات المنشور للعرض السلس
                     let allFilesJson = encodeURIComponent(JSON.stringify(p.files));
                     p.files.forEach((f, fIdx) => {
                         if(f.type === 'video') {
@@ -804,12 +795,10 @@
                     mediaHtml += `</div>`;
                 }
 
-                // حساب الإعجابات
                 let likesArr = p.likes || [];
                 let isLiked = likesArr.includes(loggedInDriverName);
                 let likeBtnClass = isLiked ? "post-action-btn liked" : "post-action-btn";
 
-                // التعليقات
                 let commentsHtml = '';
                 let commentsArr = p.comments || [];
                 commentsArr.forEach(c => {
@@ -833,7 +822,6 @@
                     <p style="font-size:11px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
                     ${mediaHtml}
                     
-                    <!-- شريط التفاعل (إعجاب، تعليق، مشاركة) -->
                     <div class="post-actions-bar">
                         <button type="button" class="${likeBtnClass}" onclick="toggleLike('${p.docId}', ${JSON.stringify(likesArr)})">
                             ❤️ أعجبني (${likesArr.length})
@@ -843,7 +831,6 @@
                         </button>
                     </div>
 
-                    <!-- قسم التعليقات -->
                     <div class="comments-section">
                         <div style="margin-bottom: 4px; font-weight: bold;">التعليقات (${commentsArr.length}):</div>
                         <div style="max-height: 120px; overflow-y: auto;">${commentsHtml}</div>
@@ -859,7 +846,6 @@
             });
         }
 
-        // وظيفة الإعجاب الفوري
         function toggleLike(docId, likesArr) {
             if(!docId) return;
             let index = likesArr.indexOf(loggedInDriverName);
@@ -871,7 +857,6 @@
             db.collection('profileWalls').doc(docId).update({ likes: likesArr });
         }
 
-        // وظيفة إضافة تعليق
         function addComment(docId) {
             const input = document.getElementById(`comment-input-${docId}`);
             const text = input.value.trim();
@@ -893,7 +878,6 @@
             });
         }
 
-        // وظيفة المشاركة السريعة
         function sharePost(postText) {
             if (navigator.share) {
                 navigator.share({
@@ -913,7 +897,7 @@
             }
         }
 
-        // عارض الوسائط المنزلق (Slider & Gallery)
+        // عارض الوسائط بالسحب (Swipe Gesture Handler)
         function openMediaGallery(filesJsonEncoded, startIndex) {
             try {
                 currentGalleryFiles = JSON.parse(decodeURIComponent(filesJsonEncoded));
@@ -934,7 +918,7 @@
             if(currentFile.type === 'video') {
                 content.innerHTML = `<video controls autoplay src="${currentFile.src}" style="max-width:100%; max-height:80vh; border-radius:8px;"></video>`;
             } else {
-                content.innerHTML = `<img src="${currentFile.src}" style="max-width:100%; max-height:80vh; border-radius:8px; object-fit:contain; transition: transform 0.2s;"/>`;
+                content.innerHTML = `<img src="${currentFile.src}" style="max-width:100%; max-height:80vh; border-radius:8px; object-fit:contain;"/>`;
             }
             counter.innerText = `${currentGalleryIndex + 1} / ${currentGalleryFiles.length}`;
         }
@@ -954,6 +938,35 @@
             document.getElementById('mediaViewerModal').style.display = 'none';
             document.getElementById('mediaViewerContent').innerHTML = '';
             currentGalleryFiles = [];
+        }
+
+        // إعداد استشعار السحب يميناً ويساراً على شاشة العرض
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        function setupTouchSwipeListeners() {
+            const modal = document.getElementById('mediaViewerModal');
+            
+            modal.addEventListener('touchstart', e => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            modal.addEventListener('touchend', e => {
+                touchEndX = e.changedTouches[0].screenX;
+                handleSwipeGesture();
+            }, { passive: true });
+        }
+
+        function handleSwipeGesture() {
+            let swipeThreshold = 50; // مسافة السحب الأدنى للاستجابة
+            if (touchEndX < touchStartX - swipeThreshold) {
+                // سحب لليسار -> الانتقال للصورة التالية
+                slideMedia(1);
+            }
+            if (touchEndX > touchStartX + swipeThreshold) {
+                // سحب لليمين -> الانتقال للصورة السابقة
+                slideMedia(-1);
+            }
         }
 
         function renderProfileDriverSearch() {
