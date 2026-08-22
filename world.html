@@ -546,7 +546,7 @@
             return 'paid';
         }
 
-        // الحساب الافتراضي يبدأ كسائق معزول تماماً
+        // تم تعيين القيمة الافتراضية كمستقل/سائق وليس مدير لتلافي منح صلاحيات المدير تلقائياً للجميع
         let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
@@ -573,21 +573,18 @@
             }, 500);
         });
 
-        // 🔒 دالة مركزية صارمة للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
+        // 🔒 دالة مركزية للتحقق بدقة من رتبة المدير من قاعدة البيانات
         function isUserAdmin() {
             let user = window.currentLoggedInUser || {};
-            let role = String(user.role || '').toLowerCase().trim();
-            let userId = String(user.id || '').trim();
-            
-            // المدير الرئيسي حصراً هو من يملك معرف '1' أو رتبة 'admin' صريحة
-            return (userId === '1' || role === 'admin' || role === 'مدير نظام' || role === 'مدير');
+            let role = String(user.role || '').toLowerCase();
+            return (role === 'admin' || role === 'مدير نظام' || role === 'مدير');
         }
         window.isUserAdmin = isUserAdmin;
 
-        // 🔒 محرك مزامنة وجلب الحساب مع القيود الصارمة حسب الرتبة
+        // 🔒 محرك مزامنة حساب السائق أو المدير المستقل المعزول تماماً
         async function initConnectedUserSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
 
             try {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -629,19 +626,14 @@
                 }
 
                 if (activeUser) {
-                    let userId = String(activeUser.id || '').trim();
-                    let roleStr = String(activeUser.role || '').toLowerCase().trim();
-                    if (userId !== '1' && roleStr !== 'admin' && roleStr !== 'مدير نظام' && roleStr !== 'مدير') {
-                        activeUser.role = 'driver'; // قفل أمني لمنع أي تلاعب محلي
-                    }
                     window.currentLoggedInUser = activeUser;
-                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
+                    localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
                     applyUserPermissionsUI();
                     initFirestoreSync();
                     return;
                 }
 
+                // إذا لم توجد جلسة سابقة، نبقي المستخدم كسائق معزول افتراضياً
                 applyUserPermissionsUI();
                 initFirestoreSync();
 
@@ -652,15 +644,10 @@
 
         async function fetchDriverData(identifier) {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
             try {
-                let snapshot = null;
-                let foundData = null;
-                let foundId = identifier;
-
-                // البحث في مجموعة drivers
                 let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
-                snapshot = await getDocs(q);
+                let snapshot = await getDocs(q);
 
                 if (snapshot.empty) {
                     q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
@@ -670,7 +657,6 @@
                     q = query(collection(window.db, "drivers"), where("name", "==", identifier));
                     snapshot = await getDocs(q);
                 }
-                // البحث في platform_users كخيار بديل
                 if (snapshot.empty) {
                     q = query(collection(window.db, "platform_users"), where("id", "==", identifier));
                     snapshot = await getDocs(q);
@@ -681,37 +667,19 @@
                 }
 
                 if (!snapshot.empty) {
-                    let docSnap = snapshot.docs[0];
-                    foundId = docSnap.id;
-                    foundData = docSnap.data();
-                }
-
-                if (foundData) {
-                    let realRole = String(foundData.role || '').toLowerCase().trim();
-                    // قفل أمني: الحساب لا يصبح مديراً إلا إذا كان معرفه '1' أو رتبته 'admin' صراحة في القاعدة
-                    if (foundId !== '1' && realRole !== 'admin' && realRole !== 'مدير نظام' && realRole !== 'مدير') {
-                        foundData.role = 'driver';
-                    } else {
-                        foundData.role = 'admin';
-                    }
-                    window.currentLoggedInUser = { id: foundId, ...foundData };
+                    let docData = snapshot.docs[0].data();
+                    window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
+                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
+                    applyUserPermissionsUI();
+                    initFirestoreSync();
                 } else {
-                    // إذا لم يوجد في القاعدة، يتم تقييده كسائق مستقل افتراضياً
-                    window.currentLoggedInUser = { 
-                        id: identifier, 
-                        name: identifier, 
-                        role: 'driver', 
-                        title: 'سائق معتمد' 
-                    };
+                    window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق مستقل' };
+                    applyUserPermissionsUI();
+                    initFirestoreSync();
                 }
-
-                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                applyUserPermissionsUI();
-                initFirestoreSync();
-
             } catch(err) { 
-                console.error("خطأ في جلب بيانات المستخدم:", err);
+                console.error(err);
             }
         }
 
@@ -756,16 +724,6 @@
             }
 
             renderBottomNavbarByRole(isAdmin);
-            
-            // إذا لم يكن مديراً وحاول فتح قسم مقصور على الإدارة، يتم إرجاعه للرئيسية فوراً
-            let activeSec = document.querySelector('.app-section.active');
-            if (activeSec) {
-                let secId = activeSec.id;
-                if (!isAdmin && (secId === 'section-treasury' || secId === 'section-expenses' || secId === 'section-analytics')) {
-                    switchSection('overview', document.querySelector('.bottom-nav-bar button:nth-child(1)'));
-                }
-            }
-
             renderAllFinancials();
         }
 
@@ -798,8 +756,7 @@
 
             document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item-btn').forEach(b => b.classList.remove('active'));
-            let targetSec = document.getElementById(`section-${name}`);
-            if (targetSec) targetSec.classList.add('active');
+            document.getElementById(`section-${name}`).classList.add('active');
             if (btn) btn.classList.add('active');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -831,19 +788,18 @@
 
             let user = window.currentLoggedInUser || {};
             let isAdmin = isUserAdmin();
-            let currentUserId = String(user.id || '').trim();
+            let currentUserId = String(user.id || '');
             let userName = String(user.name || '').trim();
 
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                // إذا لم يكن مديراً، يتم جلب البيانات الخاصة بمعرفه أو اسمه فقط من السحابة لضمان الخصوصية
                 let q = isAdmin ? collection(window.db, col) : query(collection(window.db, col), where("userId", "==", currentUserId));
                 
                 onSnapshot(q, (snapshot) => {
                     let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     if (!isAdmin) {
                         items = items.filter(item => {
-                            let itemUserId = String(item.userId || '').trim();
+                            let itemUserId = String(item.userId || '');
                             let itemName = String(item.accountOwner || item.clientName || item.name || item.driver || '').trim();
                             return (currentUserId && itemUserId === currentUserId) || (userName && itemName === userName);
                         });
@@ -872,10 +828,6 @@
         }
 
         function editRssMessage() {
-            if (!isUserAdmin()) {
-                alert('تعديل الإشعارات مقصور على المدير فقط!');
-                return;
-            }
             let msg = prompt("نص الإشعار:", appData.rssMessage);
             if (msg) { 
                 appData.rssMessage = msg; 
@@ -927,14 +879,10 @@
             document.getElementById("expDesc").value = "";
             document.getElementById("expAmount").value = "";
             renderAllFinancials();
-            alert("تم حفظ المصروف وترحيله سحابياً بنجاح!");
+            alert("تم حفظ المصروف وترحيله سحابياً لحسابك بنجاح!");
         }
 
         function treasuryAction(type) {
-            if (!isUserAdmin()) {
-                alert('حركات الخزينة مقصورة على المدير فقط!');
-                return;
-            }
             let amt = parseFloat(document.getElementById("treasuryInputAmount").value);
             let reason = document.getElementById("treasuryReasonInput").value.trim() || (type === 'deposit' ? 'إيداع نقدي' : 'صرف نقدي');
             if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح للحركة النقدية");
@@ -959,14 +907,10 @@
             document.getElementById("treasuryInputAmount").value = "";
             document.getElementById("treasuryReasonInput").value = "";
             renderAllFinancials();
-            alert(`✅ تمت عملية ${type === 'deposit' ? 'الإيداع' : 'الصرف'} بالخزينة بنجاح!`);
+            alert(`✅ تمت عملية ${type === 'deposit' ? 'الإيداع' : 'الصرف'} بالخزينة لحسابك بنجاح!`);
         }
 
         function deleteTreasuryItem(id) {
-            if (!isUserAdmin()) {
-                alert('الحذف مقصور على المدير فقط!');
-                return;
-            }
             if (confirm("هل تريد حذف هذه الحركة النقدية من الخزينة؟")) {
                 appData.treasury = (appData.treasury || []).filter(t => String(t.id) !== String(id));
                 deleteItemFromCollection('treasury', id);
@@ -1072,7 +1016,6 @@
         }
 
         function openEditModal(id, collectionType) {
-            let isAdmin = isUserAdmin();
             let item = null;
             if (collectionType === 'accounts') item = appData.accounts.find(x => String(x.id) === String(id));
             else if (collectionType === 'expenses') item = appData.expenses.find(x => String(x.id) === String(id));
@@ -1080,13 +1023,6 @@
             else if (collectionType === 'shipments') item = appData.shipments.find(x => String(x.id) === String(id));
 
             if (!item) return alert("العنصر غير موجود.");
-
-            // إذا لم يكن مديراً، نتحقق أن العنصر يخصه فعلاً قبل السماح بالتعديل
-            let user = window.currentLoggedInUser || {};
-            if (!isAdmin && String(item.userId || '') !== String(user.id || '')) {
-                alert('عذراً، لا تملك صلاحية تعديل بيانات حساب آخر!');
-                return;
-            }
 
             document.getElementById("editRecordId").value = id;
             document.getElementById("editCollectionType").value = collectionType;
@@ -1210,10 +1146,10 @@
         function renderAllFinancials() {
             let user = window.currentLoggedInUser || { id: '', role: 'driver' };
             let isAdmin = isUserAdmin();
-            let currentUserId = String(user.id || '').trim();
+            let currentUserId = String(user.id || '');
             let userName = String(user.name || '').trim();
 
-            let userShipments = isAdmin ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === currentUserId || (userName && String(s.driver || '').trim() === userName));
+            let userShipments = isAdmin ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === currentUserId || (userName && String(s.driver || '') === userName));
             let userAccounts = isAdmin ? (appData.accounts || []) : (appData.accounts || []).filter(a => String(a.userId || '') === currentUserId);
             let userExpenses = isAdmin ? (appData.expenses || []) : (appData.expenses || []).filter(e => String(e.userId || '') === currentUserId);
             let userDeferred = isAdmin ? (appData.deferredInvoices || []) : (appData.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
@@ -1355,7 +1291,7 @@
                             <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
                             <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>
                         </div>
-                    ` : '<span style="font-size:10px; color:var(--secondary-text);">محمي 🔒</span>';
+                    ` : '<span style="font-size:10px; color:var(--secondary-text);">تحكم المدير</span>';
 
                     return `
                         <tr>
