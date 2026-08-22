@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة وغرفة الطوارئ V98.9 PRO SECURE UNIFIED SYNC</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المستقلة وغرفة الطوارئ V98.9 PRO SECURE SECURED</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المصحح للاستعادة الفورية للجلسة ومنع ظهور "زائر" -->
+    <!-- السكريبت المحسن مع معالجة الأخطاء السحابية -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -586,7 +586,6 @@
             return 'paid';
         }
 
-        // 🔐 التهيئة الفورية واستعادة الحساب المسجل من الخارج منعاً لظهور زائر أو تضارب
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -606,7 +605,6 @@
 
         let activeExternalSessionId = getExternalLoginSession();
         
-        // محاولة الاستعادة الفورية من التخزين المحلي المحفوظ مسبقاً لتجنب أي تأخير أو وميض
         let initialUserObj = { id: activeExternalSessionId || '1', name: 'جاري تحميل الحساب...', role: 'driver', title: 'مستخدم النظام', avatar: '' };
         let cachedSession = localStorage.getItem('na2la_active_session');
         if (cachedSession) {
@@ -633,7 +631,6 @@
         };
         window.appData = appData;
 
-        // تنفيذ عند التحميل وتطبيق واجهة الصلاحيات فوراً
         window.addEventListener('DOMContentLoaded', () => {
             applyUserPermissionsUI();
             if (activeExternalSessionId || cachedSession) {
@@ -917,10 +914,14 @@
         async function resolveEmergencyAlert(id) {
             if (!canUserManageSystem()) return alert("صلاحياتك لا تسمح بذلك.");
             if (confirm("إغلاق بلاغ الطوارئ؟")) {
-                if (window.db && window.firebaseModules) {
-                    const { doc, deleteDoc } = window.firebaseModules;
-                    await deleteDoc(doc(window.db, "viper_logistics", String(id)));
-                    alert("✅ تم إغلاق بلاغ الطوارئ بنجاح!");
+                try {
+                    if (window.db && window.firebaseModules) {
+                        const { doc, deleteDoc } = window.firebaseModules;
+                        await deleteDoc(doc(window.db, "viper_logistics", String(id)));
+                        alert("✅ تم إغلاق بلاغ الطوارئ بنجاح!");
+                    }
+                } catch(err) {
+                    console.error("خطأ في حذف البلاغ:", err);
                 }
             }
         }
@@ -930,13 +931,21 @@
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
             item.userId = item.userId || (window.currentLoggedInUser ? window.currentLoggedInUser.id : '');
-            await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
+            try {
+                await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
+            } catch(err) {
+                console.error(`خطأ في حفظ ${colName}:`, err);
+            }
         }
 
         async function deleteItemFromCollection(colName, id) {
             if (!id || !window.db || !window.firebaseModules) return;
             const { doc, deleteDoc } = window.firebaseModules;
-            await deleteDoc(doc(window.db, colName, String(id)));
+            try {
+                await deleteDoc(doc(window.db, colName, String(id)));
+            } catch(err) {
+                console.error(`خطأ في حذف ${colName}:`, err);
+            }
         }
 
         function editRssMessage() {
@@ -946,7 +955,7 @@
                 appData.rssMessage = msg; 
                 if(window.db && window.firebaseModules) {
                     const { doc, setDoc } = window.firebaseModules;
-                    setDoc(doc(window.db, "appStore", "mainState"), { rssMessage: msg }, { merge: true });
+                    setDoc(doc(window.db, "appStore", "mainState"), { rssMessage: msg }, { merge: true }).catch(err => console.error(err));
                 }
             }
         }
