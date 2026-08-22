@@ -366,25 +366,23 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
+        // 🛡️ نظام إدارة الجلسة الآمن (يمنع تداخل الحسابات تماماً)
         function syncGlobalSession() {
-            let id = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('driverId') || localStorage.getItem('userId') || 'default_user_1';
-            let name = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || localStorage.getItem('userName') || 'محمد كرم عجاج';
-            let role = localStorage.getItem('current_user_role') || localStorage.getItem('userRole') || 'admin';
-            let phone = localStorage.getItem('logged_in_driver_phone') || localStorage.getItem('driverPhone') || '+201556466015';
-
-            localStorage.setItem('logged_in_driver_id', id);
-            localStorage.setItem('logged_in_driver_name', name);
-            localStorage.setItem('current_user_name', name);
-            localStorage.setItem('current_user_role', role);
-            localStorage.setItem('logged_in_driver_phone', phone);
-
-            return { id, name, role, phone };
+            let id = localStorage.getItem('logged_in_driver_id') || '1';
+            let lastId = localStorage.getItem('last_logged_in_id');
+            
+            // إذا تغير الحساب، نقوم بتحديث بروفايل العرض تلقائياً ليطابق الحساب النشط منعاً للتداخل
+            if (lastId !== id) {
+                localStorage.setItem('viewing_profile_id', id);
+                localStorage.setItem('last_logged_in_id', id);
+            }
+            return { id };
         }
 
         let session = syncGlobalSession();
-        let currentUserRole = session.role;
         let loggedInDriverId = session.id;
-        let loggedInDriverName = session.name;
+        let currentUserRole = 'admin';
+        let loggedInDriverName = 'جاري التحميل...';
 
         let viewingProfileId = localStorage.getItem('viewing_profile_id') || loggedInDriverId;
 
@@ -409,8 +407,16 @@
         }
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
+        // جلب البيانات مباشرة من الفايربيس وتحديث معلومات المستخدم النشط لححظياً
         db.collection('drivers').onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            let activeUserDoc = appData.drivers.find(d => String(d.id) === String(loggedInDriverId));
+            if (activeUserDoc) {
+                currentUserRole = activeUserDoc.role || 'driver';
+                loggedInDriverName = activeUserDoc.name || 'مستخدم';
+                document.getElementById('user-role-badge').innerText = `الحساب المسجل: ${loggedInDriverName} (${currentUserRole})`;
+            }
             renderMyAccount();
         });
 
@@ -430,7 +436,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('user-role-badge').innerText = `الحساب المسجل: ${loggedInDriverName} (${currentUserRole})`;
             renderMyAccount();
             setupTouchSwipeListeners();
         });
@@ -469,7 +474,7 @@
             return {
                 id: loggedInDriverId,
                 name: loggedInDriverName,
-                phone: session.phone,
+                phone: '',
                 role: currentUserRole,
                 title: 'سائق معتمد',
                 status: 'متاح 🟢',
@@ -490,10 +495,9 @@
             let loggedInUser = getLoggedInUser();
             let targetDrv = getTargetViewingDriver();
             
-            // تحقق قاطع وصارم: هل البروفايل المعروض يخص المستخدم المسجل فعلياً؟
             let isViewingSelf = String(viewingProfileId) === String(loggedInDriverId);
 
-            document.getElementById('gplus-name-display').innerText = targetDrv.name;
+            document.getElementById('gplus-name-display').innerText = targetDrv.name || 'مستخدم';
             document.getElementById('gplus-badge-display').innerText = targetDrv.title || 'عضو';
             document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير محدد'} | الرتبة: ${targetDrv.role || 'سائق'}`;
             
@@ -520,7 +524,6 @@
             const gpsCard = document.getElementById('gps-broadcast-card');
 
             if (!isViewingSelf) {
-                // تصفح بروفايل شخص آخر: إخفاء كلي لأزرار التعديل والغلاف وصورة البروفايل والبث
                 if(backBtn) backBtn.style.display = 'inline-block';
                 if(editSettingsCard) editSettingsCard.style.display = 'none';
                 if(avatarUploadLabel) avatarUploadLabel.style.display = 'none';
@@ -529,7 +532,6 @@
                 if(gpsCard) gpsCard.style.display = 'none';
                 document.getElementById('profile-wall-heading').innerText = `✍️ النشر على حائط: ${targetDrv.name}`;
             } else {
-                // بروفايلك الشخصي: إظهار كافة أدوات التحكم والتعديل
                 if(backBtn) backBtn.style.display = 'none';
                 if(editSettingsCard) editSettingsCard.style.display = 'block';
                 if(avatarUploadLabel) avatarUploadLabel.style.display = 'block';
@@ -538,7 +540,7 @@
                 if(gpsCard) gpsCard.style.display = 'block';
                 document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي الشخصي';
                 
-                document.getElementById('my-edit-name').value = loggedInUser.name;
+                document.getElementById('my-edit-name').value = loggedInUser.name || '';
                 document.getElementById('my-edit-phone').value = loggedInUser.phone || '';
                 
                 const titleSelect = document.getElementById('my-edit-title');
@@ -650,9 +652,6 @@
             loggedInUser.title = document.getElementById('my-edit-title').value;
             
             loggedInDriverName = loggedInUser.name;
-            localStorage.setItem('logged_in_driver_name', loggedInDriverName);
-            localStorage.setItem('current_user_name', loggedInDriverName);
-            localStorage.setItem('logged_in_driver_phone', loggedInUser.phone);
             
             db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => {
                 alert('تم تحديث بيانات حسابك الشخصي ومزامنتها بنجاح! 💾');
