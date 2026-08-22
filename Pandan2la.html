@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90.6 SECURE SYNC</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90.7 SECURE ISOLATION</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f111a">
@@ -37,7 +37,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في Master Hub V90.6");
+            console.log("✅ تم المصادقة سحابياً بنجاح في Master Hub V90.7");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -335,7 +335,7 @@
             <div id="invoice-preview-card">
                 <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
                     <h2 style="font-size: 14px; color: #2563eb;">أسطورة الطريق & باندا</h2>
-                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V90.6)</p>
+                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة (V90.7)</p>
                 </div>
                 <div style="font-size: 10px; line-height: 1.6;">
                     <p><strong>رقم البوليصة:</strong> <span id="inv-id"></span></p>
@@ -492,7 +492,6 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    // تم ضبط القيمة الافتراضية هنا كسائق معزول تماماً حصرياً
     let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
@@ -533,42 +532,63 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 دالة مركزية صارمة جداً للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
+    // 🔒 دالة مركزية صارمة للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase().trim();
         let userId = String(user.id || '').trim();
-        // المدير الحقيقي حصراً هو من يحمل المعرف '1' أو رتبة admin صريحة مسجلة في مستنده
         return (userId === '1' && (role === 'admin' || role === 'مدير نظام' || role === 'مدير'));
     }
     window.isUserAdmin = isUserAdmin;
 
-    // 🔒 تصفية الشحنات بناءً على المستخدم الحالي
+    // 🔒 🛡️ تصفية الشحنات بدقة منعاً لأي تسريب لبيانات المدير أو حسابات أخرى
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
         if (isUserAdmin()) return all;
         let user = window.currentLoggedInUser || {};
-        let currentUserId = String(user.id || '');
+        let currentUserId = String(user.id || '').trim();
+        let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
+
+        // إذا لم يتم تعريف الحساب أو معرفه بشكل حقيقي ودقيق، منع عرض أي شحنات تماماً
+        if (!currentUserId && !userPhone && !userName) return [];
+
         return all.filter(s => {
-            let sUserId = String(s.userId || '');
+            let sUserId = String(s.userId || '').trim();
+            let sPhone = String(s.phone || s.clientPhone || '').trim();
             let sDriver = String(s.driver || '').trim();
-            return (currentUserId && sUserId === currentUserId) || (userName && sDriver === userName);
+
+            let matchId = currentUserId && sUserId === currentUserId;
+            let matchPhone = userPhone && sPhone === userPhone;
+            let matchDriver = userName && sDriver === userName;
+
+            // لا نسمح بعرض الشحنة إلا إذا تطابق المعرف السحابي أو الهاتف أو السائق بدقة مع الحساب المتصل
+            return (matchId || matchPhone || matchDriver) && sUserId !== '1';
         });
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
-    // 🔒 تصفية القوائم الأخرى لكل مستخدم بشكل آمن
+    // 🔒 🛡️ تصفية القوائم الأخرى (أجل، خزينة، مصروفات) بعزل تام ومحكم
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
         if (isUserAdmin()) return items;
         let user = window.currentLoggedInUser || {};
-        let currentUserId = String(user.id || '');
+        let currentUserId = String(user.id || '').trim();
+        let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
+
+        if (!currentUserId && !userPhone && !userName) return [];
+
         return items.filter(item => {
-            let itemUserId = String(item.userId || '');
+            let itemUserId = String(item.userId || '').trim();
+            let itemPhone = String(item.phone || item.clientPhone || '').trim();
             let itemName = String(item.name || item.accountOwner || item.driver || '').trim();
-            return (currentUserId && itemUserId === currentUserId) || (userName && itemName === userName);
+
+            let matchId = currentUserId && itemUserId === currentUserId;
+            let matchPhone = userPhone && itemPhone === userPhone;
+            let matchName = userName && itemName === userName;
+
+            return (matchId || matchPhone || matchName) && itemUserId !== '1';
         });
     }
     window.getUserFilteredList = getUserFilteredList;
@@ -613,11 +633,10 @@
         }
 
         if (activeUser) {
-            // قفل أمني: منع أي حساب عادٍ من انتحال صفة المدير إذا لم يكن id خاصته هو '1'
             let uId = String(activeUser.id || '').trim();
             let uRole = String(activeUser.role || '').toLowerCase().trim();
             if (uId !== '1' && (uRole === 'admin' || uRole === 'مدير نظام' || uRole === 'مدير')) {
-                activeUser.role = 'driver'; // خفض رتبته القسرية لسائق منعاً لأي خطأ
+                activeUser.role = 'driver';
             }
             window.currentLoggedInUser = activeUser;
             localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
@@ -658,9 +677,8 @@
                 let docData = snapshot.docs[0].data();
                 let docId = snapshot.docs[0].id;
                 
-                // 🔒 التحقق الصارم: المدير الحقيقي فقط هو من يحمل المعرف '1'
                 if (docId !== '1') {
-                    docData.role = 'driver'; // إجبار الحساب على أن يكون سائقاً معزولاً حصراً
+                    docData.role = 'driver';
                 }
 
                 window.currentLoggedInUser = { id: docId, ...docData };
@@ -688,14 +706,14 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // المزامنة السحابية المعزولة (مع إصلاح خطأ السحب التلقائي للرئيسي)
+    // المزامنة السحابية المعزولة بدقة تامة للحساب المتصل
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
         let currentUser = window.currentLoggedInUser || { id: '', role: 'driver' };
         let isAdmin = isUserAdmin();
-        let currentUserId = String(currentUser.id || '');
+        let currentUserId = String(currentUser.id || '').trim();
 
         try {
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
@@ -717,7 +735,6 @@
                     appData.drivers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     window.appData = appData;
                     
-                    // 🛡️ التعديل الحاسم هنا: تم حذف البديل الخطير `|| appData.drivers[0]` تماماً لمنع منح صلاحية المدير بالخطأ
                     if (!isAdmin && appData.drivers.length > 0) {
                         let matchedDrv = appData.drivers.find(d => d.id === currentUserId);
                         if (matchedDrv) {
@@ -728,42 +745,50 @@
                 }
             });
 
-            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("userId", "==", currentUserId));
-            onSnapshot(shipmentsQuery, (snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                appData.docs = appData.shipments;
-                window.appData = appData;
-                renderStats();
-                refreshActiveSection();
-            });
+            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : (currentUserId ? query(collection(window.db, "shipments"), where("userId", "==", currentUserId)) : null);
+            if (shipmentsQuery) {
+                onSnapshot(shipmentsQuery, (snapshot) => {
+                    if (window._isSavingLocally) return;
+                    appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    appData.docs = appData.shipments;
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                });
+            }
 
-            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("userId", "==", currentUserId));
-            onSnapshot(deferredQuery, (snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                window.appData = appData;
-                renderStats();
-                refreshActiveSection();
-            });
+            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : (currentUserId ? query(collection(window.db, "deferredInvoices"), where("userId", "==", currentUserId)) : null);
+            if (deferredQuery) {
+                onSnapshot(deferredQuery, (snapshot) => {
+                    if (window._isSavingLocally) return;
+                    appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                });
+            }
 
-            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("userId", "==", currentUserId));
-            onSnapshot(treasuryQuery, (snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                window.appData = appData;
-                renderStats();
-                refreshActiveSection();
-            });
+            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : (currentUserId ? query(collection(window.db, "treasury"), where("userId", "==", currentUserId)) : null);
+            if (treasuryQuery) {
+                onSnapshot(treasuryQuery, (snapshot) => {
+                    if (window._isSavingLocally) return;
+                    appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                });
+            }
 
-            let expensesQuery = isAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("userId", "==", currentUserId));
-            onSnapshot(expensesQuery, (snapshot) => {
-                if (window._isSavingLocally) return;
-                appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                window.appData = appData;
-                renderStats();
-                refreshActiveSection();
-            });
+            let expensesQuery = isAdmin ? collection(window.db, "expenses") : (currentUserId ? query(collection(window.db, "expenses"), where("userId", "==", currentUserId)) : null);
+            if (expensesQuery) {
+                onSnapshot(expensesQuery, (snapshot) => {
+                    if (window._isSavingLocally) return;
+                    appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    window.appData = appData;
+                    renderStats();
+                    refreshActiveSection();
+                });
+            }
 
         } catch (error) {
             console.error("خطأ في المزامنة:", error);
@@ -836,7 +861,7 @@
             }
         } catch (err) { console.error(err); }
 
-        localStorage.setItem('transportAppV90_6', JSON.stringify(appData));
+        localStorage.setItem('transportAppV90_7', JSON.stringify(appData));
         setTimeout(() => { window._isSavingLocally = false; }, 1000);
 
         if(typeof renderStats === 'function') renderStats();
@@ -2536,7 +2561,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V90.6", 20, 20);
+        doc.text("Global Transport Hub - Waybill V90.7", 20, 20);
         doc.text(`Client: ${getSafeName(s)}`, 20, 30);
         doc.text(`Phone: ${getSafePhone(s)}`, 20, 40);
         doc.text(`Address: ${s.address || '-'}`, 20, 50);
@@ -2552,7 +2577,7 @@
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "شحناتي");
-        XLSX.writeFile(wb, "na2la_my_shipments_v90_6.xlsx");
+        XLSX.writeFile(wb, "na2la_my_shipments_v90_7.xlsx");
         showToast('تم تصدير بياناتك إلى Excel بنجاح!');
     }
 
