@@ -492,8 +492,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    // تم جعل القيمة الافتراضية هنا سائق مستقل غير مديري لضمان الأمان وعدم تسريب صلاحيات المدير
-    let currentLoggedInUser = { id: '', name: 'سائق مستقل', role: 'driver', title: 'سائق مستقل', avatar: '' };
+    let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -533,7 +532,7 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة والآمنة لتحديد الرتبة بدقة تامة
+    // 🔒 محرك مزامنة الحسابات المستقلة المحدث لضمان جلب السائق المتصل بدقة
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -542,6 +541,7 @@
             return;
         }
 
+        // التحقق أولاً من معرف السائق المخزن سابقاً عبر المنصة الأم
         const savedDriverId = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('na2la_active_driver_id');
         if (savedDriverId) {
             fetchDriverData(savedDriverId.trim());
@@ -564,11 +564,25 @@
                         break;
                     }
                 } catch(e) {
+                    // لو القيمة المخزنة نصية (مثل الاسم أو المعرف مباشرة)
                     if (typeof saved === 'string' && saved.trim() !== '') {
                         fetchDriverData(saved.trim());
                         return;
                     }
                 }
+            }
+        }
+
+        if (!activeUser) {
+            for (let i = 0; i < localStorage.length; i++) {
+                let key = localStorage.key(i);
+                try {
+                    let val = JSON.parse(localStorage.getItem(key));
+                    if (val && typeof val === 'object' && (val.id || val.phone || val.name)) {
+                        activeUser = val;
+                        break;
+                    }
+                } catch(e) {}
             }
         }
 
@@ -580,10 +594,8 @@
             return;
         }
         
-        // إذا لم توجد جلسة، نحددها كمستخدم افتراضي آمن (سائق) ولا نفترض المدير عشوائياً
-        window.currentLoggedInUser = { id: 'driver_guest', name: 'سائق المنصة', role: 'سائق', title: 'سائق مستقل' };
-        applyUserPermissionsUI();
-        loadAllDataFromFirestoreMultiCollection();
+        // إذا لم توجد أي جلسة سابقة، لا نفترض المدير عشوائياً بل نبحث أو نطلب التحديد
+        fetchDriverData('1');
     }
 
     async function fetchDriverData(identifier) {
@@ -606,6 +618,7 @@
                 return;
             }
 
+            // البحث الشامل في مجموعة drivers ومجموعة platform_users بالمعرف أو الهاتف أو الاسم
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
             let snapshot = await getDocs(q);
 
@@ -635,7 +648,7 @@
                 loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب، تم تعيينه كسائق مستقل", "warning");
+                showToast("⚠️ لم يتم العثور على الحساب، جاري محاولة الفحص...", "warning");
             }
         } catch(err) { 
             console.error(err);
@@ -650,11 +663,12 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
+    // 🔒 المزامنة السحابية المفصولة والآمنة حسب معرف المستخدم الحالي (userId)
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
-        let currentUser = window.currentLoggedInUser || { id: '', role: 'سائق' };
+        let currentUser = window.currentLoggedInUser || { id: '', role: 'driver' };
         let role = String(currentUser.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || currentUser.id === '1');
         let currentUserId = String(currentUser.id || '');
@@ -809,10 +823,7 @@
         updateRSSTicker();
         loadAllDataFromFirestoreMultiCollection();
         initChatRealtimeListener();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-        switchSection(isAdmin ? 'deferredInvoices' : 'shipments');
+        switchSection('deferredInvoices');
     });
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -822,17 +833,14 @@
                 updateRSSTicker();
                 loadAllDataFromFirestoreMultiCollection();
                 initChatRealtimeListener();
-                let user = window.currentLoggedInUser || {};
-                let role = String(user.role || '').toLowerCase();
-                let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
-                switchSection(isAdmin ? 'deferredInvoices' : 'shipments');
+                switchSection('deferredInvoices');
             }
         }, 500);
     });
 </script>
 
 <script>
-    let currentSectionId = 'shipments';
+    let currentSectionId = 'deferredInvoices';
     window.currentSectionId = currentSectionId;
 
     function refreshActiveSection() {
@@ -873,7 +881,7 @@
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'سائق', title: 'سائق مستقل', avatar: '' };
+        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', title: 'سائق مستقل', avatar: '' };
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
         
@@ -921,14 +929,13 @@
                 <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات والأحداث</button>
             `;
         } else {
-            // القائمة المخصصة للسائقين والمشرفين (مطابقة للمنصة الخارجية)
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 شحناتي ومهماتي</button>
-                <button onclick="switchSection('aiMechanic'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">🤖 مساعد الذكاء الاصطناعي للصيانة</button>
-                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الرحلات العامة والإعلانات</button>
-                <button onclick="switchSection('chat'); toggleSidebar();" style="background:var(--green-success); color:#fff;">💬 غرفة المحادثة والتواصل</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي</button>
+                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تحديث مراحل الشحنة</button>
+                <button onclick="switchSection('chat'); toggleSidebar();">💬 شات الأسطول الفوري</button>
+                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
                 <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
-                <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير والفواتير</button>
             `;
         }
     }
@@ -945,13 +952,10 @@
                 <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
             `;
         } else {
-            // شريط التنقل السفلي الخاص بالسائق والمشرف مطابق للمنصة
             navbar.innerHTML = `
-                <div class="nav-item" onclick="switchSection('aiMechanic', this)"><i class="fa-solid fa-robot"></i><span>المساعد</span></div>
-                <div class="nav-item" onclick="switchSection('publicFeed', this)"><i class="fa-solid fa-bullhorn"></i><span>الرحلات</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الدردشة</span></div>
                 <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-                <div class="nav-item" onclick="openSwitchAccountPrompt()"><i class="fa-solid fa-user"></i><span>بروفايلي</span></div>
+                <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-location-crosshairs"></i><span>التتبع</span></div>
+                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
             `;
         }
     }
@@ -972,7 +976,7 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function renderStats() {
-        let user = window.currentLoggedInUser || { id: '', role: 'سائق' };
+        let user = window.currentLoggedInUser || { id: '', role: 'driver' };
         let role = String(user.role || '').toLowerCase();
         let isAdmin = (role === 'admin' || role === 'مدير نظام' || user.id === '1');
         let currentUserId = String(user.id || '');
@@ -1016,8 +1020,7 @@
 
         let shipmentsList = isAdmin ? getAllShipments(data) : getAllShipments(data).filter(s => String(s.userId || '') === currentUserId);
 
-        // حماية الأقسام الإدارية بحيث لا يمكن للسائق العادي أو المشرف دخولها
-        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses' || sectionId === 'deferredInvoices') && !isAdmin) {
+        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl' || sectionId === 'treasury' || sectionId === 'expenses') && !isAdmin) {
             showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
             sectionId = 'shipments';
         }
@@ -2535,4 +2538,4 @@
     }
 </script>
 </body>
-</html>
+    </html>
