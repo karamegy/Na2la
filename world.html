@@ -504,7 +504,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث لدعم المزامنة المعزولة وحساب السائق المستقل -->
+    <!-- السكريبت المحدث والمصحح لعزل الحسابات والتحقق الدقيق من الرتبة -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -546,7 +546,8 @@
             return 'paid';
         }
 
-        let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق', avatar: '' };
+        // تم تعيين القيمة الافتراضية كمستقل/سائق وليس مدير لتلافي منح صلاحيات المدير تلقائياً للجميع
+        let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -572,7 +573,15 @@
             }, 500);
         });
 
-        // 🔒 محرك مزامنة حساب السائق المستقل المعزول تماماً
+        // 🔒 دالة مركزية للتحقق بدقة من رتبة المدير من قاعدة البيانات
+        function isUserAdmin() {
+            let user = window.currentLoggedInUser || {};
+            let role = String(user.role || '').toLowerCase();
+            return (role === 'admin' || role === 'مدير نظام' || role === 'مدير');
+        }
+        window.isUserAdmin = isUserAdmin;
+
+        // 🔒 محرك مزامنة حساب السائق أو المدير المستقل المعزول تماماً
         async function initConnectedUserSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
@@ -624,7 +633,9 @@
                     return;
                 }
 
-                await fetchDriverData('1');
+                // إذا لم توجد جلسة سابقة، نبقي المستخدم كسائق معزول افتراضياً
+                applyUserPermissionsUI();
+                initFirestoreSync();
 
             } catch (err) {
                 console.error("خطأ في مزامنة الحساب المستقل:", err);
@@ -635,21 +646,6 @@
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
             try {
-                if (identifier === '1' || identifier === 'مدير' || identifier === 'admin') {
-                    let docRef = doc(window.db, "drivers", "1");
-                    let docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        window.currentLoggedInUser = { id: docSnap.id, ...docSnap.data() };
-                    } else {
-                        window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق' };
-                    }
-                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                    applyUserPermissionsUI();
-                    initFirestoreSync();
-                    return;
-                }
-
                 let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
                 let snapshot = await getDocs(q);
 
@@ -678,7 +674,7 @@
                     applyUserPermissionsUI();
                     initFirestoreSync();
                 } else {
-                    window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver' };
+                    window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق مستقل' };
                     applyUserPermissionsUI();
                     initFirestoreSync();
                 }
@@ -688,27 +684,26 @@
         }
 
         function openSwitchAccountPrompt() {
-            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة (أو '1' للمدير):");
+            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة برتبته الحقيقية (أو '1' للمدير):");
             if (inputId && inputId.trim() !== "") {
                 fetchDriverData(inputId.trim());
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-        function isUserAdmin() {
-            let user = window.currentLoggedInUser || {};
-            let role = String(user.role || '').toLowerCase();
-            let name = String(user.name || '');
-            return (role === 'admin' || role === 'مدير نظام' || role === 'مدير' || user.id === '1' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(name));
-        }
-
-        // 🖼️ تطبيق الصلاحيات والواجهة
+        // 🖼️ تطبيق الصلاحيات والواجهة حسب الرتبة الحقيقية
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', avatar: '' };
             let isAdmin = isUserAdmin();
+            let roleName = String(user.role || '').toLowerCase();
             
             document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
-            document.getElementById('header-role-badge').innerText = isAdmin ? '👑 مدير نظام (تحكم كامل)' : `👨‍✈️ ${user.title || user.role || 'سائق مستقل'}`;
+            
+            let roleBadgeText = '👨‍✈️ سائق مستقل';
+            if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
+            else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
+
+            document.getElementById('header-role-badge').innerText = roleBadgeText;
 
             const imgEl = document.getElementById("userHeaderAvatarImg");
             const emojiEl = document.getElementById("userHeaderAvatarEmoji");
@@ -720,10 +715,9 @@
             } else {
                 imgEl.style.display = "none";
                 emojiEl.style.display = "block";
-                emojiEl.innerText = isAdmin ? '🐼' : '👨‍✈️';
+                emojiEl.innerText = isAdmin ? '🐼' : (roleName.includes('مشرف') ? '🛡️' : '👨‍✈️');
             }
 
-            // تعبئة حقل المسؤول تلقائياً باسم المستخدم الحالي في نموذج المصروفات
             let expOwnerInput = document.getElementById('expOwner');
             if (expOwnerInput && user.name) {
                 expOwnerInput.value = user.name;
@@ -778,7 +772,7 @@
             renderAllFinancials();
         }
 
-        // 🔒 المزامنة السحابية المعزولة تماماً حسب معرف وحساب المستخدم
+        // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة المستخدم
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -803,7 +797,6 @@
                 
                 onSnapshot(q, (snapshot) => {
                     let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    // تصفية أمان إضافية لضمان عدم تداخل أي بيانات
                     if (!isAdmin) {
                         items = items.filter(item => {
                             let itemUserId = String(item.userId || '');
