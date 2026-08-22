@@ -546,8 +546,7 @@
             return 'paid';
         }
 
-        // تم ضبط القيمة الافتراضية هنا كسائق مستقل حصرياً
-        let currentLoggedInUser = { id: 'guest_driver', name: 'سائق مستقل', role: 'driver', title: 'سائق معتمد', avatar: '' };
+        let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -573,7 +572,7 @@
             }, 500);
         });
 
-        // 🔒 محرك مزامنة حساب السائق المستقل المعزول تماماً (دون إجبار العودة للمدير)
+        // 🔒 محرك مزامنة حساب السائق المستقل المعزول تماماً
         async function initConnectedUserSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
@@ -625,9 +624,7 @@
                     return;
                 }
 
-                // إذا لم يوجد مستخدم محفوظ، نكتفي ببيانات السائق المستقل الحالي دون تحميل الإدارة
-                applyUserPermissionsUI();
-                initFirestoreSync();
+                await fetchDriverData('1');
 
             } catch (err) {
                 console.error("خطأ في مزامنة الحساب المستقل:", err);
@@ -638,6 +635,21 @@
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
             try {
+                if (identifier === '1' || identifier === 'مدير' || identifier === 'admin') {
+                    let docRef = doc(window.db, "drivers", "1");
+                    let docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        window.currentLoggedInUser = { id: docSnap.id, ...docSnap.data() };
+                    } else {
+                        window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق' };
+                    }
+                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
+                    applyUserPermissionsUI();
+                    initFirestoreSync();
+                    return;
+                }
+
                 let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
                 let snapshot = await getDocs(q);
 
@@ -676,18 +688,18 @@
         }
 
         function openSwitchAccountPrompt() {
-            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة:");
+            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة (أو '1' للمدير):");
             if (inputId && inputId.trim() !== "") {
                 fetchDriverData(inputId.trim());
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-        // 🔒 التحقق بدقة من رتبة المدير في قاعدة البيانات فقط
         function isUserAdmin() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase();
-            return (role === 'admin' || role === 'مدير نظام');
+            let name = String(user.name || '');
+            return (role === 'admin' || role === 'مدير نظام' || role === 'مدير' || user.id === '1' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(name));
         }
 
         // 🖼️ تطبيق الصلاحيات والواجهة
@@ -711,6 +723,7 @@
                 emojiEl.innerText = isAdmin ? '🐼' : '👨‍✈️';
             }
 
+            // تعبئة حقل المسؤول تلقائياً باسم المستخدم الحالي في نموذج المصروفات
             let expOwnerInput = document.getElementById('expOwner');
             if (expOwnerInput && user.name) {
                 expOwnerInput.value = user.name;
@@ -790,6 +803,7 @@
                 
                 onSnapshot(q, (snapshot) => {
                     let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // تصفية أمان إضافية لضمان عدم تداخل أي بيانات
                     if (!isAdmin) {
                         items = items.filter(item => {
                             let itemUserId = String(item.userId || '');
