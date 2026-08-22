@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث للتحقق من الرتبة والصلاحيات ومنحها تلقائياً -->
+    <!-- السكريبت المحدث والمصحح -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -615,13 +615,13 @@
             }, 500);
         });
 
-        // 👑 تحديد الرتبة بدقة من بيانات المستخدم السحابية
+        // 👑 تحديد الرتبة بدقة من بيانات المستخدم السحابية دون إجبار ID رقم 1 على أن يكون مديراً
         function getUserRole() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase().trim();
             let title = String(user.title || '').toLowerCase().trim();
             
-            if (role === 'admin' || role === 'مدير' || role === 'مدير نظام' || user.id === '1') return 'admin';
+            if (role === 'admin' || role === 'مدير' || role === 'مدير نظام') return 'admin';
             if (role === 'supervisor' || role === 'مشرف' || title.includes('مشرف')) return 'supervisor';
             return 'driver';
         }
@@ -689,7 +689,7 @@
                     return;
                 }
 
-                // افتراضي الحساب رقم 1 (المدير العام) إذا لم يوجد جلسة
+                // افتراضي الحساب رقم 1 (أو يمكن تغييره حسب رغبتك)
                 await fetchUserAccountData("1");
 
             } catch (err) {
@@ -703,7 +703,6 @@
             try {
                 let foundDoc = null;
 
-                // البحث في مجموعة drivers
                 let q1 = query(collection(window.db, "drivers"), where("id", "==", identifier));
                 let snap1 = await getDocs(q1);
                 if (!snap1.empty) foundDoc = { id: snap1.docs[0].id, ...snap1.docs[0].data() };
@@ -714,7 +713,6 @@
                     if (!snap2.empty) foundDoc = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
                 }
 
-                // البحث في مجموعة platform_users
                 if (!foundDoc) {
                     let q3 = query(collection(window.db, "platform_users"), where("id", "==", identifier));
                     let snap3 = await getDocs(q3);
@@ -744,14 +742,13 @@
         }
 
         function openSwitchAccountPrompt() {
-            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف لجلب الرتبة والصلاحيات (أو '1' للمدير):");
+            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف لجلب الرتبة والصلاحيات:");
             if (inputId && inputId.trim() !== "") {
                 fetchUserAccountData(inputId.trim());
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-        // 🔐 تطبيق الصلاحيات والواجهات بناءً على الرتبة المجلوبة
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', avatar: '' };
             let role = getUserRole();
@@ -782,7 +779,6 @@
                 expOwnerInput.value = user.name;
             }
 
-            // إظهار أو إخفاء زر تعديل الإشعار العام RSS بناءً على الرتبة
             let rssEditBtn = document.getElementById('rssEditBtn');
             if (rssEditBtn) {
                 rssEditBtn.style.display = (role === 'admin') ? 'inline-block' : 'none';
@@ -792,7 +788,6 @@
             renderAllFinancials();
         }
 
-        // 🧭 تخصيص شريط التنقل السفلي بناءً على الرتبة
         function renderBottomNavbarByRole(role) {
             const navbar = document.getElementById('bottom-navbar');
             if(!navbar) return;
@@ -814,7 +809,6 @@
                     <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التقارير</span></button>
                 `;
             } else {
-                // السائق يرى شحناته وحسابه فقط
                 navbar.innerHTML = `
                     <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
                     <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>شحناتي والآجل</span></button>
@@ -861,7 +855,6 @@
 
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                // المدير والمشرف يمكنهم رؤية البيانات الشاملة أو حسب الصلاحية، السائق يرى بياناته الخاصة فقط بناءً على userId أو اسمه
                 let q = (role === 'admin') ? collection(window.db, col) : query(collection(window.db, col), where("userId", "==", currentUserId));
                 
                 onSnapshot(q, (snapshot) => {
@@ -879,7 +872,6 @@
             });
         }
 
-        // 🚨 مستمع سحابي لبلاغات الطوارئ النشطة (للمديرين والمشرفين)
         function initEmergencyAlertsListener() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot } = window.firebaseModules;
@@ -905,7 +897,6 @@
             let listWidget = document.getElementById("overviewEmergencyList");
             let role = getUserRole();
 
-            // السائقون لا تظهر لهم ودجت الطوارئ الخاصة بالتحكم الإداري
             if (role === 'driver') {
                 if (widget) widget.style.display = 'none';
                 return;
