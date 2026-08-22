@@ -597,14 +597,12 @@
             localStorage.setItem('na2la_external_logged_user_id', externalId);
             localStorage.setItem('logged_in_driver_id', externalId);
         } else {
-            // إذا لم يوجد في الرابط، نحاول قراءته بحذر أو طلب تحديد الحساب لتجنب بقاء حساب المدير عالقاً
             externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
         }
 
         if (externalId) {
             await fetchDriverData(externalId);
         } else {
-            // عدم فرض المدير افتراضياً، بل طلب تحديد المعرف لضمان العزل التام للمستخدمين
             window.currentLoggedInUser = { id: '', name: 'يرجى تحديد الحساب', role: 'guest', title: 'زائر' };
             applyUserPermissionsUI();
             openSwitchAccountPrompt();
@@ -613,7 +611,7 @@
 
     async function fetchDriverData(identifier) {
         if (!window.db || !window.firebaseModules) {
-            window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+            window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             initChatRealtimeListener();
@@ -621,30 +619,55 @@
             return;
         }
 
-        const { collection, getDocs, query, where } = window.firebaseModules;
+        const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
         try {
-            let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
-            let snapshot = await getDocs(q);
+            let docData = null;
+            let docId = identifier;
 
-            if (snapshot.empty) {
-                q = query(collection(window.db, "drivers"), where("phone", "==", identifier));
-                snapshot = await getDocs(q);
-            }
-            if (snapshot.empty) {
-                q = query(collection(window.db, "drivers"), where("name", "==", identifier));
-                snapshot = await getDocs(q);
-            }
-            if (snapshot.empty) {
-                q = query(collection(window.db, "platform_users"), where("id", "==", identifier));
-                snapshot = await getDocs(q);
+            // 1. محاولة الجلب المباشر بمعرف المستند من drivers
+            try {
+                let dSnap = await getDoc(doc(window.db, "drivers", identifier));
+                if (dSnap.exists()) {
+                    docData = dSnap.data();
+                    docId = dSnap.id;
+                }
+            } catch(e) {}
+
+            // 2. محاولة الجلب المباشر بمعرف المستند من platform_users
+            if (!docData) {
+                try {
+                    let pSnap = await getDoc(doc(window.db, "platform_users", identifier));
+                    if (pSnap.exists()) {
+                        docData = pSnap.data();
+                        docId = pSnap.id;
+                    }
+                } catch(e) {}
             }
 
-            if (!snapshot.empty) {
-                let docData = snapshot.docs[0].data();
-                let docId = snapshot.docs[0].id;
-                
+            // 3. البحث عبر الحقول في حال لم يكن المستند مطابقاً للـ ID مباشرة
+            if (!docData) {
+                let collectionsToQuery = ["drivers", "platform_users"];
+                let fieldsToQuery = ["id", "phone", "name"];
+
+                for (let colName of collectionsToQuery) {
+                    for (let fieldName of fieldsToQuery) {
+                        try {
+                            let q = query(collection(window.db, colName), where(fieldName, "==", identifier));
+                            let snapshot = await getDocs(q);
+                            if (!snapshot.empty) {
+                                docData = snapshot.docs[0].data();
+                                docId = snapshot.docs[0].id;
+                                break;
+                            }
+                        } catch(err) {}
+                    }
+                    if (docData) break;
+                }
+            }
+
+            if (docData) {
                 if (docId !== '1' && !['المدير', 'مدير', 'عماد', 'Emad'].includes(docData.name)) {
-                    docData.role = 'driver';
+                    docData.role = docData.role || 'driver';
                 }
 
                 window.currentLoggedInUser = { id: docId, ...docData };
@@ -652,11 +675,20 @@
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+                let savedSession = localStorage.getItem('na2la_active_session');
+                if (savedSession) {
+                    try {
+                        window.currentLoggedInUser = JSON.parse(savedSession);
+                    } catch(e) {
+                        window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
+                    }
+                } else {
+                    window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
+                }
             }
         } catch(err) { 
             console.error(err);
-            window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+            window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
         }
 
         applyUserPermissionsUI();
