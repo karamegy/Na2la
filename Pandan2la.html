@@ -492,7 +492,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    // تم ضبط القيمة الافتراضية هنا كسائق مستقل حصرياً وليس المدير لتفادي منح صلاحيات المدير للجميع
+    // تم ضبط القيمة الافتراضية هنا كسائق معزول تماماً حصرياً
     let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
@@ -533,11 +533,13 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 دالة مركزية للتحقق بدقة من رتبة المدير الحقيقية من قاعدة البيانات
+    // 🔒 دالة مركزية صارمة جداً للتحقق من أن المستخدم الحالي هو المدير الرئيسي فقط
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        return (role === 'admin' || role === 'مدير نظام' || role === 'مدير');
+        let role = String(user.role || '').toLowerCase().trim();
+        let userId = String(user.id || '').trim();
+        // المدير الحقيقي حصراً هو من يحمل المعرف '1' أو رتبة admin صريحة مسجلة في مستنده
+        return (userId === '1' && (role === 'admin' || role === 'مدير نظام' || role === 'مدير'));
     }
     window.isUserAdmin = isUserAdmin;
 
@@ -611,6 +613,12 @@
         }
 
         if (activeUser) {
+            // قفل أمني: منع أي حساب عادٍ من انتحال صفة المدير إذا لم يكن id خاصته هو '1'
+            let uId = String(activeUser.id || '').trim();
+            let uRole = String(activeUser.role || '').toLowerCase().trim();
+            if (uId !== '1' && (uRole === 'admin' || uRole === 'مدير نظام' || uRole === 'مدير')) {
+                activeUser.role = 'driver'; // خفض رتبته القسرية لسائق منعاً لأي خطأ
+            }
             window.currentLoggedInUser = activeUser;
             localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
             applyUserPermissionsUI();
@@ -618,7 +626,6 @@
             return;
         }
         
-        // إذا لم يتم العثور على جلسة، نبقي المستخدم كسائق عادي ولا نجبره على حساب المدير 1
         applyUserPermissionsUI();
         loadAllDataFromFirestoreMultiCollection();
     }
@@ -649,14 +656,24 @@
 
             if (!snapshot.empty) {
                 let docData = snapshot.docs[0].data();
-                window.currentLoggedInUser = { id: snapshot.docs[0].id, ...docData };
+                let docId = snapshot.docs[0].id;
+                
+                // 🔒 التحقق الصارم: المدير الحقيقي فقط هو من يحمل المعرف '1'
+                if (docId !== '1') {
+                    docData.role = 'driver'; // إجبار الحساب على أن يكون سائقاً معزولاً حصراً
+                }
+
+                window.currentLoggedInUser = { id: docId, ...docData };
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 applyUserPermissionsUI();
                 loadAllDataFromFirestoreMultiCollection();
-                showToast(`تم مزامنة حساب (${getSafeName(docData)}) برتبته الحقيقية بنجاح! ✅`);
+                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب، يرجى التحقق من المعرف.", "warning");
+                showToast("⚠️ لم يتم العثور على الحساب، تم تعيينه كسائق مستقل معزول.", "warning");
+                window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+                applyUserPermissionsUI();
+                loadAllDataFromFirestoreMultiCollection();
             }
         } catch(err) { 
             console.error(err);
@@ -671,7 +688,7 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // المزامنة السحابية المعزولة
+    // المزامنة السحابية المعزولة (مع إصلاح خطأ السحب التلقائي للرئيسي)
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -699,10 +716,14 @@
                 if (!snapshot.empty) {
                     appData.drivers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     window.appData = appData;
+                    
+                    // 🛡️ التعديل الحاسم هنا: تم حذف البديل الخطير `|| appData.drivers[0]` تماماً لمنع منح صلاحية المدير بالخطأ
                     if (!isAdmin && appData.drivers.length > 0) {
-                        let matchedDrv = appData.drivers.find(d => d.id === currentUserId) || appData.drivers[0];
-                        window.currentLoggedInUser = { id: matchedDrv.id, ...matchedDrv };
-                        applyUserPermissionsUI();
+                        let matchedDrv = appData.drivers.find(d => d.id === currentUserId);
+                        if (matchedDrv) {
+                            window.currentLoggedInUser = { id: matchedDrv.id, ...matchedDrv };
+                            applyUserPermissionsUI();
+                        }
                     }
                 }
             });
@@ -884,10 +905,10 @@
         
         document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
         
-        let roleBadgeText = '👨‍✈️ سائق';
+        let roleBadgeText = '👨‍✈️ سائق معزول';
         if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
         else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
-        else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق معتمد';
+        else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق مستقل';
         
         document.getElementById('header-role-badge').innerText = roleBadgeText;
 
