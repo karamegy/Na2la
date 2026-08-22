@@ -260,11 +260,16 @@
             </div>
         </div>
 
+        <!-- شبكة الأقسام الكاملة تماماً مثل المنصة الأم لجميع الحسابات -->
         <div class="modules-grid" id="admin-modules-grid">
             <div class="module-card" onclick="switchSection('deferredInvoices')"><i class="fa-solid fa-hourglass-half" style="color:var(--yellow-warning);"><span>قسم الأجل</span></i></div>
-            <div class="module-card" onclick="switchSection('pandaAdmin')"><i class="fa-solid fa-chess-king" style="color:var(--yellow-warning);"><span>باندا العليا</span></i></div>
             <div class="module-card" onclick="switchSection('consolidatedInvoices')"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--green-success);"><span>فواتير مجمعة</span></i></div>
             <div class="module-card" onclick="switchSection('shipments')"><i class="fa-solid fa-truck-fast"><span>الشحنات</span></i></div>
+            <div class="module-card" onclick="switchSection('treasury')"><i class="fa-solid fa-wallet" style="color:var(--green-success);"><span>الخزينة</span></i></div>
+            <div class="module-card" onclick="switchSection('expenses')"><i class="fa-solid fa-gas-pump" style="color:var(--red-danger);"><span>المصروفات</span></i></div>
+            <div class="module-card" onclick="switchSection('cargoTracking')"><i class="fa-solid fa-location-crosshairs" style="color:var(--purple-color);"><span>التتبع</span></i></div>
+            <div class="module-card" onclick="switchSection('chat')"><i class="fa-solid fa-comments" style="color:var(--accent-main);"><span>الشات</span></i></div>
+            <div class="module-card" onclick="switchSection('freightCalc')"><i class="fa-solid fa-calculator" style="color:var(--yellow-warning);"><span>الحاسبة</span></i></div>
         </div>
     </div>
 
@@ -592,26 +597,38 @@
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
         
-        if (externalId) {
-            externalId = externalId.trim();
-            localStorage.setItem('na2la_external_logged_user_id', externalId);
-            localStorage.setItem('logged_in_driver_id', externalId);
-        } else {
-            // إذا لم يوجد في الرابط، نحاول قراءته بحذر أو طلب تحديد الحساب لتجنب بقاء حساب المدير عالقاً
-            externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
-        }
+        // مسح أي اعتماد تلقائي على التخزين المحلي للهوية لضمان الأمان والعزل التام
+        localStorage.removeItem('na2la_external_logged_user_id');
+        localStorage.removeItem('logged_in_driver_id');
+        localStorage.removeItem('na2la_active_session');
 
         if (externalId) {
+            externalId = externalId.trim();
             await fetchDriverData(externalId);
         } else {
-            // عدم فرض المدير افتراضياً، بل طلب تحديد المعرف لضمان العزل التام للمستخدمين
-            window.currentLoggedInUser = { id: '', name: 'يرجى تحديد الحساب', role: 'guest', title: 'زائر' };
+            window.currentLoggedInUser = { id: '', name: 'يرجى إدخال هويتك', role: 'guest', title: 'زائر' };
             applyUserPermissionsUI();
-            openSwitchAccountPrompt();
+            setTimeout(() => {
+                openSwitchAccountPrompt();
+            }, 300);
         }
     }
 
+    function openSwitchAccountPrompt() {
+        let inputId = prompt("🔒 الدخول الآمن: أدخل معرف الحساب (ID) أو رقم الهاتف للتحقق والمزامنة السحابية:");
+        if (inputId && inputId.trim() !== "") {
+            fetchDriverData(inputId.trim());
+        } else {
+            showToast('يجب إدخال المعرف الصحيح لفتح الحساب المعزول', 'danger');
+            setTimeout(() => {
+                openSwitchAccountPrompt();
+            }, 1000);
+        }
+    }
+    window.openSwitchAccountPrompt = openSwitchAccountPrompt;
+
     async function fetchDriverData(identifier) {
+        identifier = String(identifier).trim();
         if (!window.db || !window.firebaseModules) {
             window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
             applyUserPermissionsUI();
@@ -648,15 +665,17 @@
                 }
 
                 window.currentLoggedInUser = { id: docId, ...docData };
-                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
+                showToast(`تم التحقق ومزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+                showToast('❌ المعرف المدخل غير مسجل في قاعدة البيانات', 'danger');
+                window.currentLoggedInUser = { id: '', name: 'حساب غير مسجل', role: 'guest', title: 'زائر' };
+                setTimeout(() => {
+                    openSwitchAccountPrompt();
+                }, 1500);
             }
         } catch(err) { 
             console.error(err);
-            window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق معتمد' };
+            showToast('⚠️ خطأ في الاتصال بقاعدة البيانات السحابية', 'danger');
         }
 
         applyUserPermissionsUI();
@@ -664,14 +683,6 @@
         initChatRealtimeListener();
         switchSection('deferredInvoices');
     }
-
-    function openSwitchAccountPrompt() {
-        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة:");
-        if (inputId && inputId.trim() !== "") {
-            fetchDriverData(inputId.trim());
-        }
-    }
-    window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
@@ -819,7 +830,6 @@
             }
         } catch (err) { console.error(err); }
 
-        localStorage.setItem('transportAppV90_8', JSON.stringify(appData));
         setTimeout(() => { window._isSavingLocally = false; }, 1000);
 
         if(typeof renderStats === 'function') renderStats();
@@ -901,71 +911,48 @@
         renderStats();
     }
 
+    // إظهار كافة الصلاحيات والأقسام كما في المنصة الأم لجميع الحسابات مع حماية العزل لبياناتهم
     function renderSidebarByRole(isAdmin) {
         const sidebarList = document.querySelector('.sidebar-nav-list');
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
-        
-        let user = window.currentLoggedInUser || {};
-        let roleName = String(user.role || '').toLowerCase();
-        let isSupervisor = roleName.includes('مشرف') || roleName === 'supervisor';
 
-        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : (isSupervisor ? '🛡️ لوحة المشرف' : '👨‍✈️ قائمة السائق المستقل');
+        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : '👑 لوحة التحكم الشاملة (المنصة الأم)';
 
-        if (isAdmin) {
-            sidebarList.innerHTML = `
-                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ إدارة الأجل والفواتير</button>
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة جميع الشحنات</button>
+        sidebarList.innerHTML = `
+            <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ قسم الأجل وفواتير الديون</button>
+            <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة الشحنات والرحلات</button>
+            <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة</button>
+            <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
+            <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول وصيانة السيارات</button>
+            <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والحسابات النقدية</button>
+            <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات والوقود</button>
+            <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون</button>
+            <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل</button>
+            <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي</button>
+            <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
+            <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
+            <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية للمقرات</button>
+            <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
+            ${isAdmin ? `
                 <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا والتحكم</button>
-                <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة</button>
-                <button onclick="switchSection('centralChat'); toggleSidebar();">📢 الشات المركزي وبث الرسائل</button>
-                <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة الألقاب والصلاحيات</button>
-                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
-                <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول وصيانة السيارات</button>
-                <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والحسابات</button>
-                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات والوقود</button>
-                <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون</button>
-                <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل</button>
-                <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي</button>
-                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
-                <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
-                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
-                <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
-                <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات</button>
-            `;
-        } else {
-            sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 شحناتي الخاصة فقط</button>
-                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
-                <button onclick="switchSection('treasury'); toggleSidebar();">💵 خزينتي وحساباتي النقدية</button>
-                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ مصروفاتي التشغيلية</button>
-                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع ومراسلة الشحنات</button>
-                <button onclick="switchSection('chat'); toggleSidebar();">💬 شات الأسطول الفوري</button>
-                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
-                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
-            `;
-        }
+                <button onclick="switchSection('centralChat'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📢 الشات المركزي وبث الرسائل</button>
+                <button onclick="switchSection('driversControl'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 إدارة الألقاب والصلاحيات</button>
+                <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات والأحداث</button>
+            ` : ''}
+        `;
     }
 
     function renderBottomNavbarByRole(isAdmin) {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
 
-        if (isAdmin) {
-            navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
-                <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-                <div class="nav-item" onclick="switchSection('pandaAdmin', this)"><i class="fa-solid fa-chess-king"></i><span>باندا</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-            `;
-        } else {
-            navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>شحناتي</span></div>
-                <div class="nav-item" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
-                <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-location-crosshairs"></i><span>التتبع</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-            `;
-        }
+        navbar.innerHTML = `
+            <div class="nav-item active" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
+            <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
+            <div class="nav-item" onclick="switchSection('treasury', this)"><i class="fa-solid fa-wallet"></i><span>الخزينة</span></div>
+            <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
+        `;
     }
 
     function toggleSidebar() {
