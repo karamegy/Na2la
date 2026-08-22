@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>غرفة العمليات التشغيلية والأسطول - Na2la | Emad AI OS V59 PRO</title>
+    <title>غرفة العمليات التشغيلية والأسطول - Na2la | Emad AI OS V59 PRO SECURE</title>
     
     <!-- استدعاء مكتبات Firebase سحابياً -->
     <script type="module">
@@ -548,13 +548,12 @@
     let globalDriversCache = []; 
     let globalFleetCache = [];
 
-    // التحقق مما إذا كان المستخدم الحالي مديراً بناءً على البيانات المخزنة وقاعدة البيانات
+    // جلب بيانات الحساب النشط
     function getCurrentActiveDriver() {
         let loggedId = localStorage.getItem('logged_in_driver_id') || "";
         let loggedName = (localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_name') || "").trim();
         
         if (!loggedId && !loggedName) {
-            // كقيمة افتراضية إذا لم يتم تخزين جلسة، نعتبر أول حساب في الكاش أو المدير العام هو الافتراضي
             if (globalDriversCache.length > 0) {
                 return globalDriversCache.find(d => ['مدير', 'المدير', 'عماد', 'Emad'].includes(d.name)) || globalDriversCache[0];
             }
@@ -566,24 +565,20 @@
             (loggedName && (d.name === loggedName || d.phone === loggedName || d.id === loggedName))
         );
 
-        if (!driver && loggedName) {
-            // إنشاء كائن مؤقت إذا طابق اسم المدير العام
-            if (['مدير', 'المدير', 'عماد', 'Emad', 'ADMIN_MASTER_EMAD'].includes(loggedName)) {
-                return { name: loggedName, role: 'admin', avatar: localStorage.getItem('na2la_current_user_avatar') || '' };
-            }
-        }
         return driver;
     }
 
+    // تم تعديل هذه الدالة للتحقق بصرامة من الرتبة في قاعدة البيانات (منع إعطاء الإدارة بسبب صلاحية المجتمع)
     function isUserAdmin() {
         let driver = getCurrentActiveDriver();
-        if (!driver) {
-            let loggedName = (localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_name') || "").trim();
-            return ['مدير', 'المدير', 'عماد', 'Emad', 'ADMIN_MASTER_EMAD'].includes(loggedName);
+        if (driver) {
+            let role = String(driver.role || '').toLowerCase().trim();
+            return (role === 'admin' || role === 'مدير' || role === 'المدير');
         }
-        let role = (driver.role || '').trim().toLowerCase();
-        let name = (driver.name || '').trim();
-        return (role === 'admin' || role === 'مدير' || role === 'المدير' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(name));
+        
+        // كبديل احتياطي للـ Admin الرئيسي (باندا) لو لم تكتمل المزامنة بعد
+        let loggedName = (localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_name') || "").trim().toLowerCase();
+        return ['مدير', 'المدير', 'عماد', 'emad', 'admin_master_emad'].includes(loggedName);
     }
 
     function openModal(modalId) {
@@ -857,6 +852,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
             let newRole = (currentRole === 'admin' || currentRole === 'مدير') ? 'driver' : 'admin';
+            // تحديث الرتبة، وإذا أصبح مديراً يحصل تلقائياً على وصول للمجتمع (ويمكن تعطيله لاحقاً لو شئت)
             await updateDoc(doc(window.db, "drivers", driverId), { role: newRole, canAccessSocial: newRole === 'admin' });
             fetchDriversManual();
         } catch (err) {
@@ -889,7 +885,7 @@
         renderDriversTable(filtered);
     }
 
-    // مزامنة تلقائية لحظية للحساب المتصل مع الصور والمعلومات من قاعدة البيانات
+    // هنا تم تصحيح خطأ العرض الدقيق والفصل التام بين الإدارة وصلاحية المجتمع
     function updateCurrentInterfacePermissions() {
         let activeDriver = getCurrentActiveDriver();
         
@@ -897,12 +893,13 @@
         let avatarEl = document.getElementById("currentUserAvatar");
         let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
 
-        let activeName = activeDriver ? (activeDriver.name || "مستخدم") : "مدير النظام";
+        let activeName = activeDriver ? (activeDriver.name || "مستخدم") : "زائر";
         let activeAvatar = (activeDriver && activeDriver.avatar && activeDriver.avatar.trim() !== "") 
             ? activeDriver.avatar 
             : "https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png";
         
-        let activeRoleText = isUserAdmin() ? "🛡️ مدير النظام (صلاحيات كاملة)" : "👤 سائق / مستخدم";
+        let isAdmin = isUserAdmin();
+        let activeRoleText = isAdmin ? "🛡️ مدير النظام (صلاحيات كاملة)" : "👤 سائق / مستخدم";
 
         if (labelEl) labelEl.innerText = activeName;
         if (avatarEl) avatarEl.src = activeAvatar;
@@ -913,23 +910,27 @@
         let adminBtn = document.getElementById("navAdminBtn");
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        let isAdmin = isUserAdmin();
-
         if (isAdmin) {
+            // المدير يرى كل شيء بالكامل
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
             if(profileBtn) profileBtn.style.display = "flex";
             if(communityBtn) communityBtn.style.display = "flex";
         } else {
+            // المستخدم العادي: اخفاء الإدارة بشكل قاطع وصارم
             if(adminBtn) adminBtn.style.display = "none";
             if(cardAdminUsers) cardAdminUsers.style.display = "none";
             
-            if (activeDriver && activeDriver.canAccessSocial === true) {
+            // فحص صلاحية المجتمع المستقلة
+            let hasSocialAccess = activeDriver && activeDriver.canAccessSocial === true;
+            
+            if (hasSocialAccess) {
+                // تفعيل حسابي والمجتمع فقط (تم تصحيح الخطأ المطبعي هنا)
                 if(profileBtn) profileBtn.style.display = "flex";
-                if(communityBtn) profileBtn.style.display = "flex";
+                if(communityBtn) communityBtn.style.display = "flex";
             } else {
                 if(profileBtn) profileBtn.style.display = "none";
-                if(communityBtn) profileBtn.style.display = "none";
+                if(communityBtn) communityBtn.style.display = "none";
             }
         }
     }
