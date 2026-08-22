@@ -770,7 +770,7 @@
         function openChatModal() { document.getElementById('chatModal').style.display = 'flex'; renderChatMessages(); renderChatAccountsList(); }
         function closeChatModal() { document.getElementById('chatModal').style.display = 'none'; }
 
-        // إدارة مكالمات WebRTC مع التعامل السليم مع الأذونات
+        // إدارة مكالمات WebRTC مع فحص الأذونات ومعالجة الأخطاء الدقيقة للـ PWA
         async function startWebRTCCall(isVideo) {
             if (currentChatTarget === 'general') {
                 alert('⚠️ يرجى اختيار حساب شخصي محدد من القائمة الجانبية لإجراء المكالمة.');
@@ -780,6 +780,12 @@
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو جارية...' : '📞 مكالمة صوتية جارية...';
             document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون...';
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون (getUserMedia غير مدعوم).');
+                endActiveWebRTCCall();
+                return;
+            }
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia(isVideo ? { audio: true, video: true } : { audio: true, video: false });
@@ -839,7 +845,7 @@
 
             } catch (err) {
                 console.error('Error starting WebRTC call:', err);
-                alert('⚠️ تعذر الوصول إلى الكاميرا أو الميكروفون.\nيرجى النقر على أيقونة القفل (🔒) بجوار رابط الموقع في المتصفح والسماح للأذونات.');
+                alert(`⚠️ خطأ في تشغيل الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}\n(تأكد من عدم استخدام الكاميرا أو الميكروفون في تطبيق آخر بالخلفية).`);
                 endActiveWebRTCCall();
             }
         }
@@ -848,6 +854,12 @@
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو واردة' : '📞 مكالمة صوتية واردة';
             document.getElementById('call-modal-status').innerText = 'جاري طلب الأذونات والرد...';
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون.');
+                endActiveWebRTCCall();
+                return;
+            }
 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia(isVideo ? { audio: true, video: true } : { audio: true, video: false });
@@ -892,7 +904,7 @@
 
             } catch (err) {
                 console.error('Error answering WebRTC call:', err);
-                alert('⚠️ تعذر الوصول للكاميرا أو الميكروفون. يرجى السماح بالأذونات من إعدادات المتصفح.');
+                alert(`⚠️ خطأ في استقبال الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}`);
                 endActiveWebRTCCall();
             }
         }
@@ -1271,7 +1283,7 @@
                 profileName: targetDrv.name,
                 author: loggedInUser.name,
                 text: text,
-                files: [...profileWallFilesArr], // تم التصحيح هنا من profileWallFilesAttr إلى profileWallFilesArr
+                files: [...profileWallFilesArr],
                 likes: [],
                 comments: [],
                 date: new Date().toLocaleString('ar-EG')
