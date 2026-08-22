@@ -388,7 +388,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تاما لكل مستخدم ومدير ومشرف -->
+<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماما لكل مستخدم ومدير ومشرف -->
 <script>
     window._isSavingLocally = false;
 
@@ -492,7 +492,8 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق', avatar: '' };
+    // تم ضبط القيمة الافتراضية هنا كسائق مستقل حصرياً وليس المدير لتفادي منح صلاحيات المدير للجميع
+    let currentLoggedInUser = { id: '', name: 'زائر / سائق', role: 'driver', title: 'سائق معتمد', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -532,15 +533,15 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 دالة مركزية للتحقق مما إذا كان المستخدم الحالي مديراً أم لا
+    // 🔒 دالة مركزية للتحقق بدقة من رتبة المدير الحقيقية من قاعدة البيانات
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        return (role === 'admin' || role === 'مدير نظام' || role === 'مدير' || user.id === '1');
+        return (role === 'admin' || role === 'مدير نظام' || role === 'مدير');
     }
     window.isUserAdmin = isUserAdmin;
 
-    // 🔒 دالة لتصفية الشحنات بناءً على المستخدم الحالي (للمدير تظهر الكل، وللمشرف والسائق تظهر شحناته الخاصة فقط)
+    // 🔒 تصفية الشحنات بناءً على المستخدم الحالي
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
         if (isUserAdmin()) return all;
@@ -555,7 +556,7 @@
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
-    // 🔒 دالة لتصفية أي قوائم أخرى (مثل الخزينة والمصروفات والأجل) لكل مستخدم بشكل آمن
+    // 🔒 تصفية القوائم الأخرى لكل مستخدم بشكل آمن
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
         if (isUserAdmin()) return items;
@@ -570,7 +571,7 @@
     }
     window.getUserFilteredList = getUserFilteredList;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة المحدث
+    // 🔒 محرك مزامنة الحسابات المستقلة
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -609,19 +610,6 @@
             }
         }
 
-        if (!activeUser) {
-            for (let i = 0; i < localStorage.length; i++) {
-                let key = localStorage.key(i);
-                try {
-                    let val = JSON.parse(localStorage.getItem(key));
-                    if (val && typeof val === 'object' && (val.id || val.phone || val.name)) {
-                        activeUser = val;
-                        break;
-                    }
-                } catch(e) {}
-            }
-        }
-
         if (activeUser) {
             window.currentLoggedInUser = activeUser;
             localStorage.setItem('logged_in_driver_id', activeUser.id || activeUser.phone);
@@ -630,29 +618,15 @@
             return;
         }
         
-        fetchDriverData('1');
+        // إذا لم يتم العثور على جلسة، نبقي المستخدم كسائق عادي ولا نجبره على حساب المدير 1
+        applyUserPermissionsUI();
+        loadAllDataFromFirestoreMultiCollection();
     }
 
     async function fetchDriverData(identifier) {
         if (!window.db || !window.firebaseModules) return;
-        const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
+        const { collection, getDocs, query, where } = window.firebaseModules;
         try {
-            if (identifier === '1' || identifier === 'مدير' || identifier === 'admin') {
-                let docRef = doc(window.db, "drivers", "1");
-                let docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    window.currentLoggedInUser = { id: docSnap.id, ...docSnap.data() };
-                } else {
-                    window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق' };
-                }
-                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                applyUserPermissionsUI();
-                loadAllDataFromFirestoreMultiCollection();
-                showToast(`تم مزامنة حساب المدير بنجاح! 👑`);
-                return;
-            }
-
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
             let snapshot = await getDocs(q);
 
@@ -680,9 +654,9 @@
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 applyUserPermissionsUI();
                 loadAllDataFromFirestoreMultiCollection();
-                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
+                showToast(`تم مزامنة حساب (${getSafeName(docData)}) برتبته الحقيقية بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب، جاري محاولة الفحص...", "warning");
+                showToast("⚠️ لم يتم العثور على الحساب، يرجى التحقق من المعرف.", "warning");
             }
         } catch(err) { 
             console.error(err);
@@ -690,14 +664,14 @@
     }
 
     function openSwitchAccountPrompt() {
-        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة (أو '1' للمدير):");
+        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة:");
         if (inputId && inputId.trim() !== "") {
             fetchDriverData(inputId.trim());
         }
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة وحساب المستخدم
+    // المزامنة السحابية المعزولة
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -726,8 +700,8 @@
                     appData.drivers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     window.appData = appData;
                     if (!isAdmin && appData.drivers.length > 0) {
-                        let updatedUser = appData.drivers[0];
-                        window.currentLoggedInUser = { id: updatedUser.id, ...updatedUser };
+                        let matchedDrv = appData.drivers.find(d => d.id === currentUserId) || appData.drivers[0];
+                        window.currentLoggedInUser = { id: matchedDrv.id, ...matchedDrv };
                         applyUserPermissionsUI();
                     }
                 }
@@ -771,7 +745,7 @@
             });
 
         } catch (error) {
-            console.error("خطأ في المزامنة المخصصة للحساب:", error);
+            console.error("خطأ في المزامنة:", error);
         }
     }
 
@@ -794,8 +768,6 @@
             if(window.currentSectionId === 'chat') {
                 renderChatMessagesBox();
             }
-        }, (err) => {
-            console.error("خطأ الشات:", err);
         });
     }
 
@@ -814,7 +786,6 @@
                     }
                 }
             }
-
             if (appData.deferredInvoices) {
                 for (let d of appData.deferredInvoices) {
                     if (d.id) {
@@ -823,7 +794,6 @@
                     }
                 }
             }
-
             if (appData.treasury) {
                 for (let t of appData.treasury) {
                     if (t.id) {
@@ -832,7 +802,6 @@
                     }
                 }
             }
-
             if (appData.expenses) {
                 for (let ex of appData.expenses) {
                     if (ex.id) {
@@ -841,7 +810,6 @@
                     }
                 }
             }
-
             if (isUserAdmin()) {
                 await setDoc(doc(window.db, "appStore", "mainState"), appData, { merge: true });
             }
@@ -889,7 +857,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getUserFilteredShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بنظام العزل التام - إجمالي شحناتك الخاصة: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً برتبتك الحقيقية - إجمالي شحناتك الخاصة: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -904,21 +872,13 @@
         return window.appData;
     }
 
-    function logAction(actionText) {
-        let data = appStateData();
-        if(!data.auditLogs) data.auditLogs = [];
-        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
-        data.auditLogs.unshift({ action: actionText, user: userName, time: new Date().toLocaleTimeString('ar-EG'), createdAt: Date.now() });
-        saveDataAll();
-    }
-
     function setTheme(theme) {
         document.body.setAttribute('data-theme', theme);
         showToast('تم تغيير الثيم بنجاح');
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'مستقل', role: 'driver', title: 'سائق', avatar: '' };
+        let user = window.currentLoggedInUser || { name: 'زائر', role: 'driver', title: 'سائق', avatar: '' };
         let isAdmin = isUserAdmin();
         let roleName = String(user.role || '').toLowerCase();
         
@@ -927,6 +887,7 @@
         let roleBadgeText = '👨‍✈️ سائق';
         if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
         else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
+        else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق معتمد';
         
         document.getElementById('header-role-badge').innerText = roleBadgeText;
 
@@ -951,7 +912,7 @@
         let roleName = String(user.role || '').toLowerCase();
         let isSupervisor = roleName.includes('مشرف') || roleName === 'supervisor';
 
-        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : (isSupervisor ? '🛡️ لوحة المشرف (بيانات معزولة)' : '👨‍✈️ قائمة السائق المتصل');
+        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : (isSupervisor ? '🛡️ لوحة المشرف' : '👨‍✈️ قائمة السائق المستقل');
 
         if (isAdmin) {
             sidebarList.innerHTML = `
@@ -975,9 +936,8 @@
                 <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات</button>
             `;
         } else {
-            // المشرف أو السائق يرى فقط شحناته وأجله وخدماته الخاصة دون تداخل
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي فقط</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 شحناتي الخاصة فقط</button>
                 <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
                 <button onclick="switchSection('treasury'); toggleSidebar();">💵 خزينتي وحساباتي النقدية</button>
                 <button onclick="switchSection('expenses'); toggleSidebar();">⛽ مصروفاتي التشغيلية</button>
@@ -1035,10 +995,7 @@
         let rev = shipments.reduce((s, x) => s + getSafeAmount(x), 0);
         let exp = expenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipments.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
         let cash = treasury.reduce((s, t) => s + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
-        
-        let debts = deferredList
-            .filter(c => getSafeStatus(c) !== 'paid')
-            .reduce((s, c) => s + getSafeAmount(c), 0);
+        let debts = deferredList.filter(c => getSafeStatus(c) !== 'paid').reduce((s, c) => s + getSafeAmount(c), 0);
 
         if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = shipments.length;
         if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = rev.toLocaleString() + ' ج.م';
@@ -1258,15 +1215,17 @@
                         <table>
                             <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب الاحترافي</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.drivers || []).map((d, idx) => `
+                                ${(data.drivers || []).map((d, idx) => {
+                                    let currentRole = String(d.role || '').toLowerCase();
+                                    return `
                                     <tr>
                                         <td style="font-weight:bold;">${getSafeName(d)}</td>
                                         <td>${getSafePhone(d)}</td>
                                         <td>
                                             <select onchange="updateDriverField(${idx}, 'role', this.value)" style="font-size:9px; padding:2px;">
-                                                <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق</option>
-                                                <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
-                                                <option value="مدير نظام" ${d.role === 'مدير نظام' || d.role === 'admin' ? 'selected' : ''}>مدير نظام</option>
+                                                <option value="سائق" ${currentRole === 'سائق' || currentRole === 'driver' ? 'selected' : ''}>سائق</option>
+                                                <option value="مشرف" ${currentRole === 'مشرف' || currentRole === 'supervisor' ? 'selected' : ''}>مشرف</option>
+                                                <option value="مدير نظام" ${currentRole === 'مدير نظام' || currentRole === 'admin' || currentRole === 'مدير' ? 'selected' : ''}>مدير نظام</option>
                                             </select>
                                         </td>
                                         <td>
@@ -1278,7 +1237,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('drivers', ${idx})">حذف</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
+                                `;}).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -2309,11 +2268,21 @@
         showToast('📢 تم بث الرسالة بنجاح!');
     }
 
-    function updateDriverField(index, field, value) {
+    async function updateDriverField(index, field, value) {
         let data = appStateData();
-        data.drivers[index][field] = value;
+        let drv = data.drivers[index];
+        if(!drv) return;
+
+        drv[field] = value;
         saveDataAll();
-        showToast('تم التحديث بنجاح');
+
+        if (window.db && window.firebaseModules) {
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, "drivers", String(drv.id)), drv, { merge: true }).catch(err => console.error(err));
+        }
+
+        showToast('تم تحديث الحساب ورتبته بنجاح في السحاب! ✅');
+        applyUserPermissionsUI();
     }
 
     async function saveNewDriver(e) {
@@ -2345,7 +2314,7 @@
 
         saveDataAll();
         switchSection('driversControl');
-        showToast('تم إضافة الحساب بنجاح وتحديث باندا!');
+        showToast('تم إضافة الحساب الجديد بنجاح وتحديث قاعدة البيانات!');
     }
 
     async function deleteItem(type, index) {
@@ -2575,4 +2544,4 @@
     }
 </script>
 </body>
-    </html>
+</html>
