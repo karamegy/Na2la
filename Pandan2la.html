@@ -492,7 +492,7 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    let currentLoggedInUser = { id: 'guest_driver', name: 'سائق مستقل', role: 'driver', title: 'سائق معتمد', avatar: '' };
+    let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق', avatar: '' };
     window.currentLoggedInUser = currentLoggedInUser;
 
     const defaultInitialData = {
@@ -532,7 +532,7 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 التحقق بدقة من أن المستخدم مدير مستند على الرتبة في قاعدة البيانات
+    // 🔒 دالة مركزية للتحقق مما إذا كان المستخدم الحالي مديراً أم لا
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
@@ -540,6 +540,7 @@
     }
     window.isUserAdmin = isUserAdmin;
 
+    // 🔒 دالة لتصفية الشحنات بناءً على المستخدم الحالي (للمدير تظهر الكل، وللمشرف والسائق تظهر شحناته الخاصة فقط)
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
         if (isUserAdmin()) return all;
@@ -554,6 +555,7 @@
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
+    // 🔒 دالة لتصفية أي قوائم أخرى (مثل الخزينة والمصروفات والأجل) لكل مستخدم بشكل آمن
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
         if (isUserAdmin()) return items;
@@ -568,7 +570,7 @@
     }
     window.getUserFilteredList = getUserFilteredList;
 
-    // 🔒 محرك مزامنة الحسابات المستقلة (بدون تحميل افتراضي للمدير)
+    // 🔒 محرك مزامنة الحسابات المستقلة المحدث
     function initConnectedUserSync() {
         const urlParams = new URLSearchParams(window.location.search);
         const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
@@ -628,16 +630,29 @@
             return;
         }
         
-        // إذا لم يكن هناك أي مستجيل مسجل سابقاً، نتركه كسائق مستقل جديد افتراضياً (بدون صلاحيات مدير)
-        window.currentLoggedInUser = { id: 'guest_driver_' + Date.now(), name: 'سائق جديد', role: 'driver', title: 'سائق معتمد' };
-        applyUserPermissionsUI();
-        loadAllDataFromFirestoreMultiCollection();
+        fetchDriverData('1');
     }
 
     async function fetchDriverData(identifier) {
         if (!window.db || !window.firebaseModules) return;
         const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
         try {
+            if (identifier === '1' || identifier === 'مدير' || identifier === 'admin') {
+                let docRef = doc(window.db, "drivers", "1");
+                let docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    window.currentLoggedInUser = { id: docSnap.id, ...docSnap.data() };
+                } else {
+                    window.currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'أسطورة الطريق' };
+                }
+                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
+                applyUserPermissionsUI();
+                loadAllDataFromFirestoreMultiCollection();
+                showToast(`تم مزامنة حساب المدير بنجاح! 👑`);
+                return;
+            }
+
             let q = query(collection(window.db, "drivers"), where("id", "==", identifier));
             let snapshot = await getDocs(q);
 
@@ -667,7 +682,7 @@
                 loadAllDataFromFirestoreMultiCollection();
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                showToast("⚠️ لم يتم العثور على الحساب بهذه البيانات", "warning");
+                showToast("⚠️ لم يتم العثور على الحساب، جاري محاولة الفحص...", "warning");
             }
         } catch(err) { 
             console.error(err);
@@ -675,13 +690,14 @@
     }
 
     function openSwitchAccountPrompt() {
-        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة:");
+        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة (أو '1' للمدير):");
         if (inputId && inputId.trim() !== "") {
             fetchDriverData(inputId.trim());
         }
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
+    // 🔒 المزامنة السحابية المعزولة تماماً حسب رتبة وحساب المستخدم
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -902,7 +918,7 @@
     }
 
     function applyUserPermissionsUI() {
-        let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', title: 'سائق', avatar: '' };
+        let user = window.currentLoggedInUser || { name: 'مستقل', role: 'driver', title: 'سائق', avatar: '' };
         let isAdmin = isUserAdmin();
         let roleName = String(user.role || '').toLowerCase();
         
@@ -959,6 +975,7 @@
                 <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات</button>
             `;
         } else {
+            // المشرف أو السائق يرى فقط شحناته وأجله وخدماته الخاصة دون تداخل
             sidebarList.innerHTML = `
                 <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 الشحنات الخاصة بي فقط</button>
                 <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
@@ -2558,4 +2575,4 @@
     }
 </script>
 </body>
-</html>
+    </html>
