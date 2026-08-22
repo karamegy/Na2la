@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في منصة الخزينة وغرفة الطوارئ V98.9");
+            console.log("✅ تم المصادقة سحابياً بنجاح");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -215,8 +215,8 @@
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
             <div>
-                <div class="brand-text-styled" id="header-username">جاري مزامنة الحساب...</div>
-                <div style="font-size: 10px; color: var(--warning-color);" id="header-role-badge">🔄 مزامنة الرتبة والصلاحيات</div>
+                <div class="brand-text-styled" id="header-username">جاري التحقق من حالة الدخول الخارجي...</div>
+                <div style="font-size: 10px; color: var(--warning-color);" id="header-role-badge">🔄 جاري مزامنة حالة الجلسة</div>
             </div>
         </div>
 
@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المصحح والمحصّن ضد التضارب 100% -->
+    <!-- السكريبت المصحح للتحقق من حالة الدخول الخارجي فوراً -->
     <script>
         let currentAccountFilter = 'all';
 
@@ -586,7 +586,28 @@
             return 'paid';
         }
 
-        let currentLoggedInUser = { id: '1', name: 'المدير', role: 'admin', title: 'مدير نظام', avatar: '' };
+        // 🔐 قراءة ومعالجة حالة الدخول الخارجي (من خارج التطبيق أو الرابط أو التخزين الخارجي) فوراً قبل البناء
+        function getExternalLoginSession() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
+            
+            if (externalId) {
+                localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
+                return externalId.trim();
+            }
+
+            let savedExternalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
+            if (savedExternalId) {
+                return savedExternalId.trim();
+            }
+
+            // افتراضي المدير العام في حال عدم وجود جلسة خارجية مسجلة مسبقاً
+            return '1';
+        }
+
+        let activeExternalSessionId = getExternalLoginSession();
+        
+        let currentLoggedInUser = { id: activeExternalSessionId, name: 'جاري مزامنة الجلسة الخارجية...', role: 'driver', title: 'مستخدم النظام', avatar: '' };
         window.currentLoggedInUser = currentLoggedInUser;
 
         let appData = { 
@@ -597,90 +618,29 @@
             treasury: [], 
             drivers: [],
             emergencyAlerts: [],
-            rssMessage: "مرحباً بكم في أسطورة الطريق - نظام الصلاحيات والرتب الدقيق"
+            rssMessage: "مرحباً بكم في أسطورة الطريق - مزامنة الجلسة الخارجية نشطة"
         };
         window.appData = appData;
 
+        // تنفيذ المزامنة فور جاهزية قاعدة البيانات أو عند تحميل المستند
         window.addEventListener('firebase-ready', () => {
-            initConnectedUserSync();
-            initEmergencyAlertsListener();
+            executeExternalSyncSession();
         });
 
         window.addEventListener('DOMContentLoaded', () => {
+            applyUserPermissionsUI();
             setTimeout(() => {
                 if(window.db && window.firebaseModules) {
-                    initConnectedUserSync();
-                    initEmergencyAlertsListener();
+                    executeExternalSyncSession();
                 }
-            }, 500);
+            }, 300);
         });
 
-        function getUserRole() {
-            let user = window.currentLoggedInUser || {};
-            let role = String(user.role || '').toLowerCase().trim();
-            let title = String(user.title || '').toLowerCase().trim();
-            
-            if (role === 'admin' || role === 'مدير' || role === 'مدير نظام') return 'admin';
-            if (role === 'supervisor' || role === 'مشرف' || title.includes('مشرف')) return 'supervisor';
-            return 'driver';
-        }
-        window.getUserRole = getUserRole;
-
-        function isUserAdmin() {
-            return getUserRole() === 'admin';
-        }
-        window.isUserAdmin = isUserAdmin;
-
-        function isUserSupervisor() {
-            return getUserRole() === 'supervisor';
-        }
-        window.isUserSupervisor = isUserSupervisor;
-
-        function canUserManageSystem() {
-            let role = getUserRole();
-            return role === 'admin' || role === 'supervisor';
-        }
-        window.canUserManageSystem = canUserManageSystem;
-
-        // 🛡️ دالة المزامنة الجديدة والمصححة لمنع تداخل الحسابات كلياً
-        async function initConnectedUserSync() {
-            if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
-
-            try {
-                // تصفية وحذف المفاتيح القديمة المسببة للتضارب
-                const legacyKeys = [
-                    'na2la_independent_user_v98', 'na2la_connected_user_v90', 
-                    'na2la_user', 'currentUser', 'user', 'driver'
-                ];
-                legacyKeys.forEach(k => localStorage.removeItem(k));
-
-                const urlParams = new URLSearchParams(window.location.search);
-                const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
-                
-                if (urlUserId) {
-                    await fetchDriverData(urlUserId.trim());
-                    return;
-                }
-
-                const savedDriverId = localStorage.getItem('logged_in_driver_id') || localStorage.getItem('na2la_active_driver_id');
-                if (savedDriverId) {
-                    await fetchDriverData(savedDriverId.trim());
-                    return;
-                }
-
-                // افتراضي الحساب الرئيسي للمدير (مستند رقم 1) لمنع جلب بيانات خاطئة
-                await fetchDriverData('1');
-
-            } catch (err) {
-                console.error("خطأ في مزامنة الحساب المستقل:", err);
-            }
-        }
-
-        async function fetchDriverData(identifier) {
+        async function executeExternalSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, doc, getDoc, query, where } = window.firebaseModules;
             try {
+                let identifier = activeExternalSessionId;
                 let foundDoc = null;
 
                 let q1 = query(collection(window.db, "drivers"), where("id", "==", identifier));
@@ -707,29 +667,55 @@
 
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
-                    localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                    applyUserPermissionsUI();
-                    initFirestoreSync();
+                    localStorage.setItem('na2la_external_logged_user_id', foundDoc.id);
                 } else {
-                    window.currentLoggedInUser = { id: identifier, name: identifier, role: 'driver', title: 'سائق مستقل' };
-                    applyUserPermissionsUI();
-                    initFirestoreSync();
+                    window.currentLoggedInUser = { id: identifier, name: "حساب " + identifier, role: 'driver', title: 'سائق مستقل' };
                 }
-            } catch(err) { 
-                console.error(err);
+
+                applyUserPermissionsUI();
+                initFirestoreSync();
+                initEmergencyAlertsListener();
+
+            } catch (err) {
+                console.error("خطأ في مزامنة جلسة الدخول الخارجي:", err);
             }
         }
+
+        function getUserRole() {
+            let user = window.currentLoggedInUser || {};
+            let role = String(user.role || '').toLowerCase().trim();
+            let title = String(user.title || '').toLowerCase().trim();
+            
+            if (role === 'admin' || role === 'مدير' || role === 'مدير نظام') return 'admin';
+            if (role === 'supervisor' || role === 'مشرف' || title.includes('مشرف')) return 'supervisor';
+            return 'driver';
+        }
+        window.getUserRole = getUserRole;
+
+        function isUserAdmin() { return getUserRole() === 'admin'; }
+        window.isUserAdmin = isUserAdmin;
+
+        function isUserSupervisor() { return getUserRole() === 'supervisor'; }
+        window.isUserSupervisor = isUserSupervisor;
+
+        function canUserManageSystem() {
+            let role = getUserRole();
+            return role === 'admin' || role === 'supervisor';
+        }
+        window.canUserManageSystem = canUserManageSystem;
 
         function openSwitchAccountPrompt() {
             let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف لجلب الصلاحيات والرتبة الصحيحة:");
             if (inputId && inputId.trim() !== "") {
-                fetchDriverData(inputId.trim());
+                activeExternalSessionId = inputId.trim();
+                localStorage.setItem('na2la_external_logged_user_id', activeExternalSessionId);
+                executeExternalSyncSession();
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'سائق مستقل', role: 'driver', avatar: '' };
+            let user = window.currentLoggedInUser || { name: 'مستخدم النظام', role: 'driver', avatar: '' };
             let role = getUserRole();
             
             document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
@@ -807,9 +793,7 @@
             currentAccountFilter = filterType;
             ['all', 'shipments', 'deferred', 'accounts'].forEach(f => {
                 let btn = document.getElementById(`filterBtn-${f}`);
-                if(btn) {
-                    btn.style.opacity = (f === filterType) ? '1' : '0.7';
-                }
+                if(btn) btn.style.opacity = (f === filterType) ? '1' : '0.7';
             });
             renderAllFinancials();
         }
@@ -861,13 +845,10 @@
                     let d = doc.data();
                     alerts.push({ id: doc.id, ...d });
                 });
-
                 alerts.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
                 appData.emergencyAlerts = alerts;
                 renderEmergencyAlertsUI(alerts);
-            }, (err) => {
-                console.error("خطأ في جلب بلاغات الطوارئ:", err);
-            });
+            }, (err) => console.error(err));
         }
 
         function renderEmergencyAlertsUI(alerts) {
@@ -887,8 +868,8 @@
                     listWidget.innerHTML = alerts.map(a => `
                         <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--danger-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <div>
-                                <b style="color:var(--danger-color);">🚨 الكابتن: ${a.driverName || a.name || 'سائق غير معروف'}</b><br>
-                                <span style="font-size:11px; color:var(--secondary-text);">الهاتف: <a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a> | الوقت: ${a.time || 'اليوم'}</span>
+                                <b style="color:var(--danger-color);">🚨 الكابتن: ${a.driverName || a.name || 'سائق'}</b><br>
+                                <span style="font-size:11px; color:var(--secondary-text);">الهاتف: <a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></span>
                             </div>
                             <div style="display:flex; gap:6px;">
                                 ${a.lat ? `<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" class="whatsapp-btn" style="background:var(--primary-blue);">📍 الخريطة</a>` : ''}
@@ -903,20 +884,16 @@
 
             if (tbody) {
                 if (alerts.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ أو استغاثات نشطة حالياً. الطريق آمن تماماً.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ نشطة حالياً.</td></tr>`;
                 } else {
                     tbody.innerHTML = alerts.map(a => `
                         <tr>
                             <td><b>${a.time || 'اليوم'}</b></td>
-                            <td><b style="color:var(--danger-color);">${a.driverName || a.name || 'سائق غير معروف'}</b></td>
+                            <td><b style="color:var(--danger-color);">${a.driverName || a.name || 'سائق'}</b></td>
                             <td><a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></td>
-                            <td><span style="background:rgba(255,65,108,0.2); color:var(--danger-color); padding:4px 10px; border-radius:8px; font-weight:bold;">🚨 طوارئ SOS نشطة</span></td>
-                            <td>
-                                ${a.lat ? `<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" class="whatsapp-btn" style="background:var(--primary-blue);">📍 عرض الموقع الحي (GPS)</a>` : '<span style="color:var(--secondary-text);">الإحداثيات غير متوفرة</span>'}
-                            </td>
-                            <td>
-                                <button class="submit-btn" style="background: var(--success-color); padding: 6px 14px; font-size: 11px;" onclick="resolveEmergencyAlert('${a.id}')">✅ تم التعامل والحل</button>
-                            </td>
+                            <td><span style="background:rgba(255,65,108,0.2); color:var(--danger-color); padding:4px 10px; border-radius:8px; font-weight:bold;">🚨 طوارئ SOS</span></td>
+                            <td>${a.lat ? `<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" class="whatsapp-btn" style="background:var(--primary-blue);">📍 الموقع</a>` : 'غير متوفرة'}</td>
+                            <td><button class="submit-btn" style="background: var(--success-color); padding: 6px 14px; font-size: 11px;" onclick="resolveEmergencyAlert('${a.id}')">✅ تم الحل</button></td>
                         </tr>
                     `).join('');
                 }
@@ -924,20 +901,12 @@
         }
 
         async function resolveEmergencyAlert(id) {
-            if (!canUserManageSystem()) {
-                alert("عذراً، صلاحياتك لا تسمح بحل بلاغات الطوارئ.");
-                return;
-            }
-            if (confirm("هل أنت متأكد من إنهاء وحل بلاغ الطوارئ هذا؟")) {
+            if (!canUserManageSystem()) return alert("صلاحياتك لا تسمح بذلك.");
+            if (confirm("إغلاق بلاغ الطوارئ؟")) {
                 if (window.db && window.firebaseModules) {
                     const { doc, deleteDoc } = window.firebaseModules;
-                    try {
-                        await deleteDoc(doc(window.db, "viper_logistics", String(id)));
-                        alert("✅ تم إغلاق وحل بلاغ الطوارئ بنجاح!");
-                    } catch(err) {
-                        console.error(err);
-                        alert("حدث خطأ أثناء حذف البلاغ.");
-                    }
+                    await deleteDoc(doc(window.db, "viper_logistics", String(id)));
+                    alert("✅ تم إغلاق بلاغ الطوارئ بنجاح!");
                 }
             }
         }
@@ -946,25 +915,18 @@
         async function syncItemToCollection(colName, item) {
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
-            try {
-                item.userId = item.userId || (window.currentLoggedInUser ? window.currentLoggedInUser.id : '');
-                await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
-            } catch (err) { console.error(err); }
+            item.userId = item.userId || (window.currentLoggedInUser ? window.currentLoggedInUser.id : '');
+            await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
         }
 
         async function deleteItemFromCollection(colName, id) {
             if (!id || !window.db || !window.firebaseModules) return;
             const { doc, deleteDoc } = window.firebaseModules;
-            try {
-                await deleteDoc(doc(window.db, colName, String(id)));
-            } catch (err) { console.error(err); }
+            await deleteDoc(doc(window.db, colName, String(id)));
         }
 
         function editRssMessage() {
-            if (!isUserAdmin()) {
-                alert("تعديل الإشعار العام مقتصر على مدير النظام فقط! 👑");
-                return;
-            }
+            if (!isUserAdmin()) return alert("مقتصر على مدير النظام فقط!");
             let msg = prompt("نص الإشعار:", appData.rssMessage);
             if (msg) { 
                 appData.rssMessage = msg; 
@@ -979,11 +941,11 @@
             let income = parseFloat(document.getElementById("calcTripIncome").value);
             let rate = parseFloat(document.getElementById("calcDriverRate").value) || 15;
             let resultBox = document.getElementById("calcAdvancedResultBox");
-            if (isNaN(income) || income <= 0) return alert("يرجى إدخال مبلغ صحيح للرحلة.");
+            if (isNaN(income) || income <= 0) return alert("أدخل مبلغ صحيح.");
             let driverCommission = income * (rate / 100);
             let companyNet = income - driverCommission;
             resultBox.style.display = "block";
-            resultBox.innerHTML = `🚚 <b>عمولة السائق المستحقة (${rate}%):</b> ${driverCommission.toLocaleString()} ج.م<br>🏛️ <b>صافي حصة الشركة:</b> <span style="color:var(--success-color); font-weight:bold;">${companyNet.toLocaleString()} ج.م</span>`;
+            resultBox.innerHTML = `🚚 <b>عمولة السائق (${rate}%):</b> ${driverCommission.toLocaleString()} ج.م<br>🏛️ <b>صافي الشركة:</b> <span style="color:var(--success-color); font-weight:bold;">${companyNet.toLocaleString()} ج.م</span>`;
         }
 
         function addExpenseRecord() {
@@ -996,19 +958,9 @@
             let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
             let newId = String(Date.now());
             let expObj = { 
-                id: newId, 
-                userId: currentUserId,
-                date: new Date().toLocaleDateString('ar-EG'), 
-                accountOwner: owner, 
-                name: owner,
-                clientName: owner,
-                category: category, 
-                description: desc, 
-                item: desc,
-                amount: amount, 
-                price: amount,
-                type: 'debit', 
-                status: 'paid' 
+                id: newId, userId: currentUserId, date: new Date().toLocaleDateString('ar-EG'), 
+                accountOwner: owner, name: owner, clientName: owner, category: category, 
+                description: desc, item: desc, amount: amount, price: amount, type: 'debit', status: 'paid' 
             };
 
             appData.expenses.unshift(expObj);
@@ -1016,43 +968,32 @@
             document.getElementById("expDesc").value = "";
             document.getElementById("expAmount").value = "";
             renderAllFinancials();
-            alert("تم حفظ المصروف وترحيله سحابياً لحسابك بنجاح!");
+            alert("تم حفظ المصروف وترحيله بنجاح!");
         }
 
         function treasuryAction(type) {
             let amt = parseFloat(document.getElementById("treasuryInputAmount").value);
             let reason = document.getElementById("treasuryReasonInput").value.trim() || (type === 'deposit' ? 'إيداع نقدي' : 'صرف نقدي');
-            if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح للحركة النقدية");
+            if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح");
 
             let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
-            let newId = String(Date.now());
             let tObj = {
-                id: newId,
-                userId: currentUserId,
-                type: type === 'deposit' ? 'in' : 'out',
-                amount: amt,
-                price: amt,
-                desc: reason,
-                description: reason,
-                date: new Date().toLocaleString('ar-EG')
+                id: String(Date.now()), userId: currentUserId, type: type === 'deposit' ? 'in' : 'out',
+                amount: amt, price: amt, desc: reason, description: reason, date: new Date().toLocaleString('ar-EG')
             };
 
             if (!appData.treasury) appData.treasury = [];
             appData.treasury.unshift(tObj);
-
             syncItemToCollection('treasury', tObj);
             document.getElementById("treasuryInputAmount").value = "";
             document.getElementById("treasuryReasonInput").value = "";
             renderAllFinancials();
-            alert(`✅ تمت عملية ${type === 'deposit' ? 'الإيداع' : 'الصرف'} بالخزينة بنجاح!`);
+            alert("✅ تمت العملية بنجاح!");
         }
 
         function deleteTreasuryItem(id) {
-            if (!isUserAdmin()) {
-                alert("حذف حركات الخزينة مقتصر على مدير النظام فقط! 👑");
-                return;
-            }
-            if (confirm("هل تريد حذف هذه الحركة النقدية من الخزينة؟")) {
+            if (!isUserAdmin()) return alert("مقتصر على المدير فقط!");
+            if (confirm("حذف الحركة؟")) {
                 appData.treasury = (appData.treasury || []).filter(t => String(t.id) !== String(id));
                 deleteItemFromCollection('treasury', id);
                 renderAllFinancials();
@@ -1066,37 +1007,21 @@
             let phone = document.getElementById("defPhone").value;
             let amount = parseFloat(document.getElementById("defAmount").value);
             let dueDate = document.getElementById("defDueDate").value;
-            if (!name || isNaN(amount)) return alert("أدخل بيانات الآجل صحيحة");
+            if (!name || isNaN(amount)) return alert("أدخل بيانات صحيحة");
 
             let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
-            let invId = "INV-" + Math.floor(10000000000 + Math.random() * 90000000000);
-            let newId = String(Date.now());
             let record = { 
-                id: newId,
-                userId: currentUserId,
-                invoiceId: invId, 
-                date: new Date().toLocaleDateString('ar-EG'), 
-                accountOwner: name, 
-                name: name,
-                clientName: name,
-                clientPhone: phone, 
-                phone: phone,
-                description: "فاتورة أجل مستحقة", 
-                item: "فاتورة أجل مستحقة",
-                amount: amount, 
-                price: amount,
-                remainingAmount: amount,
-                remaining: amount,
-                type: 'deferred', 
-                status: 'pending', 
-                dueDate: dueDate 
+                id: String(Date.now()), userId: currentUserId, invoiceId: "INV-" + Math.floor(100000000 + Math.random() * 900000000), 
+                date: new Date().toLocaleDateString('ar-EG'), accountOwner: name, name: name, clientName: name,
+                clientPhone: phone, phone: phone, description: "فاتورة أجل", item: "فاتورة أجل",
+                amount: amount, price: amount, remainingAmount: amount, remaining: amount, type: 'deferred', status: 'pending', dueDate: dueDate 
             };
 
             appData.deferredInvoices.unshift(record);
             syncItemToCollection('deferredInvoices', record);
             document.getElementById('addDeferredModal').style.display = 'none';
             renderAllFinancials();
-            alert("تم حفظ فاتورة الآجل ومزامنتها بنجاح!");
+            alert("تم حفظ فاتورة الآجل بنجاح!");
         }
 
         function addFinancialRecord() {
@@ -1109,66 +1034,36 @@
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بدقة");
 
             let currentUserId = window.currentLoggedInUser ? String(window.currentLoggedInUser.id) : '';
-            let newId = String(Date.now());
             let record = { 
-                id: newId, 
-                userId: currentUserId,
-                date: new Date().toLocaleDateString('ar-EG'), 
-                accountOwner: owner, 
-                name: owner,
-                clientName: owner,
-                clientPhone: phone, 
-                phone: phone,
-                description: desc, 
-                item: desc,
-                amount: amount, 
-                price: amount,
-                type: type, 
-                status: status 
+                id: String(Date.now()), userId: currentUserId, date: new Date().toLocaleDateString('ar-EG'), 
+                accountOwner: owner, name: owner, clientName: owner, clientPhone: phone, phone: phone,
+                description: desc, item: desc, amount: amount, price: amount, type: type, status: status 
             };
 
             appData.accounts.unshift(record);
             syncItemToCollection('accounts', record);
             document.getElementById("accDescription").value = "";
             document.getElementById("accAmount").value = "";
-            document.getElementById("accAccountOwner").value = "";
-            document.getElementById("accClientPhone").value = "";
             renderAllFinancials();
-            alert("تم حفظ القيد المالي وترحيله بنجاح!");
+            alert("تم حفظ القيد بنجاح!");
         }
 
         function deleteRecord(id, collectionType) {
-            if (!isUserAdmin()) {
-                alert('حذف المعاملات مقتصر على مدير النظام فقط! 👑');
-                return;
-            }
-            if (confirm("هل أنت متأكد من الحذف النهائي؟")) {
-                let targetCol = collectionType;
-                if (collectionType === 'accounts') appData.accounts = appData.accounts.filter(x => String(x.id) !== String(id));
-                else if (collectionType === 'expenses') appData.expenses = appData.expenses.filter(x => String(x.id) !== String(id));
-                else if (collectionType === 'deferred' || collectionType === 'deferredInvoices') { targetCol = 'deferredInvoices'; appData.deferredInvoices = appData.deferredInvoices.filter(x => String(x.id) !== String(id)); }
-                else if (collectionType === 'shipments') appData.shipments = appData.shipments.filter(x => String(x.id) !== String(id));
-                
+            if (!isUserAdmin()) return alert("الحذف مقتصر على مدير النظام فقط!");
+            if (confirm("حذف نهائي؟")) {
+                let targetCol = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+                appData[targetCol] = (appData[targetCol] || []).filter(x => String(x.id) !== String(id));
                 deleteItemFromCollection(targetCol, id);
                 renderAllFinancials();
-                alert("✅ تم الحذف بنجاح!");
+                alert("✅ تم الحذف!");
             }
         }
 
         function openEditModal(id, collectionType) {
-            let role = getUserRole();
-            if (role === 'driver') {
-                alert("عذراً، السائقون ليس لديهم صلاحية تعديل المعاملات.");
-                return;
-            }
-
-            let item = null;
-            if (collectionType === 'accounts') item = appData.accounts.find(x => String(x.id) === String(id));
-            else if (collectionType === 'expenses') item = appData.expenses.find(x => String(x.id) === String(id));
-            else if (collectionType === 'deferred' || collectionType === 'deferredInvoices') item = appData.deferredInvoices.find(x => String(x.id) === String(id));
-            else if (collectionType === 'shipments') item = appData.shipments.find(x => String(x.id) === String(id));
-
-            if (!item) return alert("العنصر غير موجود.");
+            if (getUserRole() === 'driver') return alert("غير مسموح لك بالتعديل.");
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+            let item = (appData[colName] || []).find(x => String(x.id) === String(id));
+            if (!item) return alert("غير موجود.");
 
             document.getElementById("editRecordId").value = id;
             document.getElementById("editCollectionType").value = collectionType;
@@ -1176,7 +1071,7 @@
             document.getElementById("editPhone").value = getSafePhone(item);
             document.getElementById("editDesc").value = getSafeDesc(item);
             document.getElementById("editAmount").value = getSafeAmount(item);
-            document.getElementById("editType").value = item.type || (collectionType === 'shipments' ? 'shipment' : 'credit');
+            document.getElementById("editType").value = item.type || 'credit';
             document.getElementById("editStatus").value = getSafeStatus(item);
 
             document.getElementById("editRecordModal").style.display = 'flex';
@@ -1185,49 +1080,32 @@
         function saveEditedRecord() {
             let id = document.getElementById("editRecordId").value;
             let collectionType = document.getElementById("editCollectionType").value;
-            let owner = document.getElementById("editOwner").value;
-            let phone = document.getElementById("editPhone").value;
-            let desc = document.getElementById("editDesc").value;
-            let amount = parseFloat(document.getElementById("editAmount").value);
-            let type = document.getElementById("editType").value;
-            let status = document.getElementById("editStatus").value;
-
-            let colName = (collectionType === 'deferred' || collectionType === 'deferredInvoices') ? 'deferredInvoices' : collectionType;
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
             let list = appData[colName] || [];
-            let idx = list.findIndex(x => String(x.id) === String(id));
-            if (idx !== -1) {
-                list[idx].accountOwner = owner;
-                list[idx].name = owner;
-                list[idx].clientName = owner;
-                list[idx].clientPhone = phone;
-                list[idx].phone = phone;
-                list[idx].description = desc;
-                list[idx].item = desc;
-                list[idx].amount = amount;
-                list[idx].price = amount;
-                list[idx].type = type;
-                list[idx].status = status;
+            let item = list.find(x => String(x.id) === String(id));
 
-                syncItemToCollection(colName, list[idx]);
+            if (item) {
+                item.accountOwner = document.getElementById("editOwner").value;
+                item.name = item.accountOwner;
+                item.clientPhone = document.getElementById("editPhone").value;
+                item.description = document.getElementById("editDesc").value;
+                item.amount = parseFloat(document.getElementById("editAmount").value);
+                item.type = document.getElementById("editType").value;
+                item.status = document.getElementById("editStatus").value;
+                syncItemToCollection(colName, item);
             }
 
             document.getElementById("editRecordModal").style.display = 'none';
             renderAllFinancials();
-            alert("✅ تم التحديث بنجاح!");
+            alert("✅ تم التحديث!");
         }
 
         function toggleRecordStatus(id, collectionType) {
-            let role = getUserRole();
-            if (role === 'driver') {
-                alert("تغيير حالة السداد مقتصر على الإدارة والمشرفين.");
-                return;
-            }
-            let colName = (collectionType === 'deferred' || collectionType === 'deferredInvoices') ? 'deferredInvoices' : collectionType;
-            let list = appData[colName] || [];
-            let item = list.find(x => String(x.id) === String(id));
+            if (getUserRole() === 'driver') return alert("غير مسموح.");
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+            let item = (appData[colName] || []).find(x => String(x.id) === String(id));
             if (item) {
-                let current = getSafeStatus(item);
-                item.status = (current === 'pending' ? 'paid' : 'pending');
+                item.status = getSafeStatus(item) === 'pending' ? 'paid' : 'pending';
                 syncItemToCollection(colName, item);
                 renderAllFinancials();
             }
@@ -1254,7 +1132,7 @@
                 link.download = `Invoice_${item.id || Date.now()}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
-            } catch (err) { alert("خطأ أثناء تصدير الصورة."); }
+            } catch (err) { alert("خطأ."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
 
@@ -1269,57 +1147,38 @@
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 pdf.addImage(imgData, 'PNG', 10, 10, 190, (canvas.height * 190) / canvas.width);
                 pdf.save(`Invoice_${item.id || Date.now()}.pdf`);
-            } catch (err) { alert("خطأ أثناء تصدير PDF."); }
+            } catch (err) { alert("خطأ."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
 
         function exportAccountsToCSV() {
             let csv = "\uFEFFالتاريخ,العميل,الهاتف,البيان,المبلغ,النوع,الحالة\n";
-            let role = getUserRole();
-            let user = window.currentLoggedInUser || {};
-
-            let filteredShipments = (role === 'admin') ? appData.shipments : (appData.shipments || []).filter(s => String(s.userId || '') === String(user.id));
-            let filteredAccounts = (role === 'admin') ? appData.accounts : (appData.accounts || []).filter(a => String(a.userId || '') === String(user.id));
-            let filteredDeferred = (role === 'admin') ? appData.deferredInvoices : (appData.deferredInvoices || []).filter(d => String(d.userId || '') === String(user.id));
-
-            filteredShipments.forEach(s => csv += `"${s.date || ''}","${getSafeName(s)}","${getSafePhone(s)}","شحنة: ${getSafeDesc(s)}","${getSafeAmount(s)}","شحنة","${getSafeStatus(s)}"\n`);
-            filteredAccounts.forEach(a => csv += `"${a.date || ''}","${getSafeName(a)}","${getSafePhone(a)}","${getSafeDesc(a)}","${getSafeAmount(a)}","${a.type || 'قيد'}","${getSafeStatus(a)}"\n`);
-            filteredDeferred.forEach(d => csv += `"${d.date || ''}","${getSafeName(d)}","${getSafePhone(d)}","${getSafeDesc(d)}","${getSafeAmount(d)}","آجل","${getSafeStatus(d)}"\n`);
-            
+            (appData.accounts || []).forEach(a => csv += `"${a.date || ''}","${getSafeName(a)}","${getSafePhone(a)}","${getSafeDesc(a)}","${getSafeAmount(a)}","${a.type || ''}","${getSafeStatus(a)}"\n`);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url; a.download = `Na2la_Financials.csv`;
             a.click();
-            alert("📊 تم تصدير البيانات إلى CSV بنجاح!");
         }
 
         function renderAllFinancials() {
             let role = getUserRole();
-            let user = window.currentLoggedInUser || { id: '', role: 'driver' };
+            let user = window.currentLoggedInUser || {};
             let currentUserId = String(user.id || '');
             let userName = String(user.name || '').trim();
 
-            let userShipments = (role === 'admin') ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === currentUserId || (userName && String(s.driver || '') === userName));
+            let userShipments = (role === 'admin') ? (appData.shipments || []) : (appData.shipments || []).filter(s => String(s.userId || '') === currentUserId);
             let userAccounts = (role === 'admin') ? (appData.accounts || []) : (appData.accounts || []).filter(a => String(a.userId || '') === currentUserId);
             let userExpenses = (role === 'admin') ? (appData.expenses || []) : (appData.expenses || []).filter(e => String(e.userId || '') === currentUserId);
             let userDeferred = (role === 'admin') ? (appData.deferredInvoices || []) : (appData.deferredInvoices || []).filter(d => String(d.userId || '') === currentUserId);
             let userTreasury = (role === 'admin') ? (appData.treasury || []) : (appData.treasury || []).filter(t => String(t.userId || '') === currentUserId);
 
-            let totalCredit = 0;   
-            let totalDebit = 0;    
-            let totalDeferred = 0; 
-            let pendingCount = 0;
+            let totalCredit = 0, totalDebit = 0, totalDeferred = 0, pendingCount = 0;
 
             userShipments.forEach(s => {
-                let price = getSafeAmount(s);
-                let st = getSafeStatus(s);
-                if (st === 'pending') {
-                    totalDeferred += price;
-                    pendingCount++;
-                } else {
-                    totalCredit += price;
-                }
+                let p = getSafeAmount(s);
+                if (getSafeStatus(s) === 'pending') { totalDeferred += p; pendingCount++; }
+                else totalCredit += p;
             });
             
             userAccounts.forEach(a => {
@@ -1327,22 +1186,17 @@
                 let st = getSafeStatus(a);
                 if (a.type === 'debit') totalDebit += amt;
                 else if (st === 'paid' && (a.type === 'credit' || a.type === 'invoice')) totalCredit += amt;
-                else if (a.type === 'deferred' || st === 'pending') { totalDeferred += amt; pendingCount++; }
+                else { totalDeferred += amt; pendingCount++; }
             });
             
-            userExpenses.forEach(e => { totalDebit += getSafeAmount(e); });
-            
+            userExpenses.forEach(e => totalDebit += getSafeAmount(e));
             userDeferred.forEach(d => {
                 let amt = getSafeAmount(d);
-                let st = getSafeStatus(d);
-                if (st === 'pending') { totalDeferred += amt; pendingCount++; }
-                else { totalCredit += amt; }
+                if (getSafeStatus(d) === 'pending') { totalDeferred += amt; pendingCount++; }
+                else totalCredit += amt;
             });
 
-            let treasuryBalance = userTreasury.reduce((sum, t) => {
-                return sum + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t));
-            }, 0);
-
+            let treasuryBalance = userTreasury.reduce((sum, t) => sum + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
             let net = totalCredit - totalDebit;
 
             document.getElementById("totalShipmentsCountDisplay").innerText = userShipments.length;
@@ -1351,18 +1205,9 @@
             document.getElementById("totalDeferredDisplay").innerText = totalDeferred.toLocaleString() + " ج.م";
             document.getElementById("netBalanceDisplay").innerText = net.toLocaleString() + " ج.م";
             document.getElementById("treasuryBalanceDisplay").innerText = treasuryBalance.toLocaleString() + " ج.م";
-
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
-            let aiText = `رتبة الحساب الحالي: <b>${role === 'admin' ? 'مدير نظام 👑' : (role === 'supervisor' ? 'مشرف معتمد 🛡️' : 'سائق مستقل 👨‍✈️')}</b>.<br>`;
-            aiText += `إجمالي الشحنات الخاصة بحسابك: <b>${userShipments.length}</b> شحنة.<br>`;
-            aiText += `معدل التحصيل لحسابك: <b>${(totalCredit + totalDeferred > 0 ? ((totalCredit / (totalCredit + totalDeferred)) * 100).toFixed(1) : 100)}%</b>.<br>`;
-            if (totalDeferred > 0) {
-                aiText += `<span style="color:var(--warning-color);">⚠️ توجد مديونيات آجلة بقيمة ${totalDeferred.toLocaleString()} ج.م تتطلب المتابعة.</span>`;
-            } else {
-                aiText += `<span style="color:var(--success-color);">✅ الثروة المالية والسيولة لحسابك متزنة والتحصيل ممتاز.</span>`;
-            }
-            document.getElementById("aiAnalyticsReportText").innerHTML = aiText;
+            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب الخارجي: <b>${user.name}</b> (${role === 'admin' ? 'مدير نظام 👑' : 'سائق/مشرف'}).<br>البيانات متصلة سحابياً بنجاح.`;
 
             let treasuryTbody = document.getElementById("treasuryTableBody");
             if (treasuryTbody) {
@@ -1372,9 +1217,9 @@
                         <td><span class="badge-${t.type === 'in' ? 'credit' : 'debit'}">${t.type === 'in' ? 'إيداع 📥' : 'صرف 📤'}</span></td>
                         <td><b>${getSafeAmount(t).toLocaleString()} ج.م</b></td>
                         <td>${getSafeDesc(t)}</td>
-                        <td>${role === 'admin' ? `<button class="delete-btn" onclick="deleteTreasuryItem('${t.id}')">حذف</button>` : '<span style="font-size:10px; color:var(--secondary-text);">للمدير</span>'}</td>
+                        <td>${role === 'admin' ? `<button class="delete-btn" onclick="deleteTreasuryItem('${t.id}')">حذف</button>` : ''}</td>
                     </tr>
-                `).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--secondary-text);">لا توجد حركات بالخزينة لحسابك</td></tr>`;
+                `).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--secondary-text);">لا توجد حركات بالخزينة</td></tr>`;
             }
 
             let expTbody = document.getElementById("expensesTableBody");
@@ -1383,49 +1228,37 @@
                     <tr>
                         <td>${e.date || '-'}</td>
                         <td><b>${getSafeName(e)}</b></td>
-                        <td><span style="background:rgba(255,8,68,0.15); color:var(--danger-color); padding:3px 8px; border-radius:6px; font-size:11px;">${e.category || 'عام'}</span></td>
+                        <td>${e.category || 'عام'}</td>
                         <td>${getSafeDesc(e)}</td>
                         <td><b style="color:var(--danger-color);">${getSafeAmount(e).toLocaleString()} ج.م</b></td>
                         <td>مسدد</td>
                         <td>
                             <div class="action-btn-group">
-                                ${role !== 'driver' ? `<button class="edit-btn" onclick="openEditModal('${e.id}', 'expenses')">✏️ تعديل</button>` : ''}
-                                ${role === 'admin' ? `<button class="delete-btn" onclick="deleteRecord('${e.id}', 'expenses')">🗑️ حذف</button>` : '<span style="font-size:10px; color:var(--secondary-text);">صلاحية إدارية</span>'}
+                                ${role !== 'driver' ? `<button class="edit-btn" onclick="openEditModal('${e.id}', 'expenses')">✏️</button>` : ''}
+                                ${role === 'admin' ? `<button class="delete-btn" onclick="deleteRecord('${e.id}', 'expenses')">🗑️</button>` : ''}
                             </div>
                         </td>
                     </tr>
-                `).join('') || `<tr><td colspan="7" style="text-align:center; color:var(--secondary-text);">لا توجد مصروفات مسجلة لحسابك</td></tr>`;
+                `).join('') || `<tr><td colspan="7" style="text-align:center; color:var(--secondary-text);">لا توجد مصروفات</td></tr>`;
             }
 
             let accTbody = document.getElementById("accountsTableBody");
             if (accTbody) {
                 let combined = [];
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') {
-                    combined.push(...userShipments.map(s => ({ ...s, collectionSource: 'shipments', type: 'shipment' })));
-                }
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
-                    combined.push(...userDeferred.map(d => ({ ...d, collectionSource: 'deferredInvoices', type: 'deferred' })));
-                }
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') {
-                    combined.push(...userAccounts.map(a => ({ ...a, collectionSource: 'accounts' })));
-                }
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') combined.push(...userShipments.map(s => ({ ...s, collectionSource: 'shipments', type: 'shipment' })));
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') combined.push(...userDeferred.map(d => ({ ...d, collectionSource: 'deferredInvoices', type: 'deferred' })));
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') combined.push(...userAccounts.map(a => ({ ...a, collectionSource: 'accounts' })));
 
-                let searchInputEl = document.getElementById("accountsSearchInput");
-                let searchQuery = searchInputEl ? searchInputEl.value.trim().toLowerCase() : "";
+                let searchQuery = (document.getElementById("accountsSearchInput")?.value || "").trim().toLowerCase();
                 if (searchQuery) {
-                    combined = combined.filter(item => 
-                        getSafeName(item).toLowerCase().includes(searchQuery) || 
-                        getSafeDesc(item).toLowerCase().includes(searchQuery) ||
-                        getSafePhone(item).toLowerCase().includes(searchQuery)
-                    );
+                    combined = combined.filter(item => getSafeName(item).toLowerCase().includes(searchQuery) || getSafeDesc(item).toLowerCase().includes(searchQuery));
                 }
 
-                let recordCountEl = document.getElementById("recordCountIndicator");
-                if (recordCountEl) recordCountEl.innerText = `إجمالي المعاملات: ${combined.length}`;
+                document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
 
                 accTbody.innerHTML = combined.map(item => {
                     let badge = item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : (item.type === 'deferred' ? '<span class="badge-deferred">⏳ آجل</span>' : '<span class="badge-credit">📥 قيد</span>');
-                    let safeId = item.id !== undefined ? item.id : '';
+                    let safeId = item.id || '';
                     let collType = item.collectionSource || 'accounts';
                     let st = getSafeStatus(item);
 
@@ -1433,48 +1266,27 @@
                         `<span class="status-badge status-pending" onclick="toggleRecordStatus('${safeId}', '${collType}')">معلق ⏳</span>` : 
                         `<span class="status-badge status-paid" onclick="toggleRecordStatus('${safeId}', '${collType}')">مسدد ✅</span>`;
 
-                    let phone = getSafePhone(item);
-                    let name = getSafeName(item);
-                    let desc = getSafeDesc(item);
-                    let amt = getSafeAmount(item);
-
-                    let controlButtons = '';
-                    if (role === 'admin') {
-                        controlButtons = `
-                            <div class="action-btn-group">
-                                <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
-                                <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>
-                            </div>
-                        `;
-                    } else if (role === 'supervisor') {
-                        controlButtons = `
-                            <div class="action-btn-group">
-                                <button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button>
-                            </div>
-                        `;
-                    } else {
-                        controlButtons = '<span style="font-size:10px; color:var(--secondary-text);">عرض فقط</span>';
-                    }
-
                     return `
                         <tr>
-                            <td><b>${item.invoiceId || safeId}</b><br><span style="font-size:10px; color:var(--secondary-text);">${item.date || '-'}</span></td>
-                            <td><b>${name}</b></td>
-                            <td>${phone}</td>
-                            <td>${desc}</td>
-                            <td>${badge}<br><b>${amt.toLocaleString()} ج.م</b></td>
+                            <td><b>${item.invoiceId || safeId}</b><br><span style="font-size:10px;">${item.date || '-'}</span></td>
+                            <td><b>${getSafeName(item)}</b></td>
+                            <td>${getSafePhone(item)}</td>
+                            <td>${getSafeDesc(item)}</td>
+                            <td>${badge}<br><b>${getSafeAmount(item).toLocaleString()} ج.م</b></td>
                             <td>${statusBadge}</td>
                             <td>
                                 <div class="action-btn-group">
-                                    <a href="https://wa.me/${phone !== 'غير محدد' ? phone.replace(/[^0-9]/g, '') : ''}?text=فاتورة بقيمة ${amt} ج.م" target="_blank" class="whatsapp-btn">💬 واتساب</a>
-                                    <button class="image-btn" onclick='downloadInvoiceAsImage(${JSON.stringify(item)})'>🖼️ صورة</button>
-                                    <button class="pdf-btn" onclick='downloadInvoiceAsPDF(${JSON.stringify(item)})'>📄 PDF</button>
-                                </div>
+                                    <a href="https://wa.me/" target="_blank" class="whatsapp-btn">💬 واتساب</a>
+                                    <button class="image-btn" onclick='downloadInvoiceAsImage(${JSON.stringify(item)})'>🖼️</button>
+                                    <button class="pdf-btn" onclick='downloadInvoiceAsPDF(${JSON.stringify(item)})'>📄</button>
+                                }
+                            </div>
+                            <td>
+                                ${role === 'admin' ? `<button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button> <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>` : ''}
                             </td>
-                            <td>${controlButtons}</td>
                         </tr>
                     `;
-                }).join('') || `<tr><td colspan="8" style="text-align:center; color:var(--secondary-text);">لا توجد بيانات مطابقة لحسابك</td></tr>`;
+                }).join('') || `<tr><td colspan="8" style="text-align:center; color:var(--secondary-text);">لا توجد بيانات مطابقة</td></tr>`;
             }
         }
 
