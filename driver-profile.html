@@ -477,6 +477,53 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
+        // نظام نغمات الرنين التلقائي (Web Audio API)
+        let ringtoneAudioCtx = null;
+        let ringtoneInterval = null;
+
+        function startRingtone(isIncoming = false) {
+            try {
+                stopRingtone();
+                if (!window.AudioContext && !window.webkitAudioContext) return;
+                ringtoneAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                function playTone() {
+                    if (!ringtoneAudioCtx) return;
+                    if (ringtoneAudioCtx.state === 'suspended') {
+                        ringtoneAudioCtx.resume();
+                    }
+                    let osc = ringtoneAudioCtx.createOscillator();
+                    let gain = ringtoneAudioCtx.createGain();
+                    osc.type = 'sine';
+                    // نغمة رنين واردة (تردد مختلف) أو نغمة اتصال صادر (جاهزية الطلب)
+                    osc.frequency.value = isIncoming ? 480 : 425; 
+                    gain.gain.setValueAtTime(0.12, ringtoneAudioCtx.currentTime);
+                    
+                    osc.connect(gain);
+                    gain.connect(ringtoneAudioCtx.destination);
+                    
+                    osc.start();
+                    osc.stop(ringtoneAudioCtx.currentTime + (isIncoming ? 0.8 : 0.4));
+                }
+
+                playTone();
+                ringtoneInterval = setInterval(playTone, isIncoming ? 2000 : 1500);
+            } catch (e) {
+                console.log("AudioContext error:", e);
+            }
+        }
+
+        function stopRingtone() {
+            if (ringtoneInterval) {
+                clearInterval(ringtoneInterval);
+                ringtoneInterval = null;
+            }
+            if (ringtoneAudioCtx) {
+                ringtoneAudioCtx.close().catch(() => {});
+                ringtoneAudioCtx = null;
+            }
+        }
+
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -573,9 +620,15 @@
                   if (change.type === 'added') {
                       let callData = change.doc.data();
                       currentCallId = change.doc.id;
+                      
+                      // تشغيل نغمة الرنين الوارد عند الاستقبال
+                      startRingtone(true);
+
                       if (confirm(`📞 لديك مكالمة واردة من (${callData.caller}). هل تريد الرد؟`)) {
+                          stopRingtone();
                           answerWebRTCCall(currentCallId, callData.isVideo);
                       } else {
+                          stopRingtone();
                           db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
                       }
                   }
@@ -770,7 +823,7 @@
         function openChatModal() { document.getElementById('chatModal').style.display = 'flex'; renderChatMessages(); renderChatAccountsList(); }
         function closeChatModal() { document.getElementById('chatModal').style.display = 'none'; }
 
-        // إدارة مكالمات WebRTC مع فحص الأذونات ومعالجة الأخطاء الدقيقة للـ PWA
+        // إدارة مكالمات WebRTC مع تشغيل نغمة الاتصال الصادر والرنين الوارد
         async function startWebRTCCall(isVideo) {
             if (currentChatTarget === 'general') {
                 alert('⚠️ يرجى اختيار حساب شخصي محدد من القائمة الجانبية لإجراء المكالمة.');
@@ -779,10 +832,14 @@
             
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو جارية...' : '📞 مكالمة صوتية جارية...';
-            document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون...';
+            document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون ورنين الاتصال...';
+
+            // تشغيل نغمة الاتصال الصادر (Dialing Tone)
+            startRingtone(false);
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون (getUserMedia غير مدعوم).');
+                stopRingtone();
+                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون.');
                 endActiveWebRTCCall();
                 return;
             }
@@ -795,6 +852,7 @@
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
                 peerConnection.ontrack = event => {
+                    stopRingtone();
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                     document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح';
                 };
@@ -825,10 +883,12 @@
                 callDocRef.onSnapshot(snapshot => {
                     const data = snapshot.data();
                     if (data && data.answer && !peerConnection.currentRemoteDescription) {
+                        stopRingtone();
                         const answerDescription = new RTCSessionDescription(data.answer);
                         peerConnection.setRemoteDescription(answerDescription);
                     }
                     if (data && data.status === 'rejected') {
+                        stopRingtone();
                         alert('⚠️ تم رفض المكالمة من الطرف الآخر.');
                         endActiveWebRTCCall();
                     }
@@ -844,13 +904,15 @@
                 });
 
             } catch (err) {
+                stopRingtone();
                 console.error('Error starting WebRTC call:', err);
-                alert(`⚠️ خطأ في تشغيل الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}\n(تأكد من عدم استخدام الكاميرا أو الميكروفون في تطبيق آخر بالخلفية).`);
+                alert(`⚠️ خطأ في تشغيل الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}`);
                 endActiveWebRTCCall();
             }
         }
 
         async function answerWebRTCCall(callId, isVideo) {
+            stopRingtone();
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو واردة' : '📞 مكالمة صوتية واردة';
             document.getElementById('call-modal-status').innerText = 'جاري طلب الأذونات والرد...';
@@ -910,6 +972,7 @@
         }
 
         function endActiveWebRTCCall() {
+            stopRingtone();
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
