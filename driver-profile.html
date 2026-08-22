@@ -366,9 +366,9 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
-        let currentUserRole = localStorage.getItem('current_user_role') || 'admin';
+        let currentUserRole = localStorage.getItem('current_user_role') || 'driver';
         let loggedInDriverId = localStorage.getItem('logged_in_driver_id') || null;
-        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
+        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'سائق';
         
         let viewingProfileId = localStorage.getItem('viewing_profile_id') || null;
         let viewingProfileName = localStorage.getItem('viewing_profile_name') || null;
@@ -448,12 +448,8 @@
         }
 
         function getOrCreateCurrentDriver() {
-            let savedName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('current_user_name') || 'المدير';
-            let savedPhone = localStorage.getItem('logged_in_driver_phone') || (savedName === 'المدير' ? '+201114099799' : '01012345678');
-            let savedRole = localStorage.getItem('current_user_role') || (savedName === 'المدير' ? 'admin' : 'سائق');
-            
             let activeTargetId = viewingProfileId ? viewingProfileId : loggedInDriverId;
-            let activeTargetName = viewingProfileName ? viewingProfileName : savedName;
+            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
             
             let drv = null;
 
@@ -462,57 +458,24 @@
                     drv = appData.drivers.find(d => d.id === activeTargetId);
                 }
                 if (!drv && activeTargetName) {
-                    drv = appData.drivers.find(d => 
-                        (d.name && d.name.trim() === activeTargetName.trim()) || 
-                        (activeTargetName === 'المدير' && (d.role === 'admin' || d.phone === '+201114099799'))
-                    );
+                    drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
                 }
             }
 
+            // الاعتماد حصرياً على البيانات المخزنة محلياً إذا لم تصل بيانات السحاب فوراً، ودون فرض بيانات المدير
             if (!drv) {
-                if (!appData.drivers || appData.drivers.length === 0) {
-                    return {
-                        id: activeTargetId || '1',
-                        name: activeTargetName,
-                        phone: savedPhone, // استخدام الهاتف المخزن محلياً بدلاً من فرض رقم المدير
-                        role: savedRole,
-                        title: activeTargetName === 'المدير' ? 'أسطورة الطريق' : 'سائق معتمد',
-                        status: 'متاح 🟢',
-                        avatar: localStorage.getItem('cached_avatar') || '',
-                        cover: localStorage.getItem('cached_cover') || '',
-                        coverHeight: 180,
-                        advances: 0
-                    };
-                }
-
-                let newId = activeTargetId || String(Date.now());
-                drv = {
-                    id: newId,
+                return {
+                    id: activeTargetId || '1',
                     name: activeTargetName,
-                    phone: savedPhone,
-                    pin: '01036',
-                    role: savedRole,
-                    title: activeTargetName === 'المدير' ? 'أسطورة الطريق' : 'سائق معتمد',
+                    phone: localStorage.getItem('logged_in_driver_phone') || '',
+                    role: localStorage.getItem('current_user_role') || 'driver',
+                    title: 'سائق معتمد',
                     status: 'متاح 🟢',
-                    avatar: '',
-                    cover: '',
+                    avatar: localStorage.getItem('cached_avatar') || '',
+                    cover: localStorage.getItem('cached_cover') || '',
                     coverHeight: 180,
                     advances: 0
                 };
-                
-                localStorage.setItem('logged_in_driver_id', newId);
-                localStorage.setItem('logged_in_driver_name', drv.name);
-                localStorage.setItem('logged_in_driver_phone', drv.phone);
-                db.collection('drivers').doc(newId).set(drv, { merge: true });
-            } else {
-                localStorage.setItem('logged_in_driver_id', drv.id);
-                localStorage.setItem('logged_in_driver_name', drv.name);
-                localStorage.setItem('logged_in_driver_phone', drv.phone);
-                loggedInDriverId = drv.id;
-                loggedInDriverName = drv.name;
-                
-                if (drv.avatar) localStorage.setItem('cached_avatar', drv.avatar);
-                if (drv.cover) localStorage.setItem('cached_cover', drv.cover);
             }
             return drv;
         }
@@ -522,7 +485,7 @@
 
             document.getElementById('gplus-name-display').innerText = drv.name;
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone} | الرتبة: ${drv.role}`;
+            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role}`;
             
             let myShipments = (appData.shipments || []).filter(s => s.assignedDriver === drv.name || s.name === drv.name);
             document.getElementById('gplus-stat-shipments').innerText = myShipments.length;
@@ -558,7 +521,7 @@
                 document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي';
                 
                 document.getElementById('my-edit-name').value = drv.name;
-                document.getElementById('my-edit-phone').value = drv.phone;
+                document.getElementById('my-edit-phone').value = drv.phone || '';
                 
                 const titleSelect = document.getElementById('my-edit-title');
                 titleSelect.innerHTML = '';
