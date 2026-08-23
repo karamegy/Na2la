@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - بروفايل السائق والأسطول V96 HIERARCHICAL TREE ISOLATED</title>
+    <title>أسطورة الطريق - بروفايل السائق والأسطول V96 FIXED SYNC</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -130,7 +130,6 @@
         .comment-item { background: var(--bg); padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color); }
         .comment-input-box { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
 
-        /* تصميم الشات الموسع المطور والمرن */
         .chat-layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; height: 460px; }
         @media(max-width: 700px) { .chat-layout { grid-template-columns: 1fr; height: 420px; } }
         
@@ -146,7 +145,6 @@
         .chat-bubble.driver { background: #334155; color: white; align-self: flex-end; box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
         .chat-input-area { display: flex; padding: 8px; background: var(--card-bg); border-top: 1px solid var(--border-color); gap: 6px; }
 
-        /* الشريط السفلي المتناسق */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); border-top: 1px solid var(--border-color);
             display: flex; justify-content: space-around; align-items: center; padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px)) 4px; 
@@ -166,7 +164,7 @@
 <body>
 
     <div class="app-3d-logo-container">
-        <div class="logo-3d">أسطورة الطريق <span>DRIVER PROFILE V96 HIERARCHICAL TREE ISOLATED</span></div>
+        <div class="logo-3d">أسطورة الطريق <span>DRIVER PROFILE V96 FIXED SYNC</span></div>
     </div>
 
     <div class="theme-selector-bar">
@@ -546,7 +544,6 @@
 
         let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName);
 
-        // 🌳 معمارية توريث معرف شجرة الشركة بدقة لكل حساب
         let currentCompanyId = isSuper ? 'comp_1787481011714' : (localStorage.getItem('current_company_id') || ('comp_' + activeExternalSessionName.replace(/[^a-zA-Z0-9]/g, '_')));
         window.currentCompanyId = currentCompanyId;
 
@@ -619,38 +616,51 @@
         }
         renderInitialUIInstant();
 
-        // 🔄 استعلامات فايرستور مع عزل شجري هرمي دقيق (`Tree Company Isolation`)
-        db.collection('drivers').onSnapshot(snapshot => {
+        // 🔄 محولات الاستماع السحابي المتزامنة الآمنة لمنع أي تضارب في المعرّفات
+        let shipmentsUnsubscribe = null;
+        let chatUnsubscribe = null;
+
+        function initializeCloudListeners() {
             let superAdmin = isSuperAdmin();
-            let rawDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // تحقق من وجود السائق في السحاب وتحديث شجرة شركته تلقائياً
-            let matched = rawDrivers.find(d => d.name === activeExternalSessionName || d.id === activeExternalSessionName || d.phone === activeExternalSessionName);
-            if (matched && matched.companyId) {
-                currentCompanyId = matched.companyId;
-                window.currentCompanyId = currentCompanyId;
-                localStorage.setItem('current_company_id', currentCompanyId);
-            }
 
-            appData.drivers = superAdmin ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
+            // 1. مستمع السائقين والأعضاء بالشجرة
+            db.collection('drivers').onSnapshot(snapshot => {
+                let rawDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                let matched = rawDrivers.find(d => d.name === activeExternalSessionName || d.id === activeExternalSessionName || d.phone === activeExternalSessionName);
+                if (matched && matched.companyId && matched.companyId !== currentCompanyId) {
+                    currentCompanyId = matched.companyId;
+                    window.currentCompanyId = currentCompanyId;
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    // إعادة تهيئة المستمعين بالمعرّف الصحيح المحدث
+                    initializeCloudListeners();
+                    return;
+                }
 
-            renderMyAccount();
-            renderChatAccountsList();
-        });
+                appData.drivers = superAdmin ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
+                renderMyAccount();
+                renderChatAccountsList();
+            });
 
-        db.collection('shipments').onSnapshot(snapshot => {
-            let superAdmin = isSuperAdmin();
-            let rawShipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.shipments = superAdmin ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
-            renderMyAccount();
-        });
+            // 2. مستمع الشحنات
+            if (shipmentsUnsubscribe) shipmentsUnsubscribe();
+            shipmentsUnsubscribe = db.collection('shipments').onSnapshot(snapshot => {
+                let rawShipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                appData.shipments = superAdmin ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
+                renderMyAccount();
+            });
 
-        db.collection('chat').onSnapshot(snapshot => {
-            let superAdmin = isSuperAdmin();
-            let rawChat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.chat = superAdmin ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
-            renderChatMessages();
-        });
+            // 3. مستمع الشات
+            if (chatUnsubscribe) chatUnsubscribe();
+            chatUnsubscribe = db.collection('chat').onSnapshot(snapshot => {
+                let rawChat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                appData.chat = superAdmin ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
+                renderChatMessages();
+            });
+        }
+
+        // بدء الاستماع السحابي الموثوق
+        initializeCloudListeners();
 
         db.collection('webrtc_calls')
           .where('callee', '==', activeExternalSessionName)
