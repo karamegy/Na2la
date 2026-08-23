@@ -390,7 +390,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماما لكل مستخدم ومدير ومشرف -->
+<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماماً لكل مستخدم وشركة -->
 <script>
     window._isSavingLocally = false;
     let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
@@ -541,19 +541,21 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 👑 دالة فحص صلاحيات المدير العام والمسؤولين (Super Admin)
+    // 👑 فحص صلاحيات الإدارة المستقلة لكل حساب
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let userName = String(user.name || user.id || '').trim();
         let role = String(user.role || '').toLowerCase().trim();
         
-        return role === 'admin' || role === 'مدير' || role === 'مدير نظام' || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(userName);
+        return role === 'admin' || role === 'مدير' || role === 'مدير نظام' || userName === 'المدير';
     }
     window.isUserAdmin = isUserAdmin;
 
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
-        if (isUserAdmin()) return all;
+        if (isUserAdmin()) {
+            return all.filter(s => !s.companyId || s.companyId === currentCompanyId);
+        }
         let user = window.currentLoggedInUser || {};
         let currentUserId = String(user.id || '').trim();
         let userPhone = String(user.phone || '').trim();
@@ -562,6 +564,9 @@
         if (!currentUserId && !userPhone && !userName) return [];
 
         return all.filter(s => {
+            let sCompany = String(s.companyId || '').trim();
+            if (sCompany && sCompany !== currentCompanyId) return false;
+
             let sUserId = String(s.userId || '').trim();
             let sPhone = String(s.phone || s.clientPhone || '').trim();
             let sDriver = String(s.driver || '').trim();
@@ -570,14 +575,16 @@
             let matchPhone = userPhone && sPhone === userPhone;
             let matchDriver = userName && sDriver === userName;
 
-            return (matchId || matchPhone || matchDriver) && sUserId !== '1';
+            return (matchId || matchPhone || matchDriver);
         });
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
-        if (isUserAdmin()) return items;
+        if (isUserAdmin()) {
+            return items.filter(x => !x.companyId || x.companyId === currentCompanyId);
+        }
         let user = window.currentLoggedInUser || {};
         let currentUserId = String(user.id || '').trim();
         let userPhone = String(user.phone || '').trim();
@@ -586,6 +593,9 @@
         if (!currentUserId && !userPhone && !userName) return [];
 
         return items.filter(item => {
+            let itemCompany = String(item.companyId || '').trim();
+            if (itemCompany && itemCompany !== currentCompanyId) return false;
+
             let itemUserId = String(item.userId || '').trim();
             let itemPhone = String(item.phone || item.clientPhone || '').trim();
             let itemName = String(item.name || item.accountOwner || item.driver || '').trim();
@@ -594,7 +604,7 @@
             let matchPhone = userPhone && itemPhone === userPhone;
             let matchName = userName && itemName === userName;
 
-            return (matchId || matchPhone || matchName) && itemUserId !== '1';
+            return (matchId || matchPhone || matchName);
         });
     }
     window.getUserFilteredList = getUserFilteredList;
@@ -615,7 +625,7 @@
         if (externalId) {
             await fetchDriverData(externalId);
         } else {
-            currentCompanyId = 'company_main_' + Date.now();
+            currentCompanyId = 'company_main';
             localStorage.setItem('current_company_id', currentCompanyId);
             window.currentCompanyId = currentCompanyId;
 
@@ -628,14 +638,14 @@
     }
 
     async function fetchDriverData(identifier) {
-        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier);
+        let isMasterAdmin = (identifier === 'المدير' || identifier === 'admin');
 
         if (!window.db || !window.firebaseModules) {
-            currentCompanyId = isSuper ? 'comp_1787481011714' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
+            currentCompanyId = isMasterAdmin ? 'company_main' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
             localStorage.setItem('current_company_id', currentCompanyId);
             window.currentCompanyId = currentCompanyId;
 
-            window.currentLoggedInUser = { id: identifier, name: identifier, role: isSuper ? 'admin' : 'driver', title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' };
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: isMasterAdmin ? 'admin' : 'driver', title: isMasterAdmin ? 'مدير عام النظام' : 'سائق معتمد' };
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             initChatRealtimeListener();
@@ -675,34 +685,35 @@
             }
 
             if (docData) {
-                currentCompanyId = docData.companyId || (isSuper ? 'comp_1787481011714' : ('comp_' + docId));
+                // اعتماد معرف الشركة الحقيقي الخاص بهذا الحساب حصراً دون أي دمج أو تداخل
+                currentCompanyId = docData.companyId || ('comp_' + docId);
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
 
                 window.currentLoggedInUser = { id: docId, ...docData };
-                if(isSuper) window.currentLoggedInUser.role = 'admin';
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
-                showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح ضمن شركة (${currentCompanyId})! ✅`);
+                showToast(`تم تسجيل دخول الحساب (${getSafeName(docData)}) بنجاح ضمن عزل شركة (${currentCompanyId})! ✅`);
             } else {
-                currentCompanyId = isSuper ? 'comp_1787481011714' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
+                currentCompanyId = isMasterAdmin ? 'company_main' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
 
                 window.currentLoggedInUser = { 
                     id: identifier, 
                     name: identifier, 
-                    role: isSuper ? 'admin' : 'driver', 
-                    title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' 
+                    role: isMasterAdmin ? 'admin' : 'driver', 
+                    title: isMasterAdmin ? 'مدير عام النظام' : 'سائق معتمد',
+                    companyId: currentCompanyId
                 };
-                showToast(`تم فتح الحساب الجديد بشكل مستقل تماماً برقم شركة (${currentCompanyId})! 🚀`);
+                showToast(`تم فتح الحساب بشكل مستقل تماماً برقم شركة (${currentCompanyId})! 🚀`);
             }
         } catch(err) { 
             console.error(err);
-            currentCompanyId = isSuper ? 'comp_1787481011714' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
+            currentCompanyId = isMasterAdmin ? 'company_main' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
             localStorage.setItem('current_company_id', currentCompanyId);
             window.currentCompanyId = currentCompanyId;
-            window.currentLoggedInUser = { id: identifier, name: identifier, role: isSuper ? 'admin' : 'driver', title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' };
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: isMasterAdmin ? 'admin' : 'driver', title: isMasterAdmin ? 'مدير عام النظام' : 'سائق معتمد' };
         }
 
         applyUserPermissionsUI();
@@ -730,8 +741,8 @@
                 if (window._isSavingLocally || !docSnap.exists()) return;
                 const data = docSnap.data();
                 if (isAdmin) {
-                    if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
-                    if (data.customers) appData.customers = data.customers;
+                    if (data.consolidatedInvoices) appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
+                    if (data.customers) appData.customers = (data.customers || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
                 } else {
                     if (data.consolidatedInvoices) appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
                     if (data.customers) appData.customers = (data.customers || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
@@ -741,7 +752,7 @@
                 refreshActiveSection();
             });
 
-            let driversQuery = isAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+            let driversQuery = isAdmin ? query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId)) : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
             onSnapshot(driversQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -750,7 +761,7 @@
                 }
             });
 
-            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
+            let shipmentsQuery = query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
             onSnapshot(shipmentsQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -760,7 +771,7 @@
                 refreshActiveSection();
             });
 
-            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
+            let deferredQuery = query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
             onSnapshot(deferredQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -769,7 +780,7 @@
                 refreshActiveSection();
             });
 
-            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
+            let treasuryQuery = query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
             onSnapshot(treasuryQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -778,7 +789,7 @@
                 refreshActiveSection();
             });
 
-            let expensesQuery = isAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
+            let expensesQuery = query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
             onSnapshot(expensesQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -794,15 +805,14 @@
 
     function initChatRealtimeListener() {
         if (!window.db || !window.firebaseModules) return;
-        const { collection, onSnapshot } = window.firebaseModules;
+        const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-        onSnapshot(collection(window.db, "chatMessages"), (snapshot) => {
+        let chatQuery = query(collection(window.db, "chatMessages"), where("companyId", "==", currentCompanyId));
+        onSnapshot(chatQuery, (snapshot) => {
             let messages = [];
             snapshot.forEach((docSnap) => {
                 let mData = docSnap.data();
-                if (isUserAdmin() || !mData.companyId || mData.companyId === currentCompanyId) {
-                    messages.push({ id: docSnap.id, ...mData });
-                }
+                messages.push({ id: docSnap.id, ...mData });
             });
             messages.sort((a, b) => {
                 let timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
@@ -828,7 +838,7 @@
                 for (let s of appData.shipments) {
                     if (s.id) {
                         s.userId = s.userId || currentUserId;
-                        s.companyId = s.companyId || currentCompanyId;
+                        s.companyId = currentCompanyId;
                         await setDoc(doc(window.db, 'shipments', String(s.id)), s, { merge: true });
                     }
                 }
@@ -837,7 +847,7 @@
                 for (let d of appData.deferredInvoices) {
                     if (d.id) {
                         d.userId = d.userId || currentUserId;
-                        d.companyId = d.companyId || currentCompanyId;
+                        d.companyId = currentCompanyId;
                         await setDoc(doc(window.db, 'deferredInvoices', String(d.id)), d, { merge: true });
                     }
                 }
@@ -846,7 +856,7 @@
                 for (let t of appData.treasury) {
                     if (t.id) {
                         t.userId = t.userId || currentUserId;
-                        t.companyId = t.companyId || currentCompanyId;
+                        t.companyId = currentCompanyId;
                         await setDoc(doc(window.db, 'treasury', String(t.id)), t, { merge: true });
                     }
                 }
@@ -855,13 +865,10 @@
                 for (let ex of appData.expenses) {
                     if (ex.id) {
                         ex.userId = ex.userId || currentUserId;
-                        ex.companyId = ex.companyId || currentCompanyId;
+                        ex.companyId = currentCompanyId;
                         await setDoc(doc(window.db, 'expenses', String(ex.id)), ex, { merge: true });
                     }
                 }
-            }
-            if (isUserAdmin()) {
-                await setDoc(doc(window.db, "appStore", "mainState"), appData, { merge: true });
             }
         } catch (err) { console.error(err); }
 
@@ -929,7 +936,7 @@
         document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
         
         let roleBadgeText = '👨‍✈️ سائق معزول';
-        if (isAdmin) roleBadgeText = '👑 مدير عام النظام (تحكم كامل)';
+        if (isAdmin) roleBadgeText = '👑 مدير الشركة (تحكم كامل)';
         else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
         else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق مستقل';
         
@@ -939,7 +946,7 @@
         if (user.avatar && String(user.avatar).trim() !== '') {
             avatarEl.innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
         } else {
-            avatarEl.innerHTML = isAdmin ? '🐼' : (roleName.includes('مشرف') ? '🛡️' : '👨‍✈️');
+            avatarEl.innerHTML = isAdmin ? '👑' : (roleName.includes('مشرف') ? '🛡️' : '👨‍✈️');
         }
 
         renderSidebarByRole(isAdmin);
@@ -1149,7 +1156,7 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل اللحظي</h3>
-                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">مفوض حصرياً لمدير النظام لإدارة ومزامنة كافة الشحنات والحسابات لحظياً:</p>
+                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">مفوض حصرياً لمدير الشركة لإدارة ومزامنة كافة الشحنات والحسابات لحظياً:</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ إدارة الأجل والفواتير</button>
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
@@ -1161,9 +1168,9 @@
                     <h3><span>📊 ملخص غرفة باندا للبيانات الحية</span></h3>
                     <div style="font-size: 10px; line-height: 1.6;">
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
-                        <p>📦 إجمالي الشحنات في المنصة: <strong>${getAllShipments(data).length} شحنة</strong></p>
-                        <p>⏳ إجمالي فواتير الأجل العامة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">يعمل بكفاءة تامة لكل حساب مستقل (${currentCompanyId})</strong></p>
+                        <p>📦 إجمالي الشحنات في المنصة: <strong>${shipmentsList.length} شحنة</strong></p>
+                        <p>⏳ إجمالي فواتير الأجل العامة: <strong>${(getUserFilteredList(data.deferredInvoices, 'deferredInvoices')).length} فاتورة</strong></p>
+                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">مستقل تماماً لشجرة حسابك (${currentCompanyId})</strong></p>
                     </div>
                 </div>
             `;
@@ -1220,7 +1227,7 @@
                             <option value="إعلان رسمي 🔵">إعلان رسمي 🔵</option>
                             <option value="توجيه تشغيلي 🟢">توجيه تشغيلي 🟢</option>
                         </select>
-                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات المنصة..." required style="height: 60px;"></textarea>
+                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات شركتك..." required style="height: 60px;"></textarea>
                         <button type="submit" class="btn-success">إرسال وبث فوري لكافة الحسابات 📡</button>
                     </form>
                 </div>
@@ -2305,7 +2312,7 @@
         if(!text) return;
 
         const newMsg = {
-            sender: 'الإدارة العليا (مدير النظام)',
+            sender: 'إدارة الشركة (المدير)',
             companyId: currentCompanyId,
             text: text,
             priority: priority,
@@ -2354,7 +2361,7 @@
             driverName: name,
             phone: phone,
             role: role,
-            title: role === 'مدير نظام' ? 'أسطورة الطريق' : 'سائق معتمد',
+            title: role === 'مدير نظام' ? 'مدير عام الشركة' : 'سائق معتمد',
             status: 'متاح 🟢',
             avatar: ''
         };
