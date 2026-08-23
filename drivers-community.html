@@ -112,12 +112,12 @@
 
     window.manualAdminOverride = false;
 
-    // 👑 دالة فحص صلاحيات الإدارة العليا (لتحقيق رؤية شاملة للمدير و Admin1 وعماد تلقائياً)
-    function isUserAdmin() {
+    // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
+    function isSuperAdmin() {
         let userName = String(activeSessionName || document.getElementById('authorName')?.value || '').trim();
         return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
     }
-    window.isUserAdmin = isUserAdmin;
+    window.isSuperAdmin = isSuperAdmin;
 
     let allPostsData = [];
     const postsRef = collection(db, "driver_community_posts");
@@ -134,40 +134,45 @@
     });
 
     function updateAdminUIStatus() {
-        let isAdmin = isUserAdmin();
+        let superAdmin = isSuperAdmin();
         const statusEl = document.getElementById("adminStatus");
         const btnEl = document.getElementById("adminToggleBtn");
         
-        if (isAdmin) {
-            statusEl.innerText = `حالة الحساب: [مدير النظام - صلاحيات كاملة ورؤية شاملة للأسطول والشركات]`;
+        if (superAdmin) {
+            statusEl.innerText = `حالة الحساب: [مدير عام المنصة الأم - رؤية شاملة لكافة الشركات]`;
             statusEl.style.color = "#28a745";
-            btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول معتمد تلقائياً 🛡️";
+            btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
         } else {
-            statusEl.innerText = "حالة الحساب: سائق عادي (معزول ضمن نطاق شركتك)";
+            statusEl.innerText = `حالة الحساب: مدير أو سائق شركة مستقلة (عزل تام ضمن شركة: ${currentCompanyId})`;
             statusEl.style.color = "#333";
-            btnEl.innerText = "تفعيل وضع المؤسس (للإشراف)";
+            btnEl.innerText = "تفعيل وضع المؤسس (للإشراف العام)";
         }
     }
 
-    // جلب المنشورات والتعليقات
+    // جلب المنشورات والتعليقات مع تطبيق عزل الشركة التام
     function loadPosts() {
         const q = query(postsRef, orderBy("timestamp", "desc"));
         onSnapshot(q, async (snapshot) => {
             allPostsData = [];
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
 
             for (const docSnap of snapshot.docs) {
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                // عزل الشركات: إذا لم يكن مديراً، يتم عرض منشورات شركته فقط
-                if (!isAdmin && post.companyId && post.companyId !== currentCompanyId) {
+                // عزل الشركات: إذا لم يكن مديراً عاماً، يتم عرض منشورات شركته فقط
+                if (!superAdmin && post.companyId && post.companyId !== currentCompanyId) {
                     continue;
                 }
 
                 const commentsSnap = await getDocs(collection(db, "driver_community_posts", id, "comments"));
                 let comments = [];
-                commentsSnap.forEach(c => comments.push({ id: c.id, ...c.data() }));
+                commentsSnap.forEach(c => {
+                    let cData = c.data();
+                    if (superAdmin || !cData.companyId || cData.companyId === currentCompanyId) {
+                        comments.push({ id: c.id, ...cData });
+                    }
+                });
 
                 allPostsData.push({ id, ...post, comments });
             }
@@ -185,7 +190,7 @@
             return;
         }
 
-        let isAdmin = isUserAdmin();
+        let superAdmin = isSuperAdmin();
 
         posts.forEach((post) => {
             const embed = getYouTubeEmbedUrl(post.videoUrl);
@@ -214,7 +219,7 @@
                     
                     <div class="post-actions">
                         <button class="btn btn-success" onclick="likePost('${post.id}')">👍 أعجبني (${post.likes || 0})</button>
-                        ${isAdmin ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور 🗑️</button>` : ""}
+                        ${superAdmin || post.author === activeSessionName ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور 🗑️</button>` : ""}
                     </div>
 
                     <div class="comments-section">
@@ -230,7 +235,7 @@
         });
     }
 
-    // إضافة منشور جديد
+    // إضافة منشور جديد مرتبط برقم الشركة الحالي
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
         await addDoc(postsRef, {
@@ -253,7 +258,7 @@
         await updateDoc(postRef, { likes: increment(1) });
     };
 
-    // إضافة تعليق
+    // إضافة تعليق مع عزل الشركة
     window.addComment = async (e, postId) => {
         e.preventDefault();
         const author = document.getElementById(`commAuthor-${postId}`).value;
