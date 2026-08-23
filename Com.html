@@ -74,7 +74,7 @@
         .welcome-badge {
             font-size: 12px; font-weight: bold; color: var(--accent);
             background: var(--bg); padding: 6px 12px; border-radius: 20px;
-            border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;
+            border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; cursor: pointer;
         }
         .header-avatar-sm { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 1px solid var(--accent); }
 
@@ -197,11 +197,12 @@
 
     <!-- شريط الهيدر العلوي الذكي مع عزل الشركة -->
     <header>
-        <div class="welcome-badge" onclick="openProfileModal()" style="cursor:pointer;" title="عرض ملفك الشخصي">
+        <div class="welcome-badge" onclick="openProfileModal()" title="عرض ملفك الشخصي">
             <img id="headerAvatar" src="" class="header-avatar-sm" style="display:none;">
             <span id="headerNameText">أهلاً بك يا كابتن</span>
         </div>
         <div class="nav-controls">
+            <button class="cloud-status-btn" onclick="openSwitchAccountPrompt()" title="تبديل الحساب">👤 تبديل الحساب</button>
             <div class="notification-container">
                 <button class="notification-3d-btn" onclick="toggleNotificationsMenu()" title="الإشعارات">
                     🔔
@@ -216,7 +217,7 @@
                 </div>
             </div>
 
-            <button class="cloud-status-btn" id="cloudStatusBtn">☁️ سحابي معزول</button>
+            <button class="cloud-status-btn" id="cloudStatusBtn" style="background:var(--accent);">☁️ آمن ومعزول</button>
             <button type="button" onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌓</button>
         </div>
     </header>
@@ -379,25 +380,26 @@
             <p style="font-size: 11px; margin-bottom: 6px;"><strong>رقم الهاتف:</strong> <span id="modalPhoneText">غير متوفر</span></p>
             <p style="font-size: 11px; margin-bottom: 6px;"><strong>إجمالي الشحنات:</strong> <span id="modalShipmentsCount">0</span> شحنة</p>
             <p style="font-size: 11px; margin-bottom: 10px;"><strong>رصيد الخزنة:</strong> <span id="modalSafeTotal">0</span> ج.م</p>
-            <button type="button" class="btn-success" onclick="closeProfileModal()" style="width: 100%;">إغلاق النافذة</button>
+            <button type="button" class="btn-success" onclick="closeProfileModal(); openSwitchAccountPrompt();" style="width: 100%; margin-bottom: 6px; background:var(--warning);">🔄 تبديل الحساب</button>
+            <button type="button" class="btn-danger" onclick="closeProfileModal()" style="width: 100%;">إغلاق النافذة</button>
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي الاحترافي -->
+    <!-- شريط التنقل السفلي الاحترافي مع دعم تمرير الجلسة -->
     <nav class="bottom-nav">
-        <button class="bottom-nav-item" onclick="location.href='index.html'">
-            <span class="icon">☰</span>
-            <span>القائمة</span>
+        <button class="bottom-nav-item" onclick="goToPage('index.html')">
+            <span class="icon">🏠</span>
+            <span>الرئيسية</span>
         </button>
-        <button class="bottom-nav-item" onclick="location.href='safe.html'">
+        <button class="bottom-nav-item" onclick="goToPage('safe.html')">
             <span class="icon">💰</span>
             <span>الخزنة</span>
         </button>
         <button class="bottom-nav-item active" onclick="switchSection('feed-sec', document.querySelectorAll('.sector-btn')[0])">
-            <span class="icon">🚀</span>
+            <span class="icon">🌐</span>
             <span>الرادار</span>
         </button>
-        <button class="bottom-nav-item" onclick="location.href='cargo.html'">
+        <button class="bottom-nav-item" onclick="goToPage('cargo.html')">
             <span class="icon">📦</span>
             <span>الشحنات</span>
         </button>
@@ -430,24 +432,36 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // 🔐 إدارة عزل الشركة (companyId)
-        let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
-        window.currentCompanyId = currentCompanyId;
-        document.getElementById('companyIdLabel').innerText = currentCompanyId;
-
+        // 🔐 إدارة عزل الشركة وجلسة الحساب الموحدة بين كافة الصفحات
+        let currentCompanyId = 'company_guest';
         let currentDriverProfile = {
-            name: localStorage.getItem('logged_in_driver_name') || 'المدير',
+            name: '',
             avatar: '',
-            title: 'أسطورة الطريق',
+            title: 'سائق معتمد',
             phone: '',
-            rank: localStorage.getItem('current_user_role') || 'admin'
+            rank: 'driver',
+            id: ''
         };
 
         let currentChatTarget = 'general';
         let allDrivers = [];
         let myTotalSafe = 0;
 
-        // تهيئة التطبيق وتسجيل الدخول التواقئي لمنع مشاكل الصلاحيات في فايربيس
+        // دالة التنقل الذكي بين الصفحات مع الحفاظ على تمرير معرف الحساب والشركة
+        function goToPage(pageName) {
+            let userId = currentDriverProfile.id || currentDriverProfile.name || '';
+            let companyId = currentCompanyId || 'company_guest';
+            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
+        }
+
+        // الاستماع الفوري لأي تغيير في التخزين المحلي عبر أي صفحة أخرى في المتصفح
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'na2la_active_session' || event.key === 'current_company_id') {
+                location.reload();
+            }
+        });
+
+        // تهيئة التطبيق وفحص الجلسة الموحدة من الرابط أو التخزين المحلي
         async function initApp() {
             try {
                 if (!auth.currentUser) {
@@ -456,7 +470,110 @@
             } catch (err) {
                 console.warn("Auth warning:", err);
             }
-            syncProfileAndLoad();
+            await getExternalLoginSessionAndSync();
+        }
+
+        async function getExternalLoginSessionAndSync() {
+            const urlParams = new URLSearchParams(window.location.search);
+            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
+                             urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
+            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
+
+            if (externalId) {
+                externalId = externalId.trim();
+                localStorage.setItem('na2la_external_logged_user_id', externalId);
+                if (urlCompanyId) {
+                    localStorage.setItem('current_company_id', urlCompanyId.trim());
+                }
+            } else {
+                let storedSession = localStorage.getItem('na2la_active_session');
+                if (storedSession) {
+                    try {
+                        let parsed = JSON.parse(storedSession);
+                        if (parsed && (parsed.id || parsed.name)) {
+                            currentDriverProfile.id = parsed.id || parsed.name;
+                            currentDriverProfile.name = parsed.name || parsed.driverName;
+                            currentDriverProfile.phone = parsed.phone || '';
+                            currentDriverProfile.rank = parsed.role || parsed.rank || 'driver';
+                            currentDriverProfile.title = parsed.title || 'سائق';
+                            currentDriverProfile.avatar = parsed.avatar || '';
+                            currentCompanyId = parsed.companyId || parsed.companyName || localStorage.getItem('current_company_id') || 'company_main';
+                            window.currentCompanyId = currentCompanyId;
+                            localStorage.setItem('current_company_id', currentCompanyId);
+                            document.getElementById('companyIdLabel').innerText = currentCompanyId;
+                            syncProfileAndLoad();
+                            return;
+                        }
+                    } catch(e) {}
+                }
+                externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name');
+            }
+
+            if (externalId && externalId !== 'المدير') {
+                await fetchDriverData(externalId);
+            } else {
+                currentCompanyId = localStorage.getItem('current_company_id') || 'company_guest';
+                window.currentCompanyId = currentCompanyId;
+                document.getElementById('companyIdLabel').innerText = currentCompanyId;
+                currentDriverProfile.name = 'الرجاء تحديد الحساب';
+                currentDriverProfile.rank = 'guest';
+                syncProfileAndLoad();
+                openSwitchAccountPrompt();
+            }
+        }
+
+        async function fetchDriverData(identifier) {
+            let cleanId = String(identifier || '').trim();
+            if (!cleanId) return;
+
+            // مسح الجلسة القديمة لمنع تعلق حساب المدير
+            localStorage.removeItem('na2la_active_session');
+
+            try {
+                const snapshot = await db.collection('drivers').get();
+                let found = null;
+                snapshot.forEach(docSnap => {
+                    let d = docSnap.data();
+                    if (d.id === cleanId || d.name === cleanId || d.phone === cleanId || docSnap.id === cleanId) {
+                        found = d;
+                    }
+                });
+
+                if (found) {
+                    currentCompanyId = found.companyId || found.companyName || 'company_main';
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    window.currentCompanyId = currentCompanyId;
+                    document.getElementById('companyIdLabel').innerText = currentCompanyId;
+
+                    currentDriverProfile.id = found.id || found.name;
+                    currentDriverProfile.name = found.name || found.driverName || 'مستخدم';
+                    currentDriverProfile.phone = found.phone || '';
+                    currentDriverProfile.rank = found.role || found.rank || 'driver';
+                    currentDriverProfile.title = found.title || 'سائق معتمد';
+                    currentDriverProfile.avatar = found.avatar || '';
+
+                    localStorage.setItem('logged_in_driver_name', currentDriverProfile.name);
+                    localStorage.setItem('current_user_role', currentDriverProfile.rank);
+                    localStorage.setItem('na2la_active_session', JSON.stringify(found));
+
+                    syncProfileAndLoad();
+                    alert(`تم تحميل حساب (${currentDriverProfile.name}) لشركة (${currentCompanyId}) بنجاح ✅`);
+                } else {
+                    alert(`الحساب (${cleanId}) غير مسجل في السحابة!`);
+                    openSwitchAccountPrompt();
+                }
+            } catch (err) {
+                console.error(err);
+                alert('خطأ في جلب بيانات الحساب');
+            }
+        }
+
+        function openSwitchAccountPrompt() {
+            let inputId = prompt("أدخل اسم حسابك أو رقم هاتفك أو معرف الشركة للمزامنة:");
+            if (inputId && inputId.trim() !== "") {
+                localStorage.setItem('na2la_external_logged_user_id', inputId.trim());
+                fetchDriverData(inputId.trim());
+            }
         }
 
         async function syncProfileAndLoad() {
@@ -465,20 +582,14 @@
                 allDrivers = [];
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    // تصفية السائقين برقم الشركة المعزول
                     if (d.companyId && d.companyId !== currentCompanyId && currentDriverProfile.rank !== 'admin') {
                         return;
                     }
                     allDrivers.push(d);
-                    if (d.name === currentDriverProfile.name) {
-                        if (d.avatar) currentDriverProfile.avatar = d.avatar;
-                        if (d.title || d.role) currentDriverProfile.title = d.title || d.role;
-                        if (d.phone) currentDriverProfile.phone = d.phone;
-                    }
                 });
             } catch (e) { console.error("Error loading drivers:", e); }
 
-            document.getElementById('headerNameText').innerText = `أهلاً بك يا ${currentDriverProfile.name}`;
+            document.getElementById('headerNameText').innerText = currentDriverProfile.name;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
             const avatarContainer = document.getElementById('headerAvatar');
@@ -490,7 +601,7 @@
                 modalAvatar.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
             } else {
                 avatarContainer.style.display = 'none';
-                modalAvatar.innerText = currentDriverProfile.name.charAt(0);
+                modalAvatar.innerText = currentDriverProfile.name ? currentDriverProfile.name.charAt(0) : 'ز';
             }
 
             document.getElementById('modalNameText').innerText = currentDriverProfile.name;
@@ -582,7 +693,7 @@
                 likes: 0,
                 comments: [],
                 isEmergency: isEmergency,
-                companyId: currentCompanyId, // 🔐 حفظ برقم الشركة المعزول
+                companyId: currentCompanyId,
                 date: new Date().toLocaleString('ar-EG')
             };
 
@@ -603,7 +714,6 @@
                 let posts = [];
                 snapshot.forEach(docSnap => {
                     let p = docSnap.data();
-                    // تصفية المنشورات برقم الشركة
                     if (p.companyId && p.companyId !== currentCompanyId && currentDriverProfile.rank !== 'admin') {
                         return;
                     }
@@ -714,7 +824,6 @@
                 let myCargos = [];
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    // تصفية الشحنات برقم الشركة المعزول
                     if (data.companyId && data.companyId !== currentCompanyId && currentDriverProfile.rank !== 'admin') {
                         return;
                     }
@@ -749,7 +858,6 @@
             });
         }
 
-        // دالة جلب وعرض الخزنة والمالية الخاصة بالشركة
         function loadTreasuryData() {
             db.collection('transactions').onSnapshot(snapshot => {
                 const container = document.getElementById('my-treasury-container');
@@ -761,7 +869,6 @@
 
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    // تصفية الحركات النقدية برقم الشركة المعزول
                     if (data.companyId && data.companyId !== currentCompanyId && currentDriverProfile.rank !== 'admin') {
                         return;
                     }
@@ -833,7 +940,7 @@
                 sender: currentDriverProfile.name,
                 receiver: currentChatTarget,
                 text: msg,
-                companyId: currentCompanyId, // 🔐 حفظ برقم الشركة
+                companyId: currentCompanyId,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
@@ -928,7 +1035,7 @@
                 let uid = String(Date.now());
                 await db.collection('drivers').doc(uid).set({
                     id: uid, name, phone, pin, role: rank, title: rank, status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180,
-                    companyId: currentCompanyId // 🔐 الحفظ برقم الشركة المعزول
+                    companyId: currentCompanyId
                 });
                 document.getElementById('newMemberName').value = '';
                 document.getElementById('newMemberPhone').value = '';
@@ -950,7 +1057,7 @@
                 desc, 
                 driverName: currentDriverProfile.name,
                 category: 'treasury', 
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشركة المعزول
+                companyId: currentCompanyId,
                 date: new Date().toLocaleString('ar-EG') 
             };
 
@@ -961,7 +1068,6 @@
             });
         }
 
-        // نظام الإشعارات
         function getNotifications() {
             let notifs = localStorage.getItem('space_app_notifs');
             if (!notifs) {
