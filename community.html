@@ -451,18 +451,20 @@
             } catch(e) {}
         }
 
-        // 👑 دالة فحص صلاحيات الإدارة العليا للتعامل مع Admin1 وباقي المديرين بمرونة تامة
-        function isUserAdmin() {
+        // 👑 دالة المدير العام للمنصة الأم فقط (Super Admin)
+        function isSuperAdmin() {
             let user = currentDriverProfile || {};
-            let role = String(user.role || '').toLowerCase().trim();
             let userId = String(user.id || '').trim();
             let userName = String(user.name || '').trim();
             
-            return userId === '1' || 
-                   role === 'admin' || 
-                   role === 'مدير نظام' || 
-                   role === 'مدير' || 
-                   ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1'].includes(userName);
+            return userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+        }
+        window.isSuperAdmin = isSuperAdmin;
+
+        function isUserAdmin() {
+            let user = currentDriverProfile || {};
+            let role = String(user.role || '').toLowerCase().trim();
+            return isSuperAdmin() || role.includes('admin') || role.includes('مدير');
         }
         window.isUserAdmin = isUserAdmin;
 
@@ -512,8 +514,8 @@
                 }
             } catch (e) { console.error("خطأ في المزامنة:", e); }
 
-            let isAdmin = isUserAdmin();
-            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${isAdmin ? 'مدير النظام' : currentDriverProfile.title} (${currentCompanyId})`;
+            let superAdmin = isSuperAdmin();
+            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير عام المنصة' : currentDriverProfile.title} (${currentCompanyId})`;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
             const avatarContainer = document.getElementById('header-avatar-container');
@@ -523,7 +525,7 @@
                 avatarContainer.innerText = currentDriverProfile.name.charAt(0);
             }
 
-            if (currentDriverProfile.canAccessSocial === false && !isAdmin) {
+            if (currentDriverProfile.canAccessSocial === false && !superAdmin) {
                 document.getElementById('social-access-warning').style.display = 'block';
                 document.getElementById('social-content-wrapper').style.display = 'none';
             } else {
@@ -558,7 +560,7 @@
         function openProfileModal() {
             const modal = document.getElementById('profileModal');
             const body = document.getElementById('profileModalBody');
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             
             let myPostsCount = allCommunityPosts.filter(p => p.author === currentDriverProfile.name).length;
             let myCommentsHtml = '';
@@ -578,7 +580,7 @@
                         ${currentDriverProfile.avatar ? `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover;">` : currentDriverProfile.name.charAt(0)}
                     </div>
                     <strong style="font-size: 14px; display: block;">${currentDriverProfile.name}</strong>
-                    <span style="font-size: 10px; opacity: 0.8; color: var(--accent);">${isAdmin ? 'مدير النظام (Admin)' : 'سائق معتمد'} | شركة: <code>${currentCompanyId}</code></span>
+                    <span style="font-size: 10px; opacity: 0.8; color: var(--accent);">${superAdmin ? 'مدير عام المنصة' : 'حساب شركة / سائق'} | شركة: <code>${currentCompanyId}</code></span>
                 </div>
                 
                 <div style="border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 8px;">
@@ -751,8 +753,8 @@
                 const container = document.getElementById('community-posts-container');
                 container.innerHTML = '';
                 
-                let isAdmin = isUserAdmin();
-                let posts = allCommunityPosts.filter(p => isAdmin || !p.companyId || p.companyId === currentCompanyId);
+                let superAdmin = isSuperAdmin();
+                let posts = allCommunityPosts.filter(p => superAdmin || p.companyId === currentCompanyId);
                 posts.sort((a, b) => Number(b.id) - Number(a.id));
 
                 if (posts.length === 0) {
@@ -915,12 +917,12 @@
                 if(!container) return;
                 container.innerHTML = '';
                 
-                let isAdmin = isUserAdmin();
+                let superAdmin = isSuperAdmin();
                 let myCargos = [];
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    let matchesComp = (isAdmin || !data.companyId || data.companyId === currentCompanyId);
-                    let matchesUser = (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || isAdmin);
+                    let matchesComp = (superAdmin || data.companyId === currentCompanyId);
+                    let matchesUser = (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || superAdmin);
                     if (matchesComp && matchesUser) {
                         myCargos.push({ id: doc.id, ...data });
                     }
@@ -956,13 +958,13 @@
                 if(!container) return;
                 container.innerHTML = '';
                 
-                let isAdmin = isUserAdmin();
+                let superAdmin = isSuperAdmin();
                 let mySafeItems = [];
                 let totalBalance = 0;
 
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    let matchesComp = (isAdmin || !data.companyId || data.companyId === currentCompanyId);
+                    let matchesComp = (superAdmin || data.companyId === currentCompanyId);
                     if (matchesComp) {
                         mySafeItems.push({ id: doc.id, ...data });
                         totalBalance += Number(data.amount || data.price || 0);
@@ -998,14 +1000,14 @@
             if(!listContainer) return;
             listContainer.innerHTML = '';
             
-            let isAdmin = isUserAdmin();
-            let companyDrivers = allDrivers.filter(drv => isAdmin || !drv.companyId || drv.companyId === currentCompanyId);
+            let superAdmin = isSuperAdmin();
+            let companyDrivers = allDrivers.filter(drv => superAdmin || drv.companyId === currentCompanyId);
 
             companyDrivers.forEach(drv => {
                 if(drv.name === currentDriverProfile.name) return;
                 let div = document.createElement('div');
                 div.className = 'chat-account-item';
-                div.innerHTML = `<span>💬 ${drv.name}</span><small style="opacity:0.7">${isUserAdmin() ? 'مدير' : 'سائق'}</small>`;
+                div.innerHTML = `<span>💬 ${drv.name}</span><small style="opacity:0.7">${drv.role || 'سائق'}</small>`;
                 div.onclick = function() { selectChatRoom(drv.name, this); };
                 listContainer.appendChild(div);
             });
@@ -1043,7 +1045,7 @@
             let newMsg = {
                 id: String(Date.now()),
                 sender: currentDriverProfile.name,
-                senderRole: isUserAdmin() ? 'مدير النظام' : 'سائق معتمد',
+                senderRole: currentDriverProfile.role || 'سائق معتمد',
                 companyId: currentCompanyId,
                 receiver: currentChatTarget,
                 text: msg,
@@ -1065,8 +1067,8 @@
                 if(!box) return;
                 box.innerHTML = '';
                 
-                let isAdmin = isUserAdmin();
-                let msgs = allChatMessagesCache.filter(m => isAdmin || !m.companyId || m.companyId === currentCompanyId);
+                let superAdmin = isSuperAdmin();
+                let msgs = allChatMessagesCache.filter(m => superAdmin || m.companyId === currentCompanyId);
                 msgs.sort((a, b) => Number(a.id) - Number(b.id));
 
                 let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
