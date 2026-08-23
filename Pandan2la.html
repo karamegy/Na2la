@@ -639,11 +639,16 @@
 
     async function fetchDriverData(identifier) {
         let cleanId = String(identifier || '').trim();
+        if (!cleanId) return;
 
         if (!window.db || !window.firebaseModules) {
             showToast('جاري الاتصال بقاعدة البيانات...', 'warning');
             return;
         }
+
+        // 🔒 مسح الجلسة القديمة مؤقتاً لمنع بقاء حساب المدير عالقاً في حال خطأ البحث
+        localStorage.removeItem('na2la_active_session');
+        localStorage.removeItem('na2la_external_logged_user_id');
 
         const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
         try {
@@ -694,7 +699,10 @@
                 showToast(`تم تحميل حساب (${getSafeName(docData)}) لشركة (${currentCompanyId}) بنجاح ✅`);
             } else {
                 showToast(`الحساب (${cleanId}) غير مسجل في قاعدة البيانات!`, 'danger');
-                localStorage.removeItem('na2la_external_logged_user_id');
+                currentCompanyId = 'company_guest';
+                window.currentCompanyId = currentCompanyId;
+                window.currentLoggedInUser = { id: '', name: 'حساب غير معروف', role: 'driver', companyId: currentCompanyId };
+                applyUserPermissionsUI();
                 openSwitchAccountPrompt();
             }
         } catch(err) { 
