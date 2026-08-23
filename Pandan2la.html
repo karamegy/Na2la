@@ -388,7 +388,7 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماما لكل حساب وملكية شركة -->
+<!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماما لكل مستخدم ومدير ومشرف -->
 <script>
     window._isSavingLocally = false;
     let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
@@ -490,7 +490,7 @@
     const professionalTitles = [
         "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
         "وسام الأمان الأول", "درع القيادة الآمنة", "سفير السلامة", "خبير توفير الوقود", "فاحص محترف",
-        "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "التزام التام", "المستشار الفني"
+        "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "الالتزام التام", "المستشار الفني"
     ];
     window.professionalTitles = professionalTitles;
 
@@ -534,42 +534,58 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // المدير العام الحقيقي للمنصة فقط (مثل عماد أو ID 1)
-    function isSuperAdmin() {
-        let user = window.currentLoggedInUser || {};
-        let userId = String(user.id || '').trim();
-        let userName = String(user.name || '').trim();
-        return userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
-    }
-    window.isSuperAdmin = isSuperAdmin;
-
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase().trim();
-        return isSuperAdmin() || role.includes('admin') || role.includes('مدير');
+        let userId = String(user.id || '').trim();
+        return (userId === '1' && (role === 'admin' || role === 'مدير نظام' || role === 'مدير')) || ['المدير', 'مدير', 'عماد', 'Emad'].includes(user.name);
     }
     window.isUserAdmin = isUserAdmin;
 
-    // عزل الشحنات بناءً على معرف الشركة الخاص بالمستخدم (إلا لو كان السوبر أدمين)
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
-        if (isSuperAdmin()) return all;
-        
+        if (isUserAdmin()) return all;
+        let user = window.currentLoggedInUser || {};
+        let currentUserId = String(user.id || '').trim();
+        let userPhone = String(user.phone || '').trim();
+        let userName = String(user.name || '').trim();
+
+        if (!currentUserId && !userPhone && !userName) return [];
+
         return all.filter(s => {
-            let sCompanyId = String(s.companyId || '').trim();
-            return sCompanyId === currentCompanyId;
+            let sUserId = String(s.userId || '').trim();
+            let sPhone = String(s.phone || s.clientPhone || '').trim();
+            let sDriver = String(s.driver || '').trim();
+
+            let matchId = currentUserId && sUserId === currentUserId;
+            let matchPhone = userPhone && sPhone === userPhone;
+            let matchDriver = userName && sDriver === userName;
+
+            return (matchId || matchPhone || matchDriver) && sUserId !== '1';
         });
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
-    // عزل القوائم (الأجل، الخزينة، المصروفات، العملاء) بناءً على معرف الشركة الحالي
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
-        if (isSuperAdmin()) return items;
+        if (isUserAdmin()) return items;
+        let user = window.currentLoggedInUser || {};
+        let currentUserId = String(user.id || '').trim();
+        let userPhone = String(user.phone || '').trim();
+        let userName = String(user.name || '').trim();
+
+        if (!currentUserId && !userPhone && !userName) return [];
 
         return items.filter(item => {
-            let itemCompanyId = String(item.companyId || '').trim();
-            return itemCompanyId === currentCompanyId;
+            let itemUserId = String(item.userId || '').trim();
+            let itemPhone = String(item.phone || item.clientPhone || '').trim();
+            let itemName = String(item.name || item.accountOwner || item.driver || '').trim();
+
+            let matchId = currentUserId && itemUserId === currentUserId;
+            let matchPhone = userPhone && itemPhone === userPhone;
+            let matchName = userName && itemName === userName;
+
+            return (matchId || matchPhone || matchName) && itemUserId !== '1';
         });
     }
     window.getUserFilteredList = getUserFilteredList;
@@ -649,6 +665,10 @@
             }
 
             if (docData) {
+                if (docId !== '1' && !['المدير', 'مدير', 'عماد', 'Emad'].includes(docData.name)) {
+                    docData.role = docData.role || 'driver';
+                }
+
                 currentCompanyId = docData.companyId || 'company_main';
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
@@ -690,30 +710,29 @@
     }
     window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
-    // استعلامات سحابية معزولة تفرض جلب بيانات الشركة الحالية فقط
     function loadAllDataFromFirestoreMultiCollection() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
-        let superAdmin = isSuperAdmin();
+        let isAdmin = isUserAdmin();
 
         try {
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (window._isSavingLocally || !docSnap.exists()) return;
                 const data = docSnap.data();
-                if (superAdmin) {
+                if (isAdmin) {
                     if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
                     if (data.customers) appData.customers = data.customers;
                 } else {
-                    appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => x.companyId === currentCompanyId);
-                    appData.customers = (data.customers || []).filter(x => x.companyId === currentCompanyId);
+                    if (data.consolidatedInvoices) appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
+                    if (data.customers) appData.customers = (data.customers || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
                 }
                 window.appData = appData;
                 renderStats();
                 refreshActiveSection();
             });
 
-            let driversQuery = superAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+            let driversQuery = isAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
             onSnapshot(driversQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -722,7 +741,7 @@
                 }
             });
 
-            let shipmentsQuery = superAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
+            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
             onSnapshot(shipmentsQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -732,7 +751,7 @@
                 refreshActiveSection();
             });
 
-            let deferredQuery = superAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
+            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
             onSnapshot(deferredQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -741,7 +760,7 @@
                 refreshActiveSection();
             });
 
-            let treasuryQuery = superAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
+            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
             onSnapshot(treasuryQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -750,7 +769,7 @@
                 refreshActiveSection();
             });
 
-            let expensesQuery = superAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
+            let expensesQuery = isAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
             onSnapshot(expensesQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -772,7 +791,7 @@
             let messages = [];
             snapshot.forEach((docSnap) => {
                 let mData = docSnap.data();
-                if (isSuperAdmin() || !mData.companyId || mData.companyId === currentCompanyId) {
+                if (isUserAdmin() || !mData.companyId || mData.companyId === currentCompanyId) {
                     messages.push({ id: docSnap.id, ...mData });
                 }
             });
@@ -832,7 +851,7 @@
                     }
                 }
             }
-            if (isSuperAdmin()) {
+            if (isUserAdmin()) {
                 await setDoc(doc(window.db, "appStore", "mainState"), appData, { merge: true });
             }
         } catch (err) { console.error(err); }
@@ -873,7 +892,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getUserFilteredShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بمعرف الشركة (${currentCompanyId}) - إجمالي شحنات شركتك: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً برتبتك الحقيقية ومعرف الشركة (${currentCompanyId}) - إجمالي شحناتك: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -900,9 +919,10 @@
         
         document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
         
-        let roleBadgeText = '🏢 حساب شركة معزول';
-        if (isSuperAdmin()) roleBadgeText = '👑 مدير عام المنصة (تحكم شامل)';
-        else if (isAdmin) roleBadgeText = '🛡️ مدير شركة معتمد';
+        let roleBadgeText = '👨‍✈️ سائق معزول';
+        if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
+        else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
+        else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق مستقل';
         
         document.getElementById('header-role-badge').innerText = roleBadgeText;
 
@@ -910,50 +930,79 @@
         if (user.avatar && String(user.avatar).trim() !== '') {
             avatarEl.innerHTML = `<img src="${user.avatar}" alt="Avatar">`;
         } else {
-            avatarEl.innerHTML = isSuperAdmin() ? '🐼' : '🏢';
+            avatarEl.innerHTML = isAdmin ? '🐼' : (roleName.includes('مشرف') ? '🛡️' : '👨‍✈️');
         }
 
-        renderSidebarByRole(isSuperAdmin());
-        renderBottomNavbarByRole(isSuperAdmin());
+        renderSidebarByRole(isAdmin);
+        renderBottomNavbarByRole(isAdmin);
         renderStats();
     }
 
-    function renderSidebarByRole(superAdmin) {
+    function renderSidebarByRole(isAdmin) {
         const sidebarList = document.querySelector('.sidebar-nav-list');
         const sidebarTitle = document.getElementById('sidebar-title-header');
         if (!sidebarList) return;
+        
+        let user = window.currentLoggedInUser || {};
+        let roleName = String(user.role || '').toLowerCase();
+        let isSupervisor = roleName.includes('مشرف') || roleName === 'supervisor';
 
-        if(sidebarTitle) sidebarTitle.innerText = superAdmin ? '👑 لوحة المدير العام' : '🏢 لوحة إدارة الشركة المعزولة';
+        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (تحكم كامل)' : (isSupervisor ? '🛡️ لوحة المشرف' : '👨‍✈️ قائمة السائق المستقل');
 
-        sidebarList.innerHTML = `
-            <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بالشركة</button>
-            <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 شحنات الشركة</button>
-            ${superAdmin ? '<button onclick="switchSection(\'pandaAdmin\'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا</button>' : ''}
-            <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 الفواتير المجمعة</button>
-            <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
-            <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول وصيانة السيارات</button>
-            <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والحسابات</button>
-            <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات والوقود</button>
-            <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون</button>
-            <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل</button>
-            <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي</button>
-            <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
-            <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية</button>
-            <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
-            <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
-        `;
+        if (isAdmin) {
+            sidebarList.innerHTML = `
+                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ إدارة الأجل والفواتير</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة جميع الشحنات</button>
+                <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا والتحكم</button>
+                <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة</button>
+                <button onclick="switchSection('centralChat'); toggleSidebar();">📢 الشات المركزي وبث الرسائل</button>
+                <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة الألقاب والصلاحيات</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
+                <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول وصيانة السيارات</button>
+                <button onclick="switchSection('treasury'); toggleSidebar();">💵 الخزينة والحسابات</button>
+                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ المصروفات والوقود</button>
+                <button onclick="switchSection('customers'); toggleSidebar();">👥 العملاء والديون</button>
+                <button onclick="switchSection('freightCalc'); toggleSidebar();">🧮 حاسبة تكاليف النقل</button>
+                <button onclick="switchSection('aiMechanic'); toggleSidebar();">🤖 مساعد الذكاء الاصطناعي</button>
+                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
+                <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
+                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
+                <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
+                <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات</button>
+            `;
+        } else {
+            sidebarList.innerHTML = `
+                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 شحناتي الخاصة فقط</button>
+                <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">⏳ فواتير الأجل الخاصة بي</button>
+                <button onclick="switchSection('treasury'); toggleSidebar();">💵 خزينتي وحساباتي النقدية</button>
+                <button onclick="switchSection('expenses'); toggleSidebar();">⛽ مصروفاتي التشغيلية</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع ومراسلة الشحنات</button>
+                <button onclick="switchSection('chat'); toggleSidebar();">💬 شات الأسطول الفوري</button>
+                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
+                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية</button>
+            `;
+        }
     }
 
-    function renderBottomNavbarByRole(superAdmin) {
+    function renderBottomNavbarByRole(isAdmin) {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
 
-        navbar.innerHTML = `
-            <div class="nav-item active" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
-            <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-            <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-location-crosshairs"></i><span>التتبع</span></div>
-            <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-        `;
+        if (isAdmin) {
+            navbar.innerHTML = `
+                <div class="nav-item active" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
+                <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
+                <div class="nav-item" onclick="switchSection('pandaAdmin', this)"><i class="fa-solid fa-chess-king"></i><span>باندا</span></div>
+                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
+            `;
+        } else {
+            navbar.innerHTML = `
+                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>شحناتي</span></div>
+                <div class="nav-item" onclick="switchSection('deferredInvoices', this)"><i class="fa-solid fa-hourglass-half"></i><span>الأجل</span></div>
+                <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-location-crosshairs"></i><span>التتبع</span></div>
+                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
+            `;
+        }
     }
 
     function toggleSidebar() {
@@ -1001,11 +1050,13 @@
         const content = document.getElementById('main-content');
         if(!content) return;
         let data = appStateData();
+        let isAdmin = isUserAdmin();
+
         let shipmentsList = getUserFilteredShipments(data);
 
-        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl') && !isSuperAdmin()) {
-            showToast('عذراً، هذه الصلاحية مقصورة على المدير العام للمنصة فقط! 👑', 'danger');
-            sectionId = 'deferredInvoices';
+        if ((sectionId === 'pandaAdmin' || sectionId === 'driversControl') && !isAdmin) {
+            showToast('عذراً، هذه الصلاحية مقصورة على مدير النظام فقط! 👑', 'danger');
+            sectionId = 'shipments';
         }
         
         if (sectionId === 'deferredInvoices') {
@@ -1016,10 +1067,10 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <h3 style="margin:0; color:var(--yellow-warning);">⏳ فواتير الأجل الخاصة بالشركة (${currentCompanyId})</h3>
+                        <h3 style="margin:0; color:var(--yellow-warning);">⏳ فواتير الأجل الخاصة بحسابك</h3>
                         <button class="btn-warning btn-sm" style="color:#000; font-weight:bold;" onclick="openModal('deferredModal')">+ إضافة فاتورة أجل</button>
                     </div>
-                    <p style="font-size:9px; color:var(--text-muted); margin-bottom:8px;">متابعة حسابات الشركة الآجلة، المستحقات وتنبيهات السداد عبر واتساب:</p>
+                    <p style="font-size:9px; color:var(--text-muted); margin-bottom:8px;">متابعة حساباتك الآجلة، فحص المستحقات وتنبيهات السداد عبر واتساب:</p>
                     
                     <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-bottom:8px;">
                         <div style="background:var(--bg-dark); padding:6px; border-radius:8px; border-top:3px solid var(--yellow-warning); text-align:center;">
@@ -1047,7 +1098,7 @@
                 </div>
 
                 <div class="card">
-                    <h3><span>📋 قائمة فواتير الأجل المعزولة للشركة</span></h3>
+                    <h3><span>📋 قائمة فواتير الأجل المعزولة</span></h3>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -1079,7 +1130,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة لهذه الشركة</td></tr>'}
+                                `;}).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد فواتير أجل مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1088,8 +1139,8 @@
         } else if (sectionId === 'pandaAdmin') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل للمنصة</h3>
-                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">مفوض لمدير النظام العام فقط:</p>
+                    <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل اللحظي</h3>
+                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">مفوض حصرياً لمدير النظام لإدارة ومزامنة كافة الشحنات والحسابات لحظياً:</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ إدارة الأجل والفواتير</button>
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
@@ -1097,12 +1148,21 @@
                         <button class="btn-danger" onclick="switchSection('auditLogs')">🔍 سجل العمليات</button>
                     </div>
                 </div>
+                <div class="card">
+                    <h3><span>📊 ملخص غرفة باندا للبيانات الحية</span></h3>
+                    <div style="font-size: 10px; line-height: 1.6;">
+                        <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
+                        <p>📦 إجمالي الشحنات في المنصة: <strong>${getAllShipments(data).length} شحنة</strong></p>
+                        <p>⏳ إجمالي فواتير الأجل العامة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
+                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">يعمل بكفاءة تامة لكل حساب مستقل (${currentCompanyId})</strong></p>
+                    </div>
+                </div>
             `;
         } else if (sectionId === 'consolidatedInvoices') {
             const uniqueClients = [...new Set(shipmentsList.map(s => getSafeName(s)))];
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--green-success);">
-                    <h3 style="color:var(--green-success);">📑 قسم الفواتير المجمعة لشحنات الشركة</h3>
+                    <h3 style="color:var(--green-success);">📑 قسم الفواتير المجمعة لشحناتك</h3>
                     <form onsubmit="generateConsolidatedInvoice(event)">
                         <label style="font-size:9px; font-weight:bold;">اختر العميل:</label>
                         <select id="ci-client" onchange="loadClientShipmentsForConsolidation()" required style="margin-bottom:5px;">
@@ -1118,7 +1178,7 @@
                 </div>
 
                 <div class="card">
-                    <h3><span>📂 سجل الفواتير المجمعة للشركة</span></h3>
+                    <h3><span>📂 سجل الفواتير المجمعة الخاصة بك</span></h3>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>عدد الشحنات</th><th>الإجمالي</th><th>إجراءات</th></tr></thead>
@@ -1135,16 +1195,44 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة لحسابك</td></tr>'}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            `;
+        } else if (sectionId === 'centralChat') {
+            content.innerHTML = `
+                <div class="card" style="border: 2px solid var(--green-success);">
+                    <h3 style="color:var(--green-success);">📢 الشات المركزي وبث الإدارية العليا</h3>
+                    <form onsubmit="sendCentralBroadcast(event)">
+                        <select id="broadcast-priority" style="margin-bottom:5px;">
+                            <option value="عاجل 🔴">تنبيه عاجل 🔴</option>
+                            <option value="إعلان رسمي 🔵">إعلان رسمي 🔵</option>
+                            <option value="توجيه تشغيلي 🟢">توجيه تشغيلي 🟢</option>
+                        </select>
+                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات المنصة..." required style="height: 60px;"></textarea>
+                        <button type="submit" class="btn-success">إرسال وبث فوري لكافة الحسابات 📡</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3><span>📜 سجل رسائل البث المركزي</span></h3>
+                    <div style="background:var(--bg-dark); max-height:220px; overflow-y:auto; padding:8px; border-radius:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;">
+                        ${(data.centralBroadcasts || []).map(b => `
+                            <div style="background:var(--card-bg); padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+                                <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--yellow-warning); margin-bottom:3px;">
+                                    <strong>${b.sender || 'الإدارة'} (${b.priority || 'إعلان'})</strong><span>${b.time || ''}</span>
+                                </div>
+                                <p style="font-size:10px; color:var(--text-main);">${b.text || b.content || ''}</p>
+                            </div>
+                        `).join('') || '<p style="font-size:9px; text-align:center; color:var(--text-muted);">لا توجد رسائل بث حالياً</p>'}
                     </div>
                 </div>
             `;
         } else if (sectionId === 'cargoTracking') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--purple-color);">
-                    <h3 style="color:var(--purple-color);">📍 نظام تتبع مراحل شحنات الشركة (Live Timeline)</h3>
+                    <h3 style="color:var(--purple-color);">📍 نظام تتبع مراحل الشحنة الخاص بك (Live Timeline)</h3>
                     <select id="track-shipment-select" onchange="renderTrackingDetails()" style="margin-bottom:8px;">
                         <option value="">-- اختر الشحنة للتتبع --</option>
                         ${shipmentsList.map((s, idx) => `<option value="${idx}">${getSafeName(s)} - ${getSafeDesc(s)}</option>`).join('')}
@@ -1154,10 +1242,59 @@
                     </div>
                 </div>
             `;
+        } else if (sectionId === 'driversControl') {
+            content.innerHTML = `
+                <div class="card" style="border: 2px solid var(--yellow-warning);">
+                    <h3 style="color:var(--yellow-warning);">👑 إدارة الألقاب والحسابات (صلاحيات المدير)</h3>
+                    <div class="table-responsive">
+                        <table>
+                            <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب الاحترافي</th><th>إجراء</th></tr></thead>
+                            <tbody>
+                                ${(data.drivers || []).map((d, idx) => {
+                                    let currentRole = String(d.role || '').toLowerCase();
+                                    return `
+                                    <tr>
+                                        <td style="font-weight:bold;">${getSafeName(d)}</td>
+                                        <td>${getSafePhone(d)}</td>
+                                        <td>
+                                            <select onchange="updateDriverField(${idx}, 'role', this.value)" style="font-size:9px; padding:2px;">
+                                                <option value="سائق" ${currentRole === 'سائق' || currentRole === 'driver' ? 'selected' : ''}>سائق</option>
+                                                <option value="مشرف" ${currentRole === 'مشرف' || currentRole === 'supervisor' ? 'selected' : ''}>مشرف</option>
+                                                <option value="مدير نظام" ${currentRole === 'مدير نظام' || currentRole === 'admin' || currentRole === 'مدير' ? 'selected' : ''}>مدير نظام</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <select onchange="updateDriverField(${idx}, 'title', this.value)" style="font-size:9px; padding:2px; font-weight:bold; color:var(--yellow-warning);">
+                                                ${professionalTitles.map(t => `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`).join('')}
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('drivers', ${idx})">حذف</button>
+                                        </td>
+                                    </tr>
+                                `;}).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>➕ إضافة حساب جديد للمنصة</h3>
+                    <form onsubmit="saveNewDriver(event)">
+                        <input type="text" id="new-d-name" placeholder="الاسم الرباعي" required>
+                        <input type="text" id="new-d-phone" placeholder="رقم الهاتف" required>
+                        <select id="new-d-role">
+                            <option value="سائق">سائق</option>
+                            <option value="مشرف">مشرف</option>
+                            <option value="مدير نظام">مدير نظام</option>
+                        </select>
+                        <button type="submit" class="btn-success">إضافة الحساب 🚀</button>
+                    </form>
+                </div>
+            `;
         } else if (sectionId === 'shipments') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--accent-main);">
-                    <h3><span>📦 تسجيل رحلة وشحنة جديدة للشركة</span></h3>
+                    <h3><span>📦 تسجيل رحلة وشحنة جديدة</span></h3>
                     <form onsubmit="saveNewShipment(event)">
                         <input type="text" id="s-name" placeholder="اسم العميل" required>
                         <input type="text" id="s-phone" placeholder="رقم الهاتف">
@@ -1184,7 +1321,7 @@
                     </form>
                 </div>
                 <div class="card">
-                    <h3><span>📋 قائمة شحنات الشركة</span></h3>
+                    <h3><span>📋 قائمة شحناتك الخاصة</span></h3>
                     <div style="margin-bottom:6px;">
                         <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة..." oninput="filterShipmentsTable()">
                     </div>
@@ -1206,7 +1343,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مسجلة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1215,7 +1352,7 @@
         } else if (sectionId === 'fleet') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>🚚 إدارة أسطول الشركة وصيانة المركبات</span></h3>
+                    <h3><span>🚚 إدارة الأسطول وصيانة المركبات</span></h3>
                     <form onsubmit="saveTruck(event)">
                         <input type="text" id="tr-num" placeholder="اسم أو رقم الشاحنة" required>
                         <input type="text" id="tr-driver" placeholder="السائق المسؤول" required>
@@ -1226,7 +1363,7 @@
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(getUserFilteredList(data.trucks, 'trucks')).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات مسجلة لهذه الشركة</td></tr>'}
+                                ${(getUserFilteredList(data.trucks, 'trucks')).map((tr, idx) => `<tr><td>${tr.num || '-'}</td><td>${tr.driver || '-'}</td><td>${tr.km || 0} كم</td><td><button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1236,7 +1373,7 @@
             let userTreasury = getUserFilteredList(data.treasury, 'treasury');
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💵 خزينة الشركة وحركاتها النقدية المعزولة</span></h3>
+                    <h3><span>💵 خزينتك وحركاتك النقدية المعزولة</span></h3>
                     <form onsubmit="saveTreasury(event)">
                         <select id="t-type"><option value="in">إيداع (+)</option><option value="out">سحب (-)</option></select>
                         <input type="number" id="t-amount" placeholder="المبلغ (ج.م)" required>
@@ -1258,7 +1395,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية مسجلة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1268,7 +1405,7 @@
             let userExpenses = getUserFilteredList(data.expenses, 'expenses');
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>⛽ مصروفات الشركة التشغيلية والوقود</span></h3>
+                    <h3><span>⛽ مصروفاتك التشغيلية والوقود الخاصة بك</span></h3>
                     <form onsubmit="saveExpense(event)">
                         <input type="text" id="exp-title" placeholder="عنوان المصروف (مثال: تمويل سولار)" required>
                         <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
@@ -1288,7 +1425,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات مسجلة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات مسجلة لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1297,7 +1434,7 @@
         } else if (sectionId === 'customers') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>👥 عملاء الشركة والديون المرتبطة</span></h3>
+                    <h3><span>👥 العملاء والديون المرتبطة بك</span></h3>
                     <form onsubmit="saveCustomer(event)">
                         <input type="text" id="cust-name" placeholder="اسم العميل" required>
                         <input type="tel" id="cust-phone" placeholder="رقم الهاتف" required>
@@ -1318,7 +1455,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء مسجلين لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد عملاء لحسابك</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1371,12 +1508,12 @@
         } else if (sectionId === 'chat') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💬 المحادثات الفورية للشركة</span></h3>
+                    <h3><span>💬 المحادثات الفورية للأسطول</span></h3>
                     <div style="background:var(--bg-dark); height:240px; overflow-y:auto; padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;" id="chat-messages-box">
                         <p style="text-align:center; font-size:9px; color:var(--text-muted);">جاري تحميل الرسائل الحية...</p>
                     </div>
                     <form onsubmit="sendChatMessage(event)">
-                        <input type="text" id="chat-input" placeholder="اكتب رسالة...">
+                        <input type="text" id="chat-input" placeholder="اكتب رسالة للأسطول...">
                         <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
                             <label style="font-size:9px; color:var(--text-muted); cursor:pointer; background:var(--bg-dark); border:1px solid var(--border-color); padding:4px 8px; border-radius:6px; flex:1; text-align:center;">
                                 📁 إرفاق صورة <input type="file" id="chat-file" accept="image/*" style="display:none;" onchange="previewChatFileName(this)">
@@ -1391,7 +1528,7 @@
         } else if (sectionId === 'map') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>🗺️ الخريطة الحية ومقرات شحنات الشركة</span></h3>
+                    <h3><span>🗺️ الخريطة الحية ومقرات شحناتك</span></h3>
                     <div id="map"></div>
                 </div>
             `;
@@ -1400,8 +1537,22 @@
             content.innerHTML = `
                 <div class="card">
                     <h3><span>📊 التقارير والفواتير وتصدير Excel</span></h3>
-                    <button class="btn-success" onclick="exportToExcel()" style="margin-bottom:6px;">📊 تصدير شحنات الشركة إلى Excel</button>
-                    <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال التقرير عبر واتساب</button>
+                    <button class="btn-success" onclick="exportToExcel()" style="margin-bottom:6px;">📊 تصدير شحناتك إلى Excel</button>
+                    <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال تقريرك اليومي عبر واتساب</button>
+                </div>
+            `;
+        } else if (sectionId === 'auditLogs') {
+            content.innerHTML = `
+                <div class="card">
+                    <h3><span>🔍 سجل العمليات والأحداث</span></h3>
+                    <div style="background:var(--bg-dark); max-height:280px; overflow-y:auto; padding:8px; border-radius:6px; font-size:10px; display:flex; flex-direction:column; gap:4px;">
+                        ${(data.auditLogs || []).map(l => `
+                            <div style="background:var(--card-bg); padding:6px; border-radius:4px; border-right:3px solid var(--accent-main); display:flex; justify-content:space-between;">
+                                <span>${l.user || 'مستخدم'}: <strong>${l.action || '-'}</strong></span>
+                                <span style="font-size:8px; color:var(--text-muted);">${l.time || ''}</span>
+                            </div>
+                        `).join('') || '<p style="font-size:9px; text-align:center; color:var(--text-muted);">لا توجد أحداث مسجلة</p>'}
+                    </div>
                 </div>
             `;
         }
@@ -1641,7 +1792,7 @@
         data.treasury.unshift(tObj);
         saveDataAll();
         switchSection('treasury');
-        showToast('تم حفظ الحركة النقدية وترحيلها لحساب الشركة بنجاح! 💵');
+        showToast('تم حفظ الحركة النقدية وترحيلها لحسابك بنجاح! 💵');
     }
 
     function saveExpense(e) {
@@ -1661,7 +1812,7 @@
         data.expenses.unshift(expObj);
         saveDataAll();
         switchSection('expenses');
-        showToast('تم حفظ المصروف وترحيله لحساب الشركة بنجاح! ⛽');
+        showToast('تم حفظ المصروف وترحيله لحسابك بنجاح! ⛽');
     }
 
     function publishFeedPost() {
@@ -1787,7 +1938,7 @@
 
         saveDataAll();
         temporaryShipmentImageBase64 = '';
-        showToast('تم حفظ الرحلة والشحنة وترحيلها لحساب الشركة! 📦');
+        showToast('تم حفظ الرحلة والشحنة وترحيلها لحسابك! 📦');
         switchSection('shipments');
     }
 
@@ -1855,12 +2006,12 @@
         let shipmentsList = getUserFilteredShipments(data);
 
         if (type === 'shipments') {
-            title.innerText = '📦 تفاصيل شحنات الشركة الحالية';
+            title.innerText = '📦 تفاصيل شحناتك الحالية';
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th></tr></thead><tbody>` +
                 shipmentsList.map((s) => `<tr><td>${getSafeName(s)}</td><td>${getSafeDesc(s)}</td><td>${getSafeAmount(s).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'cash') {
-            title.innerText = '💵 تفاصيل حركات الخزينة';
+            title.innerText = '💵 تفاصيل حركات الخزينة الخاصة بك';
             let userTreasury = getUserFilteredList(data.treasury, 'treasury');
             body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>` +
                 userTreasury.map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${getSafeAmount(t).toLocaleString()} ج.م</td><td>${getSafeDesc(t)}</td></tr>`).join('') +
@@ -1872,7 +2023,7 @@
                 userDeferred.map((c) => `<tr><td>${getSafeName(c)}</td><td>${getSafePhone(c)}</td><td>${getSafeAmount(c).toLocaleString()} ج.م</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
-            title.innerText = '📈 تحليل الإيرادات والأرباح';
+            title.innerText = '📈 تحليل إيراداتك وأرباحك';
             let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
             let userExpenses = getUserFilteredList(data.expenses, 'expenses');
             let exp = userExpenses.reduce((s, x) => s + getSafeAmount(x), 0) + shipmentsList.reduce((s, x) => s + Number(x.fuelCost || 0) + Number(x.extraCost || 0), 0);
@@ -2163,6 +2314,56 @@
         showToast('📢 تم بث الرسالة بنجاح!');
     }
 
+    async function updateDriverField(index, field, value) {
+        let data = appStateData();
+        let drv = data.drivers[index];
+        if(!drv) return;
+
+        drv[field] = value;
+        saveDataAll();
+
+        if (window.db && window.firebaseModules) {
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, "drivers", String(drv.id)), drv, { merge: true }).catch(err => console.error(err));
+        }
+
+        showToast('تم تحديث الحساب ورتبته بنجاح في السحاب! ✅');
+        applyUserPermissionsUI();
+    }
+
+    async function saveNewDriver(e) {
+        e.preventDefault();
+        const name = document.getElementById('new-d-name').value;
+        const phone = document.getElementById('new-d-phone').value;
+        const role = document.getElementById('new-d-role').value;
+        const driverId = String(Date.now());
+
+        const newDrv = {
+            id: driverId,
+            companyId: currentCompanyId,
+            name: name,
+            driverName: name,
+            phone: phone,
+            role: role,
+            title: role === 'مدير نظام' ? 'أسطورة الطريق' : 'سائق معتمد',
+            status: 'متاح 🟢',
+            avatar: ''
+        };
+
+        let data = appStateData();
+        if(!data.drivers) data.drivers = [];
+        data.drivers.push(newDrv);
+
+        if (window.db && window.firebaseModules) {
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, "drivers", driverId), newDrv, { merge: true }).catch(err => console.error(err));
+        }
+
+        saveDataAll();
+        switchSection('driversControl');
+        showToast('تم إضافة الحساب الجديد بنجاح وتحديث قاعدة البيانات!');
+    }
+
     async function deleteItem(type, index) {
         let data = appStateData();
         if (window.db && window.firebaseModules) {
@@ -2257,7 +2458,7 @@
 
         saveDataAll();
         closeModal('visitorBookingModal');
-        showToast('تم حجز الرحلة وترحيلها لحساب الشركة بنجاح!');
+        showToast('تم حجز الرحلة وترحيلها لحسابك بنجاح!');
     }
 
     function publishCommunityPost() {
@@ -2379,18 +2580,18 @@
         let shipmentsList = getUserFilteredShipments(data);
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "شحنات الشركة");
-        XLSX.writeFile(wb, "na2la_company_shipments_v90_8.xlsx");
-        showToast('تم تصدير بيانات الشركة إلى Excel بنجاح!');
+        XLSX.utils.book_append_sheet(wb, ws, "شحناتي");
+        XLSX.writeFile(wb, "na2la_my_shipments_v90_8.xlsx");
+        showToast('تم تصدير بياناتك إلى Excel بنجاح!');
     }
 
     function exportSummaryWhatsApp() {
         let data = appStateData();
         let shipmentsList = getUserFilteredShipments(data);
         let rev = shipmentsList.reduce((s, x) => s + getSafeAmount(x), 0);
-        let msg = `📊 *تقرير الشركة اليومي - أسطورة الطريق*\n\nإجمالي شحنات الشركة: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev.toLocaleString()} ج.م`;
+        let msg = `📊 *تقريرك اليومي - أسطورة الطريق*\n\nإجمالي شحناتك: ${shipmentsList.length}\nإجمالي إيراداتك: ${rev.toLocaleString()} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 </script>
 </body>
-</html>
+            </html>
