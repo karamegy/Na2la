@@ -390,19 +390,27 @@
     <nav class="navbar" id="bottom-navbar"></nav>
 </div>
 
-<!-- سكريبت التشغيل الشامل والمزامنة لكل الشركات والحسابات (V90.10) -->
+<!-- سكريبت التشغيل الشامل والمزامنة لكل الشركات والحسابات (V90.10 محسن للتنقل بين الصفحات) -->
 <script>
     window._isSavingLocally = false;
     let currentCompanyId = localStorage.getItem('current_company_id') || 'company_guest';
     window.currentCompanyId = currentCompanyId;
 
+    // 🚀 دالة التنقل الموحدة والمحدثة لتمرير الجلسة عبر كافة الصفحات
+    function goToPageWithSession(pageName) {
+        let userId = window.currentLoggedInUser?.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || '';
+        let compId = window.currentCompanyId || localStorage.getItem('current_company_id') || 'company_main';
+        window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
+    }
+    window.goToPageWithSession = goToPageWithSession;
+
     function goToMotherPlatform() {
-        window.location.href = "https://karamegy.github.io/Na2la/";
+        goToPageWithSession("https://karamegy.github.io/Na2la/");
     }
     window.goToMotherPlatform = goToMotherPlatform;
 
     function goToOperationsHub() {
-        window.location.href = "operations-hub.html";
+        goToPageWithSession("operations-hub.html");
     }
     window.goToOperationsHub = goToOperationsHub;
 
@@ -553,7 +561,6 @@
     }
     window.isUserAdmin = isUserAdmin;
 
-    // 🔒 فلترة الشحنات بمعرف الشركة حصرياً
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
         let user = window.currentLoggedInUser || {};
@@ -582,7 +589,6 @@
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
-    // 🔒 فلترة القوائم الأخرى بمعرف الشركة حصرياً
     function getUserFilteredList(list, dataKey) {
         let items = list || appData[dataKey] || [];
         return items.filter(item => {
@@ -593,16 +599,29 @@
     }
     window.getUserFilteredList = getUserFilteredList;
 
+    // الاستماع الفوري لتغييرات التخزين بين التبويبات والصفحات المختلفة
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'na2la_active_session' || event.key === 'current_company_id') {
+            location.reload();
+        }
+    });
+
     async function getExternalLoginSessionAndSync() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
                          urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name') || 
                          urlParams.get('company');
+        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
         
         if (externalId) {
             externalId = externalId.trim();
             localStorage.setItem('na2la_external_logged_user_id', externalId);
             localStorage.setItem('logged_in_driver_id', externalId);
+            if (urlCompanyId) {
+                currentCompanyId = urlCompanyId.trim();
+                localStorage.setItem('current_company_id', currentCompanyId);
+                window.currentCompanyId = currentCompanyId;
+            }
         } else {
             let storedSession = localStorage.getItem('na2la_active_session');
             if (storedSession) {
@@ -610,8 +629,9 @@
                     let parsed = JSON.parse(storedSession);
                     if (parsed && (parsed.id || parsed.name)) {
                         window.currentLoggedInUser = parsed;
-                        currentCompanyId = parsed.companyId || 'company_main';
+                        currentCompanyId = parsed.companyId || localStorage.getItem('current_company_id') || 'company_main';
                         window.currentCompanyId = currentCompanyId;
+                        localStorage.setItem('current_company_id', currentCompanyId);
                         applyUserPermissionsUI();
                         loadAllDataFromFirestoreMultiCollection();
                         initChatRealtimeListener();
@@ -628,7 +648,7 @@
         if (externalId && externalId !== 'Admin1') {
             await fetchDriverData(externalId);
         } else {
-            currentCompanyId = 'company_guest';
+            currentCompanyId = localStorage.getItem('current_company_id') || 'company_guest';
             window.currentCompanyId = currentCompanyId;
             window.currentLoggedInUser = { id: '', name: 'الرجاء تحديد الحساب', role: 'guest', title: 'زائر', companyId: currentCompanyId };
             applyUserPermissionsUI();
@@ -646,7 +666,6 @@
             return;
         }
 
-        // 🔒 مسح الجلسة القديمة مؤقتاً لمنع بقاء حساب المدير عالقاً في حال خطأ البحث
         localStorage.removeItem('na2la_active_session');
         localStorage.removeItem('na2la_external_logged_user_id');
 
@@ -1327,7 +1346,7 @@
                                         <td>${t.date || '-'}</td>
                                         <td>
                                             <button class="btn-warning btn-sm" onclick="openEditModal('treasury', ${idx})">✏️</button>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})">✕</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية مسجلة</td></tr>'}
@@ -1357,7 +1376,7 @@
                                         <td>${ex.date || '-'}</td>
                                         <td>
                                             <button class="btn-warning btn-sm" onclick="openEditModal('expenses', ${idx})">✏️</button>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})">✕</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات مسجلة</td></tr>'}
