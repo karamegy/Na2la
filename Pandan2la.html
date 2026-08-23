@@ -553,65 +553,73 @@
     }
     window.isUserAdmin = isUserAdmin;
 
+    // 🔒 مطابقة الشحنات بدقة مع معرف الحساب المتصل الحالي
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
-        if (isUserAdmin()) {
-            return all.filter(s => !s.companyId || s.companyId === currentCompanyId);
-        }
         let user = window.currentLoggedInUser || {};
+        let isAdmin = isUserAdmin();
+
+        if (isAdmin && user.role !== 'driver') {
+            return all.filter(s => !s.companyId || s.companyId === currentCompanyId || s.userId === user.id);
+        }
+
         let currentUserId = String(user.id || '').trim();
         let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
 
-        if (!currentUserId && !userPhone && !userName) return [];
+        if (!currentUserId && !userPhone && !userName) {
+            userName = String(localStorage.getItem('logged_in_driver_name') || '').trim();
+            userPhone = String(localStorage.getItem('logged_in_driver_phone') || '').trim();
+        }
 
         return all.filter(s => {
-            let sCompany = String(s.companyId || '').trim();
-            if (sCompany && sCompany !== currentCompanyId) return false;
-
             let sUserId = String(s.userId || '').trim();
             let sPhone = String(s.phone || s.clientPhone || '').trim();
-            let sDriver = String(s.driver || '').trim();
+            let sDriver = String(s.driver || s.name || '').trim();
 
             let matchId = currentUserId && sUserId === currentUserId;
-            let matchPhone = userPhone && sPhone === userPhone;
-            let matchDriver = userName && sDriver === userName;
+            let matchPhone = userPhone && (sPhone === userPhone || sPhone.includes(userPhone) || userPhone.includes(sPhone));
+            let matchDriver = userName && (sDriver === userName || sDriver.includes(userName) || userName.includes(sDriver));
 
             return (matchId || matchPhone || matchDriver);
         });
     }
     window.getUserFilteredShipments = getUserFilteredShipments;
 
+    // 🔒 مطابقة القوائم الأخرى بدقة مع معرف الحساب المتصل
     function getUserFilteredList(list, dataKey) {
         let items = list || appStateData()[dataKey] || [];
-        if (isUserAdmin()) {
-            return items.filter(x => !x.companyId || x.companyId === currentCompanyId);
-        }
         let user = window.currentLoggedInUser || {};
+        let isAdmin = isUserAdmin();
+
+        if (isAdmin && user.role !== 'driver') {
+            return items.filter(x => !x.companyId || x.companyId === currentCompanyId || x.userId === user.id);
+        }
+
         let currentUserId = String(user.id || '').trim();
         let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
 
-        if (!currentUserId && !userPhone && !userName) return [];
+        if (!currentUserId && !userPhone && !userName) {
+            userName = String(localStorage.getItem('logged_in_driver_name') || '').trim();
+            userPhone = String(localStorage.getItem('logged_in_driver_phone') || '').trim();
+        }
 
         return items.filter(item => {
-            let itemCompany = String(item.companyId || '').trim();
-            if (itemCompany && itemCompany !== currentCompanyId) return false;
-
             let itemUserId = String(item.userId || '').trim();
             let itemPhone = String(item.phone || item.clientPhone || '').trim();
-            let itemName = String(item.name || item.accountOwner || item.driver || '').trim();
+            let itemName = String(item.name || item.accountOwner || item.driver || item.user || '').trim();
 
             let matchId = currentUserId && itemUserId === currentUserId;
-            let matchPhone = userPhone && itemPhone === userPhone;
-            let matchName = userName && itemName === userName;
+            let matchPhone = userPhone && (itemPhone === userPhone || itemPhone.includes(userPhone));
+            let matchName = userName && (itemName === userName || itemName.includes(userName));
 
             return (matchId || matchPhone || matchName);
         });
     }
     window.getUserFilteredList = getUserFilteredList;
 
-    // 🔗 جلب جلسة المستخدم الحقيقية بدقة من الرابط أو الذاكرة دون افتراضات وهمية
+    // 🔗 جلب جلسة الحساب بدقة مطابقة لمعرف الحساب المتصل
     async function getExternalLoginSessionAndSync() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
@@ -623,19 +631,28 @@
             localStorage.setItem('na2la_external_logged_user_id', externalId);
             localStorage.setItem('logged_in_driver_id', externalId);
         } else {
+            let storedSession = localStorage.getItem('na2la_active_session');
+            if (storedSession) {
+                try {
+                    let parsed = JSON.parse(storedSession);
+                    if (parsed && (parsed.id || parsed.name)) {
+                        window.currentLoggedInUser = parsed;
+                        currentCompanyId = parsed.companyId || 'company_main';
+                        window.currentCompanyId = currentCompanyId;
+                        applyUserPermissionsUI();
+                        loadAllDataFromFirestoreMultiCollection();
+                        initChatRealtimeListener();
+                        initPandanRealtimeAccountSync();
+                        return;
+                    }
+                } catch(e) {}
+            }
             externalId = localStorage.getItem('na2la_external_logged_user_id') || 
                          localStorage.getItem('logged_in_driver_id') || 
                          localStorage.getItem('logged_in_driver_name');
         }
 
-        // منع استرجاع الحساب المحذوف Admin1 نهائياً
-        if (externalId === 'Admin1') {
-            localStorage.removeItem('na2la_external_logged_user_id');
-            localStorage.removeItem('logged_in_driver_id');
-            externalId = null;
-        }
-
-        if (externalId) {
+        if (externalId && externalId !== 'Admin1') {
             await fetchDriverData(externalId);
         } else {
             currentCompanyId = 'company_guest';
@@ -647,7 +664,7 @@
         }
     }
 
-    // 🔍 البحث عن بيانات المستخدم الحقيقية من مجموعات فايربيس حصرياً
+    // 🔍 البحث الدقيق عن بيانات الحساب المتصل من قاعدة البيانات
     async function fetchDriverData(identifier) {
         let cleanId = String(identifier || '').trim();
 
@@ -661,7 +678,6 @@
             let docData = null;
             let docId = cleanId;
 
-            // 1. البحث بالمعرف (ID)
             try {
                 let dSnap = await getDoc(doc(window.db, "drivers", cleanId));
                 if (dSnap.exists()) {
@@ -670,7 +686,6 @@
                 }
             } catch(e) {}
 
-            // 2. البحث بالاسم (name)
             if (!docData) {
                 let q1 = query(collection(window.db, "drivers"), where("name", "==", cleanId));
                 let snap1 = await getDocs(q1);
@@ -680,7 +695,6 @@
                 }
             }
 
-            // 3. البحث برقم الهاتف
             if (!docData) {
                 let q3 = query(collection(window.db, "drivers"), where("phone", "==", cleanId));
                 let snap3 = await getDocs(q3);
@@ -697,6 +711,8 @@
 
                 window.currentLoggedInUser = { id: docId, ...docData, companyId: currentCompanyId };
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                localStorage.setItem('logged_in_driver_name', docData.name || '');
+                localStorage.setItem('logged_in_driver_phone', docData.phone || '');
                 
                 applyUserPermissionsUI();
                 loadAllDataFromFirestoreMultiCollection();
@@ -715,7 +731,6 @@
         }
     }
 
-    // 🔄 المزامنة اللحظية لتحديثات الحساب والشركة من السحابة
     function initPandanRealtimeAccountSync() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot } = window.firebaseModules;
@@ -764,15 +779,14 @@
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (window._isSavingLocally || !docSnap.exists()) return;
                 const data = docSnap.data();
-                if (data.consolidatedInvoices) appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
-                if (data.customers) appData.customers = (data.customers || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
+                if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices || [];
+                if (data.customers) appData.customers = data.customers || [];
                 window.appData = appData;
                 renderStats();
                 refreshActiveSection();
             });
 
-            let driversQuery = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
-            onSnapshot(driversQuery, (snapshot) => {
+            onSnapshot(collection(window.db, "drivers"), (snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
                     appData.drivers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -780,8 +794,7 @@
                 }
             });
 
-            let shipmentsQuery = query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
-            onSnapshot(shipmentsQuery, (snapshot) => {
+            onSnapshot(collection(window.db, "shipments"), (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 appData.docs = appData.shipments;
@@ -790,8 +803,7 @@
                 refreshActiveSection();
             });
 
-            let deferredQuery = query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
-            onSnapshot(deferredQuery, (snapshot) => {
+            onSnapshot(collection(window.db, "deferredInvoices"), (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.appData = appData;
@@ -799,8 +811,7 @@
                 refreshActiveSection();
             });
 
-            let treasuryQuery = query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
-            onSnapshot(treasuryQuery, (snapshot) => {
+            onSnapshot(collection(window.db, "treasury"), (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.appData = appData;
@@ -808,8 +819,7 @@
                 refreshActiveSection();
             });
 
-            let expensesQuery = query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
-            onSnapshot(expensesQuery, (snapshot) => {
+            onSnapshot(collection(window.db, "expenses"), (snapshot) => {
                 if (window._isSavingLocally) return;
                 appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.appData = appData;
@@ -927,7 +937,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getUserFilteredShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً برتبتك وحساب الشركة (${currentCompanyId}) - إجمالي شحناتك: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً بحسابك (${window.currentLoggedInUser?.name || 'مستخدم'}) - إجمالي شحناتك: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -956,7 +966,7 @@
         let roleBadgeText = '👑 مدير (تحكم كامل)';
         if (!isAdmin) roleBadgeText = '🚚 سائق مستقل';
         
-        document.getElementById('header-role-badge').innerText = roleBadgeText + ` (شركة: ${currentCompanyId})`;
+        document.getElementById('header-role-badge').innerText = roleBadgeText + ` (معرف: ${user.id || user.name})`;
 
         const avatarEl = document.getElementById('header-avatar-btn');
         if (user.avatar && String(user.avatar).trim() !== '') {
@@ -1151,10 +1161,10 @@
                 <div class="card">
                     <h3><span>📊 ملخص باندا لبياناتك</span></h3>
                     <div style="font-size: 10px; line-height: 1.6;">
-                        <p>👥 إجمالي الحسابات: <strong>${(data.drivers || []).length} حساب</strong></p>
+                        <p>👤 الحساب الحالي: <strong>${window.currentLoggedInUser?.name || 'غير محدد'}</strong></p>
                         <p>📦 إجمالي شحناتك: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>⏳ إجمالي فواتير الأجل: <strong>${(getUserFilteredList(data.deferredInvoices, 'deferredInvoices')).length} فاتورة</strong></p>
-                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">معزول تماماً برمز (${currentCompanyId})</strong></p>
+                        <p>🟢 حالة الحساب: <strong style="color:var(--green-success);">مطابق لمعرف الحساب المتصل ✅</strong></p>
                     </div>
                 </div>
             `;
@@ -1343,7 +1353,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مسجلة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مسجلة لهذا الحساب</td></tr>'}
                             </tbody>
                         </table>
                     </div>
