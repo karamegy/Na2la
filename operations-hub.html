@@ -601,18 +601,24 @@
             if (found) return found;
         }
 
-        return { name: loggedName, companyId: currentCompanyId, role: ['مدير', 'المدير', 'عماد', 'Emad'].includes(loggedName) ? 'admin' : 'driver', canAccessSocial: true };
+        return { name: loggedName, companyId: currentCompanyId, role: ['مدير', 'المدير', 'عماد', 'Emad', 'Admin1'].includes(loggedName) ? 'admin' : 'driver', canAccessSocial: true };
     }
 
+    // 👑 دالة فحص صلاحيات الإدارة العليا والمدير العام (Super Admin)
     function isUserAdmin() {
+        let activeName = String(activeExternalSessionName || '').trim();
+        if (['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(activeName)) {
+            return true;
+        }
         let driver = getCurrentActiveDriver();
         if (driver) {
             let role = String(driver.role || '').toLowerCase().trim();
             let name = String(driver.name || '').toLowerCase().trim();
-            return (role === 'admin' || role === 'مدير' || role === 'المدير' || ['مدير', 'المدير', 'عماد', 'emad'].includes(name));
+            return (role === 'admin' || role === 'مدير' || role === 'المدير' || ['مدير', 'المدير', 'عماد', 'emad', 'admin1'].includes(name));
         }
-        return ['مدير', 'المدير', 'عماد', 'emad'].includes(activeExternalSessionName.toLowerCase());
+        return false;
     }
+    window.isUserAdmin = isUserAdmin;
 
     function openModal(modalId) {
         if (modalId === 'modalUsers') {
@@ -668,9 +674,10 @@
             const querySnapshot = await getDocs(collection(window.db, "drivers"));
             
             globalDriversCache = [];
+            let isSuper = isUserAdmin();
             querySnapshot.forEach((docSnap) => {
                 let d = docSnap.data();
-                if (isUserAdmin() || !d.companyId || d.companyId === currentCompanyId) {
+                if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
                     globalDriversCache.push({ id: docSnap.id, ...d });
                 }
             });
@@ -688,9 +695,10 @@
 
         onSnapshot(collection(window.db, "drivers"), (snapshot) => {
             globalDriversCache = [];
+            let isSuper = isUserAdmin();
             snapshot.forEach((docSnap) => {
                 let d = docSnap.data();
-                if (isUserAdmin() || !d.companyId || d.companyId === currentCompanyId) {
+                if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
                     globalDriversCache.push({ id: docSnap.id, ...d });
                 }
             });
@@ -700,9 +708,10 @@
 
         onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
             globalFleetCache = [];
+            let isSuper = isUserAdmin();
             snapshot.forEach((docSnap) => {
                 let f = docSnap.data();
-                if (isUserAdmin() || !f.companyId || f.companyId === currentCompanyId) {
+                if (isSuper || !f.companyId || f.companyId === currentCompanyId) {
                     globalFleetCache.push({ id: docSnap.id, ...f });
                 }
             });
@@ -714,9 +723,10 @@
             if (!container) return;
             container.innerHTML = "";
             let count = 0;
+            let isSuper = isUserAdmin();
             snapshot.forEach((docSnap) => {
                 let m = docSnap.data();
-                if (isUserAdmin() || !m.companyId || m.companyId === currentCompanyId) {
+                if (isSuper || !m.companyId || m.companyId === currentCompanyId) {
                     count++;
                     container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${m.client || ''}</b> (${m.cargo || ''})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button></div>`;
                 }
@@ -732,9 +742,10 @@
             container.innerHTML = "";
             let total = 0;
             let count = 0;
+            let isSuper = isUserAdmin();
             snapshot.forEach((docSnap) => {
                 let ex = docSnap.data();
-                if (isUserAdmin() || !ex.companyId || ex.companyId === currentCompanyId) {
+                if (isSuper || !ex.companyId || ex.companyId === currentCompanyId) {
                     count++;
                     total += Number(ex.cost) || 0;
                     container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item || ''}: <span style="color:var(--warning-color);">${ex.cost || 0} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
@@ -773,7 +784,7 @@
 
             html += `
                 <tr>
-                    <td><b>${item.truck || 'بدون اسم'}</b></td>
+                    <td><b>${item.truck || 'بدون اسم'}</b> ${item.companyId ? `<br><small style="opacity:0.6;">شركة: ${item.companyId}</small>` : ''}</td>
                     <td>${item.mission || '-'}</td>
                     <td><span style="padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; ${badgeStyle}">${statusText}</span></td>
                     <td>
@@ -844,7 +855,7 @@
                     <td style="text-align: center;">
                         <img src="${dAvatar}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary-color);" alt="صورة">
                     </td>
-                    <td><b>${dName}</b></td>
+                    <td><b>${dName}</b> ${d.companyId ? `<br><small style="opacity:0.6;">شركة: ${d.companyId}</small>` : ''}</td>
                     <td>${dPhone}</td>
                     <td style="text-align: center;">
                         <button onclick="toggleDriverRole('${d.id}', '${d.role || 'driver'}')" style="border: none; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; ${roleBtnBg}">${roleText}</button>
@@ -961,14 +972,8 @@
             if(adminBtn) adminBtn.style.display = "none";
             if(cardAdminUsers) cardAdminUsers.style.display = "none";
             
-            let hasSocialAccess = activeDriver && activeDriver.canAccessSocial === true;
-            if (hasSocialAccess || true) {
-                if(profileBtn) profileBtn.style.display = "flex";
-                if(communityBtn) profileBtn.style.display = "flex";
-            } else {
-                if(profileBtn) profileBtn.style.display = "none";
-                if(communityBtn) profileBtn.style.display = "none";
-            }
+            if(profileBtn) profileBtn.style.display = "flex";
+            if(communityBtn) profileBtn.style.display = "flex";
         }
     }
 
