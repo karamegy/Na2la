@@ -391,6 +391,8 @@
 <!-- سكريبت المزامنة الديناميكية السحابية المعزولة تماما لكل مستخدم ومدير ومشرف -->
 <script>
     window._isSavingLocally = false;
+    let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
+    window.currentCompanyId = currentCompanyId;
 
     function goToMotherPlatform() {
         window.location.href = "https://karamegy.github.io/Na2la/";
@@ -624,7 +626,6 @@
             let docData = null;
             let docId = identifier;
 
-            // 1. محاولة الجلب المباشر بمعرف المستند من drivers
             try {
                 let dSnap = await getDoc(doc(window.db, "drivers", identifier));
                 if (dSnap.exists()) {
@@ -633,7 +634,6 @@
                 }
             } catch(e) {}
 
-            // 2. محاولة الجلب المباشر بمعرف المستند من platform_users
             if (!docData) {
                 try {
                     let pSnap = await getDoc(doc(window.db, "platform_users", identifier));
@@ -644,7 +644,6 @@
                 } catch(e) {}
             }
 
-            // 3. البحث عبر الحقول في حال لم يكن المستند مطابقاً للـ ID مباشرة
             if (!docData) {
                 let collectionsToQuery = ["drivers", "platform_users"];
                 let fieldsToQuery = ["id", "phone", "name"];
@@ -670,6 +669,10 @@
                     docData.role = docData.role || 'driver';
                 }
 
+                currentCompanyId = docData.companyId || 'company_main';
+                localStorage.setItem('current_company_id', currentCompanyId);
+                window.currentCompanyId = currentCompanyId;
+
                 window.currentLoggedInUser = { id: docId, ...docData };
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
@@ -679,6 +682,8 @@
                 if (savedSession) {
                     try {
                         window.currentLoggedInUser = JSON.parse(savedSession);
+                        currentCompanyId = window.currentLoggedInUser.companyId || 'company_main';
+                        window.currentCompanyId = currentCompanyId;
                     } catch(e) {
                         window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
                     }
@@ -709,9 +714,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
-        let currentUser = window.currentLoggedInUser || { id: '', role: 'driver' };
         let isAdmin = isUserAdmin();
-        let currentUserId = String(currentUser.id || '').trim();
 
         try {
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
@@ -720,13 +723,16 @@
                 if (isAdmin) {
                     if (data.consolidatedInvoices) appData.consolidatedInvoices = data.consolidatedInvoices;
                     if (data.customers) appData.customers = data.customers;
+                } else {
+                    if (data.consolidatedInvoices) appData.consolidatedInvoices = (data.consolidatedInvoices || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
+                    if (data.customers) appData.customers = (data.customers || []).filter(x => !x.companyId || x.companyId === currentCompanyId);
                 }
                 window.appData = appData;
                 renderStats();
                 refreshActiveSection();
             });
 
-            let driversQuery = isAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("id", "==", currentUserId));
+            let driversQuery = isAdmin ? collection(window.db, "drivers") : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
             onSnapshot(driversQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
@@ -735,50 +741,42 @@
                 }
             });
 
-            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : (currentUserId ? query(collection(window.db, "shipments"), where("userId", "==", currentUserId)) : null);
-            if (shipmentsQuery) {
-                onSnapshot(shipmentsQuery, (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    appData.docs = appData.shipments;
-                    window.appData = appData;
-                    renderStats();
-                    refreshActiveSection();
-                });
-            }
+            let shipmentsQuery = isAdmin ? collection(window.db, "shipments") : query(collection(window.db, "shipments"), where("companyId", "==", currentCompanyId));
+            onSnapshot(shipmentsQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.shipments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                appData.docs = appData.shipments;
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
-            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : (currentUserId ? query(collection(window.db, "deferredInvoices"), where("userId", "==", currentUserId)) : null);
-            if (deferredQuery) {
-                onSnapshot(deferredQuery, (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.appData = appData;
-                    renderStats();
-                    refreshActiveSection();
-                });
-            }
+            let deferredQuery = isAdmin ? collection(window.db, "deferredInvoices") : query(collection(window.db, "deferredInvoices"), where("companyId", "==", currentCompanyId));
+            onSnapshot(deferredQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.deferredInvoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
-            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : (currentUserId ? query(collection(window.db, "treasury"), where("userId", "==", currentUserId)) : null);
-            if (treasuryQuery) {
-                onSnapshot(treasuryQuery, (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.appData = appData;
-                    renderStats();
-                    refreshActiveSection();
-                });
-            }
+            let treasuryQuery = isAdmin ? collection(window.db, "treasury") : query(collection(window.db, "treasury"), where("companyId", "==", currentCompanyId));
+            onSnapshot(treasuryQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.treasury = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
-            let expensesQuery = isAdmin ? collection(window.db, "expenses") : (currentUserId ? query(collection(window.db, "expenses"), where("userId", "==", currentUserId)) : null);
-            if (expensesQuery) {
-                onSnapshot(expensesQuery, (snapshot) => {
-                    if (window._isSavingLocally) return;
-                    appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    window.appData = appData;
-                    renderStats();
-                    refreshActiveSection();
-                });
-            }
+            let expensesQuery = isAdmin ? collection(window.db, "expenses") : query(collection(window.db, "expenses"), where("companyId", "==", currentCompanyId));
+            onSnapshot(expensesQuery, (snapshot) => {
+                if (window._isSavingLocally) return;
+                appData.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                window.appData = appData;
+                renderStats();
+                refreshActiveSection();
+            });
 
         } catch (error) {
             console.error("خطأ في المزامنة:", error);
@@ -792,7 +790,10 @@
         onSnapshot(collection(window.db, "chatMessages"), (snapshot) => {
             let messages = [];
             snapshot.forEach((docSnap) => {
-                messages.push({ id: docSnap.id, ...docSnap.data() });
+                let mData = docSnap.data();
+                if (isUserAdmin() || !mData.companyId || mData.companyId === currentCompanyId) {
+                    messages.push({ id: docSnap.id, ...mData });
+                }
             });
             messages.sort((a, b) => {
                 let timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
@@ -818,6 +819,7 @@
                 for (let s of appData.shipments) {
                     if (s.id) {
                         s.userId = s.userId || currentUserId;
+                        s.companyId = s.companyId || currentCompanyId;
                         await setDoc(doc(window.db, 'shipments', String(s.id)), s, { merge: true });
                     }
                 }
@@ -826,6 +828,7 @@
                 for (let d of appData.deferredInvoices) {
                     if (d.id) {
                         d.userId = d.userId || currentUserId;
+                        d.companyId = d.companyId || currentCompanyId;
                         await setDoc(doc(window.db, 'deferredInvoices', String(d.id)), d, { merge: true });
                     }
                 }
@@ -834,6 +837,7 @@
                 for (let t of appData.treasury) {
                     if (t.id) {
                         t.userId = t.userId || currentUserId;
+                        t.companyId = t.companyId || currentCompanyId;
                         await setDoc(doc(window.db, 'treasury', String(t.id)), t, { merge: true });
                     }
                 }
@@ -842,6 +846,7 @@
                 for (let ex of appData.expenses) {
                     if (ex.id) {
                         ex.userId = ex.userId || currentUserId;
+                        ex.companyId = ex.companyId || currentCompanyId;
                         await setDoc(doc(window.db, 'expenses', String(ex.id)), ex, { merge: true });
                     }
                 }
@@ -887,7 +892,7 @@
         if (!tickerEl) return;
         let data = appStateData();
         let shipmentsList = getUserFilteredShipments(data);
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً برتبتك الحقيقية - إجمالي شحناتك الخاصة: ${shipmentsList.length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل آلياً برتبتك الحقيقية ومعرف الشركة (${currentCompanyId}) - إجمالي شحناتك: ${shipmentsList.length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -1149,7 +1154,7 @@
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات في المنصة: <strong>${getAllShipments(data).length} شحنة</strong></p>
                         <p>⏳ إجمالي فواتير الأجل العامة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">يعمل بكفاءة تامة لكل حساب مستقل</strong></p>
+                        <p>🟢 حالة العزل الأمني: <strong style="color:var(--green-success);">يعمل بكفاءة تامة لكل حساب مستقل (${currentCompanyId})</strong></p>
                     </div>
                 </div>
             `;
@@ -1580,6 +1585,7 @@
         const newInv = {
             id: document.getElementById('def-inv-id').value,
             userId: currentUserId,
+            companyId: currentCompanyId,
             name: name,
             accountOwner: name,
             clientName: name,
@@ -1699,6 +1705,7 @@
 
             const newMsg = {
                 sender: userName,
+                companyId: currentCompanyId,
                 text: text || '',
                 mediaUrl: mediaUrl,
                 mediaType: mediaType,
@@ -1735,6 +1742,7 @@
         const newCust = {
             id: Date.now(),
             userId: currentUserId,
+            companyId: currentCompanyId,
             name: name,
             accountOwner: name,
             phone: document.getElementById('cust-phone').value,
@@ -1754,6 +1762,7 @@
         const newTruck = {
             id: Date.now(),
             userId: currentUserId,
+            companyId: currentCompanyId,
             num: document.getElementById('tr-num').value,
             driver: document.getElementById('tr-driver').value,
             km: Number(document.getElementById('tr-km').value || 0)
@@ -1772,6 +1781,7 @@
         const tObj = {
             id: String(Date.now()),
             userId: currentUserId,
+            companyId: currentCompanyId,
             type: document.getElementById('t-type').value,
             amount: Number(document.getElementById('t-amount').value || 0),
             desc: document.getElementById('t-desc').value,
@@ -1791,6 +1801,7 @@
         const expObj = {
             id: String(Date.now()),
             userId: currentUserId,
+            companyId: currentCompanyId,
             title: document.getElementById('exp-title').value,
             description: document.getElementById('exp-title').value,
             amount: Number(document.getElementById('exp-amount').value || 0),
@@ -1812,6 +1823,7 @@
         const newPost = {
             id: Date.now(),
             userId: currentUserId,
+            companyId: currentCompanyId,
             user: userName,
             name: userName,
             text: text,
@@ -1878,6 +1890,7 @@
         const newShipment = {
             id: shipmentId,
             userId: currentUserId,
+            companyId: currentCompanyId,
             name: name,
             accountOwner: name,
             clientName: name,
@@ -1908,6 +1921,7 @@
             data.deferredInvoices.unshift({
                 id: shipmentId,
                 userId: currentUserId,
+                companyId: currentCompanyId,
                 name: name,
                 accountOwner: name,
                 clientName: name,
@@ -2165,6 +2179,7 @@
         const newConsolidated = {
             id: Date.now(),
             userId: currentUserId,
+            companyId: currentCompanyId,
             name: clientName,
             clientName: clientName,
             accountOwner: clientName,
@@ -2282,6 +2297,7 @@
 
         const newMsg = {
             sender: 'الإدارة العليا (مدير النظام)',
+            companyId: currentCompanyId,
             text: text,
             priority: priority,
             time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
@@ -2324,6 +2340,7 @@
 
         const newDrv = {
             id: driverId,
+            companyId: currentCompanyId,
             name: name,
             driverName: name,
             phone: phone,
@@ -2396,6 +2413,7 @@
         const newShipment = {
             id: shipmentId,
             userId: currentUserId,
+            companyId: currentCompanyId,
             name: vName,
             accountOwner: vName,
             clientName: vName,
@@ -2423,6 +2441,7 @@
             data.deferredInvoices.unshift({
                 id: shipmentId,
                 userId: currentUserId,
+                companyId: currentCompanyId,
                 name: vName,
                 accountOwner: vName,
                 clientName: vName,
@@ -2450,6 +2469,7 @@
         const newPost = {
             id: Date.now(),
             userId: currentUserId,
+            companyId: currentCompanyId,
             user: userName,
             name: userName,
             text: text,
