@@ -541,7 +541,6 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 👑 فحص صلاحيات الإدارة المستقلة لكل حساب
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let userName = String(user.name || user.id || '').trim();
@@ -633,6 +632,7 @@
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             initChatRealtimeListener();
+            initPandanRealtimeAccountSync(); // 🔄 تفعيل المزامنة اللحظية
             switchSection('deferredInvoices');
         }
     }
@@ -649,6 +649,7 @@
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             initChatRealtimeListener();
+            initPandanRealtimeAccountSync(); // 🔄 تفعيل المزامنة اللحظية
             switchSection('deferredInvoices');
             return;
         }
@@ -685,7 +686,6 @@
             }
 
             if (docData) {
-                // اعتماد معرف الشركة الحقيقي الخاص بهذا الحساب حصراً دون أي دمج أو تداخل
                 currentCompanyId = docData.companyId || ('comp_' + docId);
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
@@ -719,7 +719,41 @@
         applyUserPermissionsUI();
         loadAllDataFromFirestoreMultiCollection();
         initChatRealtimeListener();
+        initPandanRealtimeAccountSync(); // 🔄 تفعيل المزامنة اللحظية
         switchSection('deferredInvoices');
+    }
+
+    // 🔄 دالة المزامنة اللحظية لتحديثات الحساب والشراكة من السحابة في Pandan2la
+    function initPandanRealtimeAccountSync() {
+        if (!window.db || !window.firebaseModules) return;
+        const { collection, onSnapshot } = window.firebaseModules;
+        
+        let identifier = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
+        if (!identifier && window.currentLoggedInUser) {
+            identifier = window.currentLoggedInUser.id || window.currentLoggedInUser.name;
+        }
+        if (!identifier) return;
+
+        onSnapshot(collection(window.db, "drivers"), (snapshot) => {
+            snapshot.forEach(docSnap => {
+                let d = docSnap.data();
+                if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
+                    let newCompId = d.companyId || 'company_main';
+                    if (newCompId !== currentCompanyId) {
+                        currentCompanyId = newCompId;
+                        window.currentCompanyId = currentCompanyId;
+                        localStorage.setItem('current_company_id', currentCompanyId);
+                        
+                        window.currentLoggedInUser = { id: docSnap.id, ...d };
+                        localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                        
+                        applyUserPermissionsUI();
+                        loadAllDataFromFirestoreMultiCollection();
+                        showToast(`🔄 تم مزامنة شراكتك وحسابك لحظياً إلى: ${currentCompanyId}`);
+                    }
+                }
+            });
+        });
     }
 
     function openSwitchAccountPrompt() {
@@ -752,7 +786,7 @@
                 refreshActiveSection();
             });
 
-            let driversQuery = isAdmin ? query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId)) : query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+            let driversQuery = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
             onSnapshot(driversQuery, (snapshot) => {
                 if (window._isSavingLocally) return;
                 if (!snapshot.empty) {
