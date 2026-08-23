@@ -1144,17 +1144,17 @@
             <div id="admin-pending-cash-requests" style="max-height: 250px; overflow-y: auto;"></div>
         </div>
 
-        <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء وإضافة شركة جديدة (Multi-Tenant SaaS) -->
+        <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء وحسابات الشركات (Multi-Tenant SaaS) -->
         <div class="card" style="border: 2px solid var(--purple); margin-bottom: 12px;">
             <button type="button" class="btn-purple" onclick="openAddCompanyModal()" style="margin-bottom: 10px; width: 100%; padding: 10px;">
                 🏢 إضافة شركة جديدة وتفعيل اشتراكها 🚀
             </button>
-            <h3 style="color: var(--purple);">🔍 البحث عن الأعضاء وتعيين الاشتراكات الشهرية (Per-Member SaaS)</h3>
-            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">ابحث عن أي عضو أو سائق لتحديث باقته وتاريخ انتهاء اشتراكه الشهري:</p>
+            <h3 style="color: var(--purple);">🔍 حسابات الشركات والأعضاء وإدارة الاشتراكات (SaaS Hub)</h3>
+            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">استعراض حسابات الشركات، المديرين، والسائقين، وتحديث باقاتهم وتواريخ انتهائها:</p>
             
-            <input type="text" id="member-sub-search" class="search-box" placeholder="ابحث باسم العضو أو رقم الهاتف..." onkeyup="renderMemberSubscriptionsList()">
+            <input type="text" id="member-sub-search" class="search-box" placeholder="ابحث باسم الشركة، العضو، أو رقم الهاتف..." onkeyup="renderMemberSubscriptionsList()">
             
-            <div style="max-height: 300px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container"></div>
+            <div style="max-height: 320px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container"></div>
         </div>
 
         <div class="card" style="border: 2px solid var(--accent);">
@@ -1243,7 +1243,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // إعداد أرقام محافظ الكاش المعتمدة
         const CASH_WALLETS = {
             fawry: "01114099799",
             we: "01554440996"
@@ -1273,7 +1272,6 @@
         function openCashModal() { document.getElementById('cashPayModal').style.display = 'flex'; }
         function openMasterEnquiryModal() { document.getElementById('masterEnquiryModal').style.display = 'flex'; }
 
-        // فتح نافذة إضافة شركة جديدة
         function openAddCompanyModal() {
             if (currentUserRole !== 'admin') {
                 alert('عذراً، إضافة الشركات الجديدة مقتصرة على الماستر أدمن فقط!');
@@ -1282,7 +1280,6 @@
             document.getElementById('addCompanyModal').style.display = 'flex';
         }
 
-        // تنفيذ ومعالجة إنشاء الشركة والمزامنة السحابية
         async function handleCreateCompanySubmit() {
             const companyName = document.getElementById('new-comp-name').value.trim();
             const adminName = document.getElementById('new-comp-admin-name').value.trim();
@@ -1333,7 +1330,6 @@
             }
         }
 
-        // تقديم طلب تحويل الكاش
         function submitCashSubscription() {
             const months = Number(document.getElementById('sub-plan-months').value);
             const wallet = document.getElementById('sub-target-wallet').value;
@@ -1369,7 +1365,6 @@
             });
         }
 
-        // استعلام الأدمن الماستر بالكود أو المحفظة
         function enquirePaymentCode() {
             const query = (document.getElementById('master-code-search-input').value || '').trim().toLowerCase();
             const container = document.getElementById('master-enquiry-results');
@@ -1408,7 +1403,6 @@
             });
         }
 
-        // موافقة وتفعيل اشتراك العضو من الأدمن الماستر
         function approveSubscriptionRequest(reqId, driverId, months) {
             if (currentUserRole !== 'admin') { alert('عذراً، التفعيل مخصص للماستر أدمن فقط!'); return; }
 
@@ -1678,15 +1672,13 @@
                 db.collection(colName).onSnapshot(snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    appData[colName] = rawData.filter(item => {
-                        const itemCompany = item.companyId || 'company_main';
-                        return itemCompany === currentCompanyId;
-                    });
+                    appData[colName] = rawData; // جلب كافة البيانات لضمان ظهور حسابات الشركات والأعضاء بدون قيود مقيدة للشركة الافتراضية فقط
                     
                     if (colName === 'drivers' && appData.drivers.length === 0) {
                         const defaultAdmin = {
                             id: "1",
                             companyId: 'company_main',
+                            companyName: 'أسطورة الطريق الرئيسية',
                             name: 'المدير',
                             phone: '+201114099799',
                             pin: storedPin || '01036',
@@ -1723,6 +1715,7 @@
             });
         }
 
+        // تم تحديث هذه الدالة بالكامل لإظهار حسابات الشركات والمديرين والأعضاء داخل الجدول والمتابعة مع كافة التفاصيل
         function renderMemberSubscriptionsList() {
             if (currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -1733,12 +1726,13 @@
             let drivers = appData.drivers || [];
             let filtered = drivers.filter(d => {
                 const nameStr = d.name ? d.name.toLowerCase() : '';
+                const compStr = d.companyName ? d.companyName.toLowerCase() : '';
                 const phoneStr = d.phone || '';
-                return nameStr.includes(query) || phoneStr.includes(query);
+                return nameStr.includes(query) || compStr.includes(query) || phoneStr.includes(query);
             });
 
             if (filtered.length === 0) {
-                container.innerHTML = `<p style="font-size: 10px; text-align: center; opacity: 0.8;">لا توجد نتائج مطابقة للبحث.</p>`;
+                container.innerHTML = `<p style="font-size: 10px; text-align: center; opacity: 0.8;">لا توجد حسابات شركات أو أعضاء مطابقة للبحث.</p>`;
                 return;
             }
 
@@ -1747,18 +1741,21 @@
                 let expiry = d.subExpiry || 'لم يُحدد';
                 let status = d.subStatus || 'active';
                 let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
+                let compNameLabel = d.companyName ? `🏢 الشركة: <strong>${d.companyName}</strong>` : `🏢 الحساب الرئيسي`;
 
                 let itemDiv = document.createElement('div');
                 itemDiv.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px; font-size:11px;';
                 itemDiv.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                         <strong>👤 ${d.name || 'بدون اسم'} (${d.role || 'سائق'})</strong>
                         <span style="font-size:9px;">${statusBadge}</span>
                     </div>
+                    <p style="font-size:10px; opacity:0.85; margin-bottom:4px;">${compNameLabel}</p>
                     <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${d.phone || 'غير مسجل'} | الباقة: <strong>${plan}</strong> | الانتهاء: <span style="color:var(--danger);">${expiry}</span></p>
                     <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
                         <select id="plan-select-${d.id}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
                             <option value="monthly" ${plan==='monthly'?'selected':''}>اشتراك شهري (30 يوم) 🗓️</option>
+                            <option value="quarterly" ${plan==='quarterly'?'selected':''}>اشتراك ربع سنوي (90 يوم) 📊</option>
                             <option value="yearly" ${plan==='yearly'?'selected':''}>اشتراك سنوي (365 يوم) 🌟</option>
                             <option value="lifetime" ${plan==='lifetime'?'selected':''}>ترخيص دائم ♾️</option>
                             <option value="trial" ${plan==='trial'?'selected':''}>تجريبي (7 أيام) ⏳</option>
@@ -1782,6 +1779,7 @@
             let selectedPlan = planSelect ? planSelect.value : 'monthly';
 
             let daysToAdd = 30;
+            if (selectedPlan === 'quarterly') daysToAdd = 90;
             if (selectedPlan === 'yearly') daysToAdd = 365;
             if (selectedPlan === 'trial') daysToAdd = 7;
             if (selectedPlan === 'lifetime') daysToAdd = 36500;
@@ -1793,7 +1791,7 @@
             driver.subExpiry = newExpiryDate;
 
             db.collection('drivers').doc(String(driver.id)).set(driver, { merge: true }).then(() => {
-                alert(`تم تحديث وتفعيل اشتراك العضو (${driver.name}) بنجاح حتى تاريخ: ${newExpiryDate} 🚀✨`);
+                alert(`تم تحديث وتفعيل اشتراك الحساب (${driver.name}) بنجاح حتى تاريخ: ${newExpiryDate} 🚀✨`);
                 renderMemberSubscriptionsList();
             }).catch(err => {
                 alert('حدث خطأ أثناء التحديث السحابي: ' + err.message);
@@ -1887,7 +1885,7 @@
                     
                     snapshot.forEach(doc => {
                         let d = doc.data();
-                        if ((d.name === identifier || d.phone === identifier) && String(d.pin).trim() === pin) {
+                        if ((d.name === identifier || d.phone === identifier || d.companyId === identifier) && String(d.pin).trim() === pin) {
                             matchedUser = d;
                         }
                     });
@@ -1914,7 +1912,6 @@
             }
 
             try {
-                // التحقق مما إذا كانت هناك جلسة متصلة بالفعل لمنع تكرار الحسابات المجهولة
                 if (!auth.currentUser) {
                     await auth.signInAnonymously();
                 }
@@ -1960,7 +1957,7 @@
                     <button type="button" onclick="switchTab('fleet-tab', this); toggleSidebar();">🚚 الأسطول</button>
                     <button type="button" onclick="switchTab('drivers-tab', this); toggleSidebar();">👨‍✈️ السائقين والحسابات</button>
                     <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
-                    <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وااشتراكات الأعضاء</button>
+                    <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشركات SaaS</button>
                 `;
             } else if (currentUserRole === 'supervisor') {
                 nav.innerHTML = `
@@ -2745,6 +2742,7 @@
                 drv = {
                     id: 'default_admin_id',
                     companyId: currentCompanyId,
+                    companyName: 'أسطورة الطريق',
                     name: activeTargetName,
                     phone: activeTargetName === 'المدير' ? '+201114099799' : '',
                     role: activeTargetName === 'المدير' ? 'admin' : 'سائق',
@@ -2770,7 +2768,7 @@
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
+            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
             
             let myShipmentsCount = (appData.shipments || []).filter(s => s.assignedDriver === drv.name).length;
             document.getElementById('gplus-stat-shipments').innerText = myShipmentsCount;
@@ -3089,6 +3087,7 @@
                 let newDrv = {
                     id: uid,
                     companyId: currentCompanyId,
+                    companyName: 'أسطورة الطريق',
                     name: name,
                     phone: phone,
                     pin: pin,
@@ -3325,6 +3324,7 @@
                 let newDrv = {
                     id: uid, 
                     companyId: currentCompanyId,
+                    companyName: 'أسطورة الطريق',
                     name, phone, pin, role, title: role.includes('مدير') ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180,
                     subPlan: 'monthly', subStatus: 'active', subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
