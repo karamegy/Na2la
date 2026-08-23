@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة تواصل السائقين الاحترافية - V52 PRO SECURED</title>
+    <title>منصة تواصل السائقين الاحترافية - V52 PRO SECURED ISOLATED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -99,13 +99,25 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 🔐 إدارة عزل الشركة (companyId)
+    // 🔐 استخراج ومعالجة معرف الشركة المعزول بدقة تامة لكل حساب وسائق
     let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
     window.currentCompanyId = currentCompanyId;
 
     let activeSessionName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || '';
     if (activeSessionName) {
         document.getElementById('authorName').value = activeSessionName;
+    }
+
+    // تصحيح تلقائي لمعرف الشركة بناءً على اسم السائق إذا لم يكن موجوداً مسبقاً
+    let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+    if (!localStorage.getItem('current_company_id') && !isSuper && activeSessionName) {
+        currentCompanyId = 'comp_' + activeSessionName.replace(/[^a-zA-Z0-9]/g, '_');
+        localStorage.setItem('current_company_id', currentCompanyId);
+        window.currentCompanyId = currentCompanyId;
+    } else if (isSuper && !localStorage.getItem('current_company_id')) {
+        currentCompanyId = 'comp_1787481011714';
+        localStorage.setItem('current_company_id', currentCompanyId);
+        window.currentCompanyId = currentCompanyId;
     }
 
     document.getElementById('company-badge-display').innerText = `🏢 شركة: ${currentCompanyId}`;
@@ -115,7 +127,7 @@
     // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
     function isSuperAdmin() {
         let userName = String(activeSessionName || document.getElementById('authorName')?.value || '').trim();
-        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(userName);
     }
     window.isSuperAdmin = isSuperAdmin;
 
@@ -143,13 +155,13 @@
             statusEl.style.color = "#28a745";
             btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
         } else {
-            statusEl.innerText = `حالة الحساب: مدير أو سائق شركة مستقلة (عزل تام ضمن شركة: ${currentCompanyId})`;
+            statusEl.innerText = `حالة الحساب: سائق أو مسؤول شركة مستقلة (عزل تام ضمن شركة: ${currentCompanyId})`;
             statusEl.style.color = "#333";
             btnEl.innerText = "تفعيل وضع المؤسس (للإشراف العام)";
         }
     }
 
-    // جلب المنشورات والتعليقات مع تطبيق عزل الشركة التام
+    // جلب المنشورات والتعليقات مع تطبيق عزل الشركة التام (Company Isolation)
     function loadPosts() {
         const q = query(postsRef, orderBy("timestamp", "desc"));
         onSnapshot(q, async (snapshot) => {
@@ -160,7 +172,7 @@
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                // عزل الشركات: إذا لم يكن مديراً عاماً، يتم عرض منشورات شركته فقط
+                // عزل الشركات: المدير العام يرى كل شيء، بينما السائقون يرون منشورات شركتهم فقط
                 if (!superAdmin && post.companyId && post.companyId !== currentCompanyId) {
                     continue;
                 }
@@ -235,7 +247,7 @@
         });
     }
 
-    // إضافة منشور جديد مرتبط برقم الشركة الحالي
+    // إضافة منشور جديد مرتبط برقم الشركة الحالي حصرياً
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
         await addDoc(postsRef, {
@@ -243,7 +255,7 @@
             category: document.getElementById("postCategory").value,
             content: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
-            companyId: currentCompanyId, // 🔐 ربط المنشور بمعرف الشركة الحالي تلقائياً
+            companyId: currentCompanyId, // 🔐 حقن معرف الشركة المعزول بدقة تلقائياً
             likes: 0,
             date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
             timestamp: new Date()
@@ -279,7 +291,7 @@
 
     // تفعيل وضع المؤسس اليدوي أو التبديل
     window.toggleAdminMode = function() {
-        if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(activeSessionName)) {
+        if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
             if (pass === "admin123") {
                 window.manualAdminOverride = true;
