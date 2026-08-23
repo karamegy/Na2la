@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - بروفايل السائق والأسطول V94 PRO SECURE SECURED</title>
+    <title>أسطورة الطريق - بروفايل السائق والأسطول V94 PRO SECURE ISOLATED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -166,7 +166,7 @@
 <body>
 
     <div class="app-3d-logo-container">
-        <div class="logo-3d">أسطورة الطريق <span>DRIVER PROFILE V94 PRO SECURE SECURED</span></div>
+        <div class="logo-3d">أسطورة الطريق <span>DRIVER PROFILE V94 PRO SECURE ISOLATED</span></div>
     </div>
 
     <div class="theme-selector-bar">
@@ -471,7 +471,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 🔐 متغيرات العزل السحابي للشركة (companyId)
+        // 🔐 استخراج ومعالجة معرف الشركة المعزول بدقة تامة لكل حساب أو مدير
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
 
@@ -526,14 +526,15 @@
             }
         }
 
-        function getExternalLoginSession() {
+        function getExternalLoginSessionAndSync() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             
             if (externalId) {
-                localStorage.setItem('logged_in_driver_name', externalId.trim());
-                localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
-                return externalId.trim();
+                externalId = externalId.trim();
+                localStorage.setItem('logged_in_driver_name', externalId);
+                localStorage.setItem('na2la_external_logged_user_id', externalId);
+                return externalId;
             }
 
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
@@ -542,10 +543,17 @@
             return 'المدير';
         }
 
-        let activeExternalSessionName = getExternalLoginSession();
+        let activeExternalSessionName = getExternalLoginSessionAndSync();
         let loggedInDriverId = activeExternalSessionName;
         let viewingProfileId = localStorage.getItem('viewing_profile_id') || loggedInDriverId;
         let currentChatTarget = 'general';
+
+        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName);
+
+        // ضبط معرف الشركة المعزول فورياً تبعا لحساب السائق أو المدير
+        currentCompanyId = isSuper ? 'comp_1787481011714' : ('comp_' + activeExternalSessionName.replace(/[^a-zA-Z0-9]/g, '_'));
+        localStorage.setItem('current_company_id', currentCompanyId);
+        window.currentCompanyId = currentCompanyId;
 
         let cachedSession = localStorage.getItem('na2la_active_session');
         if (cachedSession) {
@@ -564,8 +572,9 @@
             let user = getLoggedInUser() || {};
             let userId = String(user.id || '').trim();
             let userName = String(user.name || activeExternalSessionName || '').trim();
+            let role = String(user.role || '').toLowerCase().trim();
             
-            return userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1'].includes(userName);
+            return role === 'admin' || role === 'مدير' || userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1', 'باندا'].includes(userName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -628,11 +637,20 @@
         }
         renderInitialUIInstant();
 
-        // استعلامات فايرستور مع تفعيل عزل الشركة التام ودعم المدير العام
+        // 🔄 استعلامات فايرستور مع عزل تДан (Company Isolation) لكل شركة
         db.collection('drivers').onSnapshot(snapshot => {
             let superAdmin = isSuperAdmin();
             let rawDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.drivers = superAdmin ? rawDrivers : rawDrivers.filter(d => d.companyId === currentCompanyId);
+            appData.drivers = superAdmin ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
+            
+            // تحقق وتحديث companyId للسائق إذا وجد في السحاب
+            let matched = rawDrivers.find(d => d.name === activeExternalSessionName || d.id === activeExternalSessionName || d.phone === activeExternalSessionName);
+            if (matched && matched.companyId) {
+                currentCompanyId = matched.companyId;
+                window.currentCompanyId = currentCompanyId;
+                localStorage.setItem('current_company_id', currentCompanyId);
+            }
+
             renderMyAccount();
             renderChatAccountsList();
         });
@@ -640,14 +658,14 @@
         db.collection('shipments').onSnapshot(snapshot => {
             let superAdmin = isSuperAdmin();
             let rawShipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.shipments = superAdmin ? rawShipments : rawShipments.filter(s => s.companyId === currentCompanyId);
+            appData.shipments = superAdmin ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
             renderMyAccount();
         });
 
         db.collection('chat').onSnapshot(snapshot => {
             let superAdmin = isSuperAdmin();
             let rawChat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.chat = superAdmin ? rawChat : rawChat.filter(m => m.companyId === currentCompanyId);
+            appData.chat = superAdmin ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
             renderChatMessages();
         });
 
@@ -658,8 +676,9 @@
               snapshot.docChanges().forEach(change => {
                   if (change.type === 'added') {
                       let callData = change.doc.data();
-                      currentCallId = change.doc.id;
+                      if (!isSuperAdmin() && callData.companyId && callData.companyId !== currentCompanyId) return;
                       
+                      currentCallId = change.doc.id;
                       startRingtone(true);
 
                       if (confirm(`📞 لديك مكالمة واردة من (${callData.caller}). هل تريد الرد؟`)) {
@@ -680,7 +699,7 @@
             let superAdmin = isSuperAdmin();
             snapshot.forEach(doc => {
                 let d = doc.data();
-                if (superAdmin || d.companyId === currentCompanyId) {
+                if (superAdmin || !d.companyId || d.companyId === currentCompanyId) {
                     html += `<div style="background:var(--bg); padding:6px; border-radius:6px; margin-bottom:4px; border-right:3px solid var(--accent);">🚨 ${d.details || 'تنبيه عمليات'} <small style="opacity:0.6">(${d.driverName || 'الأسطول'})</small></div>`;
                 }
             });
@@ -762,8 +781,9 @@
                 let assigned = (s.assignedDriver || s.driver || '').trim();
                 let clientName = (s.name || s.client || '').trim();
                 
-                if (superAdmin) return true;
-                return (assigned === drvName || clientName === drvName || s.driverId === targetDrv.id) && s.companyId === currentCompanyId;
+                let matchesComp = superAdmin || !s.companyId || s.companyId === currentCompanyId;
+                let matchesUser = (assigned === drvName || clientName === drvName || s.driverId === targetDrv.id || superAdmin);
+                return matchesComp && matchesUser;
             });
 
             document.getElementById('gplus-stat-shipments').innerText = targetShipments.length;
@@ -1046,7 +1066,7 @@
             container.innerHTML = '';
             
             let superAdmin = isSuperAdmin();
-            let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName && (superAdmin || d.companyId === currentCompanyId));
+            let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName && (superAdmin || !d.companyId || d.companyId === currentCompanyId));
             
             let filteredAccounts = accounts.filter(acc => {
                 let name = (acc.name || '').toLowerCase();
@@ -1113,9 +1133,10 @@
             if(!box) return;
             box.innerHTML = '';
             let messages = appData.chat || [];
+            let superAdmin = isSuperAdmin();
 
             let filtered = messages.filter(m => {
-                let matchesComp = superAdmin || m.companyId === currentCompanyId;
+                let matchesComp = superAdmin || !m.companyId || m.companyId === currentCompanyId;
                 let matchesRoom = currentChatTarget === 'general' ? (m.target === 'general' || !m.target) : ((m.sender === activeExternalSessionName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === activeExternalSessionName));
                 return matchesComp && matchesRoom;
             });
@@ -1200,7 +1221,7 @@
 
             querySnapshot.forEach(doc => {
                 let d = doc.data();
-                if (superAdmin || d.companyId === currentCompanyId) {
+                if (superAdmin || !d.companyId || d.companyId === currentCompanyId) {
                     posts.push({ docId: doc.id, ...d });
                 }
             });
@@ -1435,7 +1456,7 @@
             container.innerHTML = '';
             
             let superAdmin = isSuperAdmin();
-            let driversList = (appData.drivers || []).filter(d => superAdmin || d.companyId === currentCompanyId);
+            let driversList = (appData.drivers || []).filter(d => superAdmin || !d.companyId || d.companyId === currentCompanyId);
 
             let filtered = driversList.filter(d => (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query)));
             filtered.forEach(d => {
