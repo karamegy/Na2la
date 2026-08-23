@@ -559,18 +559,20 @@
             } catch(e) {}
         }
 
-        // 👑 دالة فحص صلاحيات الإدارة العليا لدعم Admin1 وباقي المديرين بمرونة تامة
-        function isUserAdmin() {
+        // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
+        function isSuperAdmin() {
             let user = getLoggedInUser() || {};
-            let role = String(user.role || '').toLowerCase().trim();
             let userId = String(user.id || '').trim();
             let userName = String(user.name || activeExternalSessionName || '').trim();
             
-            return userId === '1' || 
-                   role === 'admin' || 
-                   role === 'مدير نظام' || 
-                   role === 'مدير' || 
-                   ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1'].includes(userName);
+            return userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1'].includes(userName);
+        }
+        window.isSuperAdmin = isSuperAdmin;
+
+        function isUserAdmin() {
+            let user = getLoggedInUser() || {};
+            let role = String(user.role || '').toLowerCase().trim();
+            return isSuperAdmin() || role.includes('admin') || role.includes('مدير');
         }
         window.isUserAdmin = isUserAdmin;
 
@@ -619,33 +621,33 @@
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
         function renderInitialUIInstant() {
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             document.getElementById('gplus-name-display').innerText = activeExternalSessionName;
-            document.getElementById('gplus-badge-display').innerText = isAdmin ? 'مدير النظام' : 'أسطورة الطريق';
+            document.getElementById('gplus-badge-display').innerText = superAdmin ? 'مدير عام المنصة' : 'أسطورة الطريق';
             document.getElementById('user-role-badge').innerText = `متصل ومعزول برقم الشركة: ${currentCompanyId} ☁️`;
         }
         renderInitialUIInstant();
 
-        // استعلامات فايرستور مع تفعيل صلاحيات الإدارة العليا للرؤية الشاملة
+        // استعلامات فايرستور مع تفعيل عزل الشركة التام ودعم المدير العام
         db.collection('drivers').onSnapshot(snapshot => {
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             let rawDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.drivers = isAdmin ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
+            appData.drivers = superAdmin ? rawDrivers : rawDrivers.filter(d => d.companyId === currentCompanyId);
             renderMyAccount();
             renderChatAccountsList();
         });
 
         db.collection('shipments').onSnapshot(snapshot => {
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             let rawShipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.shipments = isAdmin ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
+            appData.shipments = superAdmin ? rawShipments : rawShipments.filter(s => s.companyId === currentCompanyId);
             renderMyAccount();
         });
 
         db.collection('chat').onSnapshot(snapshot => {
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             let rawChat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.chat = isAdmin ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
+            appData.chat = superAdmin ? rawChat : rawChat.filter(m => m.companyId === currentCompanyId);
             renderChatMessages();
         });
 
@@ -675,10 +677,10 @@
             let notifsBox = document.getElementById('driver-notifications-box');
             if(!notifsBox) return;
             let html = '';
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             snapshot.forEach(doc => {
                 let d = doc.data();
-                if (isAdmin || !d.companyId || d.companyId === currentCompanyId) {
+                if (superAdmin || d.companyId === currentCompanyId) {
                     html += `<div style="background:var(--bg); padding:6px; border-radius:6px; margin-bottom:4px; border-right:3px solid var(--accent);">🚨 ${d.details || 'تنبيه عمليات'} <small style="opacity:0.6">(${d.driverName || 'الأسطول'})</small></div>`;
                 }
             });
@@ -725,12 +727,12 @@
                     return drv;
                 }
             }
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             return {
                 id: activeExternalSessionName,
                 name: activeExternalSessionName,
                 companyId: currentCompanyId,
-                role: isAdmin ? 'admin' : 'driver',
+                role: superAdmin ? 'admin' : 'driver',
                 title: 'أسطورة الطريق',
                 status: 'متاح 🟢',
                 advances: 0
@@ -749,23 +751,23 @@
             let loggedInUser = getLoggedInUser();
             let targetDrv = getTargetViewingDriver();
             let isViewingSelf = String(targetDrv.id) === String(loggedInUser.id) || targetDrv.name === loggedInUser.name;
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
 
             document.getElementById('gplus-name-display').innerText = targetDrv.name || 'مستخدم';
             document.getElementById('gplus-badge-display').innerText = targetDrv.title || 'عضو معتمد';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${isAdmin ? 'مدير النظام' : 'سائق'} | شركة: ${currentCompanyId}`;
+            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${superAdmin ? 'مدير عام' : 'سائق'} | شركة: ${currentCompanyId}`;
             
             let targetShipments = (appData.shipments || []).filter(s => {
                 let drvName = (targetDrv.name || '').trim();
                 let assigned = (s.assignedDriver || s.driver || '').trim();
                 let clientName = (s.name || s.client || '').trim();
                 
-                if (isAdmin) return true;
-                return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
+                if (superAdmin) return true;
+                return (assigned === drvName || clientName === drvName || s.driverId === targetDrv.id) && s.companyId === currentCompanyId;
             });
 
             document.getElementById('gplus-stat-shipments').innerText = targetShipments.length;
-            document.getElementById('gplus-stat-role').innerText = isAdmin ? 'مدير' : 'سائق';
+            document.getElementById('gplus-stat-role').innerText = superAdmin ? 'مدير' : 'سائق';
             document.getElementById('gplus-stat-status').innerText = targetDrv.status || 'متاح 🟢';
 
             renderAccountShipmentsList(targetShipments);
@@ -1043,8 +1045,8 @@
             const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase().trim();
             container.innerHTML = '';
             
-            let isAdmin = isUserAdmin();
-            let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName);
+            let superAdmin = isSuperAdmin();
+            let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName && (superAdmin || d.companyId === currentCompanyId));
             
             let filteredAccounts = accounts.filter(acc => {
                 let name = (acc.name || '').toLowerCase();
@@ -1113,8 +1115,9 @@
             let messages = appData.chat || [];
 
             let filtered = messages.filter(m => {
-                if (currentChatTarget === 'general') return m.target === 'general' || !m.target;
-                return (m.sender === activeExternalSessionName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === activeExternalSessionName);
+                let matchesComp = superAdmin || m.companyId === currentCompanyId;
+                let matchesRoom = currentChatTarget === 'general' ? (m.target === 'general' || !m.target) : ((m.sender === activeExternalSessionName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === activeExternalSessionName));
+                return matchesComp && matchesRoom;
             });
 
             filtered.forEach(m => {
@@ -1175,9 +1178,9 @@
 
         function deleteWallPost(docId, authorName) {
             let loggedInUser = getLoggedInUser();
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
             
-            if(isAdmin || String(authorName) === String(loggedInUser.name)) {
+            if(superAdmin || String(authorName) === String(loggedInUser.name)) {
                 if(confirm('هل أنت متأكد من حذف هذا المنشور نهائياً؟')) {
                     db.collection('profileWalls').doc(docId).delete().then(() => {
                         alert('✅ تم حذف المنشور بنجاح');
@@ -1193,11 +1196,11 @@
             if(!container) return;
             container.innerHTML = '';
             let posts = [];
-            let isAdmin = isUserAdmin();
+            let superAdmin = isSuperAdmin();
 
             querySnapshot.forEach(doc => {
                 let d = doc.data();
-                if (isAdmin || !d.companyId || d.companyId === currentCompanyId) {
+                if (superAdmin || d.companyId === currentCompanyId) {
                     posts.push({ docId: doc.id, ...d });
                 }
             });
@@ -1235,7 +1238,7 @@
                     `;
                 });
 
-                let canDelete = isAdmin || String(p.author) === String(loggedInUser.name);
+                let canDelete = superAdmin || String(p.author) === String(loggedInUser.name);
                 let deleteBtnHtml = canDelete ? `<button type="button" class="btn-danger btn-sm" onclick="deleteWallPost('${p.docId}', '${p.author}')" style="width:auto; padding:3px 8px; font-size:9px;">حذف المنشور 🗑️</button>` : '';
 
                 let div = document.createElement('div');
@@ -1431,8 +1434,8 @@
             if(!container) return;
             container.innerHTML = '';
             
-            let isAdmin = isUserAdmin();
-            let driversList = (appData.drivers || []).filter(d => isAdmin || !d.companyId || d.companyId === currentCompanyId);
+            let superAdmin = isSuperAdmin();
+            let driversList = (appData.drivers || []).filter(d => superAdmin || d.companyId === currentCompanyId);
 
             let filtered = driversList.filter(d => (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query)));
             filtered.forEach(d => {
