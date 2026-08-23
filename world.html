@@ -544,7 +544,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث مع دعم عزل الشركات (companyId) الكامل -->
+    <!-- السكريبت المحدث مع دعم عزل الشركات (companyId) والمدير العام -->
     <script>
         let currentAccountFilter = 'all';
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
@@ -590,14 +590,14 @@
 
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
-            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
+            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             
             if (externalId) {
                 localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
                 return externalId.trim();
             }
 
-            let savedExternalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
+            let savedExternalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || localStorage.getItem('logged_in_driver_name');
             if (savedExternalId) {
                 return savedExternalId.trim();
             }
@@ -607,7 +607,7 @@
 
         let activeExternalSessionId = getExternalLoginSession();
         
-        let initialUserObj = { id: activeExternalSessionId || '1', name: 'جاري تحميل الحساب...', role: 'driver', title: 'مستخدم النظام', avatar: '' };
+        let initialUserObj = { id: activeExternalSessionId || '1', name: activeExternalSessionId || 'المدير', role: 'admin', title: 'مدير عام النظام', avatar: '' };
         let cachedSession = localStorage.getItem('na2la_active_session');
         if (cachedSession) {
             try {
@@ -662,21 +662,15 @@
                 if (!snap1.empty) foundDoc = { id: snap1.docs[0].id, ...snap1.docs[0].data() };
 
                 if (!foundDoc) {
-                    let q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                    let q2 = query(collection(window.db, "drivers"), where("name", "==", identifier));
                     let snap2 = await getDocs(q2);
                     if (!snap2.empty) foundDoc = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
                 }
 
                 if (!foundDoc) {
-                    let q3 = query(collection(window.db, "platform_users"), where("id", "==", identifier));
+                    let q3 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
                     let snap3 = await getDocs(q3);
                     if (!snap3.empty) foundDoc = { id: snap3.docs[0].id, ...snap3.docs[0].data() };
-                }
-
-                if (!foundDoc && identifier) {
-                    let docRef = doc(window.db, "drivers", String(identifier));
-                    let docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) foundDoc = { id: docSnap.id, ...docSnap.data() };
                 }
 
                 if (foundDoc) {
@@ -686,8 +680,14 @@
                     window.currentCompanyId = currentCompanyId;
                     localStorage.setItem('na2la_external_logged_user_id', foundDoc.id);
                     localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
-                } else if (!window.currentLoggedInUser.name || window.currentLoggedInUser.name.includes('جاري')) {
-                    window.currentLoggedInUser = { id: identifier, name: "حساب " + identifier, role: 'driver', title: 'سائق مستقل' };
+                } else if (identifier) {
+                    let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(identifier);
+                    window.currentLoggedInUser = { 
+                        id: identifier, 
+                        name: identifier, 
+                        role: isSuper ? 'admin' : 'driver', 
+                        title: isSuper ? 'مدير عام المنصة الأم' : 'سائق' 
+                    };
                 }
 
                 applyUserPermissionsUI();
@@ -699,7 +699,22 @@
             }
         }
 
+        // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
+        function isSuperAdmin() {
+            let user = window.currentLoggedInUser || {};
+            let userName = String(user.name || user.id || activeExternalSessionId || '').trim();
+            let role = String(user.role || '').toLowerCase().trim();
+            
+            return role === 'admin' || userIdIsSuper(userName) || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+        }
+        window.isSuperAdmin = isSuperAdmin;
+
+        function userIdIsSuper(name) {
+            return ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(name);
+        }
+
         function getUserRole() {
+            if (isSuperAdmin()) return 'admin';
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase().trim();
             let title = String(user.title || '').toLowerCase().trim();
@@ -710,12 +725,6 @@
         }
         window.getUserRole = getUserRole;
 
-        function isUserAdmin() { return getUserRole() === 'admin'; }
-        window.isUserAdmin = isUserAdmin;
-
-        function isUserSupervisor() { return getUserRole() === 'supervisor'; }
-        window.isUserSupervisor = isUserSupervisor;
-
         function canUserManageSystem() {
             let role = getUserRole();
             return role === 'admin' || role === 'supervisor';
@@ -723,7 +732,7 @@
         window.canUserManageSystem = canUserManageSystem;
 
         function openSwitchAccountPrompt() {
-            let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف لجلب الصلاحيات ورتبة الشركة الصحيحة:");
+            let inputId = prompt("أدخل معرف الحساب (ID) أو اسم المستخدم لجلب الصلاحيات ورتبة الشركة الصحيحة:");
             if (inputId && inputId.trim() !== "") {
                 activeExternalSessionId = inputId.trim();
                 localStorage.setItem('na2la_external_logged_user_id', activeExternalSessionId);
@@ -739,10 +748,10 @@
             document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
             
             let roleBadgeText = '👨‍✈️ سائق مستقل';
-            if (role === 'admin') roleBadgeText = '👑 مدير نظام (صلاحيات كاملة)';
+            if (role === 'admin') roleBadgeText = '👑 مدير عام النظام (رؤية شاملة للأسطول والشركات)';
             else if (role === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد (صلاحيات تشغيلية)';
 
-            document.getElementById('header-role-badge').innerText = roleBadgeText + ` (${currentCompanyId})`;
+            document.getElementById('header-role-badge').innerText = roleBadgeText + ` (شركة: ${currentCompanyId})`;
 
             const imgEl = document.getElementById("userHeaderAvatarImg");
             const emojiEl = document.getElementById("userHeaderAvatarEmoji");
@@ -829,15 +838,15 @@
                 }
             });
 
-            let role = getUserRole();
+            let superAdmin = isSuperAdmin();
 
             const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
             collections.forEach(col => {
-                let q = (role === 'admin') ? collection(window.db, col) : query(collection(window.db, col), where("companyId", "==", currentCompanyId));
+                let q = superAdmin ? collection(window.db, col) : query(collection(window.db, col), where("companyId", "==", currentCompanyId));
                 
                 onSnapshot(q, (snapshot) => {
                     let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    if (role !== 'admin') {
+                    if (!superAdmin) {
                         items = items.filter(item => {
                             let itemCompId = String(item.companyId || '');
                             return !itemCompId || itemCompId === currentCompanyId;
@@ -853,14 +862,14 @@
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-            let role = getUserRole();
-            let alertQuery = (role === 'admin') ? collection(window.db, "viper_logistics") : query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
+            let superAdmin = isSuperAdmin();
+            let alertQuery = superAdmin ? collection(window.db, "viper_logistics") : query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
 
             onSnapshot(alertQuery, (snapshot) => {
                 let alerts = [];
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    if (role === 'admin' || !d.companyId || d.companyId === currentCompanyId) {
+                    if (superAdmin || !d.companyId || d.companyId === currentCompanyId) {
                         alerts.push({ id: docSnap.id, ...d });
                     }
                 });
@@ -887,7 +896,7 @@
                     listWidget.innerHTML = alerts.map(a => `
                         <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--danger-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <div>
-                                <b style="color:var(--danger-color);">🚨 الكابتن: ${a.driverName || a.name || 'سائق'}</b><br>
+                                <b style="color:var(--danger-color);">🚨 الكابتن: ${a.driverName || a.name || 'سائق'}</b> ${a.companyId ? `<small style="opacity:0.7;">(شركة: ${a.companyId})</small>` : ''}<br>
                                 <span style="font-size:11px; color:var(--secondary-text);">الهاتف: <a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></span>
                             </div>
                             <div style="display:flex; gap:6px;">
@@ -903,12 +912,12 @@
 
             if (tbody) {
                 if (alerts.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ نشطة لشركتك حالياً.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ نشطة حالياً.</td></tr>`;
                 } else {
                     tbody.innerHTML = alerts.map(a => `
                         <tr>
                             <td><b>${a.time || 'اليوم'}</b></td>
-                            <td><b style="color:var(--danger-color);">${a.driverName || a.name || 'سائق'}</b></td>
+                            <td><b style="color:var(--danger-color);">${a.driverName || a.name || 'سائق'}</b> ${a.companyId ? `<br><small style="opacity:0.6;">شركة: ${a.companyId}</small>` : ''}</td>
                             <td><a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></td>
                             <td><span style="background:rgba(255,65,108,0.2); color:var(--danger-color); padding:4px 10px; border-radius:8px; font-weight:bold;">🚨 طوارئ SOS</span></td>
                             <td>${a.lat ? `<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" class="whatsapp-btn" style="background:var(--primary-blue);">📍 الموقع</a>` : 'غير متوفرة'}</td>
@@ -958,7 +967,7 @@
         }
 
         function editRssMessage() {
-            if (!isUserAdmin()) return alert("مقتصر على مدير النظام فقط!");
+            if (!isSuperAdmin()) return alert("مقتصر على مدير النظام العام فقط!");
             let msg = prompt("نص الإشعار:", appData.rssMessage);
             if (msg) { 
                 appData.rssMessage = msg; 
@@ -1024,7 +1033,7 @@
         }
 
         function deleteTreasuryItem(id) {
-            if (!isUserAdmin()) return alert("مقتصر على المدير فقط!");
+            if (!canUserManageSystem()) return alert("مقتصر على الإدارة فقط!");
             if (confirm("حذف الحركة؟")) {
                 appData.treasury = (appData.treasury || []).filter(t => String(t.id) !== String(id));
                 deleteItemFromCollection('treasury', id);
@@ -1081,7 +1090,7 @@
         }
 
         function deleteRecord(id, collectionType) {
-            if (!isUserAdmin()) return alert("الحذف مقتصر على مدير النظام فقط!");
+            if (!canUserManageSystem()) return alert("الحذف مقتصر على الإدارة فقط!");
             if (confirm("حذف نهائي؟")) {
                 let targetCol = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
                 appData[targetCol] = (appData[targetCol] || []).filter(x => String(x.id) !== String(id));
@@ -1092,7 +1101,7 @@
         }
 
         function openEditModal(id, collectionType) {
-            if (getUserRole() === 'driver') return alert("غير مسموح لك بالتعديل.");
+            if (!canUserManageSystem()) return alert("غير مسموح لك بالتعديل.");
             let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
             let item = (appData[colName] || []).find(x => String(x.id) === String(id));
             if (!item) return alert("غير موجود.");
@@ -1133,7 +1142,7 @@
         }
 
         function toggleRecordStatus(id, collectionType) {
-            if (getUserRole() === 'driver') return alert("غير مسموح.");
+            if (!canUserManageSystem()) return alert("غير مسموح.");
             let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
             let item = (appData[colName] || []).find(x => String(x.id) === String(id));
             if (item) {
@@ -1194,13 +1203,13 @@
         }
 
         function renderAllFinancials() {
-            let role = getUserRole();
+            let superAdmin = isSuperAdmin();
 
-            let userShipments = (role === 'admin') ? (appData.shipments || []) : (appData.shipments || []).filter(s => !s.companyId || s.companyId === currentCompanyId);
-            let userAccounts = (role === 'admin') ? (appData.accounts || []) : (appData.accounts || []).filter(a => !a.companyId || a.companyId === currentCompanyId);
-            let userExpenses = (role === 'admin') ? (appData.expenses || []) : (appData.expenses || []).filter(e => !e.companyId || e.companyId === currentCompanyId);
-            let userDeferred = (role === 'admin') ? (appData.deferredInvoices || []) : (appData.deferredInvoices || []).filter(d => !d.companyId || d.companyId === currentCompanyId);
-            let userTreasury = (role === 'admin') ? (appData.treasury || []) : (appData.treasury || []).filter(t => !t.companyId || t.companyId === currentCompanyId);
+            let userShipments = superAdmin ? (appData.shipments || []) : (appData.shipments || []).filter(s => !s.companyId || s.companyId === currentCompanyId);
+            let userAccounts = superAdmin ? (appData.accounts || []) : (appData.accounts || []).filter(a => !a.companyId || a.companyId === currentCompanyId);
+            let userExpenses = superAdmin ? (appData.expenses || []) : (appData.expenses || []).filter(e => !e.companyId || e.companyId === currentCompanyId);
+            let userDeferred = superAdmin ? (appData.deferredInvoices || []) : (appData.deferredInvoices || []).filter(d => !d.companyId || d.companyId === currentCompanyId);
+            let userTreasury = superAdmin ? (appData.treasury || []) : (appData.treasury || []).filter(t => !t.companyId || t.companyId === currentCompanyId);
 
             let totalCredit = 0, totalDebit = 0, totalDeferred = 0, pendingCount = 0;
 
@@ -1237,7 +1246,8 @@
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
             let user = window.currentLoggedInUser || {};
-            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب الخارجي: <b>${user.name}</b> (${role === 'admin' ? 'مدير نظام 👑' : 'سائق/مشرف'}).<br>البيانات معزولة سحابياً تحت معرف الشركة: <code>${currentCompanyId}</code>.`;
+            let role = getUserRole();
+            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب: <b>${user.name}</b> (${role === 'admin' ? 'مدير عام النظام 👑' : (role === 'supervisor' ? 'مشرف 🛡️' : 'سائق')}).<br>البيانات معزولة تحت معرف الشركة: <code>${currentCompanyId}</code>.`;
 
             let treasuryTbody = document.getElementById("treasuryTableBody");
             if (treasuryTbody) {
@@ -1246,8 +1256,8 @@
                         <td>${t.date || '-'}</td>
                         <td><span class="badge-${t.type === 'in' ? 'credit' : 'debit'}">${t.type === 'in' ? 'إيداع 📥' : 'صرف 📤'}</span></td>
                         <td><b>${getSafeAmount(t).toLocaleString()} ج.م</b></td>
-                        <td>${getSafeDesc(t)}</td>
-                        <td>${role === 'admin' ? `<button class="delete-btn" onclick="deleteTreasuryItem('${t.id}')">حذف</button>` : ''}</td>
+                        <td>${getSafeDesc(t)} ${t.companyId ? `<br><small style="opacity:0.6;">شركة: ${t.companyId}</small>` : ''}</td>
+                        <td>${canUserManageSystem() ? `<button class="delete-btn" onclick="deleteTreasuryItem('${t.id}')">حذف</button>` : ''}</td>
                     </tr>
                 `).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--secondary-text);">لا توجد حركات بالخزينة</td></tr>`;
             }
@@ -1259,13 +1269,13 @@
                         <td>${e.date || '-'}</td>
                         <td><b>${getSafeName(e)}</b></td>
                         <td>${e.category || 'عام'}</td>
-                        <td>${getSafeDesc(e)}</td>
+                        <td>${getSafeDesc(e)} ${e.companyId ? `<br><small style="opacity:0.6;">شركة: ${e.companyId}</small>` : ''}</td>
                         <td><b style="color:var(--danger-color);">${getSafeAmount(e).toLocaleString()} ج.م</b></td>
                         <td>مسدد</td>
                         <td>
                             <div class="action-btn-group">
-                                ${role !== 'driver' ? `<button class="edit-btn" onclick="openEditModal('${e.id}', 'expenses')">✏️</button>` : ''}
-                                ${role === 'admin' ? `<button class="delete-btn" onclick="deleteRecord('${e.id}', 'expenses')">🗑️</button>` : ''}
+                                ${canUserManageSystem() ? `<button class="edit-btn" onclick="openEditModal('${e.id}', 'expenses')">✏️</button>` : ''}
+                                ${canUserManageSystem() ? `<button class="delete-btn" onclick="deleteRecord('${e.id}', 'expenses')">🗑️</button>` : ''}
                             </div>
                         </td>
                     </tr>
@@ -1299,7 +1309,7 @@
                     return `
                         <tr>
                             <td><b>${item.invoiceId || safeId}</b><br><span style="font-size:10px;">${item.date || '-'}</span></td>
-                            <td><b>${getSafeName(item)}</b></td>
+                            <td><b>${getSafeName(item)}</b> ${item.companyId ? `<br><small style="opacity:0.6;">شركة: ${item.companyId}</small>` : ''}</td>
                             <td>${getSafePhone(item)}</td>
                             <td>${getSafeDesc(item)}</td>
                             <td>${badge}<br><b>${getSafeAmount(item).toLocaleString()} ج.م</b></td>
@@ -1312,7 +1322,7 @@
                                 </div>
                             </td>
                             <td>
-                                ${role === 'admin' ? `<button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button> <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>` : ''}
+                                ${canUserManageSystem() ? `<button class="edit-btn" onclick="openEditModal('${safeId}', '${collType}')">✏️</button> <button class="delete-btn" onclick="deleteRecord('${safeId}', '${collType}')">🗑️</button>` : ''}
                             </td>
                         </tr>
                     `;
