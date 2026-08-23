@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة تواصل السائقين الاحترافية - V52 PRO SECURED ISOLATED</title>
+    <title>منصة تواصل السائقين الاحترافية - V53 PRO SECURED ISOLATED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -45,7 +45,7 @@
     </div>
 
     <h2>منصة تواصل السائقين والأسطول الاحترافية</h2>
-    <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات وعزل الشركة...</div>
+    <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات ومزامنة الحساب...</div>
 
     <!-- لوحة تحكم المؤسس والإدارة -->
     <div class="admin-box">
@@ -55,9 +55,9 @@
 
     <!-- نموذج إضافة منشور -->
     <div class="post-creator">
-        <h3>مشاركة جديدة أو تنبيه طريق لأسطول الشركة</h3>
+        <h3>مشاركة جديدة أو تنبيه طريق لشراكة الشركة</h3>
         <form id="driverPostForm">
-            <input type="text" id="authorName" placeholder="اسم السائق الثلاثي" required>
+            <input type="text" id="authorName" placeholder="اسم السائق الثلاثي" required readonly style="background:#f1f5f9; cursor:not-allowed;">
             <select id="postCategory">
                 <option value="عام">دردشة وعام</option>
                 <option value="تنبيه مروري">تنبيه مروري / رادار</option>
@@ -66,18 +66,18 @@
             </select>
             <textarea id="postContent" placeholder="اكتب تفاصيل الحالة أو الخبر هنا..." rows="3" required></textarea>
             <input type="url" id="videoUrl" placeholder="رابط فيديو يوتيوب (اختياري)">
-            <button type="submit" class="btn">نشر المشاركة فوراً 🚀</button>
+            <button type="submit" class="btn">نشر المشاركة لشراكتك فوراً 🚀</button>
         </form>
     </div>
 
     <!-- شريط البحث والفلترة -->
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="🔍 ابحث في منشورات شركتك أو أسماء الزملاء..." oninput="filterPosts()">
+        <input type="text" id="searchInput" placeholder="🔍 ابحث في منشورات شراكتك أو أسماء الزملاء..." oninput="filterPosts()">
     </div>
 
     <!-- حاوية المنشورات -->
     <div id="postsContainer">
-        <p style='text-align:center; color:#777;'>جاري تحميل المنشورات المعزولة...</p>
+        <p style='text-align:center; color:#777;'>جاري تحميل المنشورات المعزولة للشراكة...</p>
     </div>
 </div>
 
@@ -99,51 +99,74 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 🔐 استخراج ومعالجة معرف الشركة المعزول بدقة تامة لكل حساب وسائق
-    let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
+    // 🔄 مزامنة الحساب المتصل ومعرف الشراكة (Partnership & Real-time Account Sync)
+    function getActiveSessionAndCompany() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
+        
+        if (externalId && externalId.trim() !== '' && externalId !== 'null') {
+            externalId = externalId.trim();
+            localStorage.setItem('logged_in_driver_name', externalId);
+            localStorage.setItem('na2la_external_logged_user_id', externalId);
+        }
+
+        let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدير';
+        activeName = activeName.trim();
+
+        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
+        let compId = isSuper ? 'comp_1787481011714' : (localStorage.getItem('current_company_id') || ('comp_' + activeName.replace(/[^a-zA-Z0-9]/g, '_')));
+        
+        localStorage.setItem('current_company_id', compId);
+        return { activeName, compId, isSuper };
+    }
+
+    let sessionData = getActiveSessionAndCompany();
+    let activeSessionName = sessionData.activeName;
+    let currentCompanyId = sessionData.compId;
     window.currentCompanyId = currentCompanyId;
 
-    let activeSessionName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || '';
-    if (activeSessionName) {
-        document.getElementById('authorName').value = activeSessionName;
-    }
-
-    // تصحيح تلقائي لمعرف الشركة بناءً على اسم السائق إذا لم يكن موجوداً مسبقاً
-    let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
-    if (!localStorage.getItem('current_company_id') && !isSuper && activeSessionName) {
-        currentCompanyId = 'comp_' + activeSessionName.replace(/[^a-zA-Z0-9]/g, '_');
-        localStorage.setItem('current_company_id', currentCompanyId);
-        window.currentCompanyId = currentCompanyId;
-    } else if (isSuper && !localStorage.getItem('current_company_id')) {
-        currentCompanyId = 'comp_1787481011714';
-        localStorage.setItem('current_company_id', currentCompanyId);
-        window.currentCompanyId = currentCompanyId;
-    }
-
-    document.getElementById('company-badge-display').innerText = `🏢 شركة: ${currentCompanyId}`;
+    document.getElementById('authorName').value = activeSessionName;
+    document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
 
     window.manualAdminOverride = false;
 
-    // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
     function isSuperAdmin() {
-        let userName = String(activeSessionName || document.getElementById('authorName')?.value || '').trim();
-        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(userName);
+        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
     }
     window.isSuperAdmin = isSuperAdmin;
 
     let allPostsData = [];
     const postsRef = collection(db, "driver_community_posts");
 
-    // الاتصال السحابي وتحديث واجهة الأدمن تلقائياً
+    // الاتصال السحابي الاستباقي ومزامنة البيانات اللحظية
     signInAnonymously(auth).then(() => {
-        document.getElementById("connectionStatus").innerText = `✅ متصل بالسحابة بنجاح (عزل الشركة: ${currentCompanyId})`;
+        document.getElementById("connectionStatus").innerText = `✅ متصل بالسحابة (مزامنة الحساب: ${activeSessionName} | شراكة: ${currentCompanyId})`;
         document.getElementById("connectionStatus").style.background = "#d4edda";
         updateAdminUIStatus();
         loadPosts();
+        setupRealtimeDriversSync();
     }).catch(() => {
         document.getElementById("connectionStatus").innerText = "⚠️ خطأ في الاتصال بالخدمة السحابية";
         document.getElementById("connectionStatus").style.background = "#f8d7da";
     });
+
+    // مراقبة سحابية فورية لأي تحديث يخص الحساب أو الشراكة المتصلة
+    function setupRealtimeDriversSync() {
+        onSnapshot(collection(db, "drivers"), (snapshot) => {
+            snapshot.docChanges().forEach(change => {
+                let d = change.doc.data();
+                if (d.name === activeSessionName || d.id === activeSessionName || d.phone === activeSessionName) {
+                    if (d.companyId && d.companyId !== currentCompanyId) {
+                        currentCompanyId = d.companyId;
+                        window.currentCompanyId = currentCompanyId;
+                        localStorage.setItem('current_company_id', currentCompanyId);
+                        document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
+                        loadPosts(); // إعادة تحميل المنشورات فوراً بناءً على الشراكة المحدثة
+                    }
+                }
+            });
+        });
+    }
 
     function updateAdminUIStatus() {
         let superAdmin = isSuperAdmin();
@@ -151,17 +174,17 @@
         const btnEl = document.getElementById("adminToggleBtn");
         
         if (superAdmin) {
-            statusEl.innerText = `حالة الحساب: [مدير عام المنصة الأم - رؤية شاملة لكافة الشركات]`;
+            statusEl.innerText = `حالة الحساب: [مدير عام المنصة الأم - رؤية شاملة لكافة الشراكات والشركات]`;
             statusEl.style.color = "#28a745";
             btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
         } else {
-            statusEl.innerText = `حالة الحساب: سائق أو مسؤول شركة مستقلة (عزل تام ضمن شركة: ${currentCompanyId})`;
+            statusEl.innerText = `حالة الحساب: متصل بـ (${activeSessionName}) ضمن شراكة معزولة (${currentCompanyId})`;
             statusEl.style.color = "#333";
             btnEl.innerText = "تفعيل وضع المؤسس (للإشراف العام)";
         }
     }
 
-    // جلب المنشورات والتعليقات مع تطبيق عزل الشركة التام (Company Isolation)
+    // جلب المنشورات والتعليقات مع عزل تام لشراكات الشركات
     function loadPosts() {
         const q = query(postsRef, orderBy("timestamp", "desc"));
         onSnapshot(q, async (snapshot) => {
@@ -172,7 +195,7 @@
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                // عزل الشركات: المدير العام يرى كل شيء، بينما السائقون يرون منشورات شركتهم فقط
+                // عزل شراكات الشركات: المدير العام يرى الجميع، والبقية يرون شراكتهم حصرياً
                 if (!superAdmin && post.companyId && post.companyId !== currentCompanyId) {
                     continue;
                 }
@@ -192,13 +215,13 @@
         });
     }
 
-    // عرض المنشورات في الواجهة
+    // عرض المنشورات في واجهة الشراكة
     window.renderPosts = function(posts) {
         const container = document.getElementById("postsContainer");
         container.innerHTML = "";
         
         if (posts.length === 0) {
-            container.innerHTML = "<p style='text-align:center; color:#777;'>لا توجد منشورات متاحة لشركتك حالياً.</p>";
+            container.innerHTML = "<p style='text-align:center; color:#777;'>لا توجد منشورات متاحة لشراكتك حالياً.</p>";
             return;
         }
 
@@ -222,7 +245,7 @@
                         <div>
                             <span class="post-author">${post.author}</span>
                             <span class="${badgeClass}" style="margin-right: 8px;">${post.category || 'عام'}</span>
-                            ${post.companyId ? `<span style="font-size:9px; background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-right:6px;">شركة: ${post.companyId}</span>` : ''}
+                            ${post.companyId ? `<span style="font-size:9px; background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-right:6px;">شراكة: ${post.companyId}</span>` : ''}
                         </div>
                         <span style="font-size: 11px; color: #888;">${post.date || ''}</span>
                     </div>
@@ -238,7 +261,7 @@
                         <div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 5px;">التعليقات:</div>
                         <div id="comments-${post.id}">${commentsHtml || '<div style="font-size:0.8rem; color:#888;">لا توجد تعليقات بعد.</div>'}</div>
                         <form onsubmit="addComment(event, '${post.id}')" style="margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;">
-                            <input type="text" placeholder="اسمك..." id="commAuthor-${post.id}" value="${activeSessionName}" required style="margin:0; width: 30%;">
+                            <input type="text" placeholder="اسمك..." id="commAuthor-${post.id}" value="${activeSessionName}" readonly required style="margin:0; width: 30%; background:#f1f5f9;">
                             <input type="text" placeholder="اكتب تعليقاً..." id="commText-${post.id}" required style="margin:0; width: 52%;">
                             <button type="submit" class="btn" style="width: 15%; padding: 5px; font-size: 0.8rem;">رد</button>
                         </form>
@@ -247,21 +270,21 @@
         });
     }
 
-    // إضافة منشور جديد مرتبط برقم الشركة الحالي حصرياً
+    // إضافة منشور جديد مرتبط بالشراكة الحالية حصرياً
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
         await addDoc(postsRef, {
-            author: document.getElementById("authorName").value,
+            author: activeSessionName,
             category: document.getElementById("postCategory").value,
             content: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
-            companyId: currentCompanyId, // 🔐 حقن معرف الشركة المعزول بدقة تلقائياً
+            companyId: currentCompanyId, // 🔐 ربط المنشور بمعرف الشراكة المعزول بدقة
             likes: 0,
             date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
             timestamp: new Date()
         });
-        document.getElementById("driverPostForm").reset();
-        if (activeSessionName) document.getElementById("authorName").value = activeSessionName;
+        document.getElementById("postContent").value = "";
+        document.getElementById("videoUrl").value = "";
     };
 
     // إعجاب
@@ -270,14 +293,16 @@
         await updateDoc(postRef, { likes: increment(1) });
     };
 
-    // إضافة تعليق مع عزل الشركة
+    // إضافة تعليق مع عزل الشراكة
     window.addComment = async (e, postId) => {
         e.preventDefault();
-        const author = document.getElementById(`commAuthor-${postId}`).value;
         const text = document.getElementById(`commText-${postId}`).value;
         
         await addDoc(collection(db, "driver_community_posts", postId, "comments"), {
-            author, text, companyId: currentCompanyId, timestamp: new Date()
+            author: activeSessionName, 
+            text, 
+            companyId: currentCompanyId, 
+            timestamp: new Date()
         });
         document.getElementById(`commText-${postId}`).value = "";
     };
@@ -289,7 +314,7 @@
         }
     };
 
-    // تفعيل وضع المؤسس اليدوي أو التبديل
+    // تفعيل وضع المؤسس
     window.toggleAdminMode = function() {
         if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
