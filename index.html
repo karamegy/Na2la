@@ -312,6 +312,13 @@
         .notification-badge-container { position: relative; display: inline-block; }
         .notif-count-badge { position: absolute; top: -6px; right: -6px; background: var(--danger-gradient); color: white; border-radius: 50%; padding: 3px 6px; font-size: 8px; font-weight: bold; box-shadow: 0 2px 5px rgba(239,68,68,0.4); }
         .community-feed-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; margin-bottom: 12px; box-shadow: var(--shadow-3d); }
+
+        .wallet-box {
+            background: linear-gradient(135deg, #10b981, #047857);
+            color: white; padding: 12px; border-radius: 10px; margin-bottom: 10px;
+            font-size: 11px; text-align: center; font-weight: bold;
+            box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+        }
     </style>
 </head>
 <body>
@@ -353,6 +360,10 @@
                 <button type="button" onclick="promptPhoneSignIn()" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: white;">
                     📱 تسجيل الدخول برقم الهاتف وإرسال كود التفعيل (SMS)
                 </button>
+
+                <button type="button" onclick="openCashModal()" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                    💵 تجديد الاشتراك ورسوم الخدمة (فوري كاش / وي كاش)
+                </button>
                 
                 <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.15); margin: 4px 0;">
                 
@@ -361,6 +372,59 @@
             </div>
         </div>
         <div id="recaptcha-container"></div>
+    </div>
+
+    <!-- نافذة تجديد الاشتراك بالكاش -->
+    <div id="cashPayModal" class="custom-modal">
+        <div class="card" style="width: 100%; max-width: 440px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:var(--success);">💵 تجديد الاشتراك الكاش (فوري / وي)</h3>
+                <button type="button" onclick="closeModal('cashPayModal')" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
+            </div>
+
+            <div class="wallet-box">
+                💳 محافظ التحويل المعتمدة للخدمة:<br>
+                📱 فوري كاش: <span style="font-size:13px; color:#fde047;">01114099799</span><br>
+                📱 وي كاش (WE): <span style="font-size:13px; color:#fde047;">01554440996</span>
+            </div>
+
+            <form id="cash-sub-form" onsubmit="event.preventDefault(); submitCashSubscription();">
+                <label style="font-size:10px; font-weight:bold;">اختر الباقة المراد تجديدها:</label>
+                <select id="sub-plan-months" style="font-weight:bold;">
+                    <option value="1">اشتراك شهري (30 يوم)</option>
+                    <option value="3">اشتراك ربع سنوي (90 يوم)</option>
+                    <option value="12">اشتراك سنوي (365 يوم)</option>
+                </select>
+
+                <label style="font-size:10px; font-weight:bold;">المحفظة المحول إليها:</label>
+                <select id="sub-target-wallet" style="font-weight:bold;">
+                    <option value="فوري كاش (01114099799)">فوري كاش (01114099799)</option>
+                    <option value="وي كاش (01554440996)">وي كاش (01554440996)</option>
+                </select>
+
+                <input type="tel" id="sub-sender-phone" placeholder="رقم محفظتك التي قمت بالتحويل منها" required>
+                <input type="text" id="sub-tx-ref" placeholder="كود الرقم المرجعي / رقم العملية" required>
+
+                <button type="submit" class="btn-success" style="padding:10px; margin-top:6px;">إرسال كود العملية للتفعيل المباشر 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- نافذة استعلام وتأكيد الماستر أدمن للأكواد -->
+    <div id="masterEnquiryModal" class="custom-modal">
+        <div class="card" style="width: 100%; max-width: 520px; max-height: 85vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:var(--purple);">🔍 استعلام وموافقة الماستر أدمن للأكواد</h3>
+                <button type="button" onclick="closeModal('masterEnquiryModal')" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
+            </div>
+
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+                <input type="text" id="master-code-search-input" placeholder="أدخل كود المرجع أو رقم المحفظة للاستعلام..." class="search-box" style="margin-bottom:0; flex:1;">
+                <button type="button" class="btn-main btn-sm" onclick="enquirePaymentCode()">بحث بالاستعلام 🔍</button>
+            </div>
+
+            <div id="master-enquiry-results" style="font-size:11px;"></div>
+        </div>
     </div>
 
     <div id="driver-register-container">
@@ -1045,6 +1109,16 @@
 
     <!-- صفحة التقارير والفواتير -->
     <section id="reports-tab" class="app-section">
+        <!-- قسم تفعيل وتفقد طلبات تحويل الكاش (الماستر أدمن) -->
+        <div class="card" style="border: 2px solid var(--success); margin-bottom: 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="color: var(--success); margin:0;">💵 استعلام ومراجعة طلبات الكاش (الماستر أدمن)</h3>
+                <button type="button" class="btn-purple btn-sm" onclick="openMasterEnquiryModal()">🔍 فتح محرك الاستعلام للأكواد</button>
+            </div>
+            <p style="font-size: 10px; opacity: 0.85; margin-top: 6px; margin-bottom: 10px;">فحص عمليات التحويل المرسلة وتفعيل الاشتراكات تلقائياً:</p>
+            <div id="admin-pending-cash-requests" style="max-height: 250px; overflow-y: auto;"></div>
+        </div>
+
         <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء (Per-Member SaaS) -->
         <div class="card" style="border: 2px solid var(--purple); margin-bottom: 12px;">
             <h3 style="color: var(--purple);">🔍 البحث عن الأعضاء وتعيين الاشتراكات الشهرية (Per-Member SaaS)</h3>
@@ -1052,9 +1126,7 @@
             
             <input type="text" id="member-sub-search" class="search-box" placeholder="ابحث باسم العضو أو رقم الهاتف..." onkeyup="renderMemberSubscriptionsList()">
             
-            <div style="max-height: 300px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container">
-                <!-- سيتم تعبئة النتائج ديناميكياً -->
-            </div>
+            <div style="max-height: 300px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container"></div>
         </div>
 
         <div class="card" style="border: 2px solid var(--accent);">
@@ -1142,6 +1214,143 @@
         }
         const db = firebase.firestore();
         const auth = firebase.auth();
+
+        // إعداد أرقام محافظ الكاش المعتمدة
+        const CASH_WALLETS = {
+            fawry: "01114099799",
+            we: "01554440996"
+        };
+
+        function openCashModal() { document.getElementById('cashPayModal').style.display = 'flex'; }
+        function openMasterEnquiryModal() { document.getElementById('masterEnquiryModal').style.display = 'flex'; }
+
+        // تقديم طلب تحويل الكاش
+        function submitCashSubscription() {
+            const months = Number(document.getElementById('sub-plan-months').value);
+            const wallet = document.getElementById('sub-target-wallet').value;
+            const phone = document.getElementById('sub-sender-phone').value.trim();
+            const txRef = document.getElementById('sub-tx-ref').value.trim();
+
+            if (!phone || !txRef) {
+                alert('الرجاء كتابة رقم المحفظة المحوّل منها ورقم العملية المرجعي!');
+                return;
+            }
+
+            let drv = getCurrentDriver();
+            const reqId = String(Date.now());
+            const reqObj = {
+                id: reqId,
+                driverId: drv.id || '1',
+                driverName: drv.name || loggedInDriverName,
+                targetWallet: wallet,
+                senderPhone: phone,
+                transactionRef: txRef,
+                months: months,
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            };
+
+            db.collection('subscription_requests').doc(reqId).set(reqObj).then(() => {
+                closeModal('cashPayModal');
+                document.getElementById('cash-sub-form').reset();
+                alert('تم إرسال كود التحويل للماستر أدمن بنجاح! سيتم الفحص وتفعيل حسابك فوراً. 🚀');
+            }).catch(err => {
+                alert('خطأ أثناء إرسال البيانات: ' + err.message);
+            });
+        }
+
+        // استعلام الأدمن الماستر بالكود أو المحفظة
+        function enquirePaymentCode() {
+            const query = (document.getElementById('master-code-search-input').value || '').trim().toLowerCase();
+            const container = document.getElementById('master-enquiry-results');
+            if (!query) { alert('الرجاء إدخال كود العملية المرجعي أو رقم المحفظة للاستعلام!'); return; }
+
+            container.innerHTML = '<p style="opacity:0.7;">جاري الاستعلام في Firestore...</p>';
+
+            db.collection('subscription_requests').get().then(snapshot => {
+                container.innerHTML = '';
+                let matches = [];
+                snapshot.forEach(doc => {
+                    let d = doc.data();
+                    if ((d.transactionRef && d.transactionRef.toLowerCase().includes(query)) || (d.senderPhone && d.senderPhone.includes(query)) || (d.driverName && d.driverName.toLowerCase().includes(query))) {
+                        matches.push({ id: doc.id, ...d });
+                    }
+                });
+
+                if (matches.length === 0) {
+                    container.innerHTML = '<p style="color:var(--danger); font-weight:bold;">لم يتم العثور على أية طلبات سداد تطابق كود أو رقم الاستعلام المدخل!</p>';
+                    return;
+                }
+
+                matches.forEach(m => {
+                    let st = m.status === 'approved' ? '<span style="color:var(--success);">مفعل ومقبول ✅</span>' : '<span style="color:var(--warning);">معلق للقبول ⏳</span>';
+                    let div = document.createElement('div');
+                    div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px;';
+                    div.innerHTML = `
+                        <p><strong>المرسل:</strong> ${m.driverName} (${m.senderPhone})</p>
+                        <p><strong>كود العملية المرجعي:</strong> <span style="color:var(--accent); font-weight:bold;">${m.transactionRef}</span></p>
+                        <p><strong>المحفظة المستهدفة:</strong> ${m.targetWallet}</p>
+                        <p><strong>مدة الاشتراك المطلوبة:</strong> ${m.months} شهور | <strong>الحالة:</strong> ${st}</p>
+                        ${m.status === 'pending' ? `<button type="button" class="btn-success btn-sm" onclick="approveSubscriptionRequest('${m.id}', '${m.driverId}', ${m.months})">تأكيد الاستلام وتفعيل الاشتراك فوراً 🚀</button>` : ''}
+                    `;
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        // موافقة وتفعيل اشتراك العضو من الأدمن الماستر
+        function approveSubscriptionRequest(reqId, driverId, months) {
+            if (currentUserRole !== 'admin') { alert('عذراً، التفعيل مخصص للماستر أدمن فقط!'); return; }
+
+            db.collection('drivers').doc(String(driverId)).get().then(doc => {
+                let currentExpiry = doc.exists && doc.data().subExpiry ? new Date(doc.data().subExpiry) : new Date();
+                if (currentExpiry < new Date()) currentExpiry = new Date();
+                
+                currentExpiry.setMonth(currentExpiry.getMonth() + Number(months));
+                let newExpiryStr = currentExpiry.toISOString().split('T')[0];
+
+                db.collection('drivers').doc(String(driverId)).set({
+                    subStatus: 'active',
+                    subPlan: months === 12 ? 'yearly' : 'monthly',
+                    subExpiry: newExpiryStr
+                }, { merge: true });
+
+                db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
+
+                alert(`تم تفعيل اشتراك العضو بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
+                if (typeof enquirePaymentCode === 'function') enquirePaymentCode();
+                renderAdminPendingCashRequests();
+            });
+        }
+
+        function renderAdminPendingCashRequests() {
+            if (currentUserRole !== 'admin') return;
+            const container = document.getElementById('admin-pending-cash-requests');
+            if (!container) return;
+
+            db.collection('subscription_requests').where('status', '==', 'pending').onSnapshot(snapshot => {
+                container.innerHTML = '';
+                if (snapshot.empty) {
+                    container.innerHTML = '<p style="font-size:10px; opacity:0.8; text-align:center;">لا توجد طلبات تجديد كاش معلقة حالياً.</p>';
+                    return;
+                }
+
+                snapshot.forEach(doc => {
+                    let m = doc.data();
+                    let div = document.createElement('div');
+                    div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; margin-bottom:6px; font-size:10px;';
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <strong>👤 ${m.driverName} (${m.senderPhone})</strong>
+                            <span style="color:var(--accent); font-weight:bold;">كود: ${m.transactionRef}</span>
+                        </div>
+                        <p style="margin-top:4px;">المحفظة: ${m.targetWallet} | الباقة: ${m.months} أشهر</p>
+                        <button type="button" class="btn-success btn-sm" style="margin-top:4px;" onclick="approveSubscriptionRequest('${doc.id}', '${m.driverId}', ${m.months})">موافقة وتفعيل 🚀</button>
+                    `;
+                    container.appendChild(div);
+                });
+            });
+        }
 
         async function finishOAuthLogin(user, role) {
             currentUserRole = role;
@@ -1235,7 +1444,7 @@
         }
 
         function promptPhoneSignIn() {
-            let rawPhone = prompt("أدخل رقم هاتفك المحمول متبوعاً برمز الدولة (مثال: +20114099799):");
+            let rawPhone = prompt("أدخل رقم هاتفك المحمول متبوعاً برمز الدولة (مثال: +201114099799):");
             if (!rawPhone) return;
 
             let phoneNumber = rawPhone.replace(/[\s-]/g, '').trim();
@@ -1266,7 +1475,7 @@
                     }
                 })
                 .catch((error) => {
-                    alert("فشل التحقق من رقم الهاتف: " + error.message + "\nتأكد من إدخال رقم هاتف حقيقي مسجل في لوحة Firebase أو مفعل كـ Test Phone Number.");
+                    alert("فشل التحقق من رقم الهاتف: " + error.message);
                 });
         }
 
@@ -1360,8 +1569,8 @@
 
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
-            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [],
-            newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة لضمان حفظ كل قسم في مكانه المخصص والاستغلال الأمثل لمساحتك 🚀'
+            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [], subscriptionRequests: [],
+            newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة والمزامنة اللحظية الشاملة 🚀'
         };
 
         let isListenersInitialized = false;
@@ -1397,7 +1606,10 @@
                     if (typeof renderChatMessages === 'function') renderChatMessages();
                     if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
                     if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-                    if (document.getElementById('reports-tab').classList.contains('active')) renderMemberSubscriptionsList();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                    }
                 }, error => {
                     console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
                 });
@@ -1411,7 +1623,6 @@
             });
         }
 
-        // دوال نظام البحث عن الأعضاء وتعيين الاشتراكات الشهرية والفردية (Per-Member SaaS)
         function renderMemberSubscriptionsList() {
             if (currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -1557,7 +1768,7 @@
                 return;
             }
 
-            if (identifier === 'المدير' || identifier === '01000000000' || identifier === 'admin') {
+            if (identifier === 'المدير' || identifier === '01114099799' || identifier === 'admin') {
                 if (pin !== storedPin && pin !== '01036') {
                     alert('الرقم السري للمدير غير صحيح!');
                     return;
@@ -1934,6 +2145,7 @@
             if(tabId === 'reports-tab') {
                 updateInvoiceDropdown();
                 renderMemberSubscriptionsList();
+                renderAdminPendingCashRequests();
             }
             if(tabId === 'consolidated-invoices-tab') renderConsolidatedInvoicesSection();
             if(tabId === 'deferred-invoices-tab') loadDeferredInvoicesTable();
@@ -3498,6 +3710,7 @@
             renderRSSTicker();
             if (currentUserRole === 'admin') {
                 renderMemberSubscriptionsList();
+                renderAdminPendingCashRequests();
             }
             
             let shipments = appData.shipments || [];
