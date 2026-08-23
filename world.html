@@ -558,19 +558,27 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث والمزود بالمزامنة اللحظية للشراكة والحساب -->
+    <!-- السكريبت المحدث والمزود بالتمرير التلقائي للجلسة ومعرف الشركة -->
     <script>
         let currentAccountFilter = 'all';
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
 
+        // 🚀 دالة موحدة لتمرير الجلسة ومعرف الشركة عبر كافة روابط النظام والصفحات
+        function goToPageWithSession(pageName) {
+            let userId = window.currentLoggedInUser?.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || '';
+            let compId = window.currentCompanyId || localStorage.getItem('current_company_id') || 'company_main';
+            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
+        }
+        window.goToPageWithSession = goToPageWithSession;
+
         function goToMotherPlatform() {
-            window.location.href = "https://karamegy.github.io/Na2la/";
+            goToPageWithSession("https://karamegy.github.io/Na2la/");
         }
         window.goToMotherPlatform = goToMotherPlatform;
 
         function goToOperationsHub() {
-            window.location.href = "operations-hub.html";
+            goToPageWithSession("operations-hub.html");
         }
         window.goToOperationsHub = goToOperationsHub;
 
@@ -602,13 +610,22 @@
             return 'paid';
         }
 
+        // 🔄 قراءة ومعالجة جلسة الدخول ومعرف الشركة من الرابط أو التخزين المحلي
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
+            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
             if (externalId) {
-                localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
-                return externalId.trim();
+                externalId = externalId.trim();
+                localStorage.setItem('na2la_external_logged_user_id', externalId);
+                localStorage.setItem('logged_in_driver_id', externalId);
+                if (urlCompanyId) {
+                    currentCompanyId = urlCompanyId.trim();
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    window.currentCompanyId = currentCompanyId;
+                }
+                return externalId;
             }
 
             let savedExternalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || localStorage.getItem('logged_in_driver_name');
@@ -628,7 +645,7 @@
                 let parsed = JSON.parse(cachedSession);
                 if (parsed && parsed.id) {
                     initialUserObj = parsed;
-                    currentCompanyId = parsed.companyId || 'company_main';
+                    currentCompanyId = parsed.companyId || localStorage.getItem('current_company_id') || 'company_main';
                     window.currentCompanyId = currentCompanyId;
                 }
             } catch(e) {}
@@ -649,6 +666,13 @@
             rssMessage: "مرحباً بكم في أسطورة الطريق - عزل الشراكات والمزامنة الفورية نشطة"
         };
         window.appData = appData;
+
+        // 🔄 مزامنة فورية عبر التبويبات والصفحات المفتوحة
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'na2la_active_session' || event.key === 'current_company_id') {
+                location.reload();
+            }
+        });
 
         window.addEventListener('DOMContentLoaded', () => {
             applyUserPermissionsUI();
@@ -707,7 +731,7 @@
 
                 applyUserPermissionsUI();
                 initFirestoreSync();
-                initRealtimeAccountSync(); // 🔄 تفعيل المزامنة اللحظية للشراكة والحساب
+                initRealtimeAccountSync();
                 initEmergencyAlertsListener();
 
             } catch (err) {
@@ -715,7 +739,6 @@
             }
         }
 
-        // 🔄 دالة المزامنة اللحظية لتحديثات الحساب والشراكة من السحابة مباشرة
         function initRealtimeAccountSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot } = window.firebaseModules;
