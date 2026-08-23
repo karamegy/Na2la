@@ -263,7 +263,7 @@
 
         <div class="modules-grid" id="admin-modules-grid">
             <div class="module-card" onclick="switchSection('deferredInvoices')"><i class="fa-solid fa-hourglass-half" style="color:var(--yellow-warning);"><span>قسم الأجل</span></i></div>
-            <div class="module-card" onclick="switchSection('pandaAdmin')" id="grid-panda-btn"><i class="fa-solid fa-chess-king" style="color:var(--yellow-warning);"><span>باندا العليا</span></i></div>
+            <div class="module-card" onclick="switchSection('pandaAdmin')" id="grid-panda-btn" style="display:none;"><i class="fa-solid fa-chess-king" style="color:var(--yellow-warning);"><span>باندا العليا</span></i></div>
             <div class="module-card" onclick="switchSection('consolidatedInvoices')"><i class="fa-solid fa-file-invoice-dollar" style="color:var(--green-success);"><span>فواتير مجمعة</span></i></div>
             <div class="module-card" onclick="switchSection('shipments')"><i class="fa-solid fa-truck-fast"><span>الشحنات</span></i></div>
         </div>
@@ -548,14 +548,17 @@
     }
     window.getAllShipments = getAllShipments;
 
-    // 🔒 التحقق الصارم من صلاحيات المدير بناءً على قاعدة البيانات والدور المسجل
+    // 🔒 التحقق الصارم جداً من صلاحيات المدير (استبعاد السائق تماماً ومنع أي خلط)
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase().trim();
         let userName = String(user.name || '').toLowerCase().trim();
         
+        // منع السائقين والمستجدين قطعياً من صلاحيات المدير حتى لو وُجدت كلمات مطابقة بالخطأ
+        if (role === 'driver' || role === 'سائق' || role === 'سائق معتمد') return false;
+        
         return role === 'admin' || role === 'مدير' || role === 'مدير نظام' || 
-               role.includes('manager') || role.includes('مشرف') ||
+               role === 'manager' || role.includes('مدير عام') ||
                userName.includes('كرم عجاج') || userName.includes('karam');
     }
     window.isUserAdmin = isUserAdmin;
@@ -620,28 +623,33 @@
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
             }
-        } else {
-            let storedSession = localStorage.getItem('na2la_active_session');
-            if (storedSession) {
-                try {
-                    let parsed = JSON.parse(storedSession);
-                    if (parsed && (parsed.id || parsed.name)) {
-                        window.currentLoggedInUser = parsed;
-                        currentCompanyId = parsed.companyId || localStorage.getItem('current_company_id') || 'company_main';
-                        window.currentCompanyId = currentCompanyId;
-                        localStorage.setItem('current_company_id', currentCompanyId);
-                        applyUserPermissionsUI();
-                        loadAllDataFromFirestoreMultiCollection();
-                        initChatRealtimeListener();
-                        initPandanRealtimeAccountSync();
-                        return;
-                    }
-                } catch(e) {}
-            }
-            externalId = localStorage.getItem('na2la_external_logged_user_id') || 
-                         localStorage.getItem('logged_in_driver_id') || 
-                         localStorage.getItem('logged_in_driver_name');
+            // جلب البيانات فورا بناء على المعرف الجديد في الرابط لمنع تداخل الجلسات القديمة
+            await fetchDriverData(externalId);
+            return;
         }
+
+        // إذا لم يكن هناك رابط جديد، افحص الـ localStorage بحذر
+        let storedSession = localStorage.getItem('na2la_active_session');
+        if (storedSession) {
+            try {
+                let parsed = JSON.parse(storedSession);
+                if (parsed && (parsed.id || parsed.name)) {
+                    window.currentLoggedInUser = parsed;
+                    currentCompanyId = parsed.companyId || localStorage.getItem('current_company_id') || 'company_main';
+                    window.currentCompanyId = currentCompanyId;
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    applyUserPermissionsUI();
+                    loadAllDataFromFirestoreMultiCollection();
+                    initChatRealtimeListener();
+                    initPandanRealtimeAccountSync();
+                    return;
+                }
+            } catch(e) {}
+        }
+
+        externalId = localStorage.getItem('na2la_external_logged_user_id') || 
+                     localStorage.getItem('logged_in_driver_id') || 
+                     localStorage.getItem('logged_in_driver_name');
 
         if (externalId && externalId !== 'Admin1') {
             await fetchDriverData(externalId);
@@ -906,7 +914,7 @@
             avatarEl.innerHTML = isAdmin ? '👑' : '👨‍✈️';
         }
 
-        // إخفاء أو إظهار زر باندا الرئيسية في الشبكة العلوية حسب الصلاحية
+        // إخفاء أو إظهار زر باندا الرئيسية في الشبكة العلوية حسب الصلاحية الحقيقية فقط
         const pandaGridBtn = document.getElementById('grid-panda-btn');
         if(pandaGridBtn) {
             pandaGridBtn.style.display = isAdmin ? 'flex' : 'none';
@@ -917,7 +925,7 @@
         renderStats();
     }
 
-    // 🔒 تخصيص القائمة الجانبية تماماً حسب دور المستخدم (سائق أم مدير)
+    // 🔒 عزل القائمة الجانبية وإخفاء أزرار المديرين تماماً عن السائقين العاديين
     function renderSidebarByRole(isAdmin) {
         const sidebarList = document.querySelector('.sidebar-nav-list');
         const sidebarTitle = document.getElementById('sidebar-title-header');
@@ -1002,6 +1010,12 @@
     }
 
     function switchSection(sectionId, el, isRefresh = false) {
+        // منع السائقين من الدخول لقسم باندا العليا حتى لو تم استدعاؤه برمجياً
+        if (sectionId === 'pandaAdmin' && !isUserAdmin()) {
+            showToast('عذراً، هذه الصلاحية مخصصة للمدير فقط ⛔', 'danger');
+            return;
+        }
+
         currentSectionId = sectionId;
         window.currentSectionId = sectionId;
 
