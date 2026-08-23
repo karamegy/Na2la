@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - المجتمع والربط الشامل 3D PRO SECURED</title>
+    <title>أسطورة الطريق - المجتمع والربط الشامل 3D PRO SECURED ISOLATED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -179,10 +179,10 @@
 <body>
 
     <div class="app-3d-logo-container">
-        <div class="logo-3d">أسطورة الطريق <span>COMMUNITY HUB SECURED</span></div>
+        <div class="logo-3d">أسطورة الطريق <span>COMMUNITY HUB SECURED ISOLATION</span></div>
     </div>
 
-    <!-- الهيدر مع أزرار التنقل والربط مع أقسام المنصة ومعرف الشركة -->
+    <!-- الهيدر مع أزرار التنقل والربط مع أقسام المنصة ومعرف الشركة المعزول -->
     <header>
         <div class="header-profile-section">
             <div id="header-avatar-container" class="header-avatar-3d" onclick="openProfileModal()" title="انقر لعرض تفاصيل حسابك">جاري</div>
@@ -234,7 +234,7 @@
             </div>
 
             <div class="card">
-                <h3>📢 منشورات وحالات أسطول الشركة النشطة</h3>
+                <h3>📢 منشورات وحالات أسطول الشركة المعزولة</h3>
                 <div id="community-posts-container">جاري جلب المنشورات المعزولة من السحابة...</div>
             </div>
         </div>
@@ -404,18 +404,19 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 🔐 معالجة جلسة الدخول وعزل الشركة (companyId) بدقة
+        // 🔐 استخراج المعرف وجلب شركة معزولة خاصة بالحساب الحالي لمنع التداخل تماماً
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
 
-        function getExternalLoginSession() {
+        function getExternalLoginSessionAndSync() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             
             if (externalId) {
-                localStorage.setItem('logged_in_driver_name', externalId.trim());
-                localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
-                return externalId.trim();
+                externalId = externalId.trim();
+                localStorage.setItem('logged_in_driver_name', externalId);
+                localStorage.setItem('na2la_external_logged_user_id', externalId);
+                return externalId;
             }
 
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
@@ -424,14 +425,15 @@
             return 'المدير';
         }
 
-        let activeExternalSessionName = getExternalLoginSession();
+        let activeExternalSessionName = getExternalLoginSessionAndSync();
+        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName);
 
         let currentDriverProfile = {
             name: activeExternalSessionName,
             avatar: '',
-            title: 'أسطورة الطريق',
+            title: isSuper ? 'مدير عام النظام' : 'سائق معتمد',
             phone: '',
-            role: 'driver',
+            role: isSuper ? 'admin' : 'driver',
             companyId: currentCompanyId,
             canAccessSocial: true,
             subPlan: 'أساسي',
@@ -444,20 +446,16 @@
                 let parsed = JSON.parse(cachedSession);
                 if (parsed && parsed.name) {
                     currentDriverProfile = { ...currentDriverProfile, ...parsed };
-                    currentCompanyId = currentDriverProfile.companyId || currentCompanyId;
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                    window.currentCompanyId = currentCompanyId;
                 }
             } catch(e) {}
         }
 
-        // 👑 دالة المدير العام للمنصة الأم فقط (Super Admin)
+        // 👑 دالة فحص المدير العام للمنصة (Super Admin)
         function isSuperAdmin() {
             let user = currentDriverProfile || {};
-            let userId = String(user.id || '').trim();
             let userName = String(user.name || '').trim();
-            
-            return userId === '1' || ['المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+            let role = String(user.role || '').toLowerCase().trim();
+            return role === 'admin' || role === 'مدير' || ['المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'Admin1'].includes(userName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -492,30 +490,41 @@
 
         async function syncProfileAndLoad() {
             try {
-                const snapshot = await db.collection('drivers').get();
-                allDrivers = [];
+                let identifier = currentDriverProfile.name;
                 let matchedDrv = null;
+                let snapshot = await db.collection('drivers').get();
+                allDrivers = [];
 
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    allDrivers.push(d);
-                    if (d.name === currentDriverProfile.name || d.id === currentDriverProfile.name || d.phone === currentDriverProfile.name) {
-                        matchedDrv = d;
+                    allDrivers.push({ id: doc.id, ...d });
+                    if (d.name === identifier || doc.id === identifier || d.phone === identifier) {
+                        matchedDrv = { id: doc.id, ...d };
                     }
                 });
 
                 if (matchedDrv) {
                     currentDriverProfile = { ...currentDriverProfile, ...matchedDrv };
-                    currentCompanyId = currentDriverProfile.companyId || currentCompanyId;
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                    window.currentCompanyId = currentCompanyId;
-                    localStorage.setItem('logged_in_driver_name', currentDriverProfile.name);
-                    localStorage.setItem('na2la_active_session', JSON.stringify(currentDriverProfile));
+                    currentCompanyId = currentDriverProfile.companyId || (isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + matchedDrv.id));
+                } else {
+                    currentCompanyId = isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
+                    currentDriverProfile.companyId = currentCompanyId;
                 }
-            } catch (e) { console.error("خطأ في المزامنة:", e); }
+
+                localStorage.setItem('current_company_id', currentCompanyId);
+                window.currentCompanyId = currentCompanyId;
+                localStorage.setItem('logged_in_driver_name', currentDriverProfile.name);
+                localStorage.setItem('na2la_active_session', JSON.stringify(currentDriverProfile));
+
+            } catch (e) { 
+                console.error("خطأ في المزامنة:", e);
+                currentCompanyId = isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + currentDriverProfile.name.replace(/[^a-zA-Z0-9]/g, '_'));
+                localStorage.setItem('current_company_id', currentCompanyId);
+                window.currentCompanyId = currentCompanyId;
+            }
 
             let superAdmin = isSuperAdmin();
-            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير عام المنصة' : currentDriverProfile.title} (${currentCompanyId})`;
+            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير عام المنصة' : currentDriverProfile.title} (شركة: ${currentCompanyId})`;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
             const avatarContainer = document.getElementById('header-avatar-container');
