@@ -343,7 +343,7 @@
     <div id="authBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-3d);">
         <img id="currentUserAvatar" src="https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);" alt="صورة المستخدم">
         <div>
-            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري المزامنة...</b>
+            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري التحميل...</b>
             <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">متصل بقاعدة البيانات سحابياً</div>
         </div>
     </div>
@@ -566,7 +566,7 @@
     let globalDriversCache = []; 
     let globalFleetCache = [];
 
-    // 🔄 مزامنة الحساب المتصل ومعرف الشراكة بدقة (Partnership & Real-time Account Sync)
+    // 🔄 جلسة الفحص الفوري للحساب والمعرف من الرابط أو الذاكرة
     function getActiveSessionAndCompany() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -577,7 +577,7 @@
             localStorage.setItem('na2la_external_logged_user_id', externalId);
         }
 
-        let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدير';
+        let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'مدير النظام';
         activeName = activeName.trim();
 
         let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
@@ -595,38 +595,39 @@
     let headerBadge = document.getElementById('headerCompanyIdDisplay');
     if (headerBadge) headerBadge.innerText = currentCompanyId;
 
+    // عرض اسم الحساب المتصل فوراً على الواجهة
+    document.addEventListener("DOMContentLoaded", () => {
+        let labelEl = document.getElementById("currentActiveUserLabel");
+        if (labelEl) labelEl.innerText = activeExternalSessionName;
+        updateCurrentInterfacePermissions();
+    });
+
     function getCurrentActiveDriver() {
-        let loggedId = localStorage.getItem('logged_in_driver_id'] || "";
         let loggedName = activeExternalSessionName;
-        
         if (globalDriversCache.length > 0) {
             let found = globalDriversCache.find(d => 
-                (loggedId && d.id === loggedId) || 
-                (loggedName && (d.name === loggedName || d.phone === loggedName || d.id === loggedName))
+                (d.name === loggedName || d.phone === loggedName || d.id === loggedName)
             );
             if (found) return found;
         }
-
         return { name: loggedName, companyId: currentCompanyId, role: isUserAdmin() ? 'admin' : 'driver', canAccessSocial: true };
     }
 
-    // 👑 دالة فحص صلاحيات الإدارة العليا والمدير العام (Super Admin)
+    // 👑 فحص صلاحيات المدير بدقة
     function isUserAdmin() {
         let activeName = String(activeExternalSessionName || '').trim();
         if (['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName)) {
             return true;
         }
-        let driver = globalDriversCache.find(d => d.name === activeName || d.id === activeName);
+        let driver = globalDriversCache.find(d => d.name === activeName || d.id === activeName || d.phone === activeName);
         if (driver) {
             let role = String(driver.role || '').toLowerCase().trim();
-            let name = String(driver.name || '').toLowerCase().trim();
-            return (role === 'admin' || role === 'مدير' || role === 'المدير' || ['مدير', 'المدير', 'عماد', 'emad', 'admin1', 'باندا'].includes(name));
+            return (role === 'admin' || role === 'مدير' || role === 'المدير');
         }
         return false;
     }
     window.isUserAdmin = isUserAdmin;
 
-    // المزامنة اللحظية لحالة الحساب والشراكة من السحابة مباشرة
     function setupRealtimeAccountSync() {
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot } = window.firebaseModules;
@@ -650,7 +651,7 @@
     function openModal(modalId) {
         if (modalId === 'modalUsers') {
             if (!isUserAdmin()) {
-                alert("❌ عذراً، هذه اللوحة مخصصة للمدير الرئيسي فقط.");
+                alert("❌ عذراً، لوحة إدارة المدير مخصصة للمدير الرئيسي وصلاحياته فقط.");
                 return;
             }
             fetchDriversManual();
@@ -918,7 +919,7 @@
                 phone,
                 role,
                 avatar,
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشراكة المعزول بدقة
+                companyId: currentCompanyId,
                 canAccessSocial: role === 'admin',
                 timestamp: Date.now(),
                 createdAt: new Date().toISOString()
@@ -936,7 +937,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
             let newRole = (currentRole === 'admin' || currentRole === 'مدير') ? 'driver' : 'admin';
-            await updateDoc(doc(window.db, "drivers", driverId), { role: newRole, canAccessSocial: newRole === 'admin' });
+            await updateDoc(doc(window.db, "drivers", driverId), { role: newRole });
             fetchDriversManual();
         } catch (err) {
             alert("❌ خطأ أثناء تحديث الرتبة: " + err.message);
@@ -968,8 +969,10 @@
         renderDriversTable(filtered);
     }
 
+    // 🔒 التحكم الدقيق والصارم بصلاحيات المدير وزر "حسابي/المجتمع"
     function updateCurrentInterfacePermissions() {
         let activeDriver = getCurrentActiveDriver();
+        let isAdmin = isUserAdmin();
         
         let labelEl = document.getElementById("currentActiveUserLabel");
         let avatarEl = document.getElementById("currentUserAvatar");
@@ -980,7 +983,6 @@
             ? activeDriver.avatar 
             : "https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png";
         
-        let isAdmin = isUserAdmin();
         let activeRoleText = isAdmin ? "🛡️ مدير النظام (صلاحيات كاملة)" : "👤 سائق / مستخدم";
 
         if (labelEl) labelEl.innerText = activeName;
@@ -993,16 +995,20 @@
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
         if (isAdmin) {
+            // إظهار لوحة وإدارة المدير بالكامل
             if(adminBtn) adminBtn.style.display = "flex";
             if(cardAdminUsers) cardAdminUsers.style.display = "block";
             if(profileBtn) profileBtn.style.display = "flex";
             if(communityBtn) communityBtn.style.display = "flex";
         } else {
+            // إخفاء لوحة الإدارة للمستخدم العادي نهائياً
             if(adminBtn) adminBtn.style.display = "none";
             if(cardAdminUsers) cardAdminUsers.style.display = "none";
             
-            if(profileBtn) profileBtn.style.display = "flex";
-            if(communityBtn) communityBtn.style.display = "flex";
+            // التحكم بظهور زر حسابي والمجتمع بناءً على تحكم المدير (canAccessSocial)
+            let canAccess = activeDriver ? (activeDriver.canAccessSocial === true) : false;
+            if(profileBtn) profileBtn.style.display = canAccess ? "flex" : "none";
+            if(communityBtn) communityBtn.style.display = canAccess ? "flex" : "none";
         }
     }
 
@@ -1018,7 +1024,7 @@
                 truck, 
                 mission, 
                 status, 
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشراكة المعزول
+                companyId: currentCompanyId,
                 timestamp: Date.now() 
             });
             document.getElementById("fleetForm").reset();
@@ -1038,7 +1044,7 @@
             await addDoc(collection(window.db, "viper_logistics"), { 
                 client, 
                 cargo, 
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشراكة المعزول
+                companyId: currentCompanyId,
                 timestamp: Date.now() 
             });
             document.getElementById("logisticsForm").reset();
@@ -1058,7 +1064,7 @@
             await addDoc(collection(window.db, "viper_finance"), { 
                 item, 
                 cost, 
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشراكة المعزول
+                companyId: currentCompanyId,
                 timestamp: Date.now() 
             });
             document.getElementById("financeForm").reset();
@@ -1078,7 +1084,7 @@
             await addDoc(collection(window.db, "viper_emergencies"), { 
                 driverName, 
                 details, 
-                companyId: currentCompanyId, // 🔐 الحفظ برقم الشراكة المعزول
+                companyId: currentCompanyId,
                 status: "🚨 بلاغ طوارئ جديد قيد الاستجابة", 
                 timestamp: Date.now(),
                 createdAt: new Date().toISOString()
