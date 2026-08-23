@@ -47,9 +47,9 @@
     <h2>منصة تواصل السائقين والأسطول الاحترافية</h2>
     <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات وعزل الشركة...</div>
 
-    <!-- لوحة تحكم المؤسس -->
+    <!-- لوحة تحكم المؤسس والإدارة -->
     <div class="admin-box">
-        <div id="adminStatus" style="font-size: 0.9rem; margin-bottom: 8px; font-weight: bold;">حالة الحساب: سائق عادي</div>
+        <div id="adminStatus" style="font-size: 0.9rem; margin-bottom: 8px; font-weight: bold;">حالة الحساب: جاري التحقق من الصلاحيات...</div>
         <button id="adminToggleBtn" onclick="toggleAdminMode()" class="btn" style="background-color: #6c757d;">تفعيل وضع المؤسس (للإشراف)</button>
     </div>
 
@@ -110,31 +110,58 @@
 
     document.getElementById('company-badge-display').innerText = `🏢 شركة: ${currentCompanyId}`;
 
-    window.isAdmin = false;
+    window.manualAdminOverride = false;
+
+    // 👑 دالة فحص صلاحيات الإدارة العليا (لتحقيق رؤية شاملة للمدير و Admin1 وعماد تلقائياً)
+    function isUserAdmin() {
+        let userName = String(activeSessionName || document.getElementById('authorName')?.value || '').trim();
+        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+    }
+    window.isUserAdmin = isUserAdmin;
+
     let allPostsData = [];
     const postsRef = collection(db, "driver_community_posts");
 
-    // الاتصال السحابي
+    // الاتصال السحابي وتحديث واجهة الأدمن تلقائياً
     signInAnonymously(auth).then(() => {
         document.getElementById("connectionStatus").innerText = `✅ متصل بالسحابة بنجاح (عزل الشركة: ${currentCompanyId})`;
         document.getElementById("connectionStatus").style.background = "#d4edda";
+        updateAdminUIStatus();
         loadPosts();
     }).catch(() => {
         document.getElementById("connectionStatus").innerText = "⚠️ خطأ في الاتصال بالخدمة السحابية";
         document.getElementById("connectionStatus").style.background = "#f8d7da";
     });
 
+    function updateAdminUIStatus() {
+        let isAdmin = isUserAdmin();
+        const statusEl = document.getElementById("adminStatus");
+        const btnEl = document.getElementById("adminToggleBtn");
+        
+        if (isAdmin) {
+            statusEl.innerText = `حالة الحساب: [مدير النظام - صلاحيات كاملة ورؤية شاملة للأسطول والشركات]`;
+            statusEl.style.color = "#28a745";
+            btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول معتمد تلقائياً 🛡️";
+        } else {
+            statusEl.innerText = "حالة الحساب: سائق عادي (معزول ضمن نطاق شركتك)";
+            statusEl.style.color = "#333";
+            btnEl.innerText = "تفعيل وضع المؤسس (للإشراف)";
+        }
+    }
+
     // جلب المنشورات والتعليقات
     function loadPosts() {
         const q = query(postsRef, orderBy("timestamp", "desc"));
         onSnapshot(q, async (snapshot) => {
             allPostsData = [];
+            let isAdmin = isUserAdmin();
+
             for (const docSnap of snapshot.docs) {
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                // تصفية المنشورات بناءً على عزل الشركة (مع السماح للمؤسس أو المنشورات القديمة العامة)
-                if (!window.isAdmin && post.companyId && post.companyId !== currentCompanyId) {
+                // عزل الشركات: إذا لم يكن مديراً، يتم عرض منشورات شركته فقط
+                if (!isAdmin && post.companyId && post.companyId !== currentCompanyId) {
                     continue;
                 }
 
@@ -158,6 +185,8 @@
             return;
         }
 
+        let isAdmin = isUserAdmin();
+
         posts.forEach((post) => {
             const embed = getYouTubeEmbedUrl(post.videoUrl);
             let badgeClass = "badge";
@@ -176,6 +205,7 @@
                         <div>
                             <span class="post-author">${post.author}</span>
                             <span class="${badgeClass}" style="margin-right: 8px;">${post.category || 'عام'}</span>
+                            ${post.companyId ? `<span style="font-size:9px; background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-right:6px;">شركة: ${post.companyId}</span>` : ''}
                         </div>
                         <span style="font-size: 11px; color: #888;">${post.date || ''}</span>
                     </div>
@@ -184,7 +214,7 @@
                     
                     <div class="post-actions">
                         <button class="btn btn-success" onclick="likePost('${post.id}')">👍 أعجبني (${post.likes || 0})</button>
-                        ${window.isAdmin ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور</button>` : ""}
+                        ${isAdmin ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور 🗑️</button>` : ""}
                     </div>
 
                     <div class="comments-section">
@@ -208,7 +238,7 @@
             category: document.getElementById("postCategory").value,
             content: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
-            companyId: currentCompanyId, // 🔐 حفظ معرف الشركة مع المنشور
+            companyId: currentCompanyId, // 🔐 ربط المنشور بمعرف الشركة الحالي تلقائياً
             likes: 0,
             date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
             timestamp: new Date()
@@ -242,26 +272,20 @@
         }
     };
 
-    // تفعيل وضع المؤسس
+    // تفعيل وضع المؤسس اليدوي أو التبديل
     window.toggleAdminMode = function() {
-        if (!window.isAdmin) {
+        if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
             if (pass === "admin123") {
-                window.isAdmin = true;
-                document.getElementById("adminStatus").innerText = "حالة الحساب: [مؤسس النظام - صلاحيات كاملة عبر الشركات]";
-                document.getElementById("adminStatus").style.color = "#28a745";
-                document.getElementById("adminToggleBtn").innerText = "خروج من وضع المؤسس";
-                document.getElementById("adminToggleBtn").style.backgroundColor = "#dc3545";
+                window.manualAdminOverride = true;
+                updateAdminUIStatus();
                 loadPosts();
             } else {
                 alert("كلمة المرور غير صحيحة!");
             }
         } else {
-            window.isAdmin = false;
-            document.getElementById("adminStatus").innerText = "حالة الحساب: سائق عادي";
-            document.getElementById("adminStatus").style.color = "#333";
-            document.getElementById("adminToggleBtn").innerText = "تفعيل وضع المؤسس (للإشراف)";
-            document.getElementById("adminToggleBtn").style.backgroundColor = "#6c757d";
+            window.manualAdminOverride = false;
+            updateAdminUIStatus();
             loadPosts();
         }
     };
