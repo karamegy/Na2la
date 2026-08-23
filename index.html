@@ -374,7 +374,7 @@
         <div id="recaptcha-container"></div>
     </div>
 
-    <!-- نافذة إضافة شركة جديدة وإدارة اشتراكها -->
+    <!-- نافذة إضافة شركة جديدة وإدارة اشتراكها (مخصصة للماستر أدمن فقط) -->
     <div id="addCompanyModal" class="custom-modal">
         <div class="card" style="width: 100%; max-width: 440px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1146,7 +1146,7 @@
 
         <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء وحسابات الشركات (Multi-Tenant SaaS) -->
         <div class="card" style="border: 2px solid var(--purple); margin-bottom: 12px;">
-            <button type="button" class="btn-purple" onclick="openAddCompanyModal()" style="margin-bottom: 10px; width: 100%; padding: 10px;">
+            <button type="button" class="btn-purple" id="add-company-btn-main" onclick="openAddCompanyModal()" style="margin-bottom: 10px; width: 100%; padding: 10px; display: none;">
                 🏢 إضافة شركة جديدة وتفعيل اشتراكها 🚀
             </button>
             <h3 style="color: var(--purple);">🔍 حسابات الشركات والأعضاء وإدارة الاشتراكات (SaaS Hub)</h3>
@@ -1272,15 +1272,21 @@
         function openCashModal() { document.getElementById('cashPayModal').style.display = 'flex'; }
         function openMasterEnquiryModal() { document.getElementById('masterEnquiryModal').style.display = 'flex'; }
 
+        // 🔒 حصر صلاحية إضافة الشركات الجديدة وتفعيلها على الماستر أدمن الأساسي ("المدير") حصراً
         function openAddCompanyModal() {
-            if (currentUserRole !== 'admin') {
-                alert('عذراً، إضافة الشركات الجديدة مقتصرة على الماستر أدمن فقط!');
+            if (loggedInDriverName !== 'المدير') {
+                alert('عذراً، إضافة الشركات الجديدة وتفعيلها مقتصرة على الماستر أدمن الأساسي (المدير) فقط! لتجديد اشتراك شركتك يرجى استخدام محفظة التحويل والتواصل مع الإدارة.');
                 return;
             }
             document.getElementById('addCompanyModal').style.display = 'flex';
         }
 
         async function handleCreateCompanySubmit() {
+            if (loggedInDriverName !== 'المدير') {
+                alert('عذراً، غير مسموح لك بإجراء هذه العملية!');
+                return;
+            }
+
             const companyName = document.getElementById('new-comp-name').value.trim();
             const adminName = document.getElementById('new-comp-admin-name').value.trim();
             const adminPhone = document.getElementById('new-comp-admin-phone').value.trim();
@@ -1359,7 +1365,7 @@
             db.collection('subscription_requests').doc(reqId).set(reqObj).then(() => {
                 closeModal('cashPayModal');
                 document.getElementById('cash-sub-form').reset();
-                alert('تم إرسال كود التحويل للماستر أدمن بنجاح! سيتم الفحص وتفعيل حسابك فوراً. 🚀');
+                alert('تم إرسال طلب تجديد الاشتراك والرمز المرجعي للماستر أدمن بنجاح! سيتم فحص التحويل وتفعيل اشتراك شركتك قريباً. 🚀');
             }).catch(err => {
                 alert('خطأ أثناء إرسال البيانات: ' + err.message);
             });
@@ -1404,7 +1410,7 @@
         }
 
         function approveSubscriptionRequest(reqId, driverId, months) {
-            if (currentUserRole !== 'admin') { alert('عذراً، التفعيل مخصص للماستر أدمن فقط!'); return; }
+            if (loggedInDriverName !== 'المدير') { alert('عذراً، تفعيل الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط!'); return; }
 
             db.collection('drivers').doc(String(driverId)).get().then(doc => {
                 let currentExpiry = doc.exists && doc.data().subExpiry ? new Date(doc.data().subExpiry) : new Date();
@@ -1421,14 +1427,14 @@
 
                 db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
 
-                alert(`تم تفعيل اشتراك العضو بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
+                alert(`تم تفعيل اشتراك العضو/الشركة بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
                 if (typeof enquirePaymentCode === 'function') enquirePaymentCode();
                 renderAdminPendingCashRequests();
             });
         }
 
         function renderAdminPendingCashRequests() {
-            if (currentUserRole !== 'admin') return;
+            if (loggedInDriverName !== 'المدير') return;
             const container = document.getElementById('admin-pending-cash-requests');
             if (!container) return;
 
@@ -1865,7 +1871,6 @@
             }
         }
 
-        // 🔒 الدالة المُصححة والمضمونة لتفادي خطأ الصلاحيات
         async function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
@@ -3847,6 +3852,13 @@
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
+                
+                // التحكم في إظهار زر إضافة الشركات بناءً على ما إذا كان المستخدم هو الماستر أدمن الأساسي ("المدير")
+                const addCompBtnMain = document.getElementById('add-company-btn-main');
+                if (addCompBtnMain) {
+                    addCompBtnMain.style.display = (loggedInDriverName === 'المدير') ? 'block' : 'none';
+                }
+
                 if (currentUserRole === 'admin') {
                     renderMemberSubscriptionsList();
                     renderAdminPendingCashRequests();
@@ -4122,4 +4134,4 @@
         }
     </script>
 </body>
-</html>
+    </html>
