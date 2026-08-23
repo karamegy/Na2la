@@ -336,7 +336,7 @@
         </div>
     </div>
 
-    <!-- كود التحكم والمصادقة والربط مع فايربيس مع عزل الشركة -->
+    <!-- كود التحكم والمصادقة والربط مع فايربيس مع عزل الشركة وصلاحيات المدير العام -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -359,7 +359,18 @@
         // 🔐 إدارة عزل الشركة (companyId)
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
-        document.getElementById('companyIdLabel').innerText = currentCompanyId;
+
+        let activeSessionName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || '';
+
+        // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
+        function isSuperAdmin() {
+            let userName = String(activeSessionName || '').trim();
+            return ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
+        }
+        window.isSuperAdmin = isSuperAdmin;
+
+        let superAdmin = isSuperAdmin();
+        document.getElementById('companyIdLabel').innerText = superAdmin ? `${currentCompanyId} (رؤية شاملة للمدير العام 👑)` : currentCompanyId;
 
         window.toggleTheme = function() {
             const body = document.body;
@@ -385,7 +396,7 @@
             document.body.setAttribute("data-theme", theme);
         }
 
-        // الاستماع الفوري للتحديثات وتصفية السائقين حسب شركة الكيان
+        // الاستماع الفوري للتحديثات وتصفية السائقين حسب شركة الكيان أو المدير العام
         function listenToDrivers() {
             const tbody = document.getElementById("driversTableBody");
             if (!tbody) return;
@@ -395,13 +406,14 @@
                 let total = 0;
                 let available = 0;
                 let busy = 0;
+                let isSuper = isSuperAdmin();
 
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
                     if (data.test) return;
 
-                    // تصفية السائقين برقم الشركة المعزول (مع السماح للسائقين القدامى بدون companyId أو وضع المدير العام)
-                    if (data.companyId && data.companyId !== currentCompanyId) {
+                    // عزل الشركات: المدير العام يرى الجميع، بينما مدير/سائق الشركة يرى شركته فقط
+                    if (!isSuper && data.companyId && data.companyId !== currentCompanyId) {
                         return;
                     }
 
@@ -415,7 +427,7 @@
 
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
-                        <td><b>${escapeHtml(data.name || '')}</b></td>
+                        <td><b>${escapeHtml(data.name || '')}</b> ${data.companyId ? `<br><small style="opacity:0.6;">شركة: ${data.companyId}</small>` : ''}</td>
                         <td>${escapeHtml(data.car || '')}</td>
                         <td><span class="${statusBadgeClass}">${statusText}</span></td>
                         <td>
