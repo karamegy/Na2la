@@ -559,6 +559,21 @@
             } catch(e) {}
         }
 
+        // 👑 دالة فحص صلاحيات الإدارة العليا لدعم Admin1 وباقي المديرين بمرونة تامة
+        function isUserAdmin() {
+            let user = getLoggedInUser() || {};
+            let role = String(user.role || '').toLowerCase().trim();
+            let userId = String(user.id || '').trim();
+            let userName = String(user.name || activeExternalSessionName || '').trim();
+            
+            return userId === '1' || 
+                   role === 'admin' || 
+                   role === 'مدير نظام' || 
+                   role === 'مدير' || 
+                   ['المدير', 'مدير', 'عماد', 'Emad', 'Admin1'].includes(userName);
+        }
+        window.isUserAdmin = isUserAdmin;
+
         let appData = { drivers: [], shipments: [], notifications: [], chat: [] };
         let profileWallFilesArr = [];
 
@@ -604,35 +619,33 @@
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
         function renderInitialUIInstant() {
+            let isAdmin = isUserAdmin();
             document.getElementById('gplus-name-display').innerText = activeExternalSessionName;
-            document.getElementById('gplus-badge-display').innerText = ['مدير', 'المدير', 'عماد', 'Emad'].includes(activeExternalSessionName) ? 'مدير النظام' : 'أسطورة الطريق';
+            document.getElementById('gplus-badge-display').innerText = isAdmin ? 'مدير النظام' : 'أسطورة الطريق';
             document.getElementById('user-role-badge').innerText = `متصل ومعزول برقم الشركة: ${currentCompanyId} ☁️`;
         }
         renderInitialUIInstant();
 
-        // استعلامات فايرستور مع عزل الشركة (companyId)
+        // استعلامات فايرستور مع تفعيل صلاحيات الإدارة العليا للرؤية الشاملة
         db.collection('drivers').onSnapshot(snapshot => {
-            let loggedIn = getLoggedInUser();
-            let role = loggedIn.role;
+            let isAdmin = isUserAdmin();
             let rawDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.drivers = (role === 'admin') ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
+            appData.drivers = isAdmin ? rawDrivers : rawDrivers.filter(d => !d.companyId || d.companyId === currentCompanyId);
             renderMyAccount();
             renderChatAccountsList();
         });
 
         db.collection('shipments').onSnapshot(snapshot => {
-            let loggedIn = getLoggedInUser();
-            let role = loggedIn.role;
+            let isAdmin = isUserAdmin();
             let rawShipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.shipments = (role === 'admin') ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
+            appData.shipments = isAdmin ? rawShipments : rawShipments.filter(s => !s.companyId || s.companyId === currentCompanyId);
             renderMyAccount();
         });
 
         db.collection('chat').onSnapshot(snapshot => {
-            let loggedIn = getLoggedInUser();
-            let role = loggedIn.role;
+            let isAdmin = isUserAdmin();
             let rawChat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData.chat = (role === 'admin') ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
+            appData.chat = isAdmin ? rawChat : rawChat.filter(m => !m.companyId || m.companyId === currentCompanyId);
             renderChatMessages();
         });
 
@@ -662,9 +675,10 @@
             let notifsBox = document.getElementById('driver-notifications-box');
             if(!notifsBox) return;
             let html = '';
+            let isAdmin = isUserAdmin();
             snapshot.forEach(doc => {
                 let d = doc.data();
-                if (getLoggedInUser().role === 'admin' || !d.companyId || d.companyId === currentCompanyId) {
+                if (isAdmin || !d.companyId || d.companyId === currentCompanyId) {
                     html += `<div style="background:var(--bg); padding:6px; border-radius:6px; margin-bottom:4px; border-right:3px solid var(--accent);">🚨 ${d.details || 'تنبيه عمليات'} <small style="opacity:0.6">(${d.driverName || 'الأسطول'})</small></div>`;
                 }
             });
@@ -711,11 +725,12 @@
                     return drv;
                 }
             }
+            let isAdmin = isUserAdmin();
             return {
                 id: activeExternalSessionName,
                 name: activeExternalSessionName,
                 companyId: currentCompanyId,
-                role: ['مدير', 'المدير', 'عماد', 'Emad'].includes(activeExternalSessionName) ? 'admin' : 'driver',
+                role: isAdmin ? 'admin' : 'driver',
                 title: 'أسطورة الطريق',
                 status: 'متاح 🟢',
                 advances: 0
@@ -734,22 +749,23 @@
             let loggedInUser = getLoggedInUser();
             let targetDrv = getTargetViewingDriver();
             let isViewingSelf = String(targetDrv.id) === String(loggedInUser.id) || targetDrv.name === loggedInUser.name;
+            let isAdmin = isUserAdmin();
 
             document.getElementById('gplus-name-display').innerText = targetDrv.name || 'مستخدم';
             document.getElementById('gplus-badge-display').innerText = targetDrv.title || 'عضو معتمد';
-            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${targetDrv.role === 'admin' ? 'مدير النظام' : 'سائق'} | شركة: ${currentCompanyId}`;
+            document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${isAdmin ? 'مدير النظام' : 'سائق'} | شركة: ${currentCompanyId}`;
             
             let targetShipments = (appData.shipments || []).filter(s => {
                 let drvName = (targetDrv.name || '').trim();
                 let assigned = (s.assignedDriver || s.driver || '').trim();
                 let clientName = (s.name || s.client || '').trim();
                 
-                if (['المدير', 'مدير', 'عماد', 'Emad'].includes(drvName) || loggedInUser.role === 'admin') return true;
+                if (isAdmin) return true;
                 return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
             });
 
             document.getElementById('gplus-stat-shipments').innerText = targetShipments.length;
-            document.getElementById('gplus-stat-role').innerText = targetDrv.role === 'admin' ? 'مدير' : 'سائق';
+            document.getElementById('gplus-stat-role').innerText = isAdmin ? 'مدير' : 'سائق';
             document.getElementById('gplus-stat-status').innerText = targetDrv.status || 'متاح 🟢';
 
             renderAccountShipmentsList(targetShipments);
@@ -1027,6 +1043,7 @@
             const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase().trim();
             container.innerHTML = '';
             
+            let isAdmin = isUserAdmin();
             let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName);
             
             let filteredAccounts = accounts.filter(acc => {
@@ -1158,7 +1175,7 @@
 
         function deleteWallPost(docId, authorName) {
             let loggedInUser = getLoggedInUser();
-            let isAdmin = loggedInUser.role === 'admin' || loggedInUser.name === 'المدير' || loggedInUser.name === 'مدير';
+            let isAdmin = isUserAdmin();
             
             if(isAdmin || String(authorName) === String(loggedInUser.name)) {
                 if(confirm('هل أنت متأكد من حذف هذا المنشور نهائياً؟')) {
@@ -1176,9 +1193,11 @@
             if(!container) return;
             container.innerHTML = '';
             let posts = [];
+            let isAdmin = isUserAdmin();
+
             querySnapshot.forEach(doc => {
                 let d = doc.data();
-                if (getLoggedInUser().role === 'admin' || !d.companyId || d.companyId === currentCompanyId) {
+                if (isAdmin || !d.companyId || d.companyId === currentCompanyId) {
                     posts.push({ docId: doc.id, ...d });
                 }
             });
@@ -1216,7 +1235,6 @@
                     `;
                 });
 
-                let isAdmin = loggedInUser.role === 'admin' || loggedInUser.name === 'المدير' || loggedInUser.name === 'مدير';
                 let canDelete = isAdmin || String(p.author) === String(loggedInUser.name);
                 let deleteBtnHtml = canDelete ? `<button type="button" class="btn-danger btn-sm" onclick="deleteWallPost('${p.docId}', '${p.author}')" style="width:auto; padding:3px 8px; font-size:9px;">حذف المنشور 🗑️</button>` : '';
 
@@ -1413,8 +1431,8 @@
             if(!container) return;
             container.innerHTML = '';
             
-            let role = getLoggedInUser().role;
-            let driversList = (appData.drivers || []).filter(d => role === 'admin' || !d.companyId || d.companyId === currentCompanyId);
+            let isAdmin = isUserAdmin();
+            let driversList = (appData.drivers || []).filter(d => isAdmin || !d.companyId || d.companyId === currentCompanyId);
 
             let filtered = driversList.filter(d => (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query)));
             filtered.forEach(d => {
