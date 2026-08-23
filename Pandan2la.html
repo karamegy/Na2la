@@ -222,6 +222,7 @@
             </div>
             <div style="display: flex; gap: 4px;">
                 <button class="settings-btn" onclick="openSwitchAccountPrompt()" title="تبديل الحساب برقم الهاتف أو المعرف" style="background-color: var(--yellow-warning); color: #000;"><i class="fa-solid fa-user-gear"></i></button>
+                <button class="settings-btn" onclick="goToOperationsHub()" title="الرجوع لغرفة العمليات" style="background-color: var(--warning-color); color: #000;"><i class="fa-solid fa-rocket"></i></button>
                 <button class="settings-btn" onclick="goToMotherPlatform()" title="الرجوع للمنصة الأم" style="background-color: var(--accent-main); color: white;"><i class="fa-solid fa-house-laptop"></i></button>
                 <button class="settings-btn" onclick="openModal('driversCommunityModal')" title="المجتمع"><i class="fa-solid fa-users"></i></button>
                 <button class="settings-btn" onclick="openModal('visitorBookingModal')" title="حجز زائر"><i class="fa-solid fa-box-archive"></i></button>
@@ -275,6 +276,7 @@
             <h3 style="font-size:12px; color:var(--yellow-warning);" id="sidebar-title-header">👑 لوحة التحكم والصلاحيات</h3>
             <button type="button" onclick="toggleSidebar()" class="btn-danger btn-sm">✕</button>
         </div>
+        <button onclick="goToOperationsHub()" style="background:var(--warning-color); color:#000; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:10px; margin-bottom:6px; width:100%; text-align:right;"><i class="fa-solid fa-rocket"></i> 🚀 العودة لغرفة العمليات</button>
         <button onclick="goToMotherPlatform()" style="background:var(--accent-main); color:white; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:10px; margin-bottom:6px; width:100%; text-align:right;"><i class="fa-solid fa-house-laptop"></i> 🏠 العودة للمنصة الأم</button>
         <button onclick="openSwitchAccountPrompt()" style="background:var(--yellow-warning); color:#000; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:10px; margin-bottom:6px; width:100%; text-align:right;"><i class="fa-solid fa-user-gear"></i> 👤 تبديل الحساب المستقل</button>
         <div class="sidebar-nav-list"></div>
@@ -398,6 +400,11 @@
         window.location.href = "https://karamegy.github.io/Na2la/";
     }
     window.goToMotherPlatform = goToMotherPlatform;
+
+    function goToOperationsHub() {
+        window.location.href = "operations-hub.html";
+    }
+    window.goToOperationsHub = goToOperationsHub;
 
     function getSafeName(item) {
         if (!item) return 'غير محدد';
@@ -534,11 +541,13 @@
     }
     window.getAllShipments = getAllShipments;
 
+    // 👑 دالة فحص صلاحيات المدير العام والمسؤولين (Super Admin)
     function isUserAdmin() {
         let user = window.currentLoggedInUser || {};
+        let userName = String(user.name || user.id || '').trim();
         let role = String(user.role || '').toLowerCase().trim();
-        let userId = String(user.id || '').trim();
-        return (userId === '1' && (role === 'admin' || role === 'مدير نظام' || role === 'مدير')) || ['المدير', 'مدير', 'عماد', 'Emad'].includes(user.name);
+        
+        return role === 'admin' || role === 'مدير' || role === 'مدير نظام' || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(userName);
     }
     window.isUserAdmin = isUserAdmin;
 
@@ -592,28 +601,32 @@
 
     async function getExternalLoginSessionAndSync() {
         const urlParams = new URLSearchParams(window.location.search);
-        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver');
+        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
         
         if (externalId) {
             externalId = externalId.trim();
             localStorage.setItem('na2la_external_logged_user_id', externalId);
             localStorage.setItem('logged_in_driver_id', externalId);
+            localStorage.setItem('logged_in_driver_name', externalId);
         } else {
-            externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
+            externalId = localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || localStorage.getItem('logged_in_driver_name');
         }
 
         if (externalId) {
             await fetchDriverData(externalId);
         } else {
-            window.currentLoggedInUser = { id: '', name: 'يرجى تحديد الحساب', role: 'guest', title: 'زائر' };
+            window.currentLoggedInUser = { id: 'المدير', name: 'المدير', role: 'admin', title: 'مدير عام النظام' };
             applyUserPermissionsUI();
-            openSwitchAccountPrompt();
+            loadAllDataFromFirestoreMultiCollection();
+            initChatRealtimeListener();
+            switchSection('deferredInvoices');
         }
     }
 
     async function fetchDriverData(identifier) {
         if (!window.db || !window.firebaseModules) {
-            window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
+            let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(identifier);
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: isSuper ? 'admin' : 'driver', title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' };
             applyUserPermissionsUI();
             loadAllDataFromFirestoreMultiCollection();
             initChatRealtimeListener();
@@ -635,40 +648,24 @@
             } catch(e) {}
 
             if (!docData) {
-                try {
-                    let pSnap = await getDoc(doc(window.db, "platform_users", identifier));
-                    if (pSnap.exists()) {
-                        docData = pSnap.data();
-                        docId = pSnap.id;
-                    }
-                } catch(e) {}
+                let q1 = query(collection(window.db, "drivers"), where("name", "==", identifier));
+                let snap1 = await getDocs(q1);
+                if (!snap1.empty) {
+                    docData = snap1.docs[0].data();
+                    docId = snap1.docs[0].id;
+                }
             }
 
             if (!docData) {
-                let collectionsToQuery = ["drivers", "platform_users"];
-                let fieldsToQuery = ["id", "phone", "name"];
-
-                for (let colName of collectionsToQuery) {
-                    for (let fieldName of fieldsToQuery) {
-                        try {
-                            let q = query(collection(window.db, colName), where(fieldName, "==", identifier));
-                            let snapshot = await getDocs(q);
-                            if (!snapshot.empty) {
-                                docData = snapshot.docs[0].data();
-                                docId = snapshot.docs[0].id;
-                                break;
-                            }
-                        } catch(err) {}
-                    }
-                    if (docData) break;
+                let q2 = query(collection(window.db, "drivers"), where("phone", "==", identifier));
+                let snap2 = await getDocs(q2);
+                if (!snap2.empty) {
+                    docData = snap2.docs[0].data();
+                    docId = snap2.docs[0].id;
                 }
             }
 
             if (docData) {
-                if (docId !== '1' && !['المدير', 'مدير', 'عماد', 'Emad'].includes(docData.name)) {
-                    docData.role = docData.role || 'driver';
-                }
-
                 currentCompanyId = docData.companyId || 'company_main';
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
@@ -678,22 +675,18 @@
                 localStorage.setItem('logged_in_driver_id', window.currentLoggedInUser.id);
                 showToast(`تم مزامنة حساب (${getSafeName(docData)}) بنجاح! ✅`);
             } else {
-                let savedSession = localStorage.getItem('na2la_active_session');
-                if (savedSession) {
-                    try {
-                        window.currentLoggedInUser = JSON.parse(savedSession);
-                        currentCompanyId = window.currentLoggedInUser.companyId || 'company_main';
-                        window.currentCompanyId = currentCompanyId;
-                    } catch(e) {
-                        window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
-                    }
-                } else {
-                    window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
-                }
+                let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(identifier);
+                window.currentLoggedInUser = { 
+                    id: identifier, 
+                    name: identifier, 
+                    role: isSuper ? 'admin' : 'driver', 
+                    title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' 
+                };
             }
         } catch(err) { 
             console.error(err);
-            window.currentLoggedInUser = { id: identifier, name: 'سائق معتمد', role: 'driver', title: 'سائق معتمد' };
+            let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(identifier);
+            window.currentLoggedInUser = { id: identifier, name: identifier, role: isSuper ? 'admin' : 'driver', title: isSuper ? 'مدير عام النظام' : 'سائق معتمد' };
         }
 
         applyUserPermissionsUI();
@@ -703,7 +696,7 @@
     }
 
     function openSwitchAccountPrompt() {
-        let inputId = prompt("أدخل معرف الحساب (ID) أو رقم الهاتف للمزامنة:");
+        let inputId = prompt("أدخل معرف الحساب (ID) أو اسم المستخدم للمزامنة:");
         if (inputId && inputId.trim() !== "") {
             fetchDriverData(inputId.trim());
         }
@@ -920,11 +913,11 @@
         document.getElementById('header-username').innerText = user.name || 'مستخدم النظام';
         
         let roleBadgeText = '👨‍✈️ سائق معزول';
-        if (isAdmin) roleBadgeText = '👑 مدير نظام (تحكم كامل)';
+        if (isAdmin) roleBadgeText = '👑 مدير عام النظام (تحكم كامل)';
         else if (roleName.includes('مشرف') || roleName === 'supervisor') roleBadgeText = '🛡️ مشرف معتمد';
         else if (roleName.includes('سائق') || roleName === 'driver') roleBadgeText = '🚚 سائق مستقل';
         
-        document.getElementById('header-role-badge').innerText = roleBadgeText;
+        document.getElementById('header-role-badge').innerText = roleBadgeText + ` (شركة: ${currentCompanyId})`;
 
         const avatarEl = document.getElementById('header-avatar-btn');
         if (user.avatar && String(user.avatar).trim() !== '') {
@@ -2594,4 +2587,4 @@
     }
 </script>
 </body>
-            </html>
+</html>
