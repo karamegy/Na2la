@@ -221,6 +221,7 @@
         </div>
 
         <div class="header-actions-group">
+            <button onclick="openCommunityModal()" style="background: var(--primary-blue); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="مجتمع الأسطول">👥 مجتمع الأسطول</button>
             <button onclick="openSwitchAccountPrompt()" style="background: var(--warning-color); color:#000; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="تبديل الحساب">👤 تبديل الحساب</button>
             <button onclick="goToOperationsHub()" style="background: var(--warning-color); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="العودة لغرفة العمليات">🚀 غرفة العمليات</button>
             <button onclick="goToMotherPlatform()" style="background: var(--primary-blue); color:#0f1020; border:none; padding:7px 12px; border-radius:10px; font-weight:900; font-size:11px; cursor:pointer;" title="العودة للصفحة الرئيسية الأم">🏠 المنصة الأم</button>
@@ -471,6 +472,19 @@
 
     </div>
 
+    <!-- نافذة مجتمع الأسطول والتواصل الفوري -->
+    <div id="communityModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; padding:16px;">
+        <div class="card-box" style="width:100%; max-width:450px; max-height:85vh; overflow-y:auto; margin:0; border: 2px solid var(--primary-blue);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="color: var(--primary-blue); margin:0;">👥 مجتمع الأسطول والتواصل الفوري</h3>
+                <button onclick="document.getElementById('communityModal').style.display='none'" class="submit-btn" style="background:var(--danger-color); padding:4px 10px; font-size:11px;">✕ إغلاق</button>
+            </div>
+            <textarea id="communityPostText" class="calc-input" placeholder="شارك حالة الطريق، التنبيهات، أو يوميات القيادة..." style="height:60px;"></textarea>
+            <button onclick="publishCommunityPost()" class="submit-btn" style="width:100%; padding:10px; margin-bottom:14px;">نشر في مجتمع الأسطول 🚀</button>
+            <div id="communityPostsContainer" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+    </div>
+
     <!-- نافذة إضافة فاتورة أجل جديدة -->
     <div id="addDeferredModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; padding:16px;">
         <div class="card-box" style="width:100%; max-width:400px; margin:0;">
@@ -544,7 +558,7 @@
         </div>
     </div>
 
-    <!-- السكريبت المحدث مع دعم عزل الشركات (companyId) والمدير العام -->
+    <!-- السكريبت المحدث مع دعم عزل الشركات (companyId) وتفعيل زر المجتمع -->
     <script>
         let currentAccountFilter = 'all';
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
@@ -631,6 +645,7 @@
             treasury: [], 
             drivers: [],
             emergencyAlerts: [],
+            communityPosts: [],
             rssMessage: "مرحباً بكم في أسطورة الطريق - عزل الشركات المالي نشط"
         };
         window.appData = appData;
@@ -699,7 +714,6 @@
             }
         }
 
-        // 👑 دالة فحص المدير العام للمنصة الأم (Super Admin)
         function isSuperAdmin() {
             let user = window.currentLoggedInUser || {};
             let userName = String(user.name || user.id || activeExternalSessionId || '').trim();
@@ -740,6 +754,48 @@
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
+
+        // 👥 تفعيل ودجت مجتمع الأسطول
+        function openCommunityModal() {
+            document.getElementById('communityModal').style.display = 'flex';
+            renderCommunityPosts();
+        }
+        window.openCommunityModal = openCommunityModal;
+
+        function publishCommunityPost() {
+            let text = document.getElementById('communityPostText').value.trim();
+            if(!text) return alert("اكتب نص المنشور أولاً");
+            let user = window.currentLoggedInUser || {};
+            let post = {
+                id: String(Date.now()),
+                userId: user.id || '',
+                companyId: currentCompanyId,
+                name: user.name || 'سائق',
+                description: text,
+                date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            };
+            if(!appData.communityPosts) appData.communityPosts = [];
+            appData.communityPosts.unshift(post);
+            syncItemToCollection('communityPosts', post);
+            document.getElementById('communityPostText').value = '';
+            renderCommunityPosts();
+            alert("✅ تم النشر في المجتمع بنجاح!");
+        }
+        window.publishCommunityPost = publishCommunityPost;
+
+        function renderCommunityPosts() {
+            let container = document.getElementById('communityPostsContainer');
+            if(!container) return;
+            let posts = appData.communityPosts || [];
+            container.innerHTML = posts.map(p => `
+                <div style="background:var(--bg-color); padding:10px; border-radius:10px; border:1px solid var(--border-color); font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; color:var(--primary-blue); font-size:10px; margin-bottom:4px;">
+                        <b>${p.name || 'سائق'}</b> ${p.companyId ? `<span>(شركة: ${p.companyId})</span>` : ''} <span>${p.date || ''}</span>
+                    </div>
+                    <p>${p.description || ''}</p>
+                </div>
+            `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات حالياً في المجتمع</p>';
+        }
 
         function applyUserPermissionsUI() {
             let user = window.currentLoggedInUser || { name: 'مستخدم النظام', role: 'driver', avatar: '' };
@@ -840,7 +896,7 @@
 
             let superAdmin = isSuperAdmin();
 
-            const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts'];
+            const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts', 'communityPosts'];
             collections.forEach(col => {
                 let q = superAdmin ? collection(window.db, col) : query(collection(window.db, col), where("companyId", "==", currentCompanyId));
                 
@@ -854,6 +910,7 @@
                     }
                     appData[col] = items;
                     renderAllFinancials();
+                    if(col === 'communityPosts') renderCommunityPosts();
                 }, err => console.error(`خطأ مزامنة ${col}:`, err));
             });
         }
