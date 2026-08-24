@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90 PURE CLOUD ISOLATED</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90 SECURE CLOUD ISOLATED</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -13,9 +13,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم) -->
+    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم مع دعم المصادقة الآمنة) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -130,16 +131,16 @@
 
 <div id="toast-container"></div>
 
-<!-- شاشة قفل وتسجيل الدخول سحابياً بالكامل -->
+<!-- شاشة قفل وتسجيل الدخول سحابياً بالكامل (مؤمنة بدون مصادقة مجهولة) -->
 <div class="login-screen" id="lock-screen" style="display: flex;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V90 PURE CLOUD)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">جاري الاتصال بقاعدة البيانات السحابية الحية...</p>
-        <div id="login-status-indicator" style="font-size: 10px; color: var(--green-success); margin-bottom: 8px;">جاري مطابقة المعرف السحابي...</div>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V90 SECURE CLOUD)</h3>
+        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">جاري التحقق من جلسة المصادقة الحقيقية...</p>
+        <div id="login-status-indicator" style="font-size: 10px; color: var(--yellow-warning); margin-bottom: 8px;">جارٍ مطابقة المعرف السحابي الآمن...</div>
         
         <div style="margin-top: 10px;">
-            <button type="button" class="btn-main" onclick="goToPage('index.html')" style="padding:8px 12px; border-radius:6px; font-size:10px;">العودة للرئيسية الأم (index.html) ➔</button>
+            <button type="button" class="btn-main" onclick="goToPage('index.html')" style="padding:8px 12px; border-radius:6px; font-size:10px;">العودة للرئيسية وتسجيل الدخول ➔</button>
         </div>
     </div>
 </div>
@@ -150,7 +151,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة السحابية الخالصة (V90)...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة السحابية الآمنة (V90)...</span>
                 </div>
             </div>
         </div>
@@ -162,7 +163,7 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">زائر</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل سحابياً</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل ومؤمن</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">جارٍ التحقق...</span>
                 </div>
@@ -327,7 +328,9 @@
         firebase.initializeApp(firebaseConfig);
     }
     const db = firebase.firestore();
+    const auth = firebase.auth();
     window.db = db;
+    window.auth = auth;
 
     window._isSavingLocally = false;
 
@@ -515,7 +518,22 @@
         });
     };
 
-    // جلسة سحابية خالصة تعتمد على URL parameters فقط بدون استخدام localStorage
+    // 🛡️ تهيئة التطبيق عبر التحقق من المصادقة الحقيقية حصرياً بدون مصادقة مجهولة
+    function initApp() {
+        auth.onAuthStateChanged(async (user) => {
+            const lockScreen = document.getElementById('lock-screen');
+            const statusInd = document.getElementById('login-status-indicator');
+
+            if (user && !user.isAnonymous) {
+                // مستخدم حقيقي مسجل دخول مؤمن
+                await initCloudSessionFromURL();
+            } else {
+                if(statusInd) statusInd.innerText = '🔒 يتطلب تسجيل دخول حقيقي (تم إلغاء المصادقة المجهولة)';
+                if(lockScreen) lockScreen.style.display = 'flex';
+            }
+        });
+    }
+
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -547,7 +565,6 @@
         }
 
         try {
-            // جلب البيانات من فايرستور مباشرة
             let found = null;
             let docSnap = await db.collection("drivers").doc(String(urlUserId)).get();
             if(docSnap.exists) {
@@ -568,7 +585,7 @@
                 if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
                 switchSection('profile');
-                showToast('مرحباً بك يا ' + found.name + ' (مزامنة سحابية خالصة)');
+                showToast('مرحباً بك يا ' + found.name + ' (مزامنة سحابية آمنة)');
             } else {
                 if(statusInd) statusInd.innerText = `🚫 المعرف (${urlUserId}) غير مسجل سحابياً`;
             }
@@ -578,7 +595,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        initCloudSessionFromURL();
+        initApp();
         renderStats();
         updateRSSTicker();
     });
@@ -595,7 +612,7 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بالمزامنة السحابية الخالصة (V90) - إجمالي الشحنات: ${(data.shipments || []).length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بالمزامنة السحابية الآمنة (V90) - إجمالي الشحنات: ${(data.shipments || []).length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -827,7 +844,7 @@
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>📑 إجمالي الفواتير المجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
                         <p>⏳ إجمالي الفواتير المؤجلة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة مع السحابة: <strong style="color:var(--green-success);">متصل سحابياً بالكامل (Pure Cloud)</strong></p>
+                        <p>🟢 حالة المزامنة مع السحابة: <strong style="color:var(--green-success);">متصل سحابياً بالكامل (Secure Cloud)</strong></p>
                     </div>
                 </div>
             `;
