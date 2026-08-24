@@ -542,7 +542,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الموحد والمرتبط بالمنصة الأم -->
+    <!-- السكريبت البرمجي الموحد والمتزامن بدقة مع فايربيس -->
     <script>
         const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'];
 
@@ -562,8 +562,8 @@
                 
                 let newUserObj = {
                     id: urlUserId,
-                    name: isSuper ? 'المدير العام' : urlUserId,
-                    role: isSuper ? 'admin' : 'driver',
+                    name: isSuper ? 'المدير' : urlUserId,
+                    role: isSuper ? 'مدير نظام' : 'driver',
                     companyId: compId
                 };
                 localStorage.setItem('na2la_active_session', JSON.stringify(newUserObj));
@@ -574,21 +574,14 @@
             if (cachedUserJson) {
                 try {
                     let parsed = JSON.parse(cachedUserJson);
-                    if (parsed && parsed.id) {
-                        if (superAdminsList.includes(parsed.id)) {
-                            parsed.role = 'admin';
-                            parsed.name = 'المدير العام';
-                            parsed.companyId = 'company_main';
-                        }
-                        return parsed;
-                    }
+                    if (parsed && parsed.id) return parsed;
                 } catch(e) {}
             }
 
             return {
                 id: '1',
-                name: 'المدير العام',
-                role: 'admin',
+                name: 'المدير',
+                role: 'مدير نظام',
                 companyId: 'company_main'
             };
         }
@@ -620,31 +613,15 @@
             executeBackgroundSyncSession(); 
         });
 
+        // مزامنة البروفايل والصلاحيات مباشرة من مجموعة drivers في فايربيس
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
+            const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
-                let identifier = currentLoggedInUser.id;
-
-                if (superAdminsList.includes(identifier)) {
-                    window.currentLoggedInUser = {
-                        id: identifier,
-                        name: 'المدير العام',
-                        role: 'admin',
-                        companyId: 'company_main'
-                    };
-                    currentCompanyId = 'company_main';
-                    window.currentCompanyId = 'company_main';
-                    localStorage.setItem('current_company_id', 'company_main');
-                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                    applyUserPermissionsUI();
-                    initFirestoreSync();
-                    initRealtimeAccountSync();
-                    initEmergencyAlertsListener();
-                    return;
-                }
-
+                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || '1';
                 let foundDoc = null;
+
+                // 1. البحث المباشر في مجموعة drivers باستخدام المعرف كـ Document ID (مثل 1)
                 try {
                     let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
                     if (directDocSnap.exists()) {
@@ -652,6 +629,7 @@
                     }
                 } catch(e) {}
 
+                // 2. إذا لم يوجد بالمستند المباشر، ابحث عبر الحقول (id, name, phone)
                 if (!foundDoc) {
                     const fieldsToCheck = ["id", "name", "phone", "mobile"];
                     for (let field of fieldsToCheck) {
@@ -666,15 +644,32 @@
                     }
                 }
 
+                // سحب البيانات الفعلية كما هي مخزنة في فايربيس
                 if (foundDoc) {
-                    window.currentLoggedInUser = foundDoc;
-                    currentCompanyId = (foundDoc.companyId && foundDoc.companyId.trim() !== '') ? foundDoc.companyId : 'company_main';
-                    window.currentCompanyId = currentCompanyId;
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                    localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
-                    applyUserPermissionsUI();
+                    window.currentLoggedInUser = {
+                        id: foundDoc.id || identifier,
+                        name: foundDoc.name || 'المدير',
+                        role: foundDoc.role || 'مدير نظام',
+                        avatar: foundDoc.avatar || foundDoc.img || '',
+                        companyId: foundDoc.companyId || 'company_main'
+                    };
+                } else {
+                    let isSuper = superAdminsList.includes(identifier);
+                    window.currentLoggedInUser = {
+                        id: identifier,
+                        name: isSuper ? 'المدير' : identifier,
+                        role: isSuper ? 'مدير نظام' : 'driver',
+                        companyId: isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || 'company_main'),
+                        avatar: ''
+                    };
                 }
 
+                currentCompanyId = window.currentLoggedInUser.companyId || 'company_main';
+                window.currentCompanyId = currentCompanyId;
+                localStorage.setItem('current_company_id', currentCompanyId);
+                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                
+                applyUserPermissionsUI();
                 initFirestoreSync();
                 initRealtimeAccountSync();
                 initEmergencyAlertsListener();
@@ -710,9 +705,9 @@
 
         function isSuperAdmin() {
             let user = window.currentLoggedInUser || {};
+            let role = String(user.role || '').toLowerCase();
             let userName = String(user.name || user.id || '').trim();
-            let role = String(user.role || '').toLowerCase().trim();
-            return role === 'admin' || superAdminsList.includes(userName);
+            return role.includes('مدير') || role === 'admin' || superAdminsList.includes(userName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -737,7 +732,6 @@
         }
         window.goToPageWithSession = goToPageWithSession;
 
-        // الاتصال المباشر بالمنصة الأم مع تمرير الجلسة والمعرفات بدقة
         function goToMotherPlatform() { 
             let userId = window.currentLoggedInUser?.id || '1';
             let compId = window.currentCompanyId || 'company_main';
@@ -772,7 +766,7 @@
                 id: String(Date.now()),
                 userId: user.id || '1',
                 companyId: currentCompanyId,
-                name: user.name || 'مدير',
+                name: user.name || 'المدير',
                 description: text,
                 date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
@@ -800,10 +794,10 @@
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'المدير العام', role: 'admin' };
+            let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام' };
             let role = getUserRole();
             
-            document.getElementById('header-username').innerText = user.name || 'المدير العام';
+            document.getElementById('header-username').innerText = user.name || 'المدير';
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
@@ -819,7 +813,7 @@
                 }
             }
             
-            let roleBadgeText = role === 'admin' ? '👑 مدير عام النظام (عزل تام للشراكة)' : '👨‍✈️ سائق مستقل';
+            let roleBadgeText = role === 'admin' ? `👑 ${user.role || 'مدير نظام'} (عزل تام)` : '👨‍✈️ سائق مستقل';
             document.getElementById('header-role-badge').innerText = roleBadgeText + ` (معرف الشركة: ${currentCompanyId})`;
 
             renderBottomNavbarByRole(role);
@@ -870,7 +864,6 @@
                 }
             });
 
-            // مزامنة ذكية تدعم المسميات المختلفة للجداول لضمان جلب الحسابات بشكل صحيح
             const collectionsMap = {
                 shipments: ['shipments', 'Shipments', 'trip', 'trips', 'رحلات', 'شحنات'],
                 deferredInvoices: ['deferredInvoices', 'deferred', 'Invoices', 'fawateer', 'فواتير'],
