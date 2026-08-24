@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تمت المصادقة السحابية الآمنة بنجاح مع العزل التام لصفحة World");
+            console.log("✅ تمت المصادقة السحابية الآمنة بنجاح مع العزل التام لصفحة المالية");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -613,7 +613,7 @@
             executeBackgroundSyncSession(); 
         });
 
-        // مزامنة البروفايل والصلاحيات مباشرة من مجموعة drivers في فايربيس
+        // مزامنة البروفايل والصلاحيات مباشرة من مجموعة drivers في فايربيس مع دعم كامل لكافة أسماء حقول الصورة
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
@@ -621,7 +621,6 @@
                 let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || '1';
                 let foundDoc = null;
 
-                // 1. البحث المباشر في مجموعة drivers باستخدام المعرف كـ Document ID (مثل 1)
                 try {
                     let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
                     if (directDocSnap.exists()) {
@@ -629,7 +628,6 @@
                     }
                 } catch(e) {}
 
-                // 2. إذا لم يوجد بالمستند المباشر، ابحث عبر الحقول (id, name, phone)
                 if (!foundDoc) {
                     const fieldsToCheck = ["id", "name", "phone", "mobile"];
                     for (let field of fieldsToCheck) {
@@ -644,13 +642,13 @@
                     }
                 }
 
-                // سحب البيانات الفعلية كما هي مخزنة في فايربيس
                 if (foundDoc) {
+                    let userAvatar = foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '';
                     window.currentLoggedInUser = {
                         id: foundDoc.id || identifier,
                         name: foundDoc.name || 'المدير',
                         role: foundDoc.role || 'مدير نظام',
-                        avatar: foundDoc.avatar || foundDoc.img || '',
+                        avatar: userAvatar,
                         companyId: foundDoc.companyId || 'company_main'
                     };
                 } else {
@@ -689,11 +687,12 @@
                     let d = docSnap.data();
                     if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
                         let newCompId = d.companyId || 'company_main';
-                        if (newCompId !== currentCompanyId || d.name !== currentLoggedInUser.name) {
+                        let newAvatar = d.avatar || d.img || d.photo || d.picture || d.imageUrl || d.profileImage || '';
+                        if (newCompId !== currentCompanyId || d.name !== currentLoggedInUser.name || newAvatar !== currentLoggedInUser.avatar) {
                             currentCompanyId = newCompId;
                             window.currentCompanyId = currentCompanyId;
                             localStorage.setItem('current_company_id', currentCompanyId);
-                            window.currentLoggedInUser = { id: docSnap.id, ...d };
+                            window.currentLoggedInUser = { id: docSnap.id, ...d, avatar: newAvatar };
                             localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                             applyUserPermissionsUI();
                             renderAllFinancials();
@@ -882,7 +881,8 @@
                             if (!superAdmin) {
                                 items = items.filter(item => {
                                     let itemCompId = String(item.companyId || '').trim();
-                                    return itemCompId === currentCompanyId;
+                                    // تصفية مرنة لمنع ظهور أصفار إذا لم يوجد معرف شركة محدد
+                                    return !itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main';
                                 });
                             }
                             appData[targetKey] = items;
@@ -903,7 +903,7 @@
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     let itemCompId = String(d.companyId || '').trim();
-                    if (superAdmin || itemCompId === currentCompanyId) {
+                    if (superAdmin || !itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main') {
                         alerts.push({ id: docSnap.id, ...d });
                     }
                 });
