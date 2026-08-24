@@ -423,6 +423,33 @@
         let commentFilesCache = {};
         let chatUnsubscribe = null;
 
+        // دالة سحابية متكاملة لتسجيل العمليات في مصفوفة auditLogs (حسب هيكل mainState لديك)
+        async function logAuditAction(actionDesc) {
+            try {
+                const mainStateRef = db.collection('appStore').doc('mainState');
+                const docSnap = await mainStateRef.get();
+                
+                let auditLogs = [];
+                if (docSnap.exists && docSnap.data().auditLogs) {
+                    auditLogs = docSnap.data().auditLogs;
+                }
+
+                auditLogs.unshift({
+                    action: actionDesc,
+                    createdAt: Date.now(),
+                    time: new Date().toLocaleString('ar-EG'),
+                    user: currentDriverProfile.name || 'مجهول'
+                });
+
+                // الاحتفاظ بآخر 100 سجل فقط لتجنب كبر حجم المستند
+                if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
+
+                await mainStateRef.set({ auditLogs: auditLogs }, { merge: true });
+            } catch (err) {
+                console.error("Audit log error:", err);
+            }
+        }
+
         function goToPage(pageName) {
             let userId = urlUserId || currentDriverProfile.name || '';
             let companyId = currentCompanyId || 'company_main';
@@ -450,7 +477,6 @@
             loadChatMessages();
         }
 
-        // مطابقة مسارات جلب بيانات البروفايل والحسابات مع المنصة الأم
         async function fetchCloudSessionFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -680,6 +706,7 @@
 
             db.collection('viper_logistics').doc(emergencyId).set(alertData).then(() => {
                 document.getElementById('sos-status-log').innerText = '✅ تم إرسال الاستغاثة بنجاح لغرفة عمليات الشركة!';
+                logAuditAction(`إرسال استغاثة طارئة SOS من قِبل ${currentDriverProfile.name}`);
                 alert('🚨 تم إرسال نداء الاستغاثة لغرفة عمليات الشركة بنجاح!');
             }).catch(err => { console.error(err); });
         }
@@ -696,6 +723,7 @@
                         db.collection('drivers').doc(doc.id).update({ lastLat: lat, lastLng: lng, lastLocationUpdate: new Date().toLocaleString('ar-EG') });
                     });
                     infoEl.innerText = `✅ تم تحديث موقعك بنجاح (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                    logAuditAction(`تحديث الموقع الجغرافي بواسطة ${currentDriverProfile.name}`);
                 });
             }, () => { infoEl.innerText = '❌ تعذر تحديد الموقع.'; });
         }
@@ -720,6 +748,7 @@
 
             db.collection('safe').doc(transactionId).set(expenseRecord).then(() => {
                 alert('✅ تم تسجيل المصروف بنجاح وتحديث خزينة الشركة!');
+                logAuditAction(`تسجيل مصروف طريق بقيمة ${amount} ج.م بواسطة ${currentDriverProfile.name}`);
                 document.getElementById('expense-amount').value = '';
                 document.getElementById('expense-note').value = '';
                 switchSection('safe-sec', document.querySelectorAll('.nav-tab-btn')[4]);
@@ -790,6 +819,7 @@
                 document.getElementById('community-post-text').value = '';
                 communityFilesArr = [];
                 document.getElementById('community-files-preview-info').innerText = '';
+                logAuditAction(`نشر إشارة جديدة في المجتمع بواسطة ${currentDriverProfile.name}`);
             });
         }
 
