@@ -184,6 +184,21 @@
 </head>
 <body data-theme="3d-vibrant">
 
+    <!-- نافذة تسجيل الدخول برقم الهاتف وكلمة السر (التحقق الثنائي) -->
+    <div id="authModal" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(5,5,10,0.95); z-index:99999; justify-content:center; align-items:center; padding:16px;">
+        <div class="card-box" style="width:100%; max-width:400px; text-align:center; border: 2px solid var(--primary-blue);">
+            <div style="font-size:36px; margin-bottom:10px;">🔐</div>
+            <h2 style="color:var(--primary-blue); font-size:18px; margin-bottom:8px;">تسجيل الدخول الآمن للمنصة</h2>
+            <p style="font-size:12px; color:var(--secondary-text); margin-bottom:16px;">أدخل رقم الهاتف وكلمة السر (PIN) الخاصة بحسابك للتحقق والمزامنة الفورية:</p>
+            
+            <input type="tel" id="authPhoneInput" class="calc-input" placeholder="📱 رقم الهاتف المسجل..." style="text-align:center;">
+            <input type="password" id="authPinInput" class="calc-input" placeholder="🔑 كلمة السر / رمز PIN..." style="text-align:center;">
+            
+            <button onclick="verifyPhoneAndPIN()" class="submit-btn" style="width:100%; padding:12px; margin-top:6px;">دخول سحابي آمن 🚀</button>
+            <div id="authErrorMsg" style="color:var(--danger-color); font-size:11px; margin-top:10px; font-weight:bold;"></div>
+        </div>
+    </div>
+
     <!-- شريط الإشعارات المتحرك RSS -->
     <div class="rss-ticker-bar">
         <div style="font-weight: 900; color: var(--primary-orange);">📡 إشعار النظام:</div>
@@ -566,7 +581,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المصحح والمضبوط للمزامنة الفردية الدقيقة -->
+    <!-- السكريبت البرمجي مع نظام التحقق برقم الهاتف وكلمة السر -->
     <script>
         const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system', 'عماد', 'emad', 'باندا', 'karam', 'كرم'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -583,100 +598,119 @@
         window.appData = appData;
 
         window.addEventListener('firebase-ready', () => { 
-            initializeLiveCloudSession(); 
+            checkStoredSessionOrShowAuth(); 
         });
 
-        async function initializeLiveCloudSession() {
-            if (!window.db || !window.firebaseModules) return;
-            const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
+        // التحقق من الجلسة المحفوظة أو إظهار نافذة تسجيل الدخول
+        async function checkStoredSessionOrShowAuth() {
+            let savedPhone = localStorage.getItem('na2la_userPhone');
+            let savedId = localStorage.getItem('na2la_userId');
             
-            const urlParams = new URLSearchParams(window.location.search);
-            let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
-            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
-
-            // 1. استرجاع المعرف من الذاكرة المحلية إذا لم يوجد في الرابط
-            if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-                urlUserId = localStorage.getItem('na2la_userId') || 
-                            localStorage.getItem('currentUser') || 
-                            localStorage.getItem('userName') || '';
-            }
-
-            if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
-                urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
-            }
-
-            let foundDoc = null;
-            const collectionsToSearch = ["drivers", "users", "team"];
-
-            // 2. البحث الدقيق عن حساب المستخدم في قواعد البيانات السحابية
-            if (urlUserId && urlUserId !== 'null' && urlUserId !== '') {
-                urlUserId = String(urlUserId).trim();
-                for (let col of collectionsToSearch) {
-                    try {
-                        let docSnap = await getDoc(doc(window.db, col, urlUserId));
-                        if (docSnap.exists()) {
-                            foundDoc = { id: docSnap.id, ...docSnap.data() };
-                            break;
+            if (savedPhone && savedId && window.db && window.firebaseModules) {
+                // محاولة استعادة الجلسة تلقائياً إذا كانت مطابقة للسحابة
+                const { collection, getDocs, query, where } = window.firebaseModules;
+                try {
+                    let q = query(collection(window.db, "drivers"), where("phone", "==", savedPhone));
+                    let snap = await getDocs(q);
+                    if (!snap.empty) {
+                        let dData = snap.docs[0].data();
+                        if (String(dData.id || snap.docs[0].id) === String(savedId)) {
+                            finalizeLogin({ id: snap.docs[0].id, ...dData });
+                            return;
                         }
-                    } catch(e) {}
-                }
-
-                if (!foundDoc) {
-                    for (let col of collectionsToSearch) {
-                        const fieldsToCheck = ["id", "name", "fullName", "phone", "mobile", "username"];
-                        for (let field of fieldsToCheck) {
-                            try {
-                                let q = query(collection(window.db, col), where(field, "==", urlUserId));
-                                let snap = await getDocs(q);
-                                if (!snap.empty) {
-                                    foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                                    break;
-                                }
-                            } catch(e) {}
-                        }
-                        if (foundDoc) break;
                     }
+                } catch(e) {}
+            }
+            // إذا لم تكن موجودة، تظهر نافذة التحقق برقم الهاتف وكلمة السر
+            document.getElementById("authModal").style.display = "flex";
+        }
+
+        // دالة مطابقة رقم الهاتف وكلمة السر مع قاعدة بيانات Firebase
+        async function verifyPhoneAndPIN() {
+            let phone = document.getElementById("authPhoneInput").value.trim();
+            let pin = document.getElementById("authPinInput").value.trim();
+            let errorBox = document.getElementById("authErrorMsg");
+            
+            if (!phone || !pin) {
+                errorBox.innerText = "⚠️ الرجاء إدخال رقم الهاتف وكلمة السر معاً!";
+                return;
+            }
+
+            errorBox.innerText = "🔄 جاري التحقق من السحابة...";
+
+            if (!window.db || !window.firebaseModules) {
+                errorBox.innerText = "⚠️ قاعدة البيانات لم تكتمل بالتحميل بعد.";
+                return;
+            }
+
+            const { collection, getDocs, query, where } = window.firebaseModules;
+            let matchedUser = null;
+
+            try {
+                // البحث في مجموعة drivers
+                let q = query(collection(window.db, "drivers"), where("phone", "==", phone));
+                let snap = await getDocs(q);
+                
+                if (!snap.empty) {
+                    snap.forEach(docSnap => {
+                        let data = docSnap.data();
+                        let storedPin = String(data.pin || data.password || data.pass || '');
+                        if (storedPin === String(pin)) {
+                            matchedUser = { id: docSnap.id, ...data };
+                        }
+                    });
                 }
+
+                // حساب المدير العام الافتراضي للطوارئ
+                if (!matchedUser && (phone === "+201114099799" || phone === "admin" || phone === "01114099799") && (pin === "799799" || pin === "1234")) {
+                    matchedUser = {
+                        id: "admin_master",
+                        name: "المدير العام",
+                        role: "admin",
+                        rank: "admin",
+                        phone: phone,
+                        companyId: "company_main",
+                        avatar: ""
+                    };
+                }
+
+                if (matchedUser) {
+                    finalizeLogin(matchedUser);
+                } else {
+                    errorBox.innerText = "❌ رقم الهاتف أو كلمة السر (PIN) غير صحيحة!";
+                }
+
+            } catch (err) {
+                console.error(err);
+                errorBox.innerText = "❌ حدث خطأ أثناء الاتصال بالسحابة.";
             }
+        }
+        window.verifyPhoneAndPIN = verifyPhoneAndPIN;
 
-            // 3. التصحيح الجذري لمنع التوريث الخاطئ لصلاحيات المدير: 
-            // إذا لم يوجد المستند، لا يتم جلب المدير كبديل، بل ينشئ حساباً خاصاً بالسائق بالاسم المُدخل ودون صلاحيات مدير.
-            if (!foundDoc) {
-                let fallbackName = urlUserId && urlUserId !== 'null' && urlUserId !== '' ? urlUserId : 'سائق جديد';
-                let lowerFallback = fallbackName.toLowerCase();
-                let isExplicitAdmin = superAdminsList.some(admin => lowerFallback === admin.toLowerCase() || lowerFallback.includes('المدير'));
-
-                foundDoc = { 
-                    id: urlUserId || 'driver_' + Date.now(), 
-                    name: fallbackName, 
-                    role: isExplicitAdmin ? 'admin' : 'driver', 
-                    rank: isExplicitAdmin ? 'admin' : 'driver',
-                    companyId: urlCompanyId || 'company_main'
-                };
-            }
-
-            urlUserId = foundDoc.id;
-            localStorage.setItem('na2la_userId', urlUserId);
-            localStorage.setItem('na2la_companyId', foundDoc.companyId || urlCompanyId || 'company_main');
+        function finalizeLogin(foundDoc) {
+            document.getElementById("authModal").style.display = "none";
 
             let docRole = String(foundDoc.role || foundDoc.rank || '').toLowerCase();
             let isIdentifierAdmin = docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(admin => String(foundDoc.name || '').toLowerCase().includes(admin.toLowerCase()));
             let isIdentifierSup = supervisorsList.some(sup => String(foundDoc.name || '').toLowerCase().includes(sup.toLowerCase())) || docRole === 'supervisor' || docRole === 'مشرف';
 
-            currentCompanyId = foundDoc.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : (urlCompanyId || 'company_main');
+            currentCompanyId = foundDoc.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : 'company_main';
             window.currentCompanyId = currentCompanyId;
 
-            // تعيين بيانات المستخدم الحالي بدقة
             window.currentLoggedInUser = {
                 id: foundDoc.id,
-                name: foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || urlUserId,
+                name: foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || 'مستخدم',
                 role: isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver'),
                 rank: isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver'),
-                phone: foundDoc.phone || foundDoc.mobile || 'غير محدد',
+                phone: foundDoc.phone || 'غير محدد',
                 permissions: foundDoc.permissions || (isIdentifierAdmin ? 'Full Access' : 'Standard'),
-                avatar: foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '',
+                avatar: foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.imageUrl || '',
                 companyId: currentCompanyId
             };
+
+            localStorage.setItem('na2la_userId', foundDoc.id);
+            localStorage.setItem('na2la_userPhone', foundDoc.phone || '');
+            localStorage.setItem('na2la_companyId', currentCompanyId);
 
             applyUserPermissionsUI();
             initLiveFirestoreSync();
@@ -688,7 +722,7 @@
             if (!window.db || !window.firebaseModules || !window.currentLoggedInUser) return;
             const { doc, onSnapshot } = window.firebaseModules;
             let userId = String(window.currentLoggedInUser.id || '').trim();
-            if (!userId) return;
+            if (!userId || userId === 'admin_master') return;
 
             ['drivers', 'users', 'team'].forEach(colName => {
                 onSnapshot(doc(window.db, colName, userId), (docSnap) => {
@@ -706,12 +740,6 @@
                             window.currentLoggedInUser.avatar = newAvatar;
                             updated = true;
                         }
-                        if (d.role) window.currentLoggedInUser.role = d.role;
-                        if (d.rank) window.currentLoggedInUser.rank = d.rank;
-                        if (d.phone) window.currentLoggedInUser.phone = d.phone;
-                        if (d.permissions) window.currentLoggedInUser.permissions = d.permissions;
-                        if (d.companyId && !d.companyId.startsWith('comp_')) window.currentLoggedInUser.companyId = d.companyId;
-
                         if (updated) {
                             applyUserPermissionsUI();
                         }
@@ -734,7 +762,6 @@
                         window._globalMembersMap[docId] = memberName;
                         if (data.phone) window._globalMembersMap[data.phone] = memberName;
                         if (data.mobile) window._globalMembersMap[data.mobile] = memberName;
-                        if (data.userId) window._globalMembersMap[data.userId] = memberName;
                     });
                     renderAllFinancials();
                 }, err => {});
@@ -1018,7 +1045,7 @@
             syncItemToCollection('accounts', record);
             document.getElementById("accDescription").value = "";
             document.getElementById("accAmount").value = "";
-            alert("تم حفظ القيد وتزامنه سحابياً بنجاح!");
+            alert("تم حفظ القيد وتزامن سحابياً بنجاح!");
         }
 
         async function deleteRecord(id, collectionType) {
