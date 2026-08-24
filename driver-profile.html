@@ -524,7 +524,6 @@
             ]
         };
 
-        // 🔄 دالة جديدة لمزامنة وتسجيل السائق الحالي تلقائياً في قاعدة بيانات فايربيس لكي يراه باقي الأجهزة
         function autoRegisterUserToFirestore() {
             if (!activeExternalSessionName || activeExternalSessionName === '1') return;
             const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
@@ -598,6 +597,7 @@
         db.collection('chat').onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderChatMessages();
+            renderChatAccountsList();
         });
 
         db.collection('webrtc_calls')
@@ -986,25 +986,49 @@
             document.getElementById('localVideo').srcObject = null;
         }
 
-        // ✅ دالة الشات المحدثة: تعرض جميع الحسابات المتصلة بالأسطول بسلاسة ودون قيود مقيدة للشركة
+        // ✅ دالة الشات المحدثة لدمج جدول السائقين وأي مرسل نشط في الشات لضمان ظهور المدير وباقي الأجهزة فوراً
         function renderChatAccountsList() {
             const container = document.getElementById('chat-accounts-list-container');
             if(!container) return;
             const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase().trim();
             container.innerHTML = '';
             
-            let accounts = (appData.drivers || []).filter(d => {
-                let dId = String(d.id || '').trim();
-                let dName = String(d.name || '').trim();
-                let dPhone = String(d.phone || '').trim();
-                let session = String(activeExternalSessionName || '').trim();
-                
-                let isMe = (dId === session || dName === session || dPhone === session);
+            let accountsMap = new Map();
+            
+            // 1. إضافة السائقين المسجلين في جدول drivers
+            (appData.drivers || []).forEach(d => {
+                let name = String(d.name || d.id || '').trim();
+                if(name) {
+                    accountsMap.set(name, {
+                        name: name,
+                        phone: d.phone || '',
+                        role: d.role || (['مدير', 'المدير', '1', 'عماد', 'Emad'].includes(name) ? 'admin' : 'driver')
+                    });
+                }
+            });
+            
+            // 2. إضافة أي مرسلين تم رصدهم في جدول الشات لضمان عدم اختفاء المدير أو أي حساب نشط
+            (appData.chat || []).forEach(m => {
+                let sender = String(m.sender || '').trim();
+                if(sender && sender !== 'general' && !accountsMap.has(sender)) {
+                    let isMgr = ['مدير', 'المدير', '1', 'عماد', 'Emad', 'باندا'].includes(sender);
+                    accountsMap.set(sender, {
+                        name: sender,
+                        phone: '',
+                        role: isMgr ? 'admin' : 'driver'
+                    });
+                }
+            });
+
+            let session = String(activeExternalSessionName || '').trim();
+            let accounts = Array.from(accountsMap.values()).filter(acc => {
+                let accName = String(acc.name).trim();
+                let isMe = (accName === session || (session === '1' && accName === 'المدير'));
                 return !isMe;
             });
             
             let filteredAccounts = accounts.filter(acc => {
-                let name = (acc.name || acc.id || '').toLowerCase();
+                let name = (acc.name || '').toLowerCase();
                 let phone = (acc.phone || '').toLowerCase();
                 return name.includes(query) || phone.includes(query);
             });
@@ -1015,20 +1039,19 @@
             }
 
             filteredAccounts.forEach(acc => {
-                let accName = acc.name || acc.id || 'سائق';
-                let isManager = acc.role === 'admin' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(accName);
+                let isManager = acc.role === 'admin' || ['مدير', 'المدير', 'عماد', 'Emad', 'باندا'].includes(acc.name);
                 let roleBadgeText = isManager ? 'مشرف/مدير 🛡️' : 'سائق 🚚';
                 let roleBadgeColor = isManager ? 'var(--warning)' : 'var(--accent)';
 
                 let div = document.createElement('div');
-                div.className = `chat-account-item ${currentChatTarget === accName ? 'active' : ''}`;
-                div.onclick = () => selectChatRoom(accName);
+                div.className = `chat-account-item ${currentChatTarget === acc.name ? 'active' : ''}`;
+                div.onclick = () => selectChatRoom(acc.name);
                 div.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 1.1rem;">👤</span>
                         <div>
-                            <div style="font-weight: bold; font-size: 11px;">${accName}</div>
-                            <div style="font-size: 8px; opacity: 0.8; color: ${currentChatTarget === accName ? '#fff' : roleBadgeColor};">${roleBadgeText}</div>
+                            <div style="font-weight: bold; font-size: 11px;">${acc.name}</div>
+                            <div style="font-size: 8px; opacity: 0.8; color: ${currentChatTarget === acc.name ? '#fff' : roleBadgeColor};">${roleBadgeText}</div>
                         </div>
                     </div>
                     <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.1);">مراسلة 💬</span>
@@ -1309,7 +1332,7 @@
                 compressImage(input.files[0], 1200, 800, 0.9, (url) => {
                     let loggedInUser = getLoggedInUser();
                     loggedInUser.cover = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount().then(() => renderMyAccount()));
+                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount());
                 });
             }
         }
