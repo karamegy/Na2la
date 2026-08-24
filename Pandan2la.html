@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V89.2 SECURE AUTH</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V89.3 DUAL SYNC</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -136,7 +136,7 @@
 <div class="login-screen" id="lock-screen" style="display: flex;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.2 SECURE)</h3>
+        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V89.3 DUAL SYNC)</h3>
         <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">أدخل رمز المرور السري (PIN) الخاص بحسابك المسجل في النظام</p>
         
         <input type="password" id="pin-input" placeholder="أدخل رمز الدخول (PIN)..." style="text-align: center; font-size: 14px; letter-spacing: 2px;">
@@ -191,7 +191,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع غرفة باندا العليا عبر Firestore...</span>
+                    <span>📢 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة المزدوجة لـ Firebase...</span>
                 </div>
             </div>
         </div>
@@ -203,12 +203,14 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">زائر</h2>
-                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل بـ Firestore سحابياً</span>
+                        <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل بـ Firestore</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">جارٍ التحقق...</span>
                 </div>
             </div>
             <div style="display: flex; gap: 4px;">
+                <!-- زر التحديث اليدوي الفوري -->
+                <button class="settings-btn" onclick="manualRefreshData()" title="تحديث ومزامنة يدوية للبيانات"><i class="fa-solid fa-rotate"></i></button>
                 <a href="index.html" class="settings-btn" title="الرئيسية" style="text-decoration:none; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-house"></i></a>
                 <button class="settings-btn" onclick="openModal('driversCommunityModal')" title="المجتمع"><i class="fa-solid fa-users"></i></button>
                 <button class="settings-btn" onclick="lockSystem()" title="قفل النظام وتسجيل الخروج"><i class="fa-solid fa-power-off" style="color:var(--red-danger);"></i></button>
@@ -442,58 +444,30 @@
     let appData = defaultInitialData;
     window.appData = appData;
 
-    function getStoredLocalData() {
-        const keys = ['transportAppV89', 'transportAppV88', 'transportAppV87', 'transportApp'];
-        for (let k of keys) {
-            let dataStr = localStorage.getItem(k);
-            if (dataStr) {
-                try {
-                    let parsed = JSON.parse(dataStr);
-                    if (parsed && (parsed.docs?.length > 0 || parsed.shipments?.length > 0)) {
-                        return parsed;
-                    }
-                } catch(e) {}
-            }
-        }
-        return null;
-    }
+    let remoteMainData = {};
+    let collectionShipments = [];
 
-    db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
-        if (window._isSavingLocally) return;
-
-        let remoteData = docSnap.exists ? docSnap.data() : null;
-        let localData = getStoredLocalData();
-
-        let rawShipments = [];
-        if (remoteData && remoteData.docs && remoteData.docs.length > 0) {
-            rawShipments = remoteData.docs;
-        } else if (remoteData && remoteData.shipments && remoteData.shipments.length > 0) {
-            rawShipments = remoteData.shipments;
-        } else if (localData && localData.docs && localData.docs.length > 0) {
-            rawShipments = localData.docs;
-        } else if (localData && localData.shipments && localData.shipments.length > 0) {
-            rawShipments = localData.shipments;
-        } else {
-            rawShipments = defaultInitialData.docs;
-        }
+    function updateUnifiedData() {
+        // دمج الشحنات القادمة من مجموعة shipments المستقلة أو الوثيقة الرئيسية
+        let rawShipments = collectionShipments.length > 0 ? collectionShipments : (remoteMainData.docs || remoteMainData.shipments || defaultInitialData.docs);
 
         appData = {
             shipments: rawShipments,
             docs: rawShipments,
-            consolidatedInvoices: remoteData?.consolidatedInvoices?.length ? remoteData.consolidatedInvoices : (localData?.consolidatedInvoices?.length ? localData.consolidatedInvoices : defaultInitialData.consolidatedInvoices),
-            treasury: remoteData?.treasury?.length ? remoteData.treasury : (localData?.treasury?.length ? localData.treasury : defaultInitialData.treasury),
-            expenses: remoteData?.expenses?.length ? remoteData.expenses : (localData?.expenses?.length ? localData.expenses : defaultInitialData.expenses),
-            customers: remoteData?.customers?.length ? remoteData.customers : (localData?.customers?.length ? localData.customers : defaultInitialData.customers),
-            drivers: remoteData?.drivers?.length ? remoteData.drivers : (localData?.drivers?.length ? localData.drivers : defaultInitialData.drivers),
-            communityPosts: remoteData?.communityPosts || localData?.communityPosts || defaultInitialData.communityPosts,
-            posts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
-            wallPosts: remoteData?.posts || remoteData?.wallPosts || localData?.posts || localData?.wallPosts || defaultInitialData.posts,
-            trucks: remoteData?.trucks?.length ? remoteData.trucks : (localData?.trucks?.length ? localData.trucks : defaultInitialData.trucks),
-            maintenanceLogs: remoteData?.maintenanceLogs?.length ? remoteData.maintenanceLogs : (localData?.maintenanceLogs?.length ? localData.maintenanceLogs : defaultInitialData.maintenanceLogs),
-            chat: remoteData?.chat?.length ? remoteData.chat : (localData?.chat?.length ? localData.chat : defaultInitialData.chat),
-            centralBroadcasts: remoteData?.centralBroadcasts?.length ? remoteData.centralBroadcasts : (localData?.centralBroadcasts?.length ? localData.centralBroadcasts : defaultInitialData.centralBroadcasts),
-            auditLogs: remoteData?.auditLogs?.length ? remoteData.auditLogs : (localData?.auditLogs?.length ? localData.auditLogs : defaultInitialData.auditLogs),
-            files: remoteData?.files || localData?.files || []
+            consolidatedInvoices: remoteMainData.consolidatedInvoices || defaultInitialData.consolidatedInvoices,
+            treasury: remoteMainData.treasury || defaultInitialData.treasury,
+            expenses: remoteMainData.expenses || defaultInitialData.expenses,
+            customers: remoteMainData.customers || defaultInitialData.customers,
+            drivers: remoteMainData.drivers || defaultInitialData.drivers,
+            communityPosts: remoteMainData.communityPosts || defaultInitialData.communityPosts,
+            posts: remoteMainData.posts || remoteMainData.wallPosts || defaultInitialData.posts,
+            wallPosts: remoteMainData.posts || remoteMainData.wallPosts || defaultInitialData.posts,
+            trucks: remoteMainData.trucks || defaultInitialData.trucks,
+            maintenanceLogs: remoteMainData.maintenanceLogs || defaultInitialData.maintenanceLogs,
+            chat: remoteMainData.chat || defaultInitialData.chat,
+            centralBroadcasts: remoteMainData.centralBroadcasts || defaultInitialData.centralBroadcasts,
+            auditLogs: remoteMainData.auditLogs || defaultInitialData.auditLogs,
+            files: remoteMainData.files || []
         };
         
         window.appData = appData;
@@ -502,18 +476,48 @@
         if(typeof renderStats === 'function') renderStats();
         if(typeof refreshActiveSection === 'function') refreshActiveSection();
         if(typeof updateRSSTicker === 'function') updateRSSTicker();
-    }, (error) => {
-        let localData = getStoredLocalData();
-        if (localData && (localData.docs?.length > 0 || localData.shipments?.length > 0)) {
-            appData.shipments = localData.docs || localData.shipments;
-            appData.docs = appData.shipments;
-        } else {
-            appData = defaultInitialData;
-        }
-        window.appData = appData;
-        if(typeof renderStats === 'function') renderStats();
-        if(typeof refreshActiveSection === 'function') refreshActiveSection();
+    }
+
+    // 1. الاستماع للوثيقة الرئيسية (appStore/mainState)
+    db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
+        if (window._isSavingLocally) return;
+        remoteMainData = docSnap.exists ? docSnap.data() : {};
+        updateUnifiedData();
+    }, (err) => {
+        console.error("خطأ في استماع الوثيقة الرئيسية:", err);
     });
+
+    // 2. الاستماع المباشر لمجموعة الشحنات المستقلة (shipments) الخاصة بالمنصة الأم
+    db.collection("shipments").onSnapshot((snapshot) => {
+        if (window._isSavingLocally) return;
+        collectionShipments = [];
+        snapshot.forEach(doc => {
+            collectionShipments.push({ id: doc.id, ...doc.data() });
+        });
+        updateUnifiedData();
+    }, (err) => {
+        console.error("خطأ في استماع مجموعة الشحنات المستقلة:", err);
+    });
+
+    // زر التحديث اليدوي الفوري من سحابة Firebase
+    window.manualRefreshData = function() {
+        showToast('جاري تحديث ومزامنة البيانات يدوياً من السحابة... 🔄');
+        db.collection("appStore").doc("mainState").get().then((docSnap) => {
+            if(docSnap.exists) {
+                remoteMainData = docSnap.data();
+            }
+            db.collection("shipments").get().then((snapshot) => {
+                collectionShipments = [];
+                snapshot.forEach(doc => {
+                    collectionShipments.push({ id: doc.id, ...doc.data() });
+                });
+                updateUnifiedData();
+                showToast('تمت المزامنة والتحديث اليدوي بنجاح! ✅');
+            });
+        }).catch((e) => {
+            showToast('فشل الاتصال بالسحابة أثناء التحديث', 'error');
+        });
+    };
 
     window.saveDataAll = function() {
         let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
@@ -581,7 +585,7 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بغرفة باندا والمنصة الأم - إجمالي الشحنات: ${(data.shipments || []).length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-bullhorn" style="color:#fde047;"></i> متصل بالمزامنة المزدوجة - إجمالي الشحنات: ${(data.shipments || []).length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -640,7 +644,6 @@
         document.getElementById('header-username').innerText = user.name;
         document.getElementById('header-role-badge').innerText = role === 'admin' ? '👑 (admin) (مدير النظام)' : (role === 'مشرف' ? '⭐ مشرف (صلاحيات محدودة)' : '👨‍✈️ سائق (متابعة فقط)');
 
-        // تحديث صورة الأفاتار في الهيدر بناءً على بيانات المستخدم
         const avatarEl = document.getElementById('header-avatar-btn');
         if (avatarEl) {
             if (user.avatar) {
@@ -800,19 +803,14 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--accent-main);">
                     <div style="text-align: center; margin-bottom: 12px;">
-                        <!-- صورة البروفايل الحقيقية أو الرمز الافتراضي 🐼 -->
                         <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; margin: 0 auto 8px; border: 3px solid var(--accent-main); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
                             ${user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : '🐼'}
                         </div>
-                        <!-- اسم المستخدم -->
                         <h3 style="font-size: 15px; color: var(--accent-main); justify-content: center; margin-bottom: 2px;">${user.name || 'مستخدم النظام'}</h3>
-                        <!-- الشركة التابع لها -->
                         <p style="font-size: 10px; color: var(--yellow-warning); font-weight: bold; margin-bottom: 4px;">🏢 ${user.companyName || 'أسطورة الطريق & باندا للخدمات اللوجستية'}</p>
-                        <!-- الرتبة -->
                         <span class="badge bg-transit" style="font-size: 9px; margin-top: 2px; display: inline-block;">${user.role === 'admin' ? 'مدير النظام (admin)' : (user.role === 'مشرف' ? 'مشرف' : 'سائق')}</span>
                     </div>
                     
-                    <!-- تفاصيل الحساب والشركة -->
                     <div style="font-size: 11px; line-height: 1.8; background: var(--bg-dark); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
                         <p><strong>👤 الاسم الكامل:</strong> ${user.name || 'غير مسجل'}</p>
                         <p><strong>🏢 الشركة التابع لها:</strong> ${user.companyName || 'أسطورة الطريق & باندا'}</p>
@@ -823,7 +821,7 @@
                     </div>
 
                     <div style="margin-top: 10px;">
-                        <button class="btn-main" onclick="showToast('تم مزامنة بيانات حسابك والشركة بنجاح 🚀')">تحديث وحفظ المزامنة 🔄</button>
+                        <button class="btn-main" onclick="manualRefreshData()">تحديث ومزامنة يدوية للبيانات 🔄</button>
                     </div>
                 </div>
             `;
@@ -845,7 +843,7 @@
                         <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>📑 إجمالي الفواتير المجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة مع المنصة الأم: <strong style="color:var(--green-success);">متصل بـ Firestore لحظياً</strong></p>
+                        <p>🟢 حالة المزامنة مع المنصة الأم: <strong style="color:var(--green-success);">متصل بالمزامنة المزدوجة اللحظية</strong></p>
                     </div>
                 </div>
             `;
@@ -1943,7 +1941,7 @@
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.text("Global Transport Hub - Waybill V89.2", 20, 20);
+        doc.text("Global Transport Hub - Waybill V89.3", 20, 20);
         doc.text(`Client: ${s.name}`, 20, 30);
         doc.text(`Phone: ${s.phone || '-'}`, 20, 40);
         doc.text(`Address: ${s.address}`, 20, 50);
@@ -1959,7 +1957,7 @@
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
         const wb = XLSX.utils.book_net();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-        XLSX.writeFile(wb, "na2la_panda_data_v89_2.xlsx");
+        XLSX.writeFile(wb, "na2la_panda_data_v89_3.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
     }
 
