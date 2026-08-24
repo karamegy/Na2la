@@ -397,8 +397,8 @@
                 <input type="text" id="newAdminUserName" placeholder="اسم المستخدم / السائق..." required style="margin:0;">
                 <input type="text" id="newAdminUserPhone" placeholder="رقم الهاتف..." required style="margin:0;">
                 <select id="newAdminUserRole" style="margin:0;">
-                    <option value="driver">سائق (مستخدم عادي)</option>
-                    <option value="admin">مدير (صلاحيات كاملة)</option>
+                    <option value="driver">سائق (driver)</option>
+                    <option value="admin">مدير (admin)</option>
                 </select>
                 <input type="text" id="newAdminUserAvatar" placeholder="رابط الصورة الشخصية (اختياري)..." style="margin:0;">
                 <button type="submit" class="btn-submit" style="grid-column: span 2; margin:0;">حفظ وإضافة المستخدم سحابياً</button>
@@ -569,7 +569,6 @@
     let currentCompanyId = 'company_main';
     window.currentCompanyId = currentCompanyId;
 
-    // 🛡️ دورة مزامنة الجلسة السحابية الفورية المتزامنة لمنع أي تضارب أو تأخير
     async function executeOperationsHubSyncSession() {
         if (!window.db || !window.firebaseModules) return;
         const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
@@ -650,10 +649,11 @@
         return { name: loggedName, companyId: currentCompanyId, role: isUserAdmin() ? 'admin' : 'driver', canAccessSocial: true };
     }
 
+    // التحقق الفحوصي المعتمد على "admin" بدقة متناهية
     function isUserAdmin() {
         if (window.currentLoggedInUser) {
             let role = String(window.currentLoggedInUser.role || '').toLowerCase().trim();
-            if (role === 'admin' || role === 'مدير') return true;
+            if (role === 'admin') return true;
         }
         let activeName = String(activeExternalSessionName || '').trim();
         if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName)) {
@@ -662,7 +662,7 @@
         let driver = globalDriversCache.find(d => d.name === activeName || d.id === activeName || d.phone === activeName);
         if (driver) {
             let role = String(driver.role || '').toLowerCase().trim();
-            return (role === 'admin' || role === 'مدير' || role === 'المدير');
+            return role === 'admin';
         }
         return false;
     }
@@ -914,8 +914,9 @@
             let dName = d.name || 'بدون اسم';
             let dPhone = d.phone || '-';
             let dAvatar = d.avatar && d.avatar.trim() !== '' ? d.avatar : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
-            let isAdm = (d.role === 'admin' || d.role === 'مدير' || d.role === 'المدير');
-            let roleText = isAdm ? "🛡️ مدير" : "👤 سائق";
+            let roleStr = String(d.role || '').toLowerCase().trim();
+            let isAdm = (roleStr === 'admin');
+            let roleText = isAdm ? "🛡️ Admin" : "👤 سائق";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
             
             let hasAccess = d.canAccessSocial === true;
@@ -978,7 +979,8 @@
         try {
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
-            let newRole = (currentRole === 'admin' || currentRole === 'مدير') ? 'driver' : 'admin';
+            let roleStr = String(currentRole || '').toLowerCase().trim();
+            let newRole = (roleStr === 'admin') ? 'driver' : 'admin';
             await updateDoc(doc(window.db, "drivers", driverId), { role: newRole });
             fetchDriversManual();
         } catch (err) {
@@ -1024,7 +1026,7 @@
             ? activeDriver.avatar 
             : "https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png";
         
-        let activeRoleText = isAdmin ? "🛡️ مدير النظام (صلاحيات كاملة)" : "👤 سائق / مستخدم";
+        let activeRoleText = isAdmin ? "🛡️ Admin (صلاحيات كاملة)" : "👤 سائق / مستخدم";
 
         if (labelEl) labelEl.innerText = activeName;
         if (avatarEl) avatarEl.src = activeAvatar;
@@ -1150,7 +1152,6 @@
         }
     }
 
-    // 🛡️ دورة حياة الصفحة المتزامنة المانعة للتضارب
     window.addEventListener('DOMContentLoaded', async () => {
         loadSavedTheme();
         if (window.db && window.firebaseModules) {
