@@ -356,7 +356,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // 🔄 مزامنة الحساب المتصل ومعرف الشراكة لحظياً (Real-time Connected Account & Partnership Sync)
+        // 🔄 مزامنة الحساب المتصل ومعرف الشراكة لحظياً (مع توحيد معرف المدير ليكون company_main)
         function getActiveSessionAndCompany() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -370,8 +370,10 @@
             let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدير';
             activeName = activeName.trim();
 
-            let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
-            let compId = isSuper ? 'comp_1787481011714' : (localStorage.getItem('current_company_id') || ('comp_' + activeName.replace(/[^a-zA-Z0-9]/g, '_')));
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
+            
+            // 🔐 توحيد معرف الشركة للمدير العام ليكون company_main ليتطابق تماماً مع باقي الصفحات
+            let compId = isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || ('comp_' + activeName.replace(/[^a-zA-Z0-9]/g, '_')));
             
             localStorage.setItem('current_company_id', compId);
             return { activeName, compId, isSuper };
@@ -383,7 +385,7 @@
         window.currentCompanyId = currentCompanyId;
 
         function isSuperAdmin() {
-            return ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+            return ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -418,12 +420,12 @@
                 snapshot.docChanges().forEach(change => {
                     let d = change.doc.data();
                     if (d.name === activeSessionName || d.id === activeSessionName || d.phone === activeSessionName) {
-                        if (d.companyId && d.companyId !== currentCompanyId) {
+                        if (d.companyId && d.companyId !== currentCompanyId && !isSuperAdmin()) {
                             currentCompanyId = d.companyId;
                             window.currentCompanyId = currentCompanyId;
                             localStorage.setItem('current_company_id', currentCompanyId);
                             document.getElementById('companyIdLabel').innerText = currentCompanyId;
-                            listenToDrivers(); // تحديث الجدول فوراً بناءً على الشراكة الجديدة المحدثة
+                            listenToDrivers();
                         }
                     }
                 });
@@ -446,7 +448,7 @@
                     const data = docSnap.data();
                     if (data.test) return;
 
-                    // عزل الشراكات التام: المدير العام يرى الكل، بينما مستخدم الشراكة يرى شراكتة فقط
+                    // عزل الشراكات التام: المدير العام يرى الكل أو company_main، بينما مستخدم الشراكة يرى شراكته فقط
                     if (!isSuper && data.companyId && data.companyId !== currentCompanyId) {
                         return;
                     }
