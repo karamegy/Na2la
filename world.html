@@ -542,36 +542,10 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي مع الجلب اللحظي الصارم للجلسة والتزامن التام لصفحة World -->
+    <!-- السكريبت البرمجي الموحد والخالي من أي تضارب -->
     <script>
-        let currentAccountFilter = 'all';
-        let currentCompanyId = 'company_main';
-        window.currentCompanyId = currentCompanyId;
+        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'];
 
-        function goToPageWithSession(pageName) {
-            let userId = window.currentLoggedInUser?.id || localStorage.getItem('na2la_external_logged_user_id') || '1';
-            let compId = window.currentCompanyId || 'company_main';
-            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
-        }
-        window.goToPageWithSession = goToPageWithSession;
-
-        function goToMotherPlatform() { goToPageWithSession("https://karamegy.github.io/Na2la/"); }
-        window.goToMotherPlatform = goToMotherPlatform;
-
-        function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
-        window.goToOperationsHub = goToOperationsHub;
-
-        function getSafeName(item) { return item ? (item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل') : 'عميل'; }
-        function getSafePhone(item) { return item ? (item.clientPhone || item.phone || item.mobile || item.tel || 'غير محدد') : 'غير محدد'; }
-        function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
-        function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
-        function getSafeStatus(item) {
-            if (!item) return 'paid';
-            let s = String(item.status || item.paymentStatus || '').toLowerCase();
-            return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
-        }
-
-        // 🚀 الجلب اللحظي الفوري والصارم (أولوية مطلقة لمعرف الرابط ثم الكاش الحديث بدون افتراضات خاطئة)
         function getInstantSessionOnLoad() {
             const urlParams = new URLSearchParams(window.location.search);
             let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
@@ -580,17 +554,17 @@
             if (urlUserId && urlUserId.trim() !== '' && urlUserId !== 'null') {
                 urlUserId = urlUserId.trim();
                 localStorage.setItem('na2la_external_logged_user_id', urlUserId);
-                if (urlCompanyId && urlCompanyId.trim() !== '') {
-                    currentCompanyId = urlCompanyId.trim();
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                }
                 
-                let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId);
+                let isSuper = superAdminsList.includes(urlUserId);
+                let compId = isSuper ? 'company_main' : (urlCompanyId && urlCompanyId.trim() !== '' ? urlCompanyId.trim() : (localStorage.getItem('current_company_id') || 'company_main'));
+                
+                localStorage.setItem('current_company_id', compId);
+                
                 let newUserObj = {
                     id: urlUserId,
-                    name: urlUserId,
+                    name: isSuper ? 'المدير العام' : urlUserId,
                     role: isSuper ? 'admin' : 'driver',
-                    companyId: currentCompanyId
+                    companyId: compId
                 };
                 localStorage.setItem('na2la_active_session', JSON.stringify(newUserObj));
                 return newUserObj;
@@ -600,24 +574,28 @@
             if (cachedUserJson) {
                 try {
                     let parsed = JSON.parse(cachedUserJson);
-                    if (parsed && parsed.id) return parsed;
+                    if (parsed && parsed.id) {
+                        if (superAdminsList.includes(parsed.id)) {
+                            parsed.role = 'admin';
+                            parsed.name = 'المدير العام';
+                            parsed.companyId = 'company_main';
+                        }
+                        return parsed;
+                    }
                 } catch(e) {}
             }
 
-            let fallbackId = localStorage.getItem('na2la_external_logged_user_id') || '1';
-            let isSuperFallback = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(fallbackId);
             return {
-                id: fallbackId,
-                name: fallbackId,
-                role: isSuperFallback ? 'admin' : 'driver',
-                companyId: localStorage.getItem('current_company_id') || 'company_main'
+                id: '1',
+                name: 'المدير العام',
+                role: 'admin',
+                companyId: 'company_main'
             };
         }
 
-        let activeExternalSessionId = getInstantSessionOnLoad().id;
         let currentLoggedInUser = getInstantSessionOnLoad();
         window.currentLoggedInUser = currentLoggedInUser;
-        currentCompanyId = currentLoggedInUser.companyId || 'company_main';
+        let currentCompanyId = currentLoggedInUser.companyId || 'company_main';
         window.currentCompanyId = currentCompanyId;
 
         let appData = { 
@@ -631,7 +609,6 @@
             if (event.key === 'na2la_active_session' || event.key === 'current_company_id') location.reload();
         });
 
-        // 🛡️ التطبيق اللحظي الفوري للواجهة بمجرد تحميل DOM بدون أي تأخير
         window.addEventListener('DOMContentLoaded', () => {
             applyUserPermissionsUI();
             if (window.db && window.firebaseModules) {
@@ -647,9 +624,27 @@
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
             try {
-                let identifier = currentLoggedInUser.id || activeExternalSessionId;
-                let foundDoc = null;
+                let identifier = currentLoggedInUser.id;
 
+                if (superAdminsList.includes(identifier)) {
+                    window.currentLoggedInUser = {
+                        id: identifier,
+                        name: 'المدير العام',
+                        role: 'admin',
+                        companyId: 'company_main'
+                    };
+                    currentCompanyId = 'company_main';
+                    window.currentCompanyId = 'company_main';
+                    localStorage.setItem('current_company_id', 'company_main');
+                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                    applyUserPermissionsUI();
+                    initFirestoreSync();
+                    initRealtimeAccountSync();
+                    initEmergencyAlertsListener();
+                    return;
+                }
+
+                let foundDoc = null;
                 try {
                     let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
                     if (directDocSnap.exists()) {
@@ -713,42 +708,50 @@
             });
         }
 
-        function userIdIsSuper(name) {
-            return ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(name);
-        }
-        window.userIdIsSuper = userIdIsSuper;
-
         function isSuperAdmin() {
             let user = window.currentLoggedInUser || {};
-            let userName = String(user.name || user.id || activeExternalSessionId || '').trim();
+            let userName = String(user.name || user.id || '').trim();
             let role = String(user.role || '').toLowerCase().trim();
-            return role === 'admin' || userIdIsSuper(userName) || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(userName);
+            return role === 'admin' || superAdminsList.includes(userName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
         function getUserRole() {
-            if (isSuperAdmin()) return 'admin';
-            let user = window.currentLoggedInUser || {};
-            let role = String(user.role || '').toLowerCase().trim();
-            return (role === 'admin' || role === 'مدير') ? 'admin' : 'driver';
+            return isSuperAdmin() ? 'admin' : 'driver';
         }
         window.getUserRole = getUserRole;
-
-        function canUserManageSystem() {
-            let role = getUserRole();
-            return role === 'admin' || role === 'supervisor';
-        }
-        window.canUserManageSystem = canUserManageSystem;
 
         function openSwitchAccountPrompt() {
             let inputId = prompt("أدخل معرف الحساب (ID) أو اسم المستخدم لجلب الصلاحيات ومعزل الشركة:");
             if (inputId && inputId.trim() !== "") {
-                activeExternalSessionId = inputId.trim();
-                localStorage.setItem('na2la_external_logged_user_id', activeExternalSessionId);
-                executeBackgroundSyncSession();
+                localStorage.setItem('na2la_external_logged_user_id', inputId.trim());
+                location.href = `?userId=${encodeURIComponent(inputId.trim())}`;
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
+
+        function goToPageWithSession(pageName) {
+            let userId = window.currentLoggedInUser?.id || '1';
+            let compId = window.currentCompanyId || 'company_main';
+            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
+        }
+        window.goToPageWithSession = goToPageWithSession;
+
+        function goToMotherPlatform() { goToPageWithSession("https://karamegy.github.io/Na2la/"); }
+        window.goToMotherPlatform = goToMotherPlatform;
+
+        function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
+        window.goToOperationsHub = goToOperationsHub;
+
+        function getSafeName(item) { return item ? (item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل') : 'عميل'; }
+        function getSafePhone(item) { return item ? (item.clientPhone || item.phone || item.mobile || item.tel || 'غير محدد') : 'غير محدد'; }
+        function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
+        function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
+        function getSafeStatus(item) {
+            if (!item) return 'paid';
+            let s = String(item.status || item.paymentStatus || '').toLowerCase();
+            return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
+        }
 
         function openCommunityModal() {
             document.getElementById('communityModal').style.display = 'flex';
@@ -792,10 +795,10 @@
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'المدير', role: 'admin' };
+            let user = window.currentLoggedInUser || { name: 'المدير العام', role: 'admin' };
             let role = getUserRole();
             
-            document.getElementById('header-username').innerText = user.name || 'المدير';
+            document.getElementById('header-username').innerText = user.name || 'المدير العام';
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
