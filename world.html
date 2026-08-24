@@ -541,9 +541,12 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المعدل لضمان المطابقة الكاملة للملف والسلسلة الآمنة -->
+    <!-- السكريبت البرمجي المعدل بالكامل -->
     <script>
-        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'كرم', 'Karam', 'كرم حمدي عبدالعظيم محمود عجاج'];
+        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'كرم', 'Karam', 'كرم حمدي عبدالعظيم محمود عجاج', 'المدثر', 'Medhat', 'مدثر'];
+
+        // خريطة مركزية لربط المعرفات العشوائية وأرقام الهواتف بأسمائها الحقيقية فوراً
+        window._globalMembersMap = {};
 
         function getInstantSessionOnLoad() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -551,7 +554,7 @@
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
             if (!urlUserId) {
-                urlUserId = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'كرم حمدي عبدالعظيم محمود عجاج';
+                urlUserId = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدثر';
             }
             if (!urlCompanyId) {
                 urlCompanyId = localStorage.getItem('current_company_id') || 'company_main';
@@ -574,8 +577,8 @@
             let newUserObj = {
                 id: urlUserId,
                 name: urlUserId,
-                role: isSuper ? 'مدير عام ومنسق النظام' : (cachedUser.role || 'سائق الأسطول'),
-                rank: isSuper ? 'مدير نظام / مطور المنصة' : (cachedUser.rank || 'سائق مستقل'),
+                role: isSuper ? 'المؤسس / مدير عام النظام' : (cachedUser.role || 'سائق الأسطول'),
+                rank: isSuper ? 'مدير النظام والمؤسس' : (cachedUser.rank || 'سائق مستقل'),
                 phone: cachedUser.phone || urlParams.get('phone') || 'غير محدد',
                 permissions: isSuper ? 'صلاحيات مطلقة (Full Access)' : (cachedUser.permissions || 'صلاحيات تشغيلية'),
                 companyId: compId,
@@ -646,9 +649,9 @@
                 } else {
                     foundDoc = {
                         id: identifier,
-                        name: "كرم حمدي عبدالعظيم محمود عجاج",
-                        role: "مدير النظام والمطور",
-                        rank: "مدير عام النظام",
+                        name: "المدثر",
+                        role: "المؤسس ومدير النظام",
+                        rank: "المؤسس العام",
                         phone: "010xxxxxxxx",
                         permissions: "تحكم كامل وعزل آمن",
                         companyId: "company_main"
@@ -660,8 +663,8 @@
                     window.currentLoggedInUser = {
                         id: foundDoc.id || identifier,
                         name: foundDoc.name || identifier,
-                        role: foundDoc.role || foundDoc.title || (isIdentifierAdmin ? 'مدير نظام ومطور' : 'سائق'),
-                        rank: foundDoc.rank || (isIdentifierAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                        role: foundDoc.role || foundDoc.title || (isIdentifierAdmin ? 'المؤسس ومدير النظام' : 'سائق'),
+                        rank: foundDoc.rank || (isIdentifierAdmin ? 'المؤسس العام' : 'سائق معتمد'),
                         phone: foundDoc.phone || foundDoc.mobile || 'غير محدد',
                         permissions: foundDoc.permissions || (isIdentifierAdmin ? 'صلاحيات مطلقة' : 'صلاحيات تشغيلية'),
                         avatar: userAvatar,
@@ -676,7 +679,6 @@
                 
                 applyUserPermissionsUI();
                 initFirestoreSync();
-                initRealtimeAccountSync();
                 initEmergencyAlertsListener();
 
             } catch (err) {
@@ -684,183 +686,28 @@
             }
         }
 
-        function initRealtimeAccountSync() {
-            if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot } = window.firebaseModules;
-            
-            onSnapshot(collection(window.db, "drivers"), (snapshot) => {
-                if (isSuperAdmin()) return;
-                let identifier = currentLoggedInUser.id || currentLoggedInUser.name;
-                snapshot.forEach(docSnap => {
-                    let d = docSnap.data();
-                    if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
-                        let newCompId = d.companyId || 'company_main';
-                        let newAvatar = d.avatar || d.img || d.photo || d.picture || d.imageUrl || d.profileImage || '';
-                        if (newCompId !== currentCompanyId || d.name !== currentLoggedInUser.name || newAvatar !== currentLoggedInUser.avatar) {
-                            currentCompanyId = newCompId;
-                            window.currentCompanyId = currentCompanyId;
-                            localStorage.setItem('current_company_id', currentCompanyId);
-                            window.currentLoggedInUser = { 
-                                id: docSnap.id, 
-                                ...d, 
-                                avatar: newAvatar,
-                                rank: d.rank || 'سائق معتمد',
-                                phone: d.phone || d.mobile || 'غير محدد',
-                                permissions: d.permissions || 'تشغيلي'
-                            };
-                            localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                            applyUserPermissionsUI();
-                            renderAllFinancials();
-                        }
-                    }
-                });
-            });
-        }
-
-        function isSuperAdmin() {
-            let user = window.currentLoggedInUser || {};
-            let role = String(user.role || '').toLowerCase();
-            let userName = String(user.name || user.id || '').trim().toLowerCase();
-            return role.includes('مدير') || role === 'admin' || superAdminsList.some(admin => userName.includes(admin.toLowerCase()));
-        }
-        window.isSuperAdmin = isSuperAdmin;
-
-        function getUserRole() {
-            return isSuperAdmin() ? 'admin' : 'driver';
-        }
-        window.getUserRole = getUserRole;
-
-        function goToPageWithSession(pageName) {
-            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
-            let compId = window.currentCompanyId || 'company_main';
-            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
-        }
-        window.goToPageWithSession = goToPageWithSession;
-
-        function goToMotherPlatform() { 
-            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
-            let compId = window.currentCompanyId || 'company_main';
-            window.location.href = `https://karamegy.github.io/Na2la/?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`; 
-        }
-        window.goToMotherPlatform = goToMotherPlatform;
-
-        function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
-        window.goToOperationsHub = goToOperationsHub;
-
-        function getSafeName(item) { return item ? (item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || 'عميل') : 'عميل'; }
-        function getSafePhone(item) { return item ? (item.clientPhone || item.phone || item.mobile || item.tel || 'غير محدد') : 'غير محدد'; }
-        function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
-        function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
-        function getSafeStatus(item) {
-            if (!item) return 'paid';
-            let s = String(item.status || item.paymentStatus || '').toLowerCase();
-            return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
-        }
-
-        function openCommunityModal() {
-            document.getElementById('communityModal').style.display = 'flex';
-            renderCommunityPosts();
-        }
-        window.openCommunityModal = openCommunityModal;
-
-        function publishCommunityPost() {
-            let text = document.getElementById('communityPostText').value.trim();
-            if(!text) return alert("اكتب نص المنشور أولاً");
-            let user = window.currentLoggedInUser || {};
-            let post = {
-                id: String(Date.now()),
-                userId: user.id || 'admin',
-                companyId: currentCompanyId,
-                name: user.name || 'سائق',
-                description: text,
-                date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-            };
-            if(!appData.communityPosts) appData.communityPosts = [];
-            appData.communityPosts.unshift(post);
-            syncItemToCollection('communityPosts', post);
-            document.getElementById('communityPostText').value = '';
-            renderCommunityPosts();
-            alert("✅ تم النشر بنجاح!");
-        }
-        window.publishCommunityPost = publishCommunityPost;
-
-        function renderCommunityPosts() {
-            let container = document.getElementById('communityPostsContainer');
-            if(!container) return;
-            let posts = (appData.communityPosts || []).filter(p => isSuperAdmin() || !p.companyId || p.companyId === currentCompanyId);
-            container.innerHTML = posts.map(p => `
-                <div style="background:var(--bg-color); padding:10px; border-radius:10px; border:1px solid var(--border-color); font-size:12px;">
-                    <div style="display:flex; justify-content:space-between; color:var(--primary-blue); font-size:10px; margin-bottom:4px;">
-                        <b>${p.name || 'سائق'}</b> <span>${p.date || ''}</span>
-                    </div>
-                    <p>${p.description || ''}</p>
-                </div>
-            `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات</p>';
-        }
-
-        function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'سائق الأسطول', role: 'driver', rank: 'سائق', phone: 'غير محدد', permissions: 'تشغيلي' };
-            
-            // عرض اسم المستخدم، الرتبة، رقم الهاتف والصلاحيات بدقة في الهيدر
-            document.getElementById('header-username').innerText = user.name || 'كرم حمدي عبدالعظيم محمود عجاج';
-            
-            let detailsLine = `رتبة: ${user.rank || 'مطور/مدير'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'مطلقة'}`;
-            document.getElementById('header-details-line').innerText = detailsLine;
-            
-            let avatarImg = document.getElementById('userHeaderAvatarImg');
-            let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
-            if (user.avatar && String(user.avatar).trim() !== '') {
-                avatarImg.src = user.avatar;
-                avatarImg.style.display = 'block';
-                if (avatarEmoji) avatarEmoji.style.display = 'none';
-            } else {
-                avatarImg.style.display = 'none';
-                if (avatarEmoji) {
-                    avatarEmoji.style.display = 'inline-block';
-                    avatarEmoji.innerText = (user.name || 'ك').charAt(0);
-                }
-            }
-
-            renderBottomNavbarByRole(getUserRole());
-            renderAllFinancials();
-        }
-
-        function renderBottomNavbarByRole(role) {
-            const navbar = document.getElementById('bottom-navbar');
-            if(!navbar) return;
-
-            navbar.innerHTML = `
-                <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
-                <button class="nav-item-btn" onclick="switchSection('emergency', this)"><span class="icon">🚨</span><span>الطوارئ</span></button>
-                <button class="nav-item-btn" onclick="switchSection('expenses', this)"><span class="icon">📤</span><span>المصروفات</span></button>
-                <button class="nav-item-btn" onclick="switchSection('treasury', this)"><span class="icon">💰</span><span>الخزينة</span></button>
-                <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الحسابات</span></button>
-                <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التحليلات</span></button>
-            `;
-        }
-
-        function switchSection(name, btn) {
-            document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.nav-item-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(`section-${name}`).classList.add('active');
-            if (btn) btn.classList.add('active');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        let currentAccountFilter = 'all';
-        function setAccountFilter(filterType) {
-            currentAccountFilter = filterType;
-            ['all', 'shipments', 'deferred', 'accounts'].forEach(f => {
-                let btn = document.getElementById(`filterBtn-${f}`);
-                if(btn) btn.style.opacity = (f === filterType) ? '1' : '0.7';
-            });
-            renderAllFinancials();
-        }
-
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc } = window.firebaseModules;
 
+            // 1. مزامنة فورية وشاملة لجميع الأعضاء والسائقين مهما كانت صلاحياتهم
+            ['drivers', 'users', 'team'].forEach(colName => {
+                onSnapshot(collection(window.db, colName), (snapshot) => {
+                    snapshot.forEach(docSnap => {
+                        let data = docSnap.data();
+                        let docId = docSnap.id;
+                        let memberName = data.name || data.fullName || data.accountOwner || data.username || docId;
+                        
+                        window._globalMembersMap[docId] = memberName;
+                        if (data.phone) window._globalMembersMap[data.phone] = memberName;
+                        if (data.mobile) window._globalMembersMap[data.mobile] = memberName;
+                        if (data.userId) window._globalMembersMap[data.userId] = memberName;
+                    });
+                    renderAllFinancials();
+                }, err => {});
+            });
+
+            // 2. مزامنة حالة النظام العامة والإشعارات
             onSnapshot(doc(window.db, "appStore", "mainState"), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -870,6 +717,7 @@
                 }
             });
 
+            // 3. مزامنة المعاملات المالية والشحنات مع فلترة الشركة
             const collectionsMap = {
                 shipments: ['shipments', 'Shipments', 'trip', 'trips', 'رحلات', 'شحنات'],
                 deferredInvoices: ['deferredInvoices', 'deferred', 'Invoices', 'fawateer', 'فواتير'],
@@ -951,7 +799,7 @@
                     listWidget.innerHTML = alerts.map(a => `
                         <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; border: 1px solid var(--danger-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                             <div>
-                                <b style="color:var(--danger-color);">🚨 الكابتن: ${a.driverName || a.name || 'سائق'}</b><br>
+                                <b style="color:var(--danger-color);">🚨 الكابتن: ${getSafeName({name: a.driverName || a.name})}</b><br>
                                 <span style="font-size:11px; color:var(--secondary-text);">الهاتف: <a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></span>
                             </div>
                             <div style="display:flex; gap:6px;">
@@ -972,7 +820,7 @@
                     tbody.innerHTML = alerts.map(a => `
                         <tr>
                             <td><b>${a.time || 'اليوم'}</b></td>
-                            <td><b style="color:var(--danger-color);">${a.driverName || a.name || 'سائق'}</b></td>
+                            <td><b style="color:var(--danger-color);">${getSafeName({name: a.driverName || a.name})}</b></td>
                             <td><a href="tel:${a.phone}" style="color:var(--primary-blue); font-weight:bold;">${a.phone || 'غير متوفر'}</a></td>
                             <td><span style="background:rgba(255,65,108,0.2); color:var(--danger-color); padding:4px 10px; border-radius:8px; font-weight:bold;">🚨 طوارئ SOS</span></td>
                             <td>${a.lat ? `<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" class="whatsapp-btn" style="background:var(--primary-blue);">📍 الموقع</a>` : 'غير متوفرة'}</td>
@@ -1239,6 +1087,167 @@
             a.href = url; a.download = `Na2la_Financials_${currentCompanyId}.csv`;
             a.click();
         }
+
+        // دالة حماية وعرض الاسم الحقيقي حصرياً (تمنع ظهور المعرفات العشوائية نهائياً)
+        function getSafeName(item) {
+            if (!item) return 'عضو عام';
+            let rawName = item.accountOwner || item.clientName || item.name || item.customerName || item.driverName || item.userId || '';
+            
+            // فحص ما إذا كان النص عبارة عن معرف تقني عشوائي طويل لفايرستور
+            if (rawName.length > 15 && /^[a-zA-Z0-9]+$/.test(rawName)) {
+                if (window._globalMembersMap && window._globalMembersMap[rawName]) {
+                    return window._globalMembersMap[rawName];
+                }
+                if (item.phone || item.clientPhone) {
+                    return `عضو الأسطول (${item.phone || item.clientPhone})`;
+                }
+                return 'عضو معتمد';
+            }
+            
+            if (window._globalMembersMap && window._globalMembersMap[rawName]) {
+                return window._globalMembersMap[rawName];
+            }
+            
+            return rawName || 'عضو عام';
+        }
+
+        function getSafePhone(item) { return item ? (item.clientPhone || item.phone || item.mobile || item.tel || 'غير محدد') : 'غير محدد'; }
+        function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
+        function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
+        function getSafeStatus(item) {
+            if (!item) return 'paid';
+            let s = String(item.status || item.paymentStatus || '').toLowerCase();
+            return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
+        }
+
+        function openCommunityModal() {
+            document.getElementById('communityModal').style.display = 'flex';
+            renderCommunityPosts();
+        }
+        window.openCommunityModal = openCommunityModal;
+
+        function publishCommunityPost() {
+            let text = document.getElementById('communityPostText').value.trim();
+            if(!text) return alert("اكتب نص المنشور أولاً");
+            let user = window.currentLoggedInUser || {};
+            let post = {
+                id: String(Date.now()),
+                userId: user.id || 'admin',
+                companyId: currentCompanyId,
+                name: user.name || 'سائق',
+                description: text,
+                date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            };
+            if(!appData.communityPosts) appData.communityPosts = [];
+            appData.communityPosts.unshift(post);
+            syncItemToCollection('communityPosts', post);
+            document.getElementById('communityPostText').value = '';
+            renderCommunityPosts();
+            alert("✅ تم النشر بنجاح!");
+        }
+        window.publishCommunityPost = publishCommunityPost;
+
+        function renderCommunityPosts() {
+            let container = document.getElementById('communityPostsContainer');
+            if(!container) return;
+            let posts = (appData.communityPosts || []).filter(p => isSuperAdmin() || !p.companyId || p.companyId === currentCompanyId);
+            container.innerHTML = posts.map(p => `
+                <div style="background:var(--bg-color); padding:10px; border-radius:10px; border:1px solid var(--border-color); font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; color:var(--primary-blue); font-size:10px; margin-bottom:4px;">
+                        <b>${getSafeName({name: p.name})}</b> <span>${p.date || ''}</span>
+                    </div>
+                    <p>${p.description || ''}</p>
+                </div>
+            `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات</p>';
+        }
+
+        function applyUserPermissionsUI() {
+            let user = window.currentLoggedInUser || { name: 'سائق الأسطول', role: 'driver', rank: 'سائق', phone: 'غير محدد', permissions: 'تشغيلي' };
+            
+            document.getElementById('header-username').innerText = user.name || 'المدثر';
+            
+            let detailsLine = `رتبة: ${user.rank || 'المؤسس'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'مطلقة'}`;
+            document.getElementById('header-details-line').innerText = detailsLine;
+            
+            let avatarImg = document.getElementById('userHeaderAvatarImg');
+            let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
+            if (user.avatar && String(user.avatar).trim() !== '') {
+                avatarImg.src = user.avatar;
+                avatarImg.style.display = 'block';
+                if (avatarEmoji) avatarEmoji.style.display = 'none';
+            } else {
+                avatarImg.style.display = 'none';
+                if (avatarEmoji) {
+                    avatarEmoji.style.display = 'inline-block';
+                    avatarEmoji.innerText = (user.name || 'م').charAt(0);
+                }
+            }
+
+            renderBottomNavbarByRole(getUserRole());
+            renderAllFinancials();
+        }
+
+        function renderBottomNavbarByRole(role) {
+            const navbar = document.getElementById('bottom-navbar');
+            if(!navbar) return;
+
+            navbar.innerHTML = `
+                <button class="nav-item-btn active" onclick="switchSection('overview', this)"><span class="icon">🏠</span><span>الرئيسية</span></button>
+                <button class="nav-item-btn" onclick="switchSection('emergency', this)"><span class="icon">🚨</span><span>الطوارئ</span></button>
+                <button class="nav-item-btn" onclick="switchSection('expenses', this)"><span class="icon">📤</span><span>المصروفات</span></button>
+                <button class="nav-item-btn" onclick="switchSection('treasury', this)"><span class="icon">💰</span><span>الخزينة</span></button>
+                <button class="nav-item-btn" onclick="switchSection('accounts', this)"><span class="icon">📋</span><span>الحسابات</span></button>
+                <button class="nav-item-btn" onclick="switchSection('analytics', this)"><span class="icon">📊</span><span>التحليلات</span></button>
+            `;
+        }
+
+        function switchSection(name, btn) {
+            document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`section-${name}`).classList.add('active');
+            if (btn) btn.classList.add('active');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        let currentAccountFilter = 'all';
+        function setAccountFilter(filterType) {
+            currentAccountFilter = filterType;
+            ['all', 'shipments', 'deferred', 'accounts'].forEach(f => {
+                let btn = document.getElementById(`filterBtn-${f}`);
+                if(btn) btn.style.opacity = (f === filterType) ? '1' : '0.7';
+            });
+            renderAllFinancials();
+        }
+
+        function isSuperAdmin() {
+            let user = window.currentLoggedInUser || {};
+            let role = String(user.role || '').toLowerCase();
+            let userName = String(user.name || user.id || '').trim().toLowerCase();
+            return role.includes('مدير') || role.includes('مؤسس') || role === 'admin' || superAdminsList.some(admin => userName.includes(admin.toLowerCase()));
+        }
+        window.isSuperAdmin = isSuperAdmin;
+
+        function getUserRole() {
+            return isSuperAdmin() ? 'admin' : 'driver';
+        }
+        window.getUserRole = getUserRole;
+
+        function goToPageWithSession(pageName) {
+            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
+            let compId = window.currentCompanyId || 'company_main';
+            window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
+        }
+        window.goToPageWithSession = goToPageWithSession;
+
+        function goToMotherPlatform() { 
+            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
+            let compId = window.currentCompanyId || 'company_main';
+            window.location.href = `https://karamegy.github.io/Na2la/?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`; 
+        }
+        window.goToMotherPlatform = goToMotherPlatform;
+
+        function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
+        window.goToOperationsHub = goToOperationsHub;
 
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
