@@ -695,7 +695,7 @@
                 <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات والرحلات العامة</button>
                 <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
                 <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية ومقرات الشحنات</button>
-                <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel</button>
+                <button onclick="switchSection('reports'); toggleSidebar();">📊 التقارير وتصدير Excel وتصدير PDF</button>
                 <button onclick="switchSection('auditLogs'); toggleSidebar();">🔍 سجل العمليات النشطة</button>
             `;
         } else if (role === 'مشرف') {
@@ -1047,16 +1047,23 @@
                 </div>
             `;
         } else if (sectionId === 'shipments') {
+            const uniqueDrivers = [...new Set(shipmentsList.map(s => s.assignedDriver).filter(Boolean))];
             content.innerHTML = `
                 ${role !== 'سائق' ? `
                 <div class="card">
-                    <h3><span>📦 تسجيل رحلة وشحنة جديدة (تظهر فوراً في باندا)</span></h3>
+                    <h3><span>📦 تسجيل رحلة وشحنة جديدة مع الحاسبة الفورية</span></h3>
                     <form onsubmit="saveNewShipment(event)">
                         <input type="text" id="s-name" placeholder="اسم العميل" required>
                         <input type="text" id="s-phone" placeholder="رقم الهاتف">
                         <input type="text" id="s-address" placeholder="عنوان التوصيل" required>
                         <input type="text" id="s-item" placeholder="وصف الحمولة" required>
-                        <input type="number" id="s-price" placeholder="الأجرة (ج.م)" required>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                            <input type="number" id="s-price" placeholder="الأجرة الإجمالية (ج.م)" required oninput="calculateTripPreview()">
+                            <input type="number" id="s-km" placeholder="مسافة الرحلة (KM)" value="100" required oninput="calculateTripPreview()">
+                        </div>
+                        <div id="trip-preview-box" style="background:var(--bg-dark); padding:6px; border-radius:6px; font-size:9px; margin-bottom:5px; color:var(--yellow-warning);">
+                            💡 معاينة التكلفة: أدخل الأجرة والمسافة لحساب الربح التقديري.
+                        </div>
                         <select id="s-priority" style="margin-bottom:5px;">
                             <option value="عادي">أولوية عادية</option>
                             <option value="عاجل ⚡">أولوية عاجلة ⚡</option>
@@ -1071,25 +1078,29 @@
                 </div>` : ''}
                 <div class="card">
                     <h3><span>📋 قائمة الشحنات المتاحة ${role === 'سائق' ? '(للمتابعة فقط)' : ''}</span></h3>
-                    <div style="margin-bottom:6px;">
-                        <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة (اسم العميل أو الحمولة)..." oninput="filterShipmentsTable()">
+                    <div style="display:flex; gap:5px; margin-bottom:6px;">
+                        <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة (اسم العميل أو الحمولة)..." oninput="filterShipmentsTable()" style="flex:2; margin:0;">
+                        <select id="shipment-driver-filter" onchange="filterShipmentsTable()" style="flex:1; margin:0; font-size:9px;">
+                            <option value="">كل السائقين</option>
+                            ${uniqueDrivers.map(d => `<option value="${d}">${d}</option>`).join('')}
+                        </select>
                     </div>
                     <div class="table-responsive">
                         <table>
-                            <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الأولوية</th><th>إجراءات</th></tr></thead>
+                            <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>السائق</th><th>إجراءات</th></tr></thead>
                             <tbody id="shipments-table-body">
                                 ${shipmentsList.map((s, idx) => `
                                     <tr>
                                         <td>${s.name}</td>
                                         <td>${s.item}</td>
-                                        <td>${s.price}</td>
-                                        <td><span class="badge ${s.priority?.includes('عاجل') ? 'bg-danger' : 'bg-transit'}">${s.priority || 'عادي'}</span></td>
+                                        <td>${s.price} ج.م</td>
+                                        <td>${s.assignedDriver || '-'}</td>
                                         <td>
                                             <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                                             <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
                                             ${role === 'admin' ? `
                                                 <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
-                                                <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
+                                                <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف نهائي">✕</button>
                                             ` : ''}
                                             ${role === 'مشرف' ? `
                                                 <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
@@ -1297,8 +1308,9 @@
         } else if (sectionId === 'reports') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>📊 التقارير والفواتير وتصدير Excel</span></h3>
+                    <h3><span>📊 التقارير والفواتير وتصدير Excel و PDF</span></h3>
                     <button class="btn-success" onclick="exportToExcel()" style="margin-bottom:6px;">📊 تصدير البيانات إلى Excel</button>
+                    <button class="btn-warning" onclick="exportAllShipmentsPDF()" style="margin-bottom:6px; color:#000; font-weight:bold;">📄 تصدير تقرير الشحنات الشامل (PDF)</button>
                     <button class="btn-main" onclick="exportSummaryWhatsApp()" style="margin-bottom:6px;">📲 إرسال التقرير اليومي عبر واتساب</button>
                 </div>
             `;
@@ -1318,6 +1330,17 @@
             `;
         }
         renderStats();
+    }
+
+    function calculateTripPreview() {
+        const price = Number(document.getElementById('s-price').value || 0);
+        const km = Number(document.getElementById('s-km').value || 100);
+        const fuelCost = (km / 8) * 12; // افتراض 8 كم لكل لتر وسعر 12 ج.م
+        const netProfit = price - fuelCost;
+        const box = document.getElementById('trip-preview-box');
+        if(box) {
+            box.innerHTML = `💡 تكلفة الوقود التقريبية: <strong>${fuelCost.toFixed(1)} ج.م</strong> | صافي الربح التقديري: <strong style="color:var(--green-success);">${netProfit.toFixed(1)} ج.م</strong>`;
+        }
     }
 
     function previewChatFileName(input) {
@@ -1380,24 +1403,30 @@
 
     function filterShipmentsTable() {
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
+        const driverFilter = document.getElementById('shipment-driver-filter') ? document.getElementById('shipment-driver-filter').value : '';
         let data = appStateData();
         let shipmentsList = data.shipments || data.docs || [];
         const tbody = document.getElementById('shipments-table-body');
         const role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
-        const filtered = shipmentsList.filter(s => s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query));
+        
+        const filtered = shipmentsList.filter(s => {
+            const matchesQuery = s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query);
+            const matchesDriver = !driverFilter || s.assignedDriver === driverFilter;
+            return matchesQuery && matchesDriver;
+        });
         
         tbody.innerHTML = filtered.map((s, idx) => `
             <tr>
                 <td>${s.name}</td>
                 <td>${s.item}</td>
-                <td>${s.price}</td>
-                <td><span class="badge ${s.priority?.includes('عاجل') ? 'bg-danger' : 'bg-transit'}">${s.priority || 'عادي'}</span></td>
+                <td>${s.price} ج.م</td>
+                <td>${s.assignedDriver || '-'}</td>
                 <td>
                     <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
                     <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
                     ${role === 'admin' ? `
                         <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
-                        <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف">✕</button>
+                        <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف نهائي">✕</button>
                     ` : ''}
                 </td>
             </tr>
@@ -1619,26 +1648,38 @@
         switchSection('consolidatedInvoices');
     }
 
-    function deleteItem(key, index) {
+    // 🔴 تم تحديث وظيفة الحذف لتكون نهائية ولا تعود أبداً مع المزامنة
+    window.deleteItem = function(key, index) {
         let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if (role !== 'admin') {
             showToast('عذراً، عمليات الحذف مخصصة لمدير النظام (admin) فقط لحماية البيانات!', 'warning');
             return;
         }
-        if(confirm('هل أنت متأكد من الحذف؟')) {
+        if(confirm('هل أنت متأكد من الحذف النهائي ولن يعود مجدداً؟')) {
             let data = appStateData();
             let targetList = key === 'shipments' ? (data.shipments || data.docs) : data[key];
-            if(targetList) {
+            
+            if(targetList && targetList[index]) {
+                let itemToDelete = targetList[index];
+                
+                // إذا كانت شحنة وتمتلك ID، احذفها فوراً من مجموعة shipments المستقلة في فايرستور لمنع عودتها
+                if (key === 'shipments' && itemToDelete.id) {
+                    db.collection("shipments").doc(String(itemToDelete.id)).delete().catch(err => console.log(err));
+                }
+
                 targetList.splice(index, 1);
+                
                 if(key === 'shipments') {
                     data.shipments = targetList;
                     data.docs = targetList;
+                    collectionShipments = [...targetList];
                 }
+                
                 saveDataAll();
-                showToast('تم الحذف بنجاح');
+                showToast('تم الحذف النهائي بنجاح ولن يعود مجدداً 🗑️');
             }
         }
-    }
+    };
 
     function openConsolidatedImageModal(id) {
         let data = appStateData();
@@ -1813,8 +1854,9 @@
             showToast('عذراً، حساب السائق لا يمتلك صلاحية إضافة شحنات جديدة!', 'warning');
             return;
         }
+        const shipmentId = Date.now();
         const newShipment = {
-            id: Date.now(),
+            id: shipmentId,
             name: document.getElementById('s-name').value,
             phone: document.getElementById('s-phone').value,
             address: document.getElementById('s-address').value,
@@ -1827,6 +1869,10 @@
             gps: '30.0444,31.2357',
             date: new Date().toLocaleDateString('ar-EG')
         };
+        
+        // حفظ أيضاً في مجموعة shipments المستقلة لضمان التوافق التام مع المستمعين
+        db.collection("shipments").doc(String(shipmentId)).set(newShipment).catch(err => console.log(err));
+
         let data = appStateData();
         let list = data.shipments || data.docs || [];
         list.unshift(newShipment);
@@ -1898,8 +1944,9 @@
     }
 
     function saveVisitorShipment() {
+        const shipmentId = Date.now();
         const newShipment = {
-            id: Date.now(),
+            id: shipmentId,
             name: document.getElementById('vis-name').value,
             phone: document.getElementById('vis-phone').value,
             address: document.getElementById('vis-address').value,
@@ -1911,6 +1958,9 @@
             gps: '30.0444,31.2357',
             date: new Date().toLocaleDateString('ar-EG')
         };
+        
+        db.collection("shipments").doc(String(shipmentId)).set(newShipment).catch(err => console.log(err));
+
         let data = appStateData();
         let list = data.shipments || data.docs || [];
         list.unshift(newShipment);
@@ -2025,6 +2075,22 @@
         doc.text(`Price: ${s.price} EGP`, 20, 70);
         doc.save(`waybill_${s.name}.pdf`);
         showToast('تم تصدير البوليصة بنجاح!');
+    }
+
+    function exportAllShipmentsPDF() {
+        let data = appStateData();
+        let shipmentsList = data.shipments || data.docs || [];
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text("أسطورة الطريق & باندا - تقرير الشحنات الشامل", 20, 20);
+        let y = 35;
+        shipmentsList.forEach((s, i) => {
+            if(y > 270) { doc.addPage(); y = 20; }
+            doc.text(`${i+1}. العميل: ${s.name} | الحمولة: ${s.item} | الأجرة: ${s.price} ج.م`, 20, y);
+            y += 10;
+        });
+        doc.save("all_shipments_report.pdf");
+        showToast('تم تصدير تقرير الشحنات الشامل بنجاح! 📄');
     }
 
     function exportToExcel() {
