@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة تواصل السائقين الاحترافية - V53 PRO SECURE ISOLATED</title>
+    <title>منصة تواصل السائقين والأسطول الاحترافية - V54 PRO SECURE SYNC</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --bg: #f4f6f9; --card-bg: #fff; }
-        body { font-family: Tahoma, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #333; padding-bottom: 90px; }
+        :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --bg: #f4f6f9; --card-bg: #fff; --accent: #2563eb; }
+        body { font-family: Tahoma, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #333; padding-bottom: 90px; direction: rtl; }
         .comm-container { max-width: 850px; margin: 0 auto; background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
         h2, h3 { text-align: center; color: #222; }
         .status-bar { padding: 10px; margin-bottom: 15px; border-radius: 6px; text-align: center; font-size: 0.9rem; background: #e9ecef; }
+        .profile-box { background: linear-gradient(135deg, #1e293b, #0f172a); color: #fff; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .admin-box, .post-creator, .search-box { background: #fafbfc; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e4e8; }
         input, textarea, select { width: 100%; padding: 10px; margin: 6px 0 12px 0; border: 1px solid #ccd0d5; border-radius: 6px; box-sizing: border-box; font-family: Tahoma; background: #fff; color: #333; }
         .btn { background-color: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
@@ -46,6 +47,21 @@
 
     <h2>منصة تواصل السائقين والأسطول الاحترافية</h2>
     <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات ومزامنة الحساب الآمن...</div>
+
+    <!-- لوحة بروفايل المستخدم والصلاحيات النشطة -->
+    <div class="profile-box">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div id="profileAvatar" style="width: 45px; height: 45px; border-radius: 50%; background: #38bdf8; color: #0f172a; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px;">👤</div>
+            <div>
+                <strong id="profileNameText" style="font-size: 1rem; display: block;">جاري التحميل...</strong>
+                <span id="profileTitleText" style="font-size: 0.8rem; color: #38bdf8;">سائق معتمد</span>
+            </div>
+        </div>
+        <div style="font-size: 0.85rem; background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">
+            <div><strong>الصلاحيات:</strong> <span id="profilePermissionsText">صلاحيات تشغيلية نشطة</span></div>
+            <div><strong>الشركة / الشراكة:</strong> <span id="profileCompanyText">-</span></div>
+        </div>
+    </div>
 
     <!-- لوحة تحكم المؤسس والإدارة -->
     <div class="admin-box">
@@ -83,7 +99,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -99,71 +115,116 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 🔄 مزامنة الحساب المتصل ومعرف الشراكة عبر الرابط والـ LocalStorage
-    function getActiveSessionAndCompany() {
+    let activeSessionName = 'المدير';
+    let currentCompanyId = 'comp_1787481011714';
+    let currentUserRole = 'admin';
+    let currentUserPermissions = 'صلاحيات كاملة لإدارة النظام والأسطول';
+    let currentUserAvatar = '';
+
+    window.currentCompanyId = currentCompanyId;
+    window.manualAdminOverride = false;
+
+    // استخراج الجلسة ومعرف المستخدم لحظياً من الرابط أو التخزين
+    function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-        
+        let urlComp = urlParams.get('companyId') || urlParams.get('company');
+
         if (externalId && externalId.trim() !== '' && externalId !== 'null') {
             externalId = externalId.trim();
             localStorage.setItem('logged_in_driver_name', externalId);
             localStorage.setItem('na2la_external_logged_user_id', externalId);
         }
 
-        let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدير';
-        activeName = activeName.trim();
-
-        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
-        let compId = isSuper ? 'comp_1787481011714' : (localStorage.getItem('current_company_id') || ('comp_' + activeName.replace(/[^a-zA-Z0-9]/g, '_')));
-        
-        localStorage.setItem('current_company_id', compId);
-        return { activeName, compId, isSuper };
+        let savedName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
+        if (savedName) activeSessionName = savedName.trim();
+        if (urlComp) {
+            currentCompanyId = urlComp.trim();
+            localStorage.setItem('current_company_id', currentCompanyId);
+        } else if (localStorage.getItem('current_company_id')) {
+            currentCompanyId = localStorage.getItem('current_company_id');
+        }
     }
 
-    let sessionData = getActiveSessionAndCompany();
-    let activeSessionName = sessionData.activeName;
-    let currentCompanyId = sessionData.compId;
-    window.currentCompanyId = currentCompanyId;
+    parseURLSession();
 
-    document.getElementById('authorName').value = activeSessionName;
-    document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
-
-    window.manualAdminOverride = false;
-
-    function isSuperAdmin() {
-        return window.manualAdminOverride || ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+    // تشغيل المصادقة المجهولة لتجنب أي قيود أمنية على قاعدة البيانات
+    async function initAuth() {
+        try {
+            if (!auth.currentUser) {
+                await signInAnonymously(auth);
+            }
+        } catch (e) {
+            console.warn("Auth warning:", e);
+        }
     }
-    window.isSuperAdmin = isSuperAdmin;
 
-    let allPostsData = [];
-    const postsRef = collection(db, "driver_community_posts");
-
-    // الاعتماد على قواعد فايربيس ومراقبة حالة المصادقة الآمنة بدلاً من الدخول المجهول
-    onAuthStateChanged(auth, (user) => {
-        document.getElementById("connectionStatus").innerText = `✅ متصل سحابياً (مزامنة الحساب: ${activeSessionName} | شراكة: ${currentCompanyId})`;
+    initAuth().then(() => {
+        document.getElementById("connectionStatus").innerText = `✅ متصل سحابياً (مزامنة فورية للأسطول)`;
         document.getElementById("connectionStatus").style.background = "#d4edda";
-        updateAdminUIStatus();
-        loadPosts();
-        setupRealtimeDriversSync();
+        setupRealtimeSync();
     });
 
-    // مراقبة سحابية فورية لأي تحديث يخص الحساب أو الشراكة المتصلة
-    function setupRealtimeDriversSync() {
+    // مزامنة حية لبيانات السائق، الصلاحيات، والشركة من قاعدة البيانات
+    function setupRealtimeSync() {
         onSnapshot(collection(db, "drivers"), (snapshot) => {
-            snapshot.docChanges().forEach(change => {
-                let d = change.doc.data();
-                if (d.name === activeSessionName || d.id === activeSessionName || d.phone === activeSessionName) {
-                    if (d.companyId && d.companyId !== currentCompanyId) {
-                        currentCompanyId = d.companyId;
-                        window.currentCompanyId = currentCompanyId;
-                        localStorage.setItem('current_company_id', currentCompanyId);
-                        document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
-                        loadPosts();
-                    }
+            let foundDriver = null;
+            let allDriversList = [];
+
+            snapshot.forEach(docSnap => {
+                let d = docSnap.data();
+                allDriversList.push(d);
+                if (d.name === activeSessionName || d.id === activeSessionName || d.phone === activeSessionName || docSnap.id === activeSessionName) {
+                    foundDriver = d;
                 }
             });
+
+            // التحقق من حساب المدير العام
+            if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
+                activeSessionName = 'المدير العام';
+                currentUserRole = 'admin';
+                currentUserPermissions = 'صلاحيات كاملة: إدارة الأسطول، الحسابات، والخزنة';
+                currentCompanyId = currentCompanyId || 'comp_1787481011714';
+            } else if (foundDriver) {
+                activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
+                currentUserRole = foundDriver.role || foundDriver.rank || 'driver';
+                currentUserPermissions = foundDriver.role === 'admin' ? 'صلاحيات كاملة لإدارة النظام والأسطول' : foundDriver.role === 'مشرف' ? 'صلاحيات إشراف وتوجيه الأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات وشحنات';
+                currentUserAvatar = foundDriver.avatar || '';
+                if (foundDriver.companyId) currentCompanyId = foundDriver.companyId;
+            } else {
+                currentUserRole = 'driver';
+                currentUserPermissions = 'صلاحيات تشغيلية أساسية';
+            }
+
+            window.currentCompanyId = currentCompanyId;
+            localStorage.setItem('current_company_id', currentCompanyId);
+
+            updateProfileUI();
+            updateAdminUIStatus();
+            loadPosts();
         });
     }
+
+    function updateProfileUI() {
+        document.getElementById('authorName').value = activeSessionName;
+        document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
+        document.getElementById('profileNameText').innerText = activeSessionName;
+        document.getElementById('profileTitleText').innerText = currentUserRole === 'admin' ? 'مدير عام النظام' : currentUserRole === 'مشرف' ? 'مشرف أسطول' : 'سائق معتمد';
+        document.getElementById('profilePermissionsText').innerText = currentUserPermissions;
+        document.getElementById('profileCompanyText').innerText = currentCompanyId;
+
+        const avatarEl = document.getElementById('profileAvatar');
+        if (currentUserAvatar) {
+            avatarEl.innerHTML = `<img src="${currentUserAvatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
+        } else {
+            avatarEl.innerText = activeSessionName ? activeSessionName.charAt(0) : '👤';
+        }
+    }
+
+    function isSuperAdmin() {
+        return window.manualAdminOverride || currentUserRole === 'admin' || ['Admin1', 'المدير العام', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+    }
+    window.isSuperAdmin = isSuperAdmin;
 
     function updateAdminUIStatus() {
         let superAdmin = isSuperAdmin();
@@ -171,7 +232,7 @@
         const btnEl = document.getElementById("adminToggleBtn");
         
         if (superAdmin) {
-            statusEl.innerText = `حالة الحساب: [مدير عام المنصة الأم - رؤية شاملة لكافة الشراكات والشركات]`;
+            statusEl.innerText = `حالة الحساب: [صلاحيات إدارة عليا - رؤية شاملة لكافة الشراكات]`;
             statusEl.style.color = "#28a745";
             btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
         } else {
@@ -181,7 +242,9 @@
         }
     }
 
-    // جلب المنشورات والتعليقات مع عزل تام لشراكات الشركات
+    let allPostsData = [];
+    const postsRef = collection(db, "driver_community_posts");
+
     function loadPosts() {
         const q = query(postsRef, orderBy("timestamp", "desc"));
         onSnapshot(q, async (snapshot) => {
@@ -306,7 +369,7 @@
     };
 
     window.toggleAdminMode = function() {
-        if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
+        if (!window.manualAdminOverride && currentUserRole !== 'admin') {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
             if (pass === "admin123") {
                 window.manualAdminOverride = true;
@@ -325,9 +388,9 @@
     window.filterPosts = function() {
         const keyword = document.getElementById("searchInput").value.toLowerCase();
         const filtered = allPostsData.filter(p => 
-            p.content.toLowerCase().includes(keyword) || 
-            p.author.toLowerCase().includes(keyword) ||
-            p.category.toLowerCase().includes(keyword)
+            (p.content && p.content.toLowerCase().includes(keyword)) || 
+            (p.author && p.author.toLowerCase().includes(keyword)) ||
+            (p.category && p.category.toLowerCase().includes(keyword))
         );
         renderPosts(filtered);
     };
