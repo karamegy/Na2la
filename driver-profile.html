@@ -480,22 +480,42 @@
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
+            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
+
+            // 🛡️ تأمين قاطع ومطلق للحساب الرئيسي رقم '1' وصلاحيات المدير لضمان التوافق التام
+            if (externalId === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(externalId)) {
+                localStorage.setItem('current_company_id', 'company_main');
+                localStorage.setItem('logged_in_driver_name', 'المدير');
+                localStorage.setItem('na2la_external_logged_user_id', '1');
+                return '1';
+            }
             
             if (externalId) {
-                localStorage.setItem('logged_in_driver_name', externalId.trim());
-                localStorage.setItem('na2la_external_logged_user_id', externalId.trim());
-                return externalId.trim();
+                externalId = externalId.trim();
+                localStorage.setItem('logged_in_driver_name', externalId);
+                localStorage.setItem('na2la_external_logged_user_id', externalId);
+                if (urlCompanyId) {
+                    localStorage.setItem('current_company_id', urlCompanyId.trim());
+                }
+                return externalId;
             }
 
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
-            if (saved) return saved.trim();
+            if (saved) {
+                if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(saved)) {
+                    localStorage.setItem('current_company_id', 'company_main');
+                }
+                return saved.trim();
+            }
 
-            return 'المدير';
+            return '1'; // الافتراضي الحساب الرئيسي 1
         }
 
         let activeExternalSessionName = getExternalLoginSession();
         let loggedInDriverId = activeExternalSessionName;
         let viewingProfileId = localStorage.getItem('viewing_profile_id') || loggedInDriverId;
+        let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
+        window.currentCompanyId = currentCompanyId;
         let currentChatTarget = 'general';
 
         let appData = { drivers: [], shipments: [], notifications: [], chat: [] };
@@ -543,8 +563,9 @@
         if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
 
         function renderInitialUIInstant() {
-            document.getElementById('gplus-name-display').innerText = activeExternalSessionName;
-            document.getElementById('gplus-badge-display').innerText = ['مدير', 'المدير', 'عماد', 'Emad'].includes(activeExternalSessionName) ? 'مدير النظام' : 'أسطورة الطريق';
+            let displayName = (activeExternalSessionName === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName)) ? 'المدير' : activeExternalSessionName;
+            document.getElementById('gplus-name-display').innerText = displayName;
+            document.getElementById('gplus-badge-display').innerText = ['1', 'مدير', 'المدير', 'عماد', 'Emad'].includes(activeExternalSessionName) ? 'مدير النظام' : 'أسطورة الطريق';
             document.getElementById('user-role-badge').innerText = 'متصل بالمنصة ☁️';
         }
         renderInitialUIInstant();
@@ -588,6 +609,7 @@
             let html = '';
             snapshot.forEach(doc => {
                 let d = doc.data();
+                if (d.companyId && d.companyId !== currentCompanyId && activeExternalSessionName !== '1') return;
                 html += `<div style="background:var(--bg); padding:6px; border-radius:6px; margin-bottom:4px; border-right:3px solid var(--accent);">🚨 ${d.details || 'تنبيه عمليات'} <small style="opacity:0.6">(${d.driverName || 'الأسطول'})</small></div>`;
             });
             notifsBox.innerHTML = html || '<div style="opacity: 0.7; text-align: center; padding: 6px;">لا توجد إشعارات جديدة حالياً.</div>';
@@ -623,6 +645,17 @@
         }
 
         function getLoggedInUser() {
+            if (activeExternalSessionName === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName)) {
+                return {
+                    id: '1',
+                    name: 'المدير',
+                    role: 'admin',
+                    title: 'مدير عام النظام',
+                    status: 'متاح 🟢',
+                    advances: 0,
+                    companyId: 'company_main'
+                };
+            }
             if (appData.drivers && appData.drivers.length > 0) {
                 let drv = appData.drivers.find(d => d.name === activeExternalSessionName || d.id === activeExternalSessionName || d.phone === activeExternalSessionName);
                 if (drv) return drv;
@@ -630,10 +663,11 @@
             return {
                 id: activeExternalSessionName,
                 name: activeExternalSessionName,
-                role: ['مدير', 'المدير', 'عماد', 'Emad'].includes(activeExternalSessionName) ? 'admin' : 'driver',
+                role: 'driver',
                 title: 'أسطورة الطريق',
                 status: 'متاح 🟢',
-                advances: 0
+                advances: 0,
+                companyId: currentCompanyId
             };
         }
 
@@ -650,7 +684,8 @@
             let targetDrv = getTargetViewingDriver();
             let isViewingSelf = String(targetDrv.id) === String(loggedInUser.id) || targetDrv.name === loggedInUser.name;
 
-            document.getElementById('gplus-name-display').innerText = targetDrv.name || 'مستخدم';
+            let displayName = (targetDrv.name === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(targetDrv.name)) ? 'المدير' : targetDrv.name;
+            document.getElementById('gplus-name-display').innerText = displayName || 'مستخدم';
             document.getElementById('gplus-badge-display').innerText = targetDrv.title || 'عضو معتمد';
             document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${targetDrv.role === 'admin' ? 'مدير النظام' : 'سائق'}`;
             
@@ -659,7 +694,9 @@
                 let assigned = (s.assignedDriver || s.driver || '').trim();
                 let clientName = (s.name || s.client || '').trim();
                 
-                if (['المدير', 'مدير', 'عماد', 'Emad'].includes(drvName) || loggedInUser.role === 'admin') return true;
+                if (loggedInUser.role === 'admin' || ['1', 'المدير', 'مدير', 'عماد', 'Emad'].includes(loggedInUser.name)) {
+                    return s.companyId === currentCompanyId || !s.companyId;
+                }
                 return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
             });
 
@@ -692,7 +729,7 @@
                 if(coverControls) coverControls.style.display = 'none';
                 if(gpsCard) gpsCard.style.display = 'none';
                 if(truckEditControls) truckEditControls.style.display = 'none';
-                document.getElementById('profile-wall-heading').innerText = `✍️ النشر على حائط: ${targetDrv.name}`;
+                document.getElementById('profile-wall-heading').innerText = `✍️ النشر على حائط: ${displayName}`;
             } else {
                 if(backBtn) backBtn.style.display = 'none';
                 if(editSettingsCard) editSettingsCard.style.display = 'block';
@@ -723,7 +760,7 @@
             document.getElementById('cover-height-label').innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
-            avatarPreview.innerHTML = targetDrv.avatar ? `<img src="${targetDrv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : targetDrv.name.charAt(0);
+            avatarPreview.innerHTML = targetDrv.avatar ? `<img src="${targetDrv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : (displayName ? displayName.charAt(0) : 'س');
 
             setupWallListener(targetDrv.id || targetDrv.name);
             renderProfileDriverSearch();
@@ -770,7 +807,6 @@
         function openChatModal() { document.getElementById('chatModal').style.display = 'flex'; renderChatMessages(); renderChatAccountsList(); }
         function closeChatModal() { document.getElementById('chatModal').style.display = 'none'; }
 
-        // إدارة مكالمات WebRTC مع فحص الأذونات ومعالجة الأخطاء الدقيقة للـ PWA
         async function startWebRTCCall(isVideo) {
             if (currentChatTarget === 'general') {
                 alert('⚠️ يرجى اختيار حساب شخصي محدد من القائمة الجانبية لإجراء المكالمة.');
@@ -782,7 +818,7 @@
             document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون...';
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون (getUserMedia غير مدعوم).');
+                alert('⚠️ متصفحك أو وضع العرض الحالي لا يدعم الوصول للكاميرا والميكروفون.');
                 endActiveWebRTCCall();
                 return;
             }
@@ -845,7 +881,7 @@
 
             } catch (err) {
                 console.error('Error starting WebRTC call:', err);
-                alert(`⚠️ خطأ في تشغيل الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}\n(تأكد من عدم استخدام الكاميرا أو الميكروفون في تطبيق آخر بالخلفية).`);
+                alert(`⚠️ خطأ في تشغيل الوسائط:\nنوع الخطأ: ${err.name}\nالرسالة: ${err.message}`);
                 endActiveWebRTCCall();
             }
         }
@@ -938,11 +974,12 @@
             let filteredAccounts = accounts.filter(acc => {
                 let name = (acc.name || '').toLowerCase();
                 let phone = (acc.phone || '').toLowerCase();
-                return name.includes(query) || phone.includes(query);
+                let matchesComp = (activeExternalSessionName === '1' || acc.companyId === currentCompanyId);
+                return matchesComp && (name.includes(query) || phone.includes(query));
             });
 
             if (filteredAccounts.length === 0) {
-                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات مطابقة للبحث</div>`;
+                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات مطابقة للبحث في شركتك</div>`;
                 return;
             }
 
@@ -985,6 +1022,7 @@
                 id: String(Date.now()),
                 sender: activeExternalSessionName,
                 target: currentChatTarget,
+                companyId: currentCompanyId,
                 text: text,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
@@ -1001,6 +1039,8 @@
             let messages = appData.chat || [];
 
             let filtered = messages.filter(m => {
+                let matchesComp = (activeExternalSessionName === '1' || m.companyId === currentCompanyId || !m.companyId);
+                if (!matchesComp) return false;
                 if (currentChatTarget === 'general') return m.target === 'general' || !m.target;
                 return (m.sender === activeExternalSessionName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === activeExternalSessionName);
             });
@@ -1282,6 +1322,7 @@
                 profileId: String(targetDrv.id || targetDrv.name),
                 profileName: targetDrv.name,
                 author: loggedInUser.name,
+                companyId: currentCompanyId,
                 text: text,
                 files: [...profileWallFilesArr],
                 likes: [],
@@ -1306,7 +1347,12 @@
             if(!container) return;
             container.innerHTML = '';
             
-            let filtered = (appData.drivers || []).filter(d => (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query)));
+            let filtered = (appData.drivers || []).filter(d => {
+                let matchesComp = (activeExternalSessionName === '1' || d.companyId === currentCompanyId);
+                let matchesQuery = (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
+                return matchesComp && matchesQuery;
+            });
+
             filtered.forEach(d => {
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
