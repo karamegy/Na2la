@@ -552,17 +552,17 @@
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
             if (urlUserId && urlUserId.trim() !== '' && urlUserId !== 'null') {
-                urlUserId = urlUserId.trim().toLowerCase() === 'admin' ? 'admin' : urlUserId.trim();
+                urlUserId = urlUserId.trim();
                 localStorage.setItem('na2la_external_logged_user_id', urlUserId);
                 
-                let isSuper = superAdminsList.includes(urlUserId) || superAdminsList.includes(urlUserId.toLowerCase());
+                let isSuper = superAdminsList.includes(urlUserId) || superAdminsList.includes(urlUserId.toLowerCase()) || urlUserId.toLowerCase() === 'admin';
                 let compId = isSuper ? 'company_main' : (urlCompanyId && urlCompanyId.trim() !== '' ? urlCompanyId.trim() : (localStorage.getItem('current_company_id') || 'company_main'));
                 
                 localStorage.setItem('current_company_id', compId);
                 
                 let newUserObj = {
                     id: urlUserId,
-                    name: urlUserId.toLowerCase() === 'admin' ? 'المدير' : (isSuper ? 'المدير' : urlUserId),
+                    name: isSuper ? 'المدير' : urlUserId,
                     role: isSuper ? 'مدير نظام' : 'driver',
                     companyId: compId
                 };
@@ -574,12 +574,19 @@
             if (cachedUserJson) {
                 try {
                     let parsed = JSON.parse(cachedUserJson);
-                    if (parsed && parsed.id) return parsed;
+                    if (parsed && parsed.id) {
+                        if (String(parsed.id).toLowerCase() === 'admin' || superAdminsList.includes(parsed.id)) {
+                            parsed.role = 'مدير نظام';
+                            parsed.companyId = 'company_main';
+                            parsed.name = 'المدير';
+                        }
+                        return parsed;
+                    }
                 } catch(e) {}
             }
 
             return {
-                id: '1',
+                id: 'admin',
                 name: 'المدير',
                 role: 'مدير نظام',
                 companyId: 'company_main'
@@ -613,56 +620,67 @@
             executeBackgroundSyncSession(); 
         });
 
-        // مزامنة البروفايل والصلاحيات مباشرة من مجموعة drivers في فايربيس مع دعم كامل لكافة أسماء حقول الصورة
+        // مزامنة البروفايل والصلاحيات مع حماية تامة لحساب المدير
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
                 let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || '1';
+                let isIdentifierAdmin = superAdminsList.includes(identifier) || superAdminsList.includes(identifier.toLowerCase()) || identifier.toLowerCase() === 'admin';
+
                 let foundDoc = null;
 
-                try {
-                    let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
-                    if (directDocSnap.exists()) {
-                        foundDoc = { id: directDocSnap.id, ...directDocSnap.data() };
-                    }
-                } catch(e) {}
-
-                if (!foundDoc) {
-                    const fieldsToCheck = ["id", "name", "phone", "mobile"];
-                    for (let field of fieldsToCheck) {
-                        try {
-                            let q = query(collection(window.db, "drivers"), where(field, "==", identifier));
-                            let snap = await getDocs(q);
-                            if (!snap.empty) {
-                                foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                                break;
-                            }
-                        } catch(e) {}
-                    }
-                }
-
-                if (foundDoc) {
-                    let userAvatar = foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '';
+                if (isIdentifierAdmin) {
                     window.currentLoggedInUser = {
-                        id: foundDoc.id || identifier,
-                        name: foundDoc.name || (identifier.toLowerCase() === 'admin' ? 'المدير' : identifier),
-                        role: foundDoc.role || 'مدير نظام',
-                        avatar: userAvatar,
-                        companyId: foundDoc.companyId || 'company_main'
+                        id: 'admin',
+                        name: 'المدير',
+                        role: 'مدير نظام',
+                        avatar: '',
+                        companyId: 'company_main'
                     };
                 } else {
-                    let isSuper = superAdminsList.includes(identifier) || superAdminsList.includes(identifier.toLowerCase());
-                    window.currentLoggedInUser = {
-                        id: identifier,
-                        name: isSuper ? 'المدير' : identifier,
-                        role: isSuper ? 'مدير نظام' : 'driver',
-                        companyId: isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || 'company_main'),
-                        avatar: ''
-                    };
+                    try {
+                        let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
+                        if (directDocSnap.exists()) {
+                            foundDoc = { id: directDocSnap.id, ...directDocSnap.data() };
+                        }
+                    } catch(e) {}
+
+                    if (!foundDoc) {
+                        const fieldsToCheck = ["id", "name", "phone", "mobile"];
+                        for (let field of fieldsToCheck) {
+                            try {
+                                let q = query(collection(window.db, "drivers"), where(field, "==", identifier));
+                                let snap = await getDocs(q);
+                                if (!snap.empty) {
+                                    foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                                    break;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+
+                    if (foundDoc) {
+                        let userAvatar = foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '';
+                        window.currentLoggedInUser = {
+                            id: foundDoc.id || identifier,
+                            name: foundDoc.name || identifier,
+                            role: foundDoc.role || 'driver',
+                            avatar: userAvatar,
+                            companyId: foundDoc.companyId || 'company_main'
+                        };
+                    } else {
+                        window.currentLoggedInUser = {
+                            id: identifier,
+                            name: identifier,
+                            role: 'driver',
+                            companyId: localStorage.getItem('current_company_id') || 'company_main',
+                            avatar: ''
+                        };
+                    }
                 }
 
-                currentCompanyId = window.currentLoggedInUser.companyId || 'company_main';
+                currentCompanyId = isIdentifierAdmin ? 'company_main' : (window.currentLoggedInUser.companyId || 'company_main');
                 window.currentCompanyId = currentCompanyId;
                 localStorage.setItem('current_company_id', currentCompanyId);
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
@@ -682,6 +700,7 @@
             const { collection, onSnapshot } = window.firebaseModules;
             
             onSnapshot(collection(window.db, "drivers"), (snapshot) => {
+                if (isSuperAdmin()) return; // المدير لا يحتاج لمزامنة السائقين الجانبية التي قد تغير صلاحياته
                 let identifier = currentLoggedInUser.id;
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
@@ -706,7 +725,7 @@
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase();
             let userName = String(user.name || user.id || '').trim().toLowerCase();
-            return role.includes('مدير') || role === 'admin' || superAdminsList.includes(userName);
+            return role.includes('مدير') || role === 'admin' || superAdminsList.includes(userName) || userName === 'admin';
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -850,6 +869,7 @@
             renderAllFinancials();
         }
 
+        // مزامنة آمنة ومدمجة لكافة مجموعات فايربيس بدون مسح البيانات
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc } = window.firebaseModules;
@@ -871,22 +891,35 @@
                 accounts: ['accounts', 'Accounts', 'transactions', 'Transactions', 'قيود', 'حسابات']
             };
 
+            window._firestoreCache = window._firestoreCache || {};
+
             Object.keys(collectionsMap).forEach(targetKey => {
+                window._firestoreCache[targetKey] = window._firestoreCache[targetKey] || {};
                 let possibleNames = collectionsMap[targetKey];
+                
                 possibleNames.forEach(colName => {
                     onSnapshot(collection(window.db, colName), (snapshot) => {
-                        if (!snapshot.empty) {
-                            let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                            let superAdmin = isSuperAdmin();
-                            if (!superAdmin) {
-                                items = items.filter(item => {
-                                    let itemCompId = String(item.companyId || '').trim();
-                                    return !itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main';
-                                });
-                            }
-                            appData[targetKey] = items;
-                            renderAllFinancials();
+                        let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                        window._firestoreCache[targetKey][colName] = colItems;
+
+                        // دمج كافة العناصر من المجموعات المرتبطة بدون فقدان بيانات
+                        let mergedMap = new Map();
+                        Object.values(window._firestoreCache[targetKey]).forEach(arr => {
+                            arr.forEach(item => {
+                                mergedMap.set(String(item.id), item);
+                            });
+                        });
+
+                        let items = Array.from(mergedMap.values());
+                        let superAdmin = isSuperAdmin();
+                        if (!superAdmin) {
+                            items = items.filter(item => {
+                                let itemCompId = String(item.companyId || '').trim();
+                                return !itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main';
+                            });
                         }
+                        appData[targetKey] = items;
+                        renderAllFinancials();
                     }, err => {});
                 });
             });
