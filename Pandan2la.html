@@ -201,6 +201,18 @@
 
     <main class="content-area" id="main-content"></main>
 
+    <!-- نافذة تسجيل الدخول برقم الهاتف وكلمة السر (التحقق المزدوج) -->
+    <div id="authModal" class="custom-modal" style="display:none; flex-direction:column;">
+        <div class="card" style="width: 100%; max-width: 380px; text-align: center;">
+            <h3 style="color: var(--yellow-warning); margin-bottom: 10px; border:none; justify-content:center;">🔐 تسجيل الدخول الآمن</h3>
+            <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5;">أدخل رقم الهاتف وكلمة السر (PIN) الخاصة بحسابك للمزامنة الفورية مع المنصة:</p>
+            <input type="text" id="auth-phone-input" placeholder="رقم الهاتف المسجل" style="margin-bottom: 6px; text-align: center;" required>
+            <input type="password" id="auth-phone-pin" placeholder="كلمة السر / رمز PIN" style="margin-bottom: 8px; text-align: center;" required>
+            <button type="button" class="btn-main" onclick="verifyPhoneAndPIN()" style="margin-bottom: 6px;">دخول سحابي آمن 🔑</button>
+            <button type="button" class="btn-danger" onclick="goToPageIndex()" style="width: 100%;">الرجوع للصفحة الرئيسية 🏠</button>
+        </div>
+    </div>
+
     <!-- النوافذ المنبثقة والمودال -->
     <div id="statDetailModal" class="custom-modal">
         <div class="card" style="width: 100%; max-width: 480px; max-height: 85vh; overflow-y: auto;">
@@ -321,6 +333,10 @@
         let userId = urlUserId || (window.currentLoggedInUser ? window.currentLoggedInUser.name : '') || '';
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
+    }
+
+    function goToPageIndex() {
+        window.location.href = 'index.html';
     }
 
     function playBeep(type = 'success') {
@@ -445,7 +461,7 @@
         }, 1000);
     };
 
-    // دالة المزامنة التلقائية الشاملة لأي مستخدم (مدير، مشرف، سائق)
+    // التحقق الفوري عبر الـ URL أو إظهار شاشة الدخول برقم الهاتف وكلمة السر
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -457,13 +473,15 @@
                 localStorage.setItem('na2la_companyId', urlCompanyId);
             }
         } else {
-            urlUserId = localStorage.getItem('na2la_userId') || 'المدير';
+            urlUserId = localStorage.getItem('na2la_userId');
             urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
         }
 
         currentCompanyId = urlCompanyId || 'company_main';
+
         if (!urlUserId || urlUserId.trim() === '' || urlUserId === 'null') {
-            urlUserId = 'المدير';
+            openModal('authModal');
+            return;
         }
 
         urlUserId = urlUserId.trim();
@@ -492,45 +510,70 @@
                 }
                 window.currentLoggedInUser = found;
                 currentCompanyId = urlCompanyId || found.companyId || 'company_main';
+                applyUserPermissionsUI();
+                initFirebaseListeners(currentCompanyId);
+                switchSection('profile');
             } else {
-                const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'مدير النظام', 'system', '1', 'عماد', 'Emad', 'باندا', 'Chevrolet Pickup'];
-                let isSuper = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase()));
-
-                if (isSuper) {
-                    window.currentLoggedInUser = {
-                        name: 'المدير',
-                        role: 'admin',
-                        companyName: currentCompanyId === 'company_main' ? 'أسطورة الطريق الرئيسية' : currentCompanyId,
-                        title: 'مدير عام المنصة',
-                        phone: '+201114099799',
-                        avatar: '',
-                        cover: ''
-                    };
-                } else {
-                    window.currentLoggedInUser = {
-                        name: urlUserId,
-                        role: 'سائق',
-                        companyName: currentCompanyId,
-                        title: 'سائق معتمد',
-                        phone: '',
-                        status: 'متاح 🟢'
-                    };
-                }
+                // إذا لم يتم التعرف على المعرف تماماً، يتم إظهار شاشة إدخال رقم الهاتف وكلمة السر
+                openModal('authModal');
             }
-            applyUserPermissionsUI();
-            initFirebaseListeners(currentCompanyId);
-            switchSection('profile');
         } catch(e) {
-            window.currentLoggedInUser = {
-                name: urlUserId,
-                role: 'admin',
-                companyName: 'أسطورة الطريق الرئيسية',
-                title: 'مدير عام المنصة',
-                phone: '+201114099799'
-            };
-            applyUserPermissionsUI();
-            initFirebaseListeners(currentCompanyId);
-            switchSection('profile');
+            openModal('authModal');
+        }
+    }
+
+    // دالة التحقق من رقم الهاتف وكلمة السر (PIN) المطابقة لقاعدة بيانات المنصة
+    async function verifyPhoneAndPIN() {
+        const phone = document.getElementById('auth-phone-input').value.trim();
+        const pin = document.getElementById('auth-phone-pin').value.trim();
+        
+        if (!phone || !pin) {
+            showToast('الرجاء إدخال رقم الهاتف وكلمة السر معاً!', 'warning');
+            return;
+        }
+
+        try {
+            let snap = await db.collection("drivers").get();
+            let matchedUser = null;
+            snap.forEach(doc => {
+                let d = doc.data();
+                if ((String(d.phone) === phone || String(doc.id) === phone) && (String(d.pin) === pin || String(d.password) === pin)) {
+                    matchedUser = { id: doc.id, ...d };
+                }
+            });
+
+            // حساب المدير الأساسي للطوارئ والنظام
+            if (!matchedUser && (phone === '+201114099799' || phone === 'admin') && (pin === '799799' || pin === '1234')) {
+                matchedUser = {
+                    name: 'المدير',
+                    role: 'admin',
+                    companyName: currentCompanyId,
+                    title: 'مدير عام المنصة',
+                    phone: '+201114099799'
+                };
+            }
+
+            if (matchedUser) {
+                let rawRole = String(matchedUser.role || '').toLowerCase();
+                if (rawRole.includes('admin') || rawRole.includes('مدير')) {
+                    matchedUser.role = 'admin';
+                } else {
+                    matchedUser.role = 'سائق';
+                }
+
+                window.currentLoggedInUser = matchedUser;
+                localStorage.setItem('na2la_userId', matchedUser.name || matchedUser.id);
+                localStorage.setItem('na2la_companyId', matchedUser.companyId || currentCompanyId);
+                closeModal('authModal');
+                showToast('تم التحقق وتسجيل الدخول بنجاح! ✅');
+                applyUserPermissionsUI();
+                initFirebaseListeners(currentCompanyId);
+                switchSection('profile');
+            } else {
+                showToast('رقم الهاتف أو كلمة السر غير صحيحة!', 'error');
+            }
+        } catch(e) {
+            showToast('حدث خطأ أثناء الاتصال بالسحابة', 'error');
         }
     }
 
@@ -984,7 +1027,7 @@
                     <form onsubmit="saveNewDriver(event)">
                         <input type="text" id="new-d-name" placeholder="الاسم الرباعي" required>
                         <input type="text" id="new-d-phone" placeholder="رقم الهاتف" required>
-                        <input type="password" id="new-d-pin" placeholder="رمز الدخول (PIN)" required>
+                        <input type="password" id="new-d-pin" placeholder="كلمة السر (PIN)" required>
                         <select id="new-d-role">
                             <option value="سائق">سائق</option>
                             <option value="مشرف">مشرف</option>
