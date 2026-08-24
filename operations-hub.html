@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
         
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في operations-hub.html مع العزل التام ومزامنة الشراكة");
+            console.log("✅ تم المصادقة سحابياً بنجاح في operations-hub.html مع المزامنة اللحظية الحقيقية");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -343,8 +343,8 @@
     <div id="authBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-3d);">
         <img id="currentUserAvatar" src="https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);" alt="صورة المستخدم">
         <div>
-            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري التحقق من الهوية سحابياً...</b>
-            <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">مزامنة فورية بدون تضارب</div>
+            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري المزامنة اللحظية من السحابة...</b>
+            <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">مطابقة الهوية الحية</div>
         </div>
     </div>
 
@@ -364,7 +364,7 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات اليومية</p>
         </div>
-        <!-- لوحة إدارة المدير - مخفية تماماً للمستخدمين العاديين -->
+        <!-- لوحة إدارة المدير -->
         <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
             <span class="icon">🛡️</span>
             <h3>لوحة إدارة المدير</h3>
@@ -384,7 +384,7 @@
 
 </div>
 
-<!-- لوحة إدارة المدير المطورة للتحكم الشامل -->
+<!-- لوحة إدارة المدير -->
 <div class="page-modal-overlay" id="modalUsers">
     <div class="page-modal-content" style="max-width: 850px;">
         <button class="modal-close-btn" onclick="closeModal('modalUsers')">إغلاق ✕</button>
@@ -523,13 +523,13 @@
     </div>
 </div>
 
-<!-- شريط التنقل السفلي -->
+<!-- شريط التنقل السفلي المحدث (زر حسابي يوجه إلى driver-profile.html وزر المجتمع يوجه إلى community.html مع المزامنة اللحظية) -->
 <nav class="bottom-nav-bar" id="bottomNavBar">
-    <button class="bottom-nav-item" id="navProfileBtn" style="display: none;" onclick="goToPage('index.html')">
+    <button class="bottom-nav-item" id="navProfileBtn" onclick="goToPage('driver-profile.html')">
         <span>👤</span>
         <span>حسابي</span>
     </button>
-    <button class="bottom-nav-item" id="navCommunityBtn" style="display: none; color: var(--accent-color);" onclick="goToPage('community.html')">
+    <button class="bottom-nav-item" id="navCommunityBtn" style="color: var(--accent-color);" onclick="goToPage('community.html')">
         <span>👥</span>
         <span>المجتمع</span>
     </button>
@@ -570,7 +570,7 @@
     let urlUserId = '';
     window.currentCompanyId = currentCompanyId;
 
-    // دالة الانتقال الذكي الحافظة لتمرير الجلسة حصرياً عبر الرابط (URL)
+    // دالة الانتقال الذكي الحافظة لتمرير الجلسة ومزامنتها حصرياً عبر الرابط (URL)
     function goToPage(pageName) {
         let userId = urlUserId || activeExternalSessionName || '';
         let companyId = currentCompanyId || 'company_main';
@@ -585,22 +585,30 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // 🟢 التحديث الذكي: حفظ المعرف في الذاكرة أو استرجاعه تلقائياً لتجنب شاشة الخطأ
+        // جلب معرف الجلسة الحقيقي والمزامنة اللحظية
         if (urlUserId && urlUserId !== 'null') {
             localStorage.setItem('na2la_userId', urlUserId);
             if (urlCompanyId) {
                 localStorage.setItem('na2la_companyId', urlCompanyId);
             }
         } else {
-            urlUserId = localStorage.getItem('na2la_userId') || 'admin';
+            urlUserId = localStorage.getItem('na2la_userId') || '';
             urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
+        }
+
+        if (!urlUserId) {
+            let labelEl = document.getElementById("currentActiveUserLabel");
+            if(labelEl) labelEl.innerText = "زائر (غير مسجل الدخول)";
+            let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
+            if(roleSubLabel) roleSubLabel.innerText = "يرجى تسجيل الدخول أو اختيار حساب";
+            return;
         }
 
         urlUserId = urlUserId.trim();
         activeExternalSessionName = urlUserId;
 
         let foundDoc = null;
-        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId);
+        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
         if (isSuper) {
             currentCompanyId = urlCompanyId || 'company_main';
@@ -637,8 +645,14 @@
                 window.currentLoggedInUser = foundDoc;
                 currentCompanyId = urlCompanyId || foundDoc.companyId || foundDoc.companyName || 'company_main';
             } else {
-                // إذا لم يوجد، ننشئ جلسة افتراضية آمنة كمدير لتفادي توقف الشاشة
-                window.currentLoggedInUser = { id: 'admin', name: 'مدير النظام العام', role: 'admin', companyId: urlCompanyId || 'company_main', canAccessSocial: true };
+                // مزامنة حية للمستخدم المعرف في الرابط بدلاً من فرض حساب وهمي
+                window.currentLoggedInUser = { 
+                    id: urlUserId, 
+                    name: urlUserId, 
+                    role: 'driver', 
+                    companyId: urlCompanyId || 'company_main', 
+                    canAccessSocial: true 
+                };
                 currentCompanyId = urlCompanyId || 'company_main';
             }
         }
@@ -678,7 +692,7 @@
             let role = String(driver.role || '').toLowerCase().trim();
             return role === 'admin' || role === 'مدير';
         }
-        return true; // وضع افتراضي تساهلي لضمان عمل غرفة العمليات بسلاسة
+        return false;
     }
     window.isUserAdmin = isUserAdmin;
 
@@ -1004,16 +1018,16 @@
         if (avatarEl) avatarEl.src = activeAvatar;
         if (roleSubLabel) roleSubLabel.innerText = activeRoleText;
 
-        let profileBtn = document.getElementById("navProfileBtn");
-        let communityBtn = document.getElementById("navCommunityBtn");
         let adminBtn = document.getElementById("navAdminBtn");
         let cardAdminUsers = document.getElementById("cardAdminUsers");
 
-        // إظهار كافة الأزرار والإدارة افتراضياً لضمان عدم اختفاء شيء بغرفة العمليات
-        if(adminBtn) adminBtn.style.display = "flex";
-        if(cardAdminUsers) cardAdminUsers.style.display = "block";
-        if(profileBtn) profileBtn.style.display = "flex";
-        if(communityBtn) profileBtn.style.display = "flex";
+        if(isAdmin) {
+            if(adminBtn) adminBtn.style.display = "flex";
+            if(cardAdminUsers) cardAdminUsers.style.display = "block";
+        } else {
+            if(adminBtn) adminBtn.style.display = "none";
+            if(cardAdminUsers) cardAdminUsers.style.display = "none";
+        }
     }
 
     async function addFleetOperation(e) {
