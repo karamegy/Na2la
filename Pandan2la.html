@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90 PURE CLOUD ISOLATED</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90 PURE CLOUD SYNCED</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -414,6 +414,8 @@
 
     let remoteMainData = {};
     let collectionShipments = [];
+    let unsubscribeState = null;
+    let unsubscribeShipments = null;
 
     function updateUnifiedData() {
         let rawShipments = collectionShipments.length > 0 ? collectionShipments : (remoteMainData.docs || remoteMainData.shipments || defaultInitialData.docs);
@@ -445,28 +447,37 @@
         if(typeof updateRSSTicker === 'function') updateRSSTicker();
     }
 
-    db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
-        if (window._isSavingLocally) return;
-        remoteMainData = docSnap.exists ? docSnap.data() : {};
-        updateUnifiedData();
-    }, (err) => {
-        console.error("خطأ في استماع الوثيقة الرئيسية:", err);
-    });
+    // تفعيل المزامنة الحية بناءً على المعرف الديناميكي للشركة/الحساب
+    function initFirebaseListeners(companyId) {
+        if (unsubscribeState) unsubscribeState();
+        if (unsubscribeShipments) unsubscribeShipments();
 
-    db.collection("shipments").onSnapshot((snapshot) => {
-        if (window._isSavingLocally) return;
-        collectionShipments = [];
-        snapshot.forEach(doc => {
-            collectionShipments.push({ id: doc.id, ...doc.data() });
+        const docId = companyId || 'company_main';
+
+        unsubscribeState = db.collection("appStore").doc(docId).onSnapshot((docSnap) => {
+            if (window._isSavingLocally) return;
+            remoteMainData = docSnap.exists ? docSnap.data() : {};
+            updateUnifiedData();
+        }, (err) => {
+            console.error("خطأ في استماع الوثيقة الرئيسية:", err);
         });
-        updateUnifiedData();
-    }, (err) => {
-        console.error("خطأ في استماع مجموعة الشحنات:", err);
-    });
+
+        unsubscribeShipments = db.collection("shipments").onSnapshot((snapshot) => {
+            if (window._isSavingLocally) return;
+            collectionShipments = [];
+            snapshot.forEach(doc => {
+                collectionShipments.push({ id: doc.id, ...doc.data() });
+            });
+            updateUnifiedData();
+        }, (err) => {
+            console.error("خطأ في استماع مجموعة الشحنات:", err);
+        });
+    }
 
     window.manualRefreshData = function() {
         showToast('جاري تحديث ومزامنة البيانات يدوياً من السحابة... 🔄');
-        db.collection("appStore").doc("mainState").get().then((docSnap) => {
+        const docId = currentCompanyId || 'company_main';
+        db.collection("appStore").doc(docId).get().then((docSnap) => {
             if(docSnap.exists) {
                 remoteMainData = docSnap.data();
             }
@@ -494,9 +505,11 @@
         appData.wallPosts = appData.posts;
         
         window._isSavingLocally = true;
+        const docId = currentCompanyId || 'company_main';
 
-        db.collection("appStore").doc("mainState").set({
+        db.collection("appStore").doc(docId).set({
             ...appData,
+            companyId: docId,
             docs: appData.shipments,
             shipments: appData.shipments,
             wallPosts: appData.posts,
@@ -515,14 +528,13 @@
         });
     };
 
-    // 🟢 التحديث الذكي: دعم الذاكرة المحلية والباراميترات مع استرجاع آلي لحساب المدير لتجنب "زائر"
+    // تحميل الجلسة ومعرف الشركة من الرابط وتفعيل المستمعين المرتبطين بها
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
         const lockScreen = document.getElementById('lock-screen');
-        const statusInd = document.getElementById('login-status-indicator');
 
         if (urlUserId && urlUserId !== 'null') {
             localStorage.setItem('na2la_userId', urlUserId);
@@ -534,7 +546,7 @@
             urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
         }
 
-        currentCompanyId = urlCompanyId;
+        currentCompanyId = urlCompanyId || 'company_main';
         if (!urlUserId || urlUserId.trim() === '' || urlUserId === 'null') {
             urlUserId = 'admin';
         }
@@ -552,6 +564,7 @@
             };
             if(lockScreen) lockScreen.style.display = 'none';
             applyUserPermissionsUI();
+            initFirebaseListeners(currentCompanyId);
             switchSection('profile');
             return;
         }
@@ -576,9 +589,9 @@
                 currentCompanyId = urlCompanyId || found.companyId || 'company_main';
                 if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
+                initFirebaseListeners(currentCompanyId);
                 switchSection('profile');
             } else {
-                // وضع افتراضي آمن كمدير لتفادي ظهور "زائر" وتوقف الصفحة
                 window.currentLoggedInUser = {
                     name: 'مدير النظام العام',
                     role: 'admin',
@@ -587,6 +600,7 @@
                 };
                 if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
+                initFirebaseListeners(currentCompanyId);
                 switchSection('profile');
             }
         } catch(e) {
@@ -598,6 +612,7 @@
             };
             if(lockScreen) lockScreen.style.display = 'none';
             applyUserPermissionsUI();
+            initFirebaseListeners(currentCompanyId);
             switchSection('profile');
         }
     }
