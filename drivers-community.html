@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة تواصل السائقين الاحترافية - V53 PRO SECURED ISOLATED</title>
+    <title>منصة تواصل السائقين الاحترافية - V53 PRO SECURE ISOLATED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -45,7 +45,7 @@
     </div>
 
     <h2>منصة تواصل السائقين والأسطول الاحترافية</h2>
-    <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات ومزامنة الحساب...</div>
+    <div id="connectionStatus" class="status-bar">☁️ جاري الاتصال بقاعدة البيانات ومزامنة الحساب الآمن...</div>
 
     <!-- لوحة تحكم المؤسس والإدارة -->
     <div class="admin-box">
@@ -83,7 +83,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -99,7 +99,7 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 🔄 مزامنة الحساب المتصل ومعرف الشراكة (Partnership & Real-time Account Sync)
+    // 🔄 مزامنة الحساب المتصل ومعرف الشراكة عبر الرابط والـ LocalStorage
     function getActiveSessionAndCompany() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -138,16 +138,13 @@
     let allPostsData = [];
     const postsRef = collection(db, "driver_community_posts");
 
-    // الاتصال السحابي الاستباقي ومزامنة البيانات اللحظية
-    signInAnonymously(auth).then(() => {
-        document.getElementById("connectionStatus").innerText = `✅ متصل بالسحابة (مزامنة الحساب: ${activeSessionName} | شراكة: ${currentCompanyId})`;
+    // الاعتماد على قواعد فايربيس ومراقبة حالة المصادقة الآمنة بدلاً من الدخول المجهول
+    onAuthStateChanged(auth, (user) => {
+        document.getElementById("connectionStatus").innerText = `✅ متصل سحابياً (مزامنة الحساب: ${activeSessionName} | شراكة: ${currentCompanyId})`;
         document.getElementById("connectionStatus").style.background = "#d4edda";
         updateAdminUIStatus();
         loadPosts();
         setupRealtimeDriversSync();
-    }).catch(() => {
-        document.getElementById("connectionStatus").innerText = "⚠️ خطأ في الاتصال بالخدمة السحابية";
-        document.getElementById("connectionStatus").style.background = "#f8d7da";
     });
 
     // مراقبة سحابية فورية لأي تحديث يخص الحساب أو الشراكة المتصلة
@@ -161,7 +158,7 @@
                         window.currentCompanyId = currentCompanyId;
                         localStorage.setItem('current_company_id', currentCompanyId);
                         document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
-                        loadPosts(); // إعادة تحميل المنشورات فوراً بناءً على الشراكة المحدثة
+                        loadPosts();
                     }
                 }
             });
@@ -195,7 +192,6 @@
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                // عزل شراكات الشركات: المدير العام يرى الجميع، والبقية يرون شراكتهم حصرياً
                 if (!superAdmin && post.companyId && post.companyId !== currentCompanyId) {
                     continue;
                 }
@@ -215,7 +211,6 @@
         });
     }
 
-    // عرض المنشورات في واجهة الشراكة
     window.renderPosts = function(posts) {
         const container = document.getElementById("postsContainer");
         container.innerHTML = "";
@@ -270,7 +265,6 @@
         });
     }
 
-    // إضافة منشور جديد مرتبط بالشراكة الحالية حصرياً
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
         await addDoc(postsRef, {
@@ -278,7 +272,7 @@
             category: document.getElementById("postCategory").value,
             content: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
-            companyId: currentCompanyId, // 🔐 ربط المنشور بمعرف الشراكة المعزول بدقة
+            companyId: currentCompanyId,
             likes: 0,
             date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
             timestamp: new Date()
@@ -287,13 +281,11 @@
         document.getElementById("videoUrl").value = "";
     };
 
-    // إعجاب
     window.likePost = async (id) => {
         const postRef = doc(db, "driver_community_posts", id);
         await updateDoc(postRef, { likes: increment(1) });
     };
 
-    // إضافة تعليق مع عزل الشراكة
     window.addComment = async (e, postId) => {
         e.preventDefault();
         const text = document.getElementById(`commText-${postId}`).value;
@@ -307,14 +299,12 @@
         document.getElementById(`commText-${postId}`).value = "";
     };
 
-    // حذف المنشور
     window.deletePost = async (id) => {
         if (confirm("هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
             await deleteDoc(doc(db, "driver_community_posts", id));
         }
     };
 
-    // تفعيل وضع المؤسس
     window.toggleAdminMode = function() {
         if (!window.manualAdminOverride && !['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
@@ -332,7 +322,6 @@
         }
     };
 
-    // فلترة البحث
     window.filterPosts = function() {
         const keyword = document.getElementById("searchInput").value.toLowerCase();
         const filtered = allPostsData.filter(p => 
