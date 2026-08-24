@@ -776,7 +776,6 @@
                 }
             });
 
-            // FIX 1: تم توحيد مجموعات الاستماع لمنع التضارب وجلب البيانات القديمة
             const collectionsMap = {
                 shipments: ['shipments'],
                 deferredInvoices: ['deferredInvoices'],
@@ -1039,12 +1038,10 @@
             alert("تم حفظ القيد وتزامنه بنجاح!");
         }
 
-        // FIX 2: دالة حذف محسنة تمنع عودة العناصر المحذوفة نهائياً
         async function deleteRecord(id, collectionType) {
             if (confirm("هل أنت متأكد من الحذف النهائي؟")) {
                 let targetCol = collectionType === 'deferred' ? 'deferredInvoices' : (collectionType === 'shipments' ? 'shipments' : collectionType);
                 
-                // الحذف الفوري من الذاكرة المحلية لكل الأقسام
                 ['accounts', 'shipments', 'deferredInvoices', 'expenses', 'treasury'].forEach(col => {
                     if (appData[col]) {
                         appData[col] = appData[col].filter(x => String(x.id) !== String(id));
@@ -1053,7 +1050,6 @@
 
                 renderAllFinancials();
 
-                // الحذف من السيرفر لكل المجموعات المحتملة لمنع عودته
                 if (window.db && window.firebaseModules) {
                     const { doc, deleteDoc } = window.firebaseModules;
                     const possibleCols = [targetCol, 'shipments', 'deferredInvoices', 'accounts', 'expenses', 'treasury'];
@@ -1327,7 +1323,7 @@
         function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
         window.goToOperationsHub = goToOperationsHub;
 
-        // FIX 3 & 4: دالة عرض الحسابات والإحصائيات المُحسنة لمنع الازدواجية والتكرار
+        // دالة عرض الحسابات والإحصائيات المُحسنة لمعالجة الشحنات المعلقة والآجلة بدقة
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
             let userAccounts = appData.accounts || [];
@@ -1436,10 +1432,19 @@
                 let combinedMap = new Map();
 
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') {
-                    userShipments.forEach(s => combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: s.type || 'shipment' }));
+                    userShipments.forEach(s => {
+                        // إذا كنا نعرض الشحنات وحدها، نتأكد أن غير المعلقة تظهر، أو حسب الرغبة
+                        combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: s.type || 'shipment' });
+                    });
                 }
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
                     userDeferred.forEach(d => combinedMap.set(String(d.id), { ...d, collectionSource: 'deferredInvoices', type: 'deferred' }));
+                    // دمج الشحنات المعلقة (الآجلة) ضمن فلتر الآجل تلقائياً
+                    userShipments.forEach(s => {
+                        if (getSafeStatus(s) === 'pending' || s.type === 'deferred') {
+                            combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: 'deferred' });
+                        }
+                    });
                 }
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') {
                     userAccounts.forEach(a => combinedMap.set(String(a.id), { ...a, collectionSource: 'accounts' }));
@@ -1453,8 +1458,10 @@
                 document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
 
                 accTbody.innerHTML = combined.map(item => {
+                    // إصلاح الأولوية: جعل شارة الآجل تظهر أولاً لأي عنصر حالته معلقة أو نوعه أجل
                     let isDef = item.type === 'deferred' || getSafeStatus(item) === 'pending';
-                    let badge = item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : (isDef ? '<span class="badge-deferred">⏳ آجل</span>' : '<span class="badge-credit">📥 قيد</span>');
+                    let badge = isDef ? '<span class="badge-deferred">⏳ آجل</span>' : (item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : '<span class="badge-credit">📥 قيد</span>');
+                    
                     let safeId = item.id || '';
                     let collType = item.collectionSource || 'accounts';
                     let st = getSafeStatus(item);
