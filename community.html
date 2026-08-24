@@ -404,7 +404,6 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 🔐 استخراج المعرف وجلب شركة معزولة خاصة بالحساب الحالي لمنع التداخل تماماً
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
 
@@ -422,7 +421,7 @@
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
             if (saved) return saved.trim();
 
-            return '1'; // الافتراضي الحساب الرئيسي رقم 1
+            return '1';
         }
 
         let activeExternalSessionName = getExternalLoginSessionAndSync();
@@ -450,7 +449,6 @@
             } catch(e) {}
         }
 
-        // 👑 دالة فحص المدير العام للمنصة (Super Admin) الشاملة والآمنة
         function isSuperAdmin() {
             let user = currentDriverProfile || {};
             let userName = String(user.name || '').trim();
@@ -492,7 +490,6 @@
             try {
                 let identifier = currentDriverProfile.name;
                 
-                // 🛡️ تأمين مطلق للحساب الرئيسي رقم 1 أو أسماء الإدارة لربطها فوراً بـ company_main
                 if (identifier === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier)) {
                     currentCompanyId = 'company_main';
                     window.currentCompanyId = currentCompanyId;
@@ -553,8 +550,13 @@
                 document.getElementById('social-content-wrapper').style.display = 'block';
             }
 
+            // تفعيل المزامنة اللحظية الحقيقية لجدول السائقين والشات
+            db.collection('drivers').onSnapshot(snapshot => {
+                allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderChatUsersList();
+            });
+
             loadCommunityPosts();
-            renderChatUsersList();
             loadChatMessages();
             loadMyCargoFromShipments();
             loadTreasuryData();
@@ -1015,20 +1017,56 @@
             });
         }
 
+        // ✅ دالة قائمة الأعضاء المحدثة (تدمج السائقين ومرسلي الشات وتعمل بلحظية التحديث)
         function renderChatUsersList() {
             const listContainer = document.getElementById('chat-users-list');
             if(!listContainer) return;
             listContainer.innerHTML = '';
             
             let superAdmin = isSuperAdmin();
-            let companyDrivers = allDrivers.filter(drv => superAdmin || drv.companyId === currentCompanyId);
+            let accountsMap = new Map();
 
-            companyDrivers.forEach(drv => {
-                if(drv.name === currentDriverProfile.name) return;
+            // 1. إضافة السائقين من جدول drivers
+            (allDrivers || []).forEach(drv => {
+                let name = String(drv.name || drv.id || '').trim();
+                if(name) {
+                    accountsMap.set(name, {
+                        name: name,
+                        role: drv.role || 'سائق',
+                        companyId: drv.companyId || 'company_main'
+                    });
+                }
+            });
+
+            // 2. إضافة أي مرسلين تم رصدهم في الشات لضمان ظهور المدير وباقي الأجهزة فوراً
+            (allChatMessagesCache || []).forEach(m => {
+                let sender = String(m.sender || '').trim();
+                if(sender && sender !== 'general' && !accountsMap.has(sender)) {
+                    let isMgr = ['مدير', 'المدير', '1', 'عماد', 'Emad', 'باندا'].includes(sender);
+                    accountsMap.set(sender, {
+                        name: sender,
+                        role: isMgr ? 'مدير' : 'سائق',
+                        companyId: m.companyId || 'company_main'
+                    });
+                }
+            });
+
+            let accounts = Array.from(accountsMap.values()).filter(acc => {
+                let matchesComp = (superAdmin || acc.companyId === currentCompanyId || acc.companyId === 'company_main');
+                let isMe = (acc.name === currentDriverProfile.name);
+                return matchesComp && !isMe;
+            });
+
+            if (accounts.length === 0) {
+                listContainer.innerHTML = `<div style="padding: 8px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات أخرى متصلة حالياً</div>`;
+                return;
+            }
+
+            accounts.forEach(acc => {
                 let div = document.createElement('div');
                 div.className = 'chat-account-item';
-                div.innerHTML = `<span>💬 ${drv.name}</span><small style="opacity:0.7">${drv.role || 'سائق'}</small>`;
-                div.onclick = function() { selectChatRoom(drv.name, this); };
+                div.innerHTML = `<span>💬 ${acc.name}</span><small style="opacity:0.7">${acc.role || 'سائق'}</small>`;
+                div.onclick = function() { selectChatRoom(acc.name, this); };
                 listContainer.appendChild(div);
             });
         }
@@ -1084,6 +1122,10 @@
             db.collection('chat').onSnapshot(snapshot => {
                 const box = document.getElementById('chat-messages-box');
                 allChatMessagesCache = snapshot.docs.map(doc => doc.data());
+                
+                // تحديث قائمة الأعضاء فور وصول رسائل جديدة لضمان المزامنة التامة
+                renderChatUsersList();
+
                 if(!box) return;
                 box.innerHTML = '';
                 
