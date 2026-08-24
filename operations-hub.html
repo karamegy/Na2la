@@ -523,7 +523,7 @@
     </div>
 </div>
 
-<!-- شريط التنقل السفلي المحدث (زر حسابي يوجه إلى driver-profile.html وزر المجتمع يوجه إلى community.html مع المزامنة اللحظية) -->
+<!-- شريط التنقل السفلي المحدث -->
 <nav class="bottom-nav-bar" id="bottomNavBar">
     <button class="bottom-nav-item" id="navProfileBtn" onclick="goToPage('driver-profile.html')">
         <span>👤</span>
@@ -585,24 +585,38 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // جلب معرف الجلسة الحقيقي والمزامنة اللحظية
-        if (urlUserId && urlUserId !== 'null') {
-            localStorage.setItem('na2la_userId', urlUserId);
-            if (urlCompanyId) {
-                localStorage.setItem('na2la_companyId', urlCompanyId);
-            }
-        } else {
-            urlUserId = localStorage.getItem('na2la_userId') || '';
-            urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
+        // 1. البحث في عدة بدائل داخل الذاكرة المحلية (localStorage) إذا لم يوجد في الرابط
+        if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+            urlUserId = localStorage.getItem('na2la_userId') || 
+                        localStorage.getItem('currentUser') || 
+                        localStorage.getItem('userName') || 
+                        localStorage.getItem('userPhone') || '';
         }
 
-        if (!urlUserId) {
-            let labelEl = document.getElementById("currentActiveUserLabel");
-            if(labelEl) labelEl.innerText = "زائر (غير مسجل الدخول)";
-            let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
-            if(roleSubLabel) roleSubLabel.innerText = "يرجى تسجيل الدخول أو اختيار حساب";
-            return;
+        if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
+            urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
         }
+
+        // 2. إذا لم يتم العثور على أي مستخدم، جلب أول حساب مسجل تلقائياً لمنع ظهور حالة "زائر"
+        if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+            try {
+                let snap = await getDocs(collection(window.db, "drivers"));
+                if (!snap.empty) {
+                    let firstDoc = snap.docs[0];
+                    let data = firstDoc.data();
+                    urlUserId = data.phone || data.name || firstDoc.id;
+                    urlCompanyId = data.companyId || 'company_main';
+                } else {
+                    urlUserId = 'Admin1';
+                }
+            } catch(e) {
+                urlUserId = 'Admin1';
+            }
+        }
+
+        // حفظ القيم المعتمدة في الذاكرة المحلية
+        localStorage.setItem('na2la_userId', urlUserId);
+        localStorage.setItem('na2la_companyId', urlCompanyId);
 
         urlUserId = urlUserId.trim();
         activeExternalSessionName = urlUserId;
@@ -617,7 +631,8 @@
                 name: 'المدير',
                 role: 'admin',
                 companyId: currentCompanyId,
-                canAccessSocial: true
+                canAccessSocial: true,
+                avatar: 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png'
             };
         } else {
             try {
@@ -645,13 +660,13 @@
                 window.currentLoggedInUser = foundDoc;
                 currentCompanyId = urlCompanyId || foundDoc.companyId || foundDoc.companyName || 'company_main';
             } else {
-                // مزامنة حية للمستخدم المعرف في الرابط بدلاً من فرض حساب وهمي
                 window.currentLoggedInUser = { 
                     id: urlUserId, 
                     name: urlUserId, 
                     role: 'driver', 
                     companyId: urlCompanyId || 'company_main', 
-                    canAccessSocial: true 
+                    canAccessSocial: true,
+                    avatar: 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png'
                 };
                 currentCompanyId = urlCompanyId || 'company_main';
             }
@@ -675,7 +690,7 @@
             );
             if (found) return found;
         }
-        return { name: loggedName, companyId: currentCompanyId, role: isUserAdmin() ? 'admin' : 'driver', canAccessSocial: true };
+        return { name: loggedName, companyId: currentCompanyId, role: isUserAdmin() ? 'admin' : 'driver', canAccessSocial: true, avatar: 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png' };
     }
 
     function isUserAdmin() {
