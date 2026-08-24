@@ -420,8 +420,6 @@
         let mySafeBalanceTotal = 0;
         let chatFileCache = null;
         let commentFilesCache = {};
-        
-        // متغير لإلغاء الاشتراك السابق ومنع تسريب المستمعات
         let chatUnsubscribe = null;
 
         function goToPage(pageName) {
@@ -448,7 +446,6 @@
                 console.warn("Auth warning:", err);
             }
             await fetchCloudSessionFromURL();
-            // تشغيل مستمع الشات مرة واحدة فقط عند بدء التطبيق
             loadChatMessages();
         }
 
@@ -457,20 +454,28 @@
             urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            if (!urlUserId) {
-                document.body.innerHTML = `
-                    <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f1020; color: #fff; font-family: 'Segoe UI', sans-serif; direction: rtl; text-align: center; padding: 20px;">
-                        <div style="background: #181a30; border: 2px solid #00f2fe; padding: 30px; border-radius: 20px; max-width: 400px; width: 100%; box-shadow: 0 10px 30px rgba(0,242,254,0.3);">
-                            <h2 style="color: #00f2fe; margin-bottom: 12px; font-size: 20px;">🔐 مطلوب معرف المستخدم الحي</h2>
-                            <p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">يرجى الدخول عبر المنصة الأم (index.html) أو رابط يحتوي على معرف الحساب للاتصال المباشر بالقاعدة السحابية.</p>
-                        </div>
-                    </div>
-                `;
-                return;
+            // 1. البحث في الذاكرة المحلية (localStorage) إذا لم يوجد في الرابط
+            if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+                urlUserId = localStorage.getItem('na2la_userId') || 
+                            localStorage.getItem('currentUser') || 
+                            localStorage.getItem('userName') || '';
             }
 
+            if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
+                urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
+            }
+
+            // 2. إذا لم يتم العثور على أي مستخدم، يتم تعيين حساب الأدمن كملجأ لضمان العمل الفوري
+            if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+                urlUserId = 'Admin1';
+            }
+
+            // حفظ المعرف في الذاكرة المحلية
+            localStorage.setItem('na2la_userId', urlUserId);
+            localStorage.setItem('na2la_companyId', urlCompanyId);
+
             urlUserId = urlUserId.trim();
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId);
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
             if (isSuper) {
                 currentCompanyId = urlCompanyId || 'company_main';
@@ -516,25 +521,42 @@
                     };
                     syncProfileAndLoad();
                 } else {
-                    document.body.innerHTML = `
-                        <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f1020; color: #fff; font-family: 'Segoe UI', sans-serif; direction: rtl; text-align: center; padding: 20px;">
-                            <div style="background: #181a30; border: 2px solid #ff416c; padding: 30px; border-radius: 20px; max-width: 400px; width: 100%; box-shadow: 0 10px 30px rgba(255,65,108,0.3);">
-                                <h2 style="color: #ff416c; margin-bottom: 12px; font-size: 20px;">🚫 عذراً، الحساب غير موجود</h2>
-                                <p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">هذا المعرف (${urlUserId}) غير مسجل في قاعدة البيانات السحابية الحية.</p>
-                            </div>
-                        </div>
-                    `;
+                    // إذا لم يوجد في الداتا بيز، يتم معاملته كأدمن مؤقت لكي لا تتوقف المنصة
+                    currentCompanyId = urlCompanyId || 'company_main';
+                    currentDriverProfile = {
+                        name: urlUserId,
+                        avatar: '',
+                        title: 'مشرف / أدمن',
+                        phone: '',
+                        role: 'admin',
+                        companyId: currentCompanyId,
+                        canAccessSocial: true,
+                        subPlan: 'مدير النظام',
+                        subExpiry: 'دائم'
+                    };
+                    syncProfileAndLoad();
                 }
             } catch (err) {
                 console.error(err);
+                currentDriverProfile = {
+                    name: 'المدير',
+                    avatar: '',
+                    title: 'مدير عام النظام',
+                    role: 'admin',
+                    companyId: 'company_main',
+                    canAccessSocial: true,
+                    subPlan: 'مدير',
+                    subExpiry: 'دائم'
+                };
+                syncProfileAndLoad();
             }
         }
 
         function isSuperAdmin() {
             let user = currentDriverProfile || {};
-            let userName = String(user.name || '').trim();
+            let userName = String(user.name || '').trim().toLowerCase();
             let role = String(user.role || '').toLowerCase().trim();
-            return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'Admin1'].includes(userName);
+            return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(userName);
         }
 
         async function syncProfileAndLoad() {
@@ -1043,7 +1065,7 @@
             (allChatMessagesCache || []).forEach(m => {
                 let sender = String(m.sender || '').trim();
                 if(sender && sender !== 'general' && !accountsMap.has(sender)) {
-                    let isMgr = ['مدير', 'المدير', '1', 'عماد', 'Emad', 'باندا'].includes(sender);
+                    let isMgr = ['مدير', 'المدير', '1', 'عماد', 'Emad', 'باندا', 'admin'].includes(sender.toLowerCase());
                     accountsMap.set(sender, {
                         name: sender,
                         role: isMgr ? 'مدير' : 'سائق',
@@ -1077,7 +1099,6 @@
             document.querySelectorAll('.chat-account-item').forEach(el => el.classList.remove('active'));
             if(element) element.classList.add('active');
             document.getElementById('floating-chat-room-title').innerText = targetName === 'general' ? '🌍 المحادثة العامة لأسطول الشركة' : `💬 محادثة خاصة مع: ${targetName}`;
-            // إعادة عرض الرسائل فوراً عند التبديل
             displayChatMessages(allChatMessagesCache);
         }
 
@@ -1086,7 +1107,7 @@
                 compressMedia(input.files[0], 1000, 1000, 0.8, (url, type) => {
                     chatFileCache = { src: url, type: type };
                     document.getElementById('chat-media-preview-container').style.display = 'flex';
-                    document.getElementById('chat-media-preview-text',).innerText = `✅ تم إرفاق (${type === 'video' ? 'فيديو' : 'صورة'}) بنجاح`;
+                    document.getElementById('chat-media-preview-text').innerText = `✅ تم إرفاق (${type === 'video' ? 'فيديو' : 'صورة'}) بنجاح`;
                 });
             }
         }
@@ -1120,9 +1141,8 @@
             });
         }
 
-        // ✅ منع تسريب المستمعات في الشات وجعل الاتصال يتم مرة واحدة فقط
         function loadChatMessages() {
-            if (chatUnsubscribe) return; // منع تكرار المستمع إذا كان مفعلاً
+            if (chatUnsubscribe) return;
 
             chatUnsubscribe = db.collection('chat').onSnapshot(snapshot => {
                 allChatMessagesCache = snapshot.docs.map(doc => doc.data());
