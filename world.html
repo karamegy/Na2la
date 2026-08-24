@@ -542,7 +542,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الموحد والخالي من أي تضارب -->
+    <!-- السكريبت البرمجي الموحد والمرتبط بالمنصة الأم -->
     <script>
         const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'];
 
@@ -737,7 +737,12 @@
         }
         window.goToPageWithSession = goToPageWithSession;
 
-        function goToMotherPlatform() { goToPageWithSession("https://karamegy.github.io/Na2la/"); }
+        // الاتصال المباشر بالمنصة الأم مع تمرير الجلسة والمعرفات بدقة
+        function goToMotherPlatform() { 
+            let userId = window.currentLoggedInUser?.id || '1';
+            let compId = window.currentCompanyId || 'company_main';
+            window.location.href = `https://karamegy.github.io/Na2la/?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`; 
+        }
         window.goToMotherPlatform = goToMotherPlatform;
 
         function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
@@ -865,23 +870,33 @@
                 }
             });
 
-            const collections = ['shipments', 'deferredInvoices', 'expenses', 'treasury', 'accounts', 'communityPosts'];
-            collections.forEach(col => {
-                onSnapshot(collection(window.db, col), (snapshot) => {
-                    let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    
-                    let superAdmin = isSuperAdmin();
-                    if (!superAdmin) {
-                        items = items.filter(item => {
-                            let itemCompId = String(item.companyId || '').trim();
-                            return itemCompId === currentCompanyId;
-                        });
-                    }
+            // مزامنة ذكية تدعم المسميات المختلفة للجداول لضمان جلب الحسابات بشكل صحيح
+            const collectionsMap = {
+                shipments: ['shipments', 'Shipments', 'trip', 'trips', 'رحلات', 'شحنات'],
+                deferredInvoices: ['deferredInvoices', 'deferred', 'Invoices', 'fawateer', 'فواتير'],
+                expenses: ['expenses', 'Expenses', 'مصروفات', 'صرف'],
+                treasury: ['treasury', 'Treasury', 'خزينة', 'cash', 'wallets'],
+                accounts: ['accounts', 'Accounts', 'transactions', 'Transactions', 'قيود', 'حسابات']
+            };
 
-                    appData[col] = items;
-                    renderAllFinancials();
-                    if(col === 'communityPosts') renderCommunityPosts();
-                }, err => console.error(`خطأ مزامنة ${col}:`, err));
+            Object.keys(collectionsMap).forEach(targetKey => {
+                let possibleNames = collectionsMap[targetKey];
+                possibleNames.forEach(colName => {
+                    onSnapshot(collection(window.db, colName), (snapshot) => {
+                        if (!snapshot.empty) {
+                            let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                            let superAdmin = isSuperAdmin();
+                            if (!superAdmin) {
+                                items = items.filter(item => {
+                                    let itemCompId = String(item.companyId || '').trim();
+                                    return itemCompId === currentCompanyId;
+                                });
+                            }
+                            appData[targetKey] = items;
+                            renderAllFinancials();
+                        }
+                    }, err => {});
+                });
             });
         }
 
