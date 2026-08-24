@@ -420,8 +420,10 @@
         let mySafeBalanceTotal = 0;
         let chatFileCache = null;
         let commentFilesCache = {};
+        
+        // متغير لإلغاء الاشتراك السابق ومنع تسريب المستمعات
+        let chatUnsubscribe = null;
 
-        // دالة التنقل الذكي الحافظة لتمرير الجلسة عبر الرابط حصرياً
         function goToPage(pageName) {
             let userId = urlUserId || currentDriverProfile.name || '';
             let companyId = currentCompanyId || 'company_main';
@@ -446,6 +448,8 @@
                 console.warn("Auth warning:", err);
             }
             await fetchCloudSessionFromURL();
+            // تشغيل مستمع الشات مرة واحدة فقط عند بدء التطبيق
+            loadChatMessages();
         }
 
         async function fetchCloudSessionFromURL() {
@@ -533,12 +537,6 @@
             return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'Admin1'].includes(userName);
         }
 
-        function isUserAdmin() {
-            let user = currentDriverProfile || {};
-            let role = String(user.role || '').toLowerCase().trim();
-            return isSuperAdmin() || role.includes('admin') || role.includes('مدير');
-        }
-
         async function syncProfileAndLoad() {
             let superAdmin = isSuperAdmin();
             document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير عام المنصة' : currentDriverProfile.title} (شركة: ${currentCompanyId})`;
@@ -565,7 +563,6 @@
             });
 
             loadCommunityPosts();
-            loadChatMessages();
             loadMyCargoFromShipments();
             loadTreasuryData();
         }
@@ -580,7 +577,6 @@
 
         function openFloatingChatModal() {
             document.getElementById('chatFloatingModal').style.display = 'flex';
-            loadChatMessages();
         }
 
         function closeFloatingChatModal() {
@@ -1081,7 +1077,8 @@
             document.querySelectorAll('.chat-account-item').forEach(el => el.classList.remove('active'));
             if(element) element.classList.add('active');
             document.getElementById('floating-chat-room-title').innerText = targetName === 'general' ? '🌍 المحادثة العامة لأسطول الشركة' : `💬 محادثة خاصة مع: ${targetName}`;
-            loadChatMessages();
+            // إعادة عرض الرسائل فوراً عند التبديل
+            displayChatMessages(allChatMessagesCache);
         }
 
         function previewChatFile(input) {
@@ -1089,7 +1086,7 @@
                 compressMedia(input.files[0], 1000, 1000, 0.8, (url, type) => {
                     chatFileCache = { src: url, type: type };
                     document.getElementById('chat-media-preview-container').style.display = 'flex';
-                    document.getElementById('chat-media-preview-text').innerText = `✅ تم إرفاق (${type === 'video' ? 'فيديو' : 'صورة'}) بنجاح`;
+                    document.getElementById('chat-media-preview-text',).innerText = `✅ تم إرفاق (${type === 'video' ? 'فيديو' : 'صورة'}) بنجاح`;
                 });
             }
         }
@@ -1123,53 +1120,58 @@
             });
         }
 
+        // ✅ منع تسريب المستمعات في الشات وجعل الاتصال يتم مرة واحدة فقط
         function loadChatMessages() {
-            db.collection('chat').onSnapshot(snapshot => {
-                const box = document.getElementById('chat-messages-box');
+            if (chatUnsubscribe) return; // منع تكرار المستمع إذا كان مفعلاً
+
+            chatUnsubscribe = db.collection('chat').onSnapshot(snapshot => {
                 allChatMessagesCache = snapshot.docs.map(doc => doc.data());
-                
                 renderChatUsersList();
+                displayChatMessages(allChatMessagesCache);
+            });
+        }
 
-                if(!box) return;
-                box.innerHTML = '';
-                
-                let superAdmin = isSuperAdmin();
-                let msgs = allChatMessagesCache.filter(m => superAdmin || m.companyId === currentCompanyId);
-                msgs.sort((a, b) => Number(a.id) - Number(b.id));
+        function displayChatMessages(msgsCache) {
+            const box = document.getElementById('chat-messages-box');
+            if(!box) return;
+            box.innerHTML = '';
+            
+            let superAdmin = isSuperAdmin();
+            let msgs = msgsCache.filter(m => superAdmin || m.companyId === currentCompanyId);
+            msgs.sort((a, b) => Number(a.id) - Number(b.id));
 
-                let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
+            let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
 
-                if (filtered.length === 0) {
-                    box.innerHTML = `<div style="text-align:center; font-size:11px; opacity:0.6; margin-top:20px;">لا توجد رسائل في هذه الغرفة بعد. ابدأ المحادثة الآن!</div>`;
-                    return;
+            if (filtered.length === 0) {
+                box.innerHTML = `<div style="text-align:center; font-size:11px; opacity:0.6; margin-top:20px;">لا توجد رسائل في هذه الغرفة بعد. ابدأ المحادثة الآن!</div>`;
+                return;
+            }
+
+            filtered.forEach(m => {
+                let isMine = m.sender === currentDriverProfile.name;
+                let mediaHtml = '';
+                if (m.mediaSrc) {
+                    mediaHtml = m.mediaType === 'video' ? 
+                        `<video src="${m.mediaSrc}" controls></video>` : 
+                        `<img src="${m.mediaSrc}" onclick="viewMedia('${m.mediaSrc}', 'image')"/>`;
                 }
 
-                filtered.forEach(m => {
-                    let isMine = m.sender === currentDriverProfile.name;
-                    let mediaHtml = '';
-                    if (m.mediaSrc) {
-                        mediaHtml = m.mediaType === 'video' ? 
-                            `<video src="${m.mediaSrc}" controls></video>` : 
-                            `<img src="${m.mediaSrc}" onclick="viewMedia('${m.mediaSrc}', 'image')"/>`;
-                    }
-
-                    let bubble = document.createElement('div');
-                    bubble.className = `chat-bubble ${isMine ? 'mine' : 'other'}`;
-                    bubble.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; gap:8px;">
-                            <strong style="font-size:10px; color:${isMine ? '#e0f2fe' : 'var(--accent)'};">${m.sender} (${m.senderRole || 'عضو'})</strong>
-                            <span style="font-size:8px; opacity:0.8;">${m.time}</span>
-                        </div>
-                        ${m.text ? `<span>${m.text}</span>` : ''}
-                        ${mediaHtml}
-                    `;
-                    box.appendChild(bubble);
-                });
-                box.scrollTop = box.scrollHeight;
+                let bubble = document.createElement('div');
+                bubble.className = `chat-bubble ${isMine ? 'mine' : 'other'}`;
+                bubble.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; gap:8px;">
+                        <strong style="font-size:10px; color:${isMine ? '#e0f2fe' : 'var(--accent)'};">${m.sender} (${m.senderRole || 'عضو'})</strong>
+                        <span style="font-size:8px; opacity:0.8;">${m.time}</span>
+                    </div>
+                    ${m.text ? `<span>${m.text}</span>` : ''}
+                    ${mediaHtml}
+                `;
+                box.appendChild(bubble);
             });
+            box.scrollTop = box.scrollHeight;
         }
 
         window.onload = initApp;
     </script>
 </body>
-                </html>
+</html>
