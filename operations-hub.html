@@ -333,13 +333,11 @@
         <div class="logo-subtext">غرفة العمليات التشغيلية الذكية - PURE CLOUD OS</div>
     </div>
 
-    <!-- شريط عرض الشراكة والشركة المعزولة سحابياً -->
     <div class="company-badge-box">
         <span>🏢 الشراكة / الشركة المعزولة حالياً: <strong id="headerCompanyIdDisplay" style="color: var(--primary-color);">جاري المزامنة...</strong></span>
         <span style="font-size: 11px; opacity: 0.8;" id="syncStatusBadge">مزامنة سحابية لحظية 🔄</span>
     </div>
 
-    <!-- شاشة عرض الحساب المتصل حالياً -->
     <div id="authBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-3d);">
         <img id="currentUserAvatar" src="https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);" alt="صورة المستخدم">
         <div>
@@ -364,7 +362,6 @@
             <h3>المالية</h3>
             <p>الأرباح والمصروفات اليومية</p>
         </div>
-        <!-- لوحة إدارة المدير -->
         <div class="admin-card" id="cardAdminUsers" style="display: none;" onclick="openModal('modalUsers')">
             <span class="icon">🛡️</span>
             <h3>لوحة إدارة المدير</h3>
@@ -562,7 +559,7 @@
         { id: "emerald", name: "الزمردي الفاخر" }
     ];
 
-    const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system', 'عماد', 'emad', 'باندا', 'karam', 'كرم'];
+    const superAdminsList = ['admin', 'مدير'];
 
     let currentThemeIndex = 0;
     let globalDriversCache = []; 
@@ -572,7 +569,6 @@
     let urlUserId = '';
     window.currentCompanyId = currentCompanyId;
 
-    // دالة الانتقال الذكي الحافظة لتمرير الجلسة ومزامنتها حصرياً عبر الرابط (URL)
     function goToPage(pageName) {
         let userId = urlUserId || activeExternalSessionName || '';
         let companyId = currentCompanyId || 'company_main';
@@ -584,32 +580,45 @@
         const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
         
         const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
+        let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // 1. البحث في عدة بدائل داخل الذاكرة المحلية (localStorage) إذا لم يوجد في الرابط
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = localStorage.getItem('na2la_userId') || 
                         localStorage.getItem('currentUser') || 
                         localStorage.getItem('userName') || 
-                        localStorage.getItem('userPhone') || 'Admin1';
+                        localStorage.getItem('userPhone') || ''; 
         }
 
         if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
             urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
         }
 
-        localStorage.setItem('na2la_userId', urlUserId);
-        localStorage.setItem('na2la_companyId', urlCompanyId);
+        if (!urlUserId) {
+            window.currentLoggedInUser = {
+                id: 'guest_driver',
+                name: 'سائق جديد',
+                role: 'driver',
+                companyId: urlCompanyId,
+                canAccessSocial: false,
+                avatar: ''
+            };
+            currentCompanyId = urlCompanyId;
+            updateCurrentInterfacePermissions();
+            initCloudSync();
+            fetchDriversManual();
+            return;
+        }
 
         urlUserId = urlUserId.trim();
         activeExternalSessionName = urlUserId;
+        localStorage.setItem('na2la_userId', urlUserId);
+        localStorage.setItem('na2la_companyId', urlCompanyId);
 
         let foundDoc = null;
         let lowerUserId = urlUserId.toLowerCase();
-        let isSuper = superAdminsList.some(adm => lowerUserId.includes(adm));
+        let isSuper = superAdminsList.some(adm => lowerUserId === adm.toLowerCase());
 
-        // البحث في مستندات فايربيز (drivers, users, team)
         const collectionsToSearch = ["drivers", "users", "team"];
         for (let col of collectionsToSearch) {
             try {
@@ -640,29 +649,22 @@
 
         if (foundDoc) {
             let docRole = String(foundDoc.role || foundDoc.rank || '').toLowerCase();
-            if (docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(adm => String(foundDoc.name || '').toLowerCase().includes(adm))) {
+            if (docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(adm => String(foundDoc.name || '').toLowerCase() === adm.toLowerCase())) {
                 isSuper = true;
                 foundDoc.role = 'admin';
+            } else {
+                isSuper = false;
+                foundDoc.role = 'driver';
             }
             window.currentLoggedInUser = foundDoc;
             currentCompanyId = urlCompanyId || foundDoc.companyId || foundDoc.companyName || 'company_main';
-        } else if (isSuper) {
-            currentCompanyId = urlCompanyId || 'company_main';
-            window.currentLoggedInUser = {
-                id: urlUserId,
-                name: 'المدير',
-                role: 'admin',
-                companyId: currentCompanyId,
-                canAccessSocial: true,
-                avatar: ''
-            };
         } else {
             window.currentLoggedInUser = { 
                 id: urlUserId, 
                 name: urlUserId, 
-                role: 'driver', 
+                role: isSuper ? 'admin' : 'driver', 
                 companyId: urlCompanyId || 'company_main', 
-                canAccessSocial: true,
+                canAccessSocial: isSuper,
                 avatar: ''
             };
             currentCompanyId = urlCompanyId || 'company_main';
@@ -694,10 +696,10 @@
             let role = String(window.currentLoggedInUser.role || window.currentLoggedInUser.rank || '').toLowerCase().trim();
             if (role === 'admin' || role === 'مدير') return true;
             let name = String(window.currentLoggedInUser.name || window.currentLoggedInUser.id || '').toLowerCase().trim();
-            if (superAdminsList.some(adm => name.includes(adm))) return true;
+            if (superAdminsList.some(adm => name === adm.toLowerCase())) return true;
         }
         let activeName = String(activeExternalSessionName || '').toLowerCase().trim();
-        if (superAdminsList.some(adm => activeName.includes(adm))) return true;
+        if (superAdminsList.some(adm => activeName === adm.toLowerCase())) return true;
         
         let driver = globalDriversCache.find(d => {
             let dName = String(d.name || d.id || d.phone || '').toLowerCase().trim();
