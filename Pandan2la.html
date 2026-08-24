@@ -220,7 +220,7 @@
                 <div class="avatar" onclick="openSwitchAccountPrompt()" id="header-avatar-btn" title="تبديل الحساب المتصل">🐼</div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
-                        <h2 id="header-username" style="font-size: 11px;">جاري التحقق من الجلسة...</h2>
+                        <h2 id="header-username" style="font-size: 11px;">باندا & أسطورة الطريق</h2>
                         <span id="sync-status-badge" class="sync-badge"><i class="fa-solid fa-circle" style="font-size: 6px;"></i> متصل وآمن</span>
                     </div>
                     <span style="font-size: 8px; color: var(--yellow-warning);" id="header-role-badge">🔄 مزامنة الصلاحيات</span>
@@ -590,17 +590,14 @@
 
     function getUserFilteredShipments(dataObj) {
         let all = getAllShipments(dataObj);
-        let user = window.currentLoggedInUser || {};
         let role = getUserRole();
 
+        // السماح للمدير والمشرف برؤية كافة الشحنات دون قيود صارمة على الـ companyId لمنع ظهور أصفار
         if (role === 'admin' || role === 'supervisor') {
-            return all.filter(s => {
-                let sCompId = String(s.companyId || '').trim();
-                if (sCompId && currentCompanyId && sCompId !== currentCompanyId && currentCompanyId !== 'company_guest') return false;
-                return true;
-            });
+            return all;
         }
 
+        let user = window.currentLoggedInUser || {};
         let currentUserId = String(user.id || '').trim();
         let userPhone = String(user.phone || '').trim();
         let userName = String(user.name || '').trim();
@@ -622,6 +619,11 @@
     function getUserFilteredList(list, dataKey) {
         let items = list || appData[dataKey] || [];
         let role = getUserRole();
+        
+        // السماح للمدير برؤية كافة القوائم تماماً لضمان سلامة الإحصائيات والخزينة والأجل
+        if (role === 'admin') {
+            return items;
+        }
         
         return items.filter(item => {
             let itemCompId = String(item.companyId || '').trim();
@@ -674,7 +676,6 @@
         }
     }
 
-    // 🛠️ التعديل الجذري: منع الالتصاق الإجباري بحساب المدير وإلغاء تضارب الذاكرة المحلية عند التبديل
     async function fetchDriverData(identifier) {
         let cleanId = String(identifier || '1').trim();
         if (!window.db || !window.firebaseModules) {
@@ -710,7 +711,6 @@
                 }
             }
 
-            // إذا لم يتم العثور عليه في سحابة فايربيس، ننشئ له بروفايل محلي آمن كـ "سائق مستقل" بدلاً من إجباره على العودة لباندا
             if (!docData) {
                 let isSuperName = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(cleanId);
                 docData = {
@@ -751,12 +751,10 @@
         }
     }
 
-    // 🛠️ دالة تبديل الحساب الآمنة لتنظيف المخلفات القديمة تماماً
     function openSwitchAccountPrompt() {
         let inputId = prompt("أدخل اسم حسابك أو رقم هاتفك للتبديل:");
         if (inputId && inputId.trim() !== "") {
             let cleanInput = inputId.trim();
-            // تفريغ الذاكرة المحلية تماماً لمنع تعلق جلسة باندا السابقة
             localStorage.removeItem('na2la_active_session');
             localStorage.removeItem('na2la_external_logged_user_id');
             localStorage.removeItem('logged_in_driver_id');
