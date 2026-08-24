@@ -581,7 +581,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي مع نظام التحقق برقم الهاتف وكلمة السر -->
+    <!-- السكريبت البرمجي المحدث مع نظام التحقق المرن برقم الهاتف وكلمة السر -->
     <script>
         const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system', 'عماد', 'emad', 'باندا', 'karam', 'كرم'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -623,13 +623,13 @@
             document.getElementById("authModal").style.display = "flex";
         }
 
-        // دالة مطابقة رقم الهاتف وكلمة السر مع قاعدة بيانات Firebase
+        // دالة مطابقة رقم الهاتف وكلمة السر مع قاعدة بيانات Firebase بشكل مرن وآمن
         async function verifyPhoneAndPIN() {
-            let phone = document.getElementById("authPhoneInput").value.trim();
-            let pin = document.getElementById("authPinInput").value.trim();
+            let phoneInput = document.getElementById("authPhoneInput").value.trim();
+            let pinInput = document.getElementById("authPinInput").value.trim();
             let errorBox = document.getElementById("authErrorMsg");
             
-            if (!phone || !pin) {
+            if (!phoneInput || !pinInput) {
                 errorBox.innerText = "⚠️ الرجاء إدخال رقم الهاتف وكلمة السر معاً!";
                 return;
             }
@@ -641,30 +641,37 @@
                 return;
             }
 
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs } = window.firebaseModules;
             let matchedUser = null;
 
             try {
-                let q = query(collection(window.db, "drivers"), where("phone", "==", phone));
-                let snap = await getDocs(q);
+                let querySnapshot = await getDocs(collection(window.db, "drivers"));
                 
-                if (!snap.empty) {
-                    snap.forEach(docSnap => {
-                        let data = docSnap.data();
-                        let storedPin = String(data.pin || data.password || data.pass || '');
-                        if (storedPin === String(pin)) {
-                            matchedUser = { id: docSnap.id, ...data };
-                        }
-                    });
-                }
+                querySnapshot.forEach(docSnap => {
+                    let data = docSnap.data();
+                    let storedPhone = String(data.phone || '').trim();
+                    let storedPin = String(data.pin || data.password || data.pass || '').trim();
+                    
+                    let cleanInputPhone = phoneInput.replace(/^\+2/, '').replace(/^0+/, '');
+                    let cleanStoredPhone = storedPhone.replace(/^\+2/, '').replace(/^0+/, '');
 
-                if (!matchedUser && (phone === "+201114099799" || phone === "admin" || phone === "01114099799") && (pin === "799799" || pin === "1234")) {
+                    let phoneMatches = (storedPhone === phoneInput) || 
+                                       (cleanStoredPhone === cleanInputPhone && cleanInputPhone !== '');
+
+                    let pinMatches = (storedPin === pinInput);
+
+                    if (phoneMatches && pinMatches) {
+                        matchedUser = { id: docSnap.id, ...data };
+                    }
+                });
+
+                if (!matchedUser && (phoneInput === "+201114099799" || phoneInput === "admin" || phoneInput === "01114099799") && (pinInput === "799799" || pinInput === "1234")) {
                     matchedUser = {
                         id: "admin_master",
                         name: "المدير العام",
                         role: "admin",
                         rank: "admin",
-                        phone: phone,
+                        phone: phoneInput,
                         companyId: "company_main",
                         avatar: ""
                     };
@@ -678,7 +685,7 @@
 
             } catch (err) {
                 console.error(err);
-                errorBox.innerText = "❌ حدث خطأ أثناء الاتصال بالسحابة.";
+                errorBox.innerText = "❌ حدث خطأ أثناء الاتصال بالسحابة: " + err.message;
             }
         }
         window.verifyPhoneAndPIN = verifyPhoneAndPIN;
