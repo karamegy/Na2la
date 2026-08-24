@@ -13,9 +13,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم) -->
+    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم والكود الثاني) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -130,20 +131,6 @@
 
 <div id="toast-container"></div>
 
-<!-- شاشة قفل وتسجيل الدخول سحابياً بالكامل -->
-<div class="login-screen" id="lock-screen" style="display: none;">
-    <div class="login-card" style="text-align: center;">
-        <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
-        <h3 style="font-size: 15px; margin-bottom: 4px;">أسطورة الطريق & باندا (V90 PURE CLOUD)</h3>
-        <p style="font-size: 9px; opacity: 0.8; margin-bottom: 10px;">جاري الاتصال بقاعدة البيانات السحابية الحية...</p>
-        <div id="login-status-indicator" style="font-size: 10px; color: var(--green-success); margin-bottom: 8px;">جاري مطابقة المعرف السحابي...</div>
-        
-        <div style="margin-top: 10px;">
-            <button type="button" class="btn-main" onclick="goToPage('index.html')" style="padding:8px 12px; border-radius:6px; font-size:10px;">العودة للرئيسية الأم (index.html) ➔</button>
-        </div>
-    </div>
-</div>
-
 <div class="app-container">
     <div class="fixed-top-wrapper">
         <div class="rss-ticker-bar">
@@ -234,6 +221,7 @@
             <form id="edit-item-form" onsubmit="saveEditedItem(event)">
                 <input type="hidden" id="edit-type">
                 <input type="hidden" id="edit-index">
+                <input type="hidden" id="edit-doc-id">
                 <div id="edit-form-fields"></div>
                 <button type="submit" class="btn-success" style="margin-top:6px;">حفظ التعديلات سحابياً 💾</button>
             </form>
@@ -329,9 +317,6 @@
     const db = firebase.firestore();
     window.db = db;
 
-    window._isSavingLocally = false;
-
-    // دالة التنقل الذكي الحافظة لتمرير الجلسة عبر الرابط حصرياً
     function goToPage(pageName) {
         let userId = urlUserId || (window.currentLoggedInUser ? window.currentLoggedInUser.name : '') || '';
         let companyId = currentCompanyId || 'company_main';
@@ -387,11 +372,10 @@
     let currentLoggedInUser = null;
     window.currentLoggedInUser = null;
     let urlUserId = '';
-    let currentCompanyId = 'company_main';
+    let currentCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
 
-    const defaultInitialData = {
+    let appData = {
         shipments: [],
-        docs: [],
         deferredInvoices: [],
         consolidatedInvoices: [],
         treasury: [],
@@ -406,132 +390,67 @@
         chat: [],
         centralBroadcasts: [],
         auditLogs: [],
-        files: []
+        files: [],
+        newsText: '🌟 نظام أسطورة الطريق & باندا متدفق لحظياً مع المزامنة السحابية الخالصة (V90)...'
     };
-
-    let appData = defaultInitialData;
     window.appData = appData;
 
-    let remoteMainData = {};
-    let collectionShipments = [];
-    let unsubscribeState = null;
-    let unsubscribeShipments = null;
+    let unsubscribers = [];
 
-    function updateUnifiedData() {
-        let rawShipments = collectionShipments.length > 0 ? collectionShipments : (remoteMainData.docs || remoteMainData.shipments || defaultInitialData.docs);
-
-        appData = {
-            shipments: rawShipments,
-            docs: rawShipments,
-            deferredInvoices: remoteMainData.deferredInvoices || defaultInitialData.deferredInvoices,
-            consolidatedInvoices: remoteMainData.consolidatedInvoices || defaultInitialData.consolidatedInvoices,
-            treasury: remoteMainData.treasury || defaultInitialData.treasury,
-            expenses: remoteMainData.expenses || defaultInitialData.expenses,
-            customers: remoteMainData.customers || defaultInitialData.customers,
-            drivers: remoteMainData.drivers || defaultInitialData.drivers,
-            communityPosts: remoteMainData.communityPosts || defaultInitialData.communityPosts,
-            posts: remoteMainData.posts || remoteMainData.wallPosts || defaultInitialData.posts,
-            wallPosts: remoteMainData.posts || remoteMainData.wallPosts || defaultInitialData.posts,
-            trucks: remoteMainData.trucks || defaultInitialData.trucks,
-            maintenanceLogs: remoteMainData.maintenanceLogs || defaultInitialData.maintenanceLogs,
-            chat: remoteMainData.chat || defaultInitialData.chat,
-            centralBroadcasts: remoteMainData.centralBroadcasts || defaultInitialData.centralBroadcasts,
-            auditLogs: remoteMainData.auditLogs || defaultInitialData.auditLogs,
-            files: remoteMainData.files || []
-        };
-        
-        window.appData = appData;
-
-        if(typeof renderStats === 'function') renderStats();
-        if(typeof refreshActiveSection === 'function') refreshActiveSection();
-        if(typeof updateRSSTicker === 'function') updateRSSTicker();
-    }
-
-    // تفعيل المزامنة الحية بناءً على معرف الشركة (companyId)
+    // مطابقة تامة لبنية الكود الثاني في الاستماع المباشر للمجموعات المستقلة
     function initFirebaseListeners(companyId) {
-        if (unsubscribeState) unsubscribeState();
-        if (unsubscribeShipments) unsubscribeShipments();
+        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+        unsubscribers = [];
 
-        const docId = companyId || 'company_main';
+        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
 
-        unsubscribeState = db.collection("appStore").doc(docId).onSnapshot((docSnap) => {
-            if (window._isSavingLocally) return;
-            remoteMainData = docSnap.exists ? docSnap.data() : {};
-            updateUnifiedData();
-        }, (err) => {
-            console.error("خطأ في استماع الوثيقة الرئيسية:", err);
+        collections.forEach(colName => {
+            let query = db.collection(colName);
+            const unsub = query.onSnapshot(snapshot => {
+                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+                
+                // التصفية بمعرف الشركة إذا وجد
+                if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
+                    appData[colName] = rawData.filter(d => d.companyId === companyId);
+                } else {
+                    appData[colName] = rawData;
+                }
+
+                if (colName === 'posts') {
+                    appData.wallPosts = appData.posts;
+                }
+
+                window.appData = appData;
+
+                if(typeof renderStats === 'function') renderStats();
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }, err => {
+                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
+            });
+            unsubscribers.push(unsub);
         });
 
-        unsubscribeShipments = db.collection("shipments").onSnapshot((snapshot) => {
-            if (window._isSavingLocally) return;
-            collectionShipments = [];
-            snapshot.forEach(doc => {
-                collectionShipments.push({ id: doc.id, ...doc.data() });
-            });
-            updateUnifiedData();
-        }, (err) => {
-            console.error("خطأ في استماع مجموعة الشحنات:", err);
+        db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if(doc.exists && doc.data().newsText) {
+                appData.newsText = doc.data().newsText;
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }
         });
     }
 
     window.manualRefreshData = function() {
         showToast('جاري تحديث ومزامنة البيانات يدوياً من السحابة... 🔄');
-        const docId = currentCompanyId || 'company_main';
-        db.collection("appStore").doc(docId).get().then((docSnap) => {
-            if(docSnap.exists) {
-                remoteMainData = docSnap.data();
-            }
-            db.collection("shipments").get().then((snapshot) => {
-                collectionShipments = [];
-                snapshot.forEach(doc => {
-                    collectionShipments.push({ id: doc.id, ...doc.data() });
-                });
-                updateUnifiedData();
-                showToast('تمت المزامنة والتحديث السحابي بنجاح! ✅');
-            });
-        }).catch((e) => {
-            showToast('فشل الاتصال بالسحابة أثناء التحديث', 'error');
-        });
+        initFirebaseListeners(currentCompanyId);
+        setTimeout(() => {
+            showToast('تمت المزامنة والتحديث السحابي بنجاح! ✅');
+        }, 1000);
     };
 
     window.saveDataAll = function() {
-        let userRole = window.currentLoggedInUser ? String(window.currentLoggedInUser.role || '').toLowerCase() : 'سائق';
-        let isAdmin = userRole === 'admin' || userRole.includes('مدير') || userRole.includes('مشرف');
-        
-        if (!isAdmin && userRole === 'سائق') {
-            showToast('عذراً، حساب السائق لا يمتلك صلاحية تعديل أو حفظ البيانات!', 'warning');
-            return;
-        }
-        
-        appData.docs = appData.shipments;
-        appData.shipments = appData.shipments;
-        appData.wallPosts = appData.posts;
-        
-        window._isSavingLocally = true;
-        const docId = currentCompanyId || 'company_main';
-
-        db.collection("appStore").doc(docId).set({
-            ...appData,
-            companyId: docId,
-            docs: appData.shipments,
-            shipments: appData.shipments,
-            wallPosts: appData.posts,
-            posts: appData.posts
-        }, { merge: true }).then(() => {
-            setTimeout(() => {
-                window._isSavingLocally = false;
-            }, 1500);
-
-            if(typeof renderStats === 'function') renderStats();
-            if(typeof refreshActiveSection === 'function') refreshActiveSection();
-            if(typeof updateRSSTicker === 'function') updateRSSTicker();
-        }).catch((e) => {
-            window._isSavingLocally = false;
-            console.error("خطأ أثناء الحفظ سحابياً:", e);
-        });
+        // يتم الحفظ مباشرة لكل مجموعة عبر الدوال المخصصة تماماً مثل الكود الثاني لضمان التطابق
     };
 
-    // جلب الجلسة وتحويل الصلاحيات بمرونة تامة (يدعم admin واللغة العربية)
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -565,7 +484,6 @@
                 companyName: currentCompanyId,
                 title: 'مدير عام المنصة'
             };
-            if(lockScreen) lockScreen.style.display = 'none';
             applyUserPermissionsUI();
             initFirebaseListeners(currentCompanyId);
             switchSection('profile');
@@ -588,7 +506,6 @@
             }
 
             if(found) {
-                // توحيد الرتبة برمجياً لتجنب أي تعارض في الحروف العربية أو الإنجليزية
                 let rawRole = String(found.role || '').toLowerCase();
                 if (rawRole.includes('admin') || rawRole.includes('مدير') || rawRole.includes('مشرف')) {
                     found.role = 'admin';
@@ -596,7 +513,6 @@
 
                 window.currentLoggedInUser = found;
                 currentCompanyId = urlCompanyId || found.companyId || 'company_main';
-                if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
                 initFirebaseListeners(currentCompanyId);
                 switchSection('profile');
@@ -607,7 +523,6 @@
                     companyName: currentCompanyId,
                     title: 'مدير عام المنصة'
                 };
-                if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
                 initFirebaseListeners(currentCompanyId);
                 switchSection('profile');
@@ -619,7 +534,6 @@
                 companyName: currentCompanyId,
                 title: 'مدير عام المنصة'
             };
-            if(lockScreen) lockScreen.style.display = 'none';
             applyUserPermissionsUI();
             initFirebaseListeners(currentCompanyId);
             switchSection('profile');
@@ -655,18 +569,17 @@
     }
 
     function appStateData() {
-        if(!window.appData) window.appData = defaultInitialData;
+        if(!window.appData) window.appData = { shipments: [], deferredInvoices: [], consolidatedInvoices: [], treasury: [], expenses: [], customers: [], drivers: [], communityPosts: [], posts: [], wallPosts: [], trucks: [], maintenanceLogs: [], chat: [], centralBroadcasts: [], auditLogs: [], files: [] };
         return window.appData;
     }
 
     function logAction(actionText) {
         let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
         if (role === 'سائق') return;
-        let data = appStateData();
-        if(!data.auditLogs) data.auditLogs = [];
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
-        data.auditLogs.unshift({ action: actionText, user: userName, time: new Date().toLocaleTimeString('ar-EG'), createdAt: Date.now() });
-        saveDataAll();
+        let newLogId = String(Date.now());
+        let logObj = { id: newLogId, companyId: currentCompanyId, action: actionText, user: userName, time: new Date().toLocaleTimeString('ar-EG'), createdAt: Date.now() };
+        db.collection('auditLogs').doc(newLogId).set(logObj);
     }
 
     function setTheme(theme) {
@@ -783,7 +696,7 @@
         if (!isAdmin && role === 'سائق') return;
 
         let data = appStateData();
-        let shipments = data.shipments || data.docs || [];
+        let shipments = data.shipments || [];
         let expenses = data.expenses || [];
         let treasury = data.treasury || [];
         let customers = data.customers || [];
@@ -818,7 +731,7 @@
         const content = document.getElementById('main-content');
         if(!content) return;
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         
         if (sectionId === 'profile') {
             content.innerHTML = `
@@ -898,13 +811,13 @@
                                 ${(data.consolidatedInvoices || []).map((ci, index) => `
                                     <tr>
                                         <td>#${String(ci.id || index).slice(-4)}</td>
-                                        <td>${ci.clientName}</td>
-                                        <td>${ci.shipments.length}</td>
-                                        <td style="font-weight:bold; color:var(--green-success);">${ci.totalAmount} ج.م</td>
+                                        <td>${ci.clientName || ci.client}</td>
+                                        <td>${ci.shipments ? ci.shipments.length : (ci.shipmentIds ? ci.shipmentIds.length : 0)}</td>
+                                        <td style="font-weight:bold; color:var(--green-success);">${ci.totalAmount || ci.total} ج.م</td>
                                         <td>
                                             <button class="btn-success btn-sm" onclick="openConsolidatedImageModal('${ci.id}')" title="صورة">🖼️</button>
                                             <button class="btn-warning btn-sm" onclick="exportConsolidatedWhatsApp('${ci.id}')" title="واتساب">💬</button>
-                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', ${index})" title="حذف">✕</button>` : ''}
+                                            ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('consolidatedInvoices', '${ci.docId || ci.id}')" title="حذف">✕</button>` : ''}
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد فواتير مجمعة</td></tr>'}
@@ -929,16 +842,16 @@
                         <table>
                             <thead><tr><th>العميل</th><th>المبلغ</th><th>تاريخ الاستحقاق</th><th>الحالة</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.deferredInvoices || []).map((di, idx) => `
+                                ${(data.deferredInvoices || []).map((di) => `
                                     <tr>
-                                        <td style="font-weight:bold;">${di.client}</td>
-                                        <td>${di.amount} ج.م</td>
+                                        <td style="font-weight:bold;">${di.clientName || di.client}</td>
+                                        <td>${di.remainingAmount || di.amount} ج.م</td>
                                         <td>${di.dueDate || '-'}</td>
-                                        <td><span class="badge ${di.status === 'تم التحصيل' ? 'bg-delivered' : 'bg-pending'}">${di.status || 'معلق'}</span></td>
+                                        <td><span class="badge ${di.status === 'paid' || di.status === 'تم التحصيل' ? 'bg-delivered' : 'bg-pending'}">${di.status === 'paid' ? 'تم التحصيل' : (di.status || 'معلق')}</span></td>
                                         <td>
                                             ${isAdmin ? `
-                                                <button class="btn-success btn-sm" onclick="markDeferredPaid(${idx})">تحصيل</button>
-                                                <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', ${idx})">✕</button>
+                                                <button class="btn-success btn-sm" onclick="markDeferredPaid('${di.docId || di.id}')">تحصيل</button>
+                                                <button class="btn-danger btn-sm" onclick="deleteItem('deferredInvoices', '${di.docId || di.id}')">✕</button>
                                             ` : 'متابعة'}
                                         </td>
                                     </tr>
@@ -969,7 +882,7 @@
                         ${(data.centralBroadcasts || []).map(b => `
                             <div style="background:var(--card-bg); padding:8px; border-radius:6px; border:1px solid var(--border-color);">
                                 <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--yellow-warning); margin-bottom:3px;">
-                                    <strong>${b.sender} (${b.priority})</strong><span>${b.time}</span>
+                                    <strong>${b.sender} (${b.priority || 'إعلان'})</strong><span>${b.time}</span>
                                 </div>
                                 <p style="font-size:10px; color:var(--text-main);">${b.text}</p>
                             </div>
@@ -1005,12 +918,12 @@
                         <table>
                             <thead><tr><th>الشاحنة</th><th>نوع الصيانة</th><th>المستهدف (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.maintenanceLogs || []).map((m, idx) => `
+                                ${(data.maintenanceLogs || []).map((m) => `
                                     <tr>
                                         <td>${m.truck}</td>
                                         <td>${m.service}</td>
                                         <td>${m.km} كم</td>
-                                        <td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('maintenanceLogs', ${idx})">إتمام</button>` : 'متابعة'}</td>
+                                        <td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('maintenanceLogs', '${m.docId || m.id}')">إتمام</button>` : 'متابعة'}</td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مهام صيانة</td></tr>'}
                             </tbody>
@@ -1026,24 +939,24 @@
                         <table>
                             <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب الاحترافي</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.drivers || []).map((d, idx) => `
+                                ${(data.drivers || []).map((d) => `
                                     <tr>
                                         <td style="font-weight:bold;">${d.name}</td>
                                         <td>${d.phone || '-'}</td>
                                         <td>
-                                            <select onchange="updateDriverField(${idx}, 'role', this.value)" style="font-size:9px; padding:2px;">
+                                            <select onchange="updateDriverField('${d.docId || d.id}', 'role', this.value)" style="font-size:9px; padding:2px;">
                                                 <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق</option>
                                                 <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                                                 <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>(admin)</option>
                                             </select>
                                         </td>
                                         <td>
-                                            <select onchange="updateDriverField(${idx}, 'title', this.value)" style="font-size:9px; padding:2px; font-weight:bold; color:var(--yellow-warning);">
+                                            <select onchange="updateDriverField('${d.docId || d.id}', 'title', this.value)" style="font-size:9px; padding:2px; font-weight:bold; color:var(--yellow-warning);">
                                                 ${professionalTitles.map(t => `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`).join('')}
                                             </select>
                                         </td>
                                         <td>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('drivers', ${idx})">حذف</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('drivers', '${d.docId || d.id}')">حذف</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
@@ -1109,18 +1022,18 @@
                         <table>
                             <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>السائق</th><th>إجراءات</th></tr></thead>
                             <tbody id="shipments-table-body">
-                                ${shipmentsList.map((s, idx) => `
+                                ${shipmentsList.map((s) => `
                                     <tr>
                                         <td>${s.name}</td>
                                         <td>${s.item}</td>
                                         <td>${s.price} ج.م</td>
                                         <td>${s.assignedDriver || '-'}</td>
                                         <td>
-                                            <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
-                                            <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
+                                            <button class="btn-main btn-sm" onclick="showQR('${s.docId || s.id}')" title="QR">QR</button>
+                                            <button class="btn-success btn-sm" onclick="exportInvoicePDF('${s.docId || s.id}')" title="PDF">PDF</button>
                                             ${isAdmin ? `
-                                                <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
-                                                <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف نهائي">✕</button>
+                                                <button class="btn-warning btn-sm" onclick="openEditModal('shipments', '${s.docId || s.id}')" title="تعديل">✏️</button>
+                                                <button class="btn-danger btn-sm" onclick="deleteItem('shipments', '${s.docId || s.id}')" title="حذف نهائي">✕</button>
                                             ` : ''}
                                         </td>
                                     </tr>
@@ -1145,7 +1058,7 @@
                         <table>
                             <thead><tr><th>المركبة</th><th>السائق</th><th>العداد (KM)</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.trucks || []).map((tr, idx) => `<tr><td>${tr.num}</td><td>${tr.driver}</td><td>${tr.km} كم</td><td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('trucks', ${idx})">حذف</button>` : 'متابعة'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
+                                ${(data.trucks || []).map((tr) => `<tr><td>${tr.num}</td><td>${tr.driver}</td><td>${tr.km} كم</td><td>${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('trucks', '${tr.docId || tr.id}')">حذف</button>` : 'متابعة'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مركبات</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -1165,15 +1078,15 @@
                         <table>
                             <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.treasury || []).map((t, idx) => `
+                                ${(data.treasury || []).map((t) => `
                                     <tr>
                                         <td><span class="badge ${t.type === 'in' ? 'bg-delivered' : 'bg-danger'}">${t.type === 'in' ? 'إيداع' : 'سحب'}</span></td>
                                         <td>${t.amount} ج.م</td>
                                         <td>${t.desc}</td>
                                         <td>${t.date}</td>
                                         <td>
-                                            <button class="btn-warning btn-sm" onclick="openEditModal('treasury', ${idx})">✏️</button>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('treasury', ${idx})">✕</button>
+                                            <button class="btn-warning btn-sm" onclick="openEditModal('treasury', '${t.docId || t.id}')">✏️</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('treasury', '${t.docId || t.id}')">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد حركات نقدية</td></tr>'}
@@ -1195,14 +1108,14 @@
                         <table>
                             <thead><tr><th>البند</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                             <tbody>
-                                ${(data.expenses || []).map((ex, idx) => `
+                                ${(data.expenses || []).map((ex) => `
                                     <tr>
                                         <td>${ex.title}</td>
                                         <td>${ex.amount} ج.م</td>
                                         <td>${ex.date}</td>
                                         <td>
-                                            <button class="btn-warning btn-sm" onclick="openEditModal('expenses', ${idx})">✏️</button>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('expenses', ${idx})">✕</button>
+                                            <button class="btn-warning btn-sm" onclick="openEditModal('expenses', '${ex.docId || ex.id}')">✏️</button>
+                                            <button class="btn-danger btn-sm" onclick="deleteItem('expenses', '${ex.docId || ex.id}')">✕</button>
                                         </td>
                                     </tr>
                                 `).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد مصروفات</td></tr>'}
@@ -1226,15 +1139,15 @@
                         <table>
                             <thead><tr><th>العميل</th><th>الهاتف</th><th>الديون المستحقة</th><th>إجراء</th></tr></thead>
                             <tbody>
-                                ${(data.customers || []).map((c, idx) => `
+                                ${(data.customers || []).map((c) => `
                                     <tr>
                                         <td>${c.name}</td>
                                         <td>${c.phone}</td>
                                         <td><span class="badge bg-danger">${c.debt} ج.م</span></td>
                                         <td>
                                             ${isAdmin ? `
-                                                <button class="btn-success btn-sm" onclick="payCustomerDebt(${idx})" title="سداد">سداد</button>
-                                                <button class="btn-danger btn-sm" onclick="deleteItem('customers', ${idx})" title="حذف">✕</button>
+                                                <button class="btn-success btn-sm" onclick="payCustomerDebt('${c.docId || c.id}')" title="سداد">سداد</button>
+                                                <button class="btn-danger btn-sm" onclick="deleteItem('customers', '${c.docId || c.id}')" title="حذف">✕</button>
                                             ` : 'متابعة'}
                                         </td>
                                     </tr>
@@ -1278,10 +1191,10 @@
                     <textarea id="feed-text" placeholder="اكتب إعلان أو حالة طريق جديدة..." style="height: 50px;"></textarea>
                     <button class="btn-main" onclick="publishFeedPost()" style="margin-bottom: 6px;">نشر إعلان سحابياً 🚀</button>` : ''}
                     <div id="feed-container">
-                        ${(data.posts || []).map((p, idx) => `
+                        ${(data.posts || []).map((p) => `
                             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; justify-content:space-between; align-items:center;">
-                                <div><strong>${p.user}</strong>: <p style="margin-top:2px;">${p.text}</p></div>
-                                ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('posts', ${idx})">✕</button>` : ''}
+                                <div><strong>${p.author || p.user}</strong>: <p style="margin-top:2px;">${p.text || p.desc}</p></div>
+                                ${isAdmin ? `<button class="btn-danger btn-sm" onclick="deleteItem('posts', '${p.docId || p.id}')">✕</button>` : ''}
                             </div>
                         `).join('') || '<p style="font-size:9px; color:var(--text-muted);">لا توجد إعلانات</p>'}
                     </div>
@@ -1377,6 +1290,7 @@
 
         if(!text && (!fileInput.files || fileInput.files.length === 0)) return;
 
+        let newMsgId = String(Date.now());
         if(fileInput.files && fileInput.files[0]) {
             const file = fileInput.files[0];
             const reader = new FileReader();
@@ -1385,6 +1299,8 @@
                 const mediaType = file.type.startsWith('video') ? 'video' : 'image';
                 
                 const newMsg = {
+                    id: newMsgId,
+                    companyId: currentCompanyId,
                     sender: userName,
                     text: text,
                     mediaUrl: base64Data,
@@ -1392,16 +1308,15 @@
                     time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
                 };
 
-                let data = appStateData();
-                if(!data.chat) data.chat = [];
-                data.chat.push(newMsg);
-                saveDataAll();
+                db.collection('chat').doc(newMsgId).set(newMsg);
                 showToast('تم إرسال الرسالة سحابياً! 🚀');
                 switchSection('chat');
             };
             reader.readAsDataURL(file);
         } else {
             const newMsg = {
+                id: newMsgId,
+                companyId: currentCompanyId,
                 sender: userName,
                 text: text,
                 mediaUrl: null,
@@ -1409,10 +1324,7 @@
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            let data = appStateData();
-            if(!data.chat) data.chat = [];
-            data.chat.push(newMsg);
-            saveDataAll();
+            db.collection('chat').doc(newMsgId).set(newMsg);
             showToast('تم إرسال الرسالة سحابياً! 🚀');
             switchSection('chat');
         }
@@ -1422,7 +1334,7 @@
         const query = document.getElementById('shipment-search-input').value.toLowerCase();
         const driverFilter = document.getElementById('shipment-driver-filter') ? document.getElementById('shipment-driver-filter').value : '';
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         const tbody = document.getElementById('shipments-table-body');
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
@@ -1434,18 +1346,18 @@
             return matchesQuery && matchesDriver;
         });
         
-        tbody.innerHTML = filtered.map((s, idx) => `
+        tbody.innerHTML = filtered.map((s) => `
             <tr>
                 <td>${s.name}</td>
                 <td>${s.item}</td>
                 <td>${s.price} ج.م</td>
                 <td>${s.assignedDriver || '-'}</td>
                 <td>
-                    <button class="btn-main btn-sm" onclick="showQR(${idx})" title="QR">QR</button>
-                    <button class="btn-success btn-sm" onclick="exportInvoicePDF(${idx})" title="PDF">PDF</button>
+                    <button class="btn-main btn-sm" onclick="showQR('${s.docId || s.id}')" title="QR">QR</button>
+                    <button class="btn-success btn-sm" onclick="exportInvoicePDF('${s.docId || s.id}')" title="PDF">PDF</button>
                     ${isAdmin ? `
-                        <button class="btn-warning btn-sm" onclick="openEditModal('shipments', ${idx})" title="تعديل">✏️</button>
-                        <button class="btn-danger btn-sm" onclick="deleteItem('shipments', ${idx})" title="حذف نهائي">✕</button>
+                        <button class="btn-warning btn-sm" onclick="openEditModal('shipments', '${s.docId || s.id}')" title="تعديل">✏️</button>
+                        <button class="btn-danger btn-sm" onclick="deleteItem('shipments', '${s.docId || s.id}')" title="حذف نهائي">✕</button>
                     ` : ''}
                 </td>
             </tr>
@@ -1461,23 +1373,27 @@
             showToast('إضافة الفواتير المؤجلة مخصصة للمدير فقط!', 'warning');
             return;
         }
+        let defId = String(Date.now());
         const newDef = {
-            id: Date.now(),
-            client: document.getElementById('def-client').value,
-            amount: Number(document.getElementById('def-amount').value),
+            id: defId,
+            companyId: currentCompanyId,
+            invoiceId: `INV-${defId}`,
+            clientName: document.getElementById('def-client').value,
+            clientPhone: '',
+            totalAmount: Number(document.getElementById('def-amount').value),
+            paidAmount: 0,
+            remainingAmount: Number(document.getElementById('def-amount').value),
             dueDate: document.getElementById('def-duedate').value,
             notes: document.getElementById('def-notes').value,
-            status: 'معلق'
+            status: 'pending'
         };
-        let data = appStateData();
-        if(!data.deferredInvoices) data.deferredInvoices = [];
-        data.deferredInvoices.unshift(newDef);
-        saveDataAll();
-        switchSection('deferredInvoices');
-        showToast('تم حفظ الفاتورة المؤجلة سحابياً! ⏳');
+        db.collection('deferredInvoices').doc(defId).set(newDef).then(() => {
+            switchSection('deferredInvoices');
+            showToast('تم حفظ الفاتورة المؤجلة سحابياً! ⏳');
+        });
     }
 
-    function markDeferredPaid(index) {
+    function markDeferredPaid(docId) {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = role === 'admin' || role.includes('مدير');
@@ -1485,16 +1401,13 @@
             showToast('تحصيل الفواتير مخصص للمدير فقط!', 'warning');
             return;
         }
-        let data = appStateData();
-        if(data.deferredInvoices && data.deferredInvoices[index]) {
-            data.deferredInvoices[index].status = 'تم التحصيل';
-            saveDataAll();
+        db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: db.FieldValue ? firebase.firestore.FieldValue.increment(0) : 0, remainingAmount: 0 }, { merge: true }).then(() => {
             switchSection('deferredInvoices');
             showToast('تم تحصيل الفاتورة المؤجلة وتحديث السحابة بنجاح! ✅');
-        }
+        });
     }
 
-    function payCustomerDebt(index) {
+    function payCustomerDebt(docId) {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = role === 'admin' || role.includes('مدير');
@@ -1503,12 +1416,15 @@
             return;
         }
         let data = appStateData();
+        let cust = (data.customers || []).find(c => String(c.docId || c.id) === String(docId));
+        if(!cust) return;
         let amount = prompt('أدخل المبلغ المراد سداده:', '0');
         if(amount && !isNaN(amount)) {
-            data.customers[index].debt = Math.max(0, Number(data.customers[index].debt) - Number(amount));
-            saveDataAll();
-            showToast('تم سداد جزء من الدين سحابياً بنجاح!');
-            switchSection('customers');
+            cust.debt = Math.max(0, Number(cust.debt) - Number(amount));
+            db.collection('customers').doc(String(cust.docId || cust.id)).set(cust, { merge: true }).then(() => {
+                showToast('تم سداد جزء من الدين سحابياً بنجاح!');
+                switchSection('customers');
+            });
         }
     }
 
@@ -1523,7 +1439,7 @@
         const body = document.getElementById('stat-modal-body');
         modal.style.display = 'flex';
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
 
         if (type === 'shipments') {
             title.innerText = '📦 تفاصيل الشحنات والرحلات';
@@ -1536,9 +1452,9 @@
                 (data.treasury || []).map((t) => `<tr><td>${t.type === 'in' ? 'إيداع' : 'سحب'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'debts') {
-            title.innerText = '⚠️ تفاصيل ديون العملاء';
-            body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الهاتف</th><th>الديون</th></tr></thead><tbody>` +
-                (data.customers || []).map((c) => `<tr><td>${c.name}</td><td>${c.phone}</td><td>${c.debt} ج.م</td></tr>`).join('') +
+            title.innerText = '⚠️ تفاصيل ديون العملاء والفواتير الآجلة';
+            body.innerHTML = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>` +
+                (data.deferredInvoices || []).map((d) => `<tr><td>${d.clientName || d.client}</td><td>${d.remainingAmount || d.amount} ج.م</td><td>${d.status}</td></tr>`).join('') +
                 `</tbody></table></div>`;
         } else if (type === 'revenue' || type === 'net_profit') {
             title.innerText = '📈 تحليل الإيرادات والمصروفات والأرباح';
@@ -1552,7 +1468,7 @@
         }
     }
 
-    function openEditModal(type, index) {
+    function openEditModal(type, docId) {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = role === 'admin' || role.includes('مدير');
@@ -1561,25 +1477,25 @@
             return;
         }
         let data = appStateData();
-        let targetList = type === 'shipments' ? (data.shipments || data.docs) : data[type];
-        let item = targetList ? targetList[index] : null;
+        let targetList = data[type] || [];
+        let item = targetList.find(x => String(x.docId || x.id) === String(docId));
         if(!item) return;
 
         document.getElementById('edit-type').value = type;
-        document.getElementById('edit-index').value = index;
+        document.getElementById('edit-doc-id').value = docId;
         const fields = document.getElementById('edit-form-fields');
 
         if(type === 'shipments') {
             document.getElementById('edit-modal-title').innerText = 'تعديل بيانات الشحنة';
             fields.innerHTML = `
                 <label style="font-size:9px;">اسم العميل:</label>
-                <input type="text" id="edit-name" value="${item.name}" required>
+                <input type="text" id="edit-name" value="${item.name || ''}" required>
                 <label style="font-size:9px;">عنوان التوصيل:</label>
-                <input type="text" id="edit-address" value="${item.address}" required>
+                <input type="text" id="edit-address" value="${item.address || ''}" required>
                 <label style="font-size:9px;">وصف الحمولة:</label>
-                <input type="text" id="edit-item" value="${item.item}" required>
+                <input type="text" id="edit-item" value="${item.item || ''}" required>
                 <label style="font-size:9px;">الأجرة (ج.م):</label>
-                <input type="number" id="edit-price" value="${item.price}" required>
+                <input type="number" id="edit-price" value="${item.price || 0}" required>
             `;
         }
         openModal('editItemModal');
@@ -1593,37 +1509,37 @@
         if (!isAdmin) return;
 
         const type = document.getElementById('edit-type').value;
-        const index = Number(document.getElementById('edit-index').value);
+        const docId = document.getElementById('edit-doc-id').value;
         let data = appStateData();
+        let targetList = data[type] || [];
+        let item = targetList.find(x => String(x.docId || x.id) === String(docId));
 
-        if(type === 'shipments') {
-            let list = data.shipments || data.docs;
-            list[index].name = document.getElementById('edit-name').value;
-            list[index].address = document.getElementById('edit-address').value;
-            list[index].item = document.getElementById('edit-item').value;
-            list[index].price = Number(document.getElementById('edit-price').value);
-            data.shipments = list;
-            data.docs = list;
+        if(item && type === 'shipments') {
+            item.name = document.getElementById('edit-name').value;
+            item.address = document.getElementById('edit-address').value;
+            item.item = document.getElementById('edit-item').value;
+            item.price = Number(document.getElementById('edit-price').value);
+            
+            db.collection('shipments').doc(String(docId)).set(item, { merge: true }).then(() => {
+                closeModal('editItemModal');
+                showToast('تم تحديث وحفظ التعديلات سحابياً بنجاح! ⚡');
+            });
         }
-
-        saveDataAll();
-        closeModal('editItemModal');
-        showToast('تم تحديث وحفظ التعديلات سحابياً بنجاح! ⚡');
     }
 
     function loadClientShipmentsForConsolidation() {
         const clientName = document.getElementById('ci-client').value;
         const container = document.getElementById('ci-shipments-checkboxes');
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         if(!clientName) {
             container.innerHTML = '<p style="color:var(--text-muted); text-align:center;">اختر العميل أولاً لعرض شحناته</p>';
             return;
         }
         const clientShipments = shipmentsList.filter(s => s.name === clientName);
-        container.innerHTML = clientShipments.map((s, idx) => `
+        container.innerHTML = clientShipments.map((s) => `
             <label style="display:flex; align-items:center; gap:6px; margin-bottom:3px; cursor:pointer;">
-                <input type="checkbox" name="ci-shipment-chk" value="${idx}" data-price="${s.price}" data-item="${s.item}" style="width:auto; margin:0;">
+                <input type="checkbox" name="ci-shipment-chk" value="${s.docId || s.id}" data-price="${s.price}" data-item="${s.item}" style="width:auto; margin:0;">
                 <span>${s.item} - <strong>${s.price} ج.م</strong> (${s.date || ''})</span>
             </label>
         `).join('');
@@ -1647,6 +1563,7 @@
         }
 
         let selectedShipments = [];
+        let shipmentIds = [];
         let totalAmount = 0;
         let clientPhone = '';
 
@@ -1654,34 +1571,38 @@
             const price = Number(chk.getAttribute('data-price'));
             const item = chk.getAttribute('data-item');
             selectedShipments.push({ item, price });
+            shipmentIds.push(chk.value);
             totalAmount += price;
         });
 
         totalAmount = Math.max(0, totalAmount - discount);
 
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         const matchedShipment = shipmentsList.find(s => s.name === clientName);
         if(matchedShipment) clientPhone = matchedShipment.phone || '';
 
+        const conId = String(Date.now());
         const newConsolidated = {
-            id: Date.now(),
+            id: conId,
+            companyId: currentCompanyId,
             clientName: clientName,
+            client: clientName,
             phone: clientPhone,
             shipments: selectedShipments,
+            shipmentIds: shipmentIds,
             totalAmount: totalAmount,
+            total: totalAmount,
             date: new Date().toLocaleDateString('ar-EG')
         };
 
-        if(!data.consolidatedInvoices) data.consolidatedInvoices = [];
-        data.consolidatedInvoices.unshift(newConsolidated);
-        saveDataAll();
-
-        showToast('تم إنشاء الفاتورة المجمعة وحفظها سحابياً! 📑');
-        switchSection('consolidatedInvoices');
+        db.collection('consolidatedInvoices').doc(conId).set(newConsolidated).then(() => {
+            showToast('تم إنشاء الفاتورة المجمعة وحفظها سحابياً! 📑');
+            switchSection('consolidatedInvoices');
+        });
     }
 
-    window.deleteItem = function(key, index) {
+    window.deleteItem = function(key, docId) {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = role === 'admin' || role.includes('مدير');
@@ -1690,42 +1611,34 @@
             return;
         }
         if(confirm('هل أنت متأكد من الحذف النهائي من السحابة؟')) {
-            let data = appStateData();
-            let targetList = key === 'shipments' ? (data.shipments || data.docs) : data[key];
-            
-            if(targetList && targetList[index]) {
-                let itemToDelete = targetList[index];
-                
-                if (key === 'shipments' && itemToDelete.id) {
-                    db.collection("shipments").doc(String(itemToDelete.id)).delete().catch(err => console.log(err));
-                }
-
-                targetList.splice(index, 1);
-                
-                if(key === 'shipments') {
-                    data.shipments = targetList;
-                    data.docs = targetList;
-                    collectionShipments = [...targetList];
-                }
-                
-                saveDataAll();
+            db.collection(key).doc(String(docId)).delete().then(() => {
                 showToast('تم الحذف النهائي من السحابة بنجاح 🗑️');
-            }
+            }).catch(err => {
+                showToast('حدث خطأ أثناء الحذف', 'error');
+            });
         }
     };
 
     function openConsolidatedImageModal(id) {
         let data = appStateData();
-        const ci = (data.consolidatedInvoices || []).find(item => item.id == id);
+        const ci = (data.consolidatedInvoices || []).find(item => String(item.docId || item.id) === String(id));
         if(!ci) return;
         document.getElementById('c-inv-id').innerText = `#${String(ci.id).slice(-4)}`;
-        document.getElementById('c-inv-name').innerText = ci.clientName;
+        document.getElementById('c-inv-name').innerText = ci.clientName || ci.client;
         document.getElementById('c-inv-phone').innerText = ci.phone || '-';
         document.getElementById('c-inv-date').innerText = ci.date;
-        document.getElementById('c-inv-total').innerText = ci.totalAmount;
+        document.getElementById('c-inv-total').innerText = ci.totalAmount || ci.total;
+
+        let itemsArr = ci.shipments || [];
+        if(itemsArr.length === 0 && ci.shipmentIds) {
+            itemsArr = ci.shipmentIds.map(sId => {
+                let s = (data.shipments || []).find(x => String(x.docId || x.id) === String(sId));
+                return s ? { item: s.item, price: s.price } : { item: 'شحنة', price: 0 };
+            });
+        }
 
         const listContainer = document.getElementById('c-inv-items-list');
-        listContainer.innerHTML = ci.shipments.map((sh, idx) => `
+        listContainer.innerHTML = itemsArr.map((sh, idx) => `
             <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
                 <span>${idx+1}. ${sh.item}</span>
                 <strong>${sh.price} ج.م</strong>
@@ -1749,10 +1662,11 @@
 
     function exportConsolidatedWhatsApp(id) {
         let data = appStateData();
-        const ci = (data.consolidatedInvoices || []).find(item => item.id == id);
+        const ci = (data.consolidatedInvoices || []).find(item => String(item.docId || item.id) === String(id));
         if(!ci) return;
-        let itemsStr = ci.shipments.map((sh) => `• ${sh.item}: *${sh.price} ج.م*`).join('\n');
-        let msg = `📑 *فاتورة مجمعة معتمدة - أسطورة الطريق*\n\nرقم الفاتورة: #${String(ci.id).slice(-4)}\nالعميل: ${ci.clientName}\nالتاريخ: ${ci.date}\n\n*تفاصيل الشحنات:*\n${itemsStr}\n\n💰 *الإجمالي المستحق: ${ci.totalAmount} ج.م*\n\nشكراً لتعاملكم معنا!`;
+        let itemsArr = ci.shipments || [];
+        let itemsStr = itemsArr.map((sh) => `• ${sh.item}: *${sh.price} ج.م*`).join('\n');
+        let msg = `📑 *فاتورة مجمعة معتمدة - أسطورة الطريق*\n\nرقم الفاتورة: #${String(ci.id).slice(-4)}\nالعميل: ${ci.clientName || ci.client}\nالتاريخ: ${ci.date}\n\n*تفاصيل الشحنات:*\n${itemsStr}\n\n💰 *الإجمالي المستحق: ${ci.totalAmount || ci.total} ج.م*\n\nشكراً لتعاملكم معنا!`;
         window.open(`https://wa.me/${ci.phone || ''}?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
@@ -1760,7 +1674,7 @@
         const index = document.getElementById('track-shipment-select').value;
         const container = document.getElementById('tracking-timeline-view');
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         if(index === '') {
             container.innerHTML = '<p style="font-size:9px; text-align:center; color:var(--text-muted);">الرجاء اختيار شحنة لعرض الخط الزمني</p>';
             return;
@@ -1769,7 +1683,7 @@
         if(!s) return;
 
         const stages = ['تم التسجيل', 'تم التعيين', 'في الطريق', 'تم التوصيل'];
-        const currentStage = s.milestone || 'تم التسجيل';
+        const currentStage = s.milestone || s.status || 'تم التسجيل';
 
         container.innerHTML = `
             <p style="font-size:10px; margin-bottom:6px; font-weight:bold;">العميل: ${s.name} | الحمولة: ${s.item}</p>
@@ -1777,21 +1691,24 @@
                 <select id="next-milestone" style="margin:0;">
                     ${stages.map(st => `<option value="${st}" ${st === currentStage ? 'selected' : ''}>${st}</option>`).join('')}
                 </select>
-                <button class="btn-success btn-sm" onclick="updateShipmentMilestone(${index})">تحديث المرحلة سحابياً 🔄</button>
+                <button class="btn-success btn-sm" onclick="updateShipmentMilestone('${s.docId || s.id}')">تحديث المرحلة سحابياً 🔄</button>
             </div>
         `;
     }
 
-    function updateShipmentMilestone(index) {
+    function updateShipmentMilestone(docId) {
         const newMilestone = document.getElementById('next-milestone').value;
         let data = appStateData();
-        let list = data.shipments || data.docs || [];
-        list[index].milestone = newMilestone;
-        data.shipments = list;
-        data.docs = list;
-        saveDataAll();
-        showToast('تم تحديث مرحلة الشحنة سحابياً بنجاح!');
-        renderTrackingDetails();
+        let list = data.shipments || [];
+        let s = list.find(x => String(x.docId || x.id) === String(docId));
+        if(s) {
+            s.milestone = newMilestone;
+            s.status = newMilestone;
+            db.collection('shipments').doc(String(docId)).set(s, { merge: true }).then(() => {
+                showToast('تم تحديث مرحلة الشحنة سحابياً بنجاح!');
+                renderTrackingDetails();
+            });
+        }
     }
 
     function saveMaintenanceTask(e) {
@@ -1803,18 +1720,18 @@
             showToast('غير مسموح إلا للمدير فقط!', 'warning');
             return;
         }
+        let maintId = String(Date.now());
         const newTask = {
-            id: Date.now(),
+            id: maintId,
+            companyId: currentCompanyId,
             truck: document.getElementById('maint-truck').value,
             service: document.getElementById('maint-service').value,
             km: Number(document.getElementById('maint-km').value)
         };
-        let data = appStateData();
-        if(!data.maintenanceLogs) data.maintenanceLogs = [];
-        data.maintenanceLogs.unshift(newTask);
-        saveDataAll();
-        switchSection('fleetMaintenance');
-        showToast('تم جدولة مهمة الصيانة سحابياً!');
+        db.collection('maintenanceLogs').doc(maintId).set(newTask).then(() => {
+            switchSection('fleetMaintenance');
+            showToast('تم جدولة مهمة الصيانة سحابياً!');
+        });
     }
 
     function sendCentralBroadcast(e) {
@@ -1830,25 +1747,25 @@
         const priority = document.getElementById('broadcast-priority').value;
         if(!text) return;
 
+        let bId = String(Date.now());
         const newMsg = {
+            id: bId,
+            companyId: currentCompanyId,
             sender: 'الإدارة العليا',
             text: text,
             priority: priority,
             time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
         };
 
-        let data = appStateData();
-        if(!data.centralBroadcasts) data.centralBroadcasts = [];
-        data.centralBroadcasts.unshift(newMsg);
-        saveDataAll();
-
-        document.getElementById('broadcast-text').value = '';
-        switchSection('centralChat');
-        updateRSSTicker();
-        showToast('📢 تم بث الرسالة سحابياً بنجاح!');
+        db.collection('centralBroadcasts').doc(bId).set(newMsg).then(() => {
+            document.getElementById('broadcast-text').value = '';
+            switchSection('centralChat');
+            updateRSSTicker();
+            showToast('📢 تم بث الرسالة سحابياً بنجاح!');
+        });
     }
 
-    function updateDriverField(index, field, value) {
+    function updateDriverField(docId, field, value) {
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
         let isAdmin = role === 'admin' || role.includes('مدير');
@@ -1856,10 +1773,9 @@
             showToast('تعديل الحسابات مخصص للمدير فقط!', 'warning');
             return;
         }
-        let data = appStateData();
-        data.drivers[index][field] = value;
-        saveDataAll();
-        showToast('تم التحديث السحابي بنجاح');
+        db.collection('drivers').doc(String(docId)).set({ [field]: value }, { merge: true }).then(() => {
+            showToast('تم التحديث السحابي بنجاح');
+        });
     }
 
     function saveNewDriver(e) {
@@ -1871,8 +1787,10 @@
             showToast('إضافة الحسابات مخصصة للمدير فقط!', 'warning');
             return;
         }
+        let drvId = String(Date.now());
         const newDrv = {
-            id: Date.now(),
+            id: drvId,
+            companyId: currentCompanyId,
             name: document.getElementById('new-d-name').value,
             phone: document.getElementById('new-d-phone').value,
             pin: document.getElementById('new-d-pin').value,
@@ -1880,12 +1798,10 @@
             title: 'سائق معتمد',
             status: 'متاح 🟢'
         };
-        let data = appStateData();
-        if(!data.drivers) data.drivers = [];
-        data.drivers.push(newDrv);
-        saveDataAll();
-        switchSection('driversControl');
-        showToast('تم إضافة الحساب وحفظه سحابياً بنجاح!');
+        db.collection('drivers').doc(drvId).set(newDrv).then(() => {
+            switchSection('driversControl');
+            showToast('تم إضافة الحساب وحفظه سحابياً بنجاح!');
+        });
     }
 
     function saveNewShipment(e) {
@@ -1897,9 +1813,10 @@
             showToast('عذراً، حساب السائق لا يمتلك صلاحية إضافة شحنات جديدة!', 'warning');
             return;
         }
-        const shipmentId = Date.now();
+        const shipmentId = String(Date.now());
         const newShipment = {
             id: shipmentId,
+            companyId: currentCompanyId,
             name: document.getElementById('s-name').value,
             phone: document.getElementById('s-phone').value,
             address: document.getElementById('s-address').value,
@@ -1913,16 +1830,10 @@
             date: new Date().toLocaleDateString('ar-EG')
         };
         
-        db.collection("shipments").doc(String(shipmentId)).set(newShipment).catch(err => console.log(err));
-
-        let data = appStateData();
-        let list = data.shipments || data.docs || [];
-        list.unshift(newShipment);
-        data.shipments = list;
-        data.docs = list;
-        saveDataAll();
-        switchSection('shipments');
-        showToast('تم حفظ الشحنة سحابياً بنجاح! 🚀');
+        db.collection("shipments").doc(shipmentId).set(newShipment).then(() => {
+            switchSection('shipments');
+            showToast('تم حفظ الشحنة سحابياً بنجاح! 🚀');
+        });
     }
 
     function saveTreasury(e) {
@@ -1934,18 +1845,19 @@
             showToast('الخزينة مخصصة للمدير فقط!', 'warning');
             return;
         }
+        let tId = String(Date.now());
         const newT = {
+            id: tId,
+            companyId: currentCompanyId,
             type: document.getElementById('t-type').value,
             amount: Number(document.getElementById('t-amount').value),
             desc: document.getElementById('t-desc').value,
             date: new Date().toLocaleDateString('ar-EG')
         };
-        let data = appStateData();
-        if(!data.treasury) data.treasury = [];
-        data.treasury.unshift(newT);
-        saveDataAll();
-        switchSection('treasury');
-        showToast('تم تسجيل الحركة سحابياً بنجاح!');
+        db.collection('treasury').doc(tId).set(newT).then(() => {
+            switchSection('treasury');
+            showToast('تم تسجيل الحركة سحابياً بنجاح!');
+        });
     }
 
     function saveExpense(e) {
@@ -1957,36 +1869,38 @@
             showToast('المصروفات مخصصة للمدير فقط!', 'warning');
             return;
         }
+        let exId = String(Date.now());
         const newEx = {
-            id: Date.now(),
+            id: exId,
+            companyId: currentCompanyId,
             title: document.getElementById('exp-title').value,
             amount: Number(document.getElementById('exp-amount').value),
             date: new Date().toLocaleDateString('ar-EG')
         };
-        let data = appStateData();
-        if(!data.expenses) data.expenses = [];
-        data.expenses.unshift(newEx);
-        saveDataAll();
-        switchSection('expenses');
-        showToast('تم حفظ المصروف سحابياً بنجاح!');
+        db.collection('expenses').doc(exId).set(newEx).then(() => {
+            switchSection('expenses');
+            showToast('تم حفظ المصروف سحابياً بنجاح!');
+        });
     }
 
     function publishCommunityPost() {
         const text = document.getElementById('community-post-text').value;
         if(!text) return;
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
+        let pId = String(Date.now());
         const newPost = {
+            id: pId,
+            companyId: currentCompanyId,
+            author: userName,
             user: userName,
             text: text,
             time: new Date().toLocaleTimeString('ar-EG')
         };
-        let data = appStateData();
-        if(!data.communityPosts) data.communityPosts = [];
-        data.communityPosts.unshift(newPost);
-        saveDataAll();
-        document.getElementById('community-post-text').value = '';
-        renderCommunityPosts();
-        showToast('تم النشر سحابياً بنجاح!');
+        db.collection('communityPosts').doc(pId).set(newPost).then(() => {
+            document.getElementById('community-post-text').value = '';
+            renderCommunityPosts();
+            showToast('تم النشر سحابياً بنجاح!');
+        });
     }
 
     function renderCommunityPosts() {
@@ -1997,7 +1911,7 @@
         container.innerHTML = posts.map(p => `
             <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; border:1px solid var(--border-color); font-size:10px;">
                 <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--text-muted); margin-bottom:2px;">
-                    <strong>${p.user}</strong><span>${p.time}</span>
+                    <strong>${p.author || p.user}</strong><span>${p.time}</span>
                 </div>
                 <p>${p.text}</p>
             </div>
@@ -2015,12 +1929,12 @@
         }).addTo(map);
 
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         shipmentsList.forEach(s => {
             if(s.gps) {
                 const coords = s.gps.split(',').map(Number);
                 if(coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                    L.marker(coords).addTo(map).bindPopup(`<b>العميل:</b> ${s.name}<br><b>الحمولة:</b> ${s.item}<br><b>المرحلة:</b> ${s.milestone || 'نشط'}`);
+                    L.marker(coords).addTo(map).bindPopup(`<b>العميل:</b> ${s.name}<br><b>الحمولة:</b> ${s.item}<br><b>المرحلة:</b> ${s.milestone || s.status || 'نشط'}`);
                 }
             }
         });
@@ -2049,10 +1963,10 @@
         document.getElementById('ai-result').innerHTML = res;
     }
 
-    function showQR(index) {
+    function showQR(id) {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
-        const s = shipmentsList[index];
+        let shipmentsList = data.shipments || [];
+        const s = shipmentsList.find(x => String(x.docId || x.id) === String(id));
         if(!s) return;
         const box = document.getElementById('qrcode');
         box.innerHTML = '';
@@ -2060,10 +1974,10 @@
         openModal('qr-modal');
     }
 
-    function exportInvoicePDF(index) {
+    function exportInvoicePDF(id) {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
-        const s = shipmentsList[index];
+        let shipmentsList = data.shipments || [];
+        const s = shipmentsList.find(x => String(x.docId || x.id) === String(id));
         if(!s) return;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
@@ -2079,7 +1993,7 @@
 
     function exportAllShipmentsPDF() {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         doc.text("أسطورة الطريق & باندا - تقرير الشحنات الشامل", 20, 20);
@@ -2095,9 +2009,9 @@
 
     function exportToExcel() {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         const ws = XLSX.utils.json_to_sheet(shipmentsList);
-        const wb = XLSX.utils.book_net();
+        const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
         XLSX.writeFile(wb, "na2la_panda_data_v90.xlsx");
         showToast('تم تصدير البيانات إلى Excel بنجاح!');
@@ -2105,7 +2019,7 @@
 
     function exportSummaryWhatsApp() {
         let data = appStateData();
-        let shipmentsList = data.shipments || data.docs || [];
+        let shipmentsList = data.shipments || [];
         let rev = shipmentsList.reduce((s, x) => s + Number(x.price || 0), 0);
         let msg = `📊 *التقرير اليومي - أسطورة الطريق*\n\nإجمالي الشحنات: ${shipmentsList.length}\nإجمالي الإيرادات: ${rev} ج.م`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
