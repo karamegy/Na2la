@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المعزولة V100 PRO SECURE ISOLATED</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المعزولة V101 PRO SECURE ISOLATED</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -195,7 +195,7 @@
     <header>
         <div class="brand-container-panda">
             <div class="header-profile-avatar" title="تبديل الحساب المستقل" onclick="openSwitchAccountPrompt()">
-                <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none;">
+                <img id="userHeaderAvatarImg" src="" alt="صورة المستخدم" style="display: none;" onerror="this.style.display='none'; document.getElementById('userHeaderAvatarEmoji').style.display='inline-block';">
                 <span id="userHeaderAvatarEmoji">🐼</span>
             </div>
             <div>
@@ -544,7 +544,7 @@
 
     <!-- السكريبت البرمجي الموحد والمتزامن بدقة مع فايربيس والمنصة الأم -->
     <script>
-        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'];
+        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'كرم', 'Karam'];
 
         // دالة التقاط الجلسة الموحدة والربط التلقائي مع المنصة الأم
         function getInstantSessionOnLoad() {
@@ -552,7 +552,6 @@
             let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
-            // الربط مع المنصة الأم عبر التخزين المحلي إذا لم توجد قيم في الرابط
             if (!urlUserId) {
                 urlUserId = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
             }
@@ -560,56 +559,47 @@
                 urlCompanyId = localStorage.getItem('current_company_id');
             }
 
+            let cachedUserJson = localStorage.getItem('na2la_active_session');
+            let cachedUser = {};
+            if (cachedUserJson) {
+                try { cachedUser = JSON.parse(cachedUserJson) || {}; } catch(e) {}
+            }
+
             if (urlUserId && urlUserId.trim() !== '' && urlUserId !== 'null') {
                 urlUserId = urlUserId.trim();
                 localStorage.setItem('na2la_external_logged_user_id', urlUserId);
                 
                 let isSuper = superAdminsList.includes(urlUserId) || superAdminsList.includes(urlUserId.toLowerCase()) || urlUserId.toLowerCase() === 'admin' || urlUserId === 'المدير';
-                let compId = isSuper ? 'company_main' : (urlCompanyId && urlCompanyId.trim() !== '' ? urlCompanyId.trim() : (localStorage.getItem('current_company_id') || 'company_main'));
+                let compId = isSuper ? 'company_main' : (urlCompanyId && urlCompanyId.trim() !== '' ? urlCompanyId.trim() : (cachedUser.companyId || 'company_main'));
                 
                 localStorage.setItem('current_company_id', compId);
                 
                 let newUserObj = {
                     id: urlUserId,
                     name: isSuper ? 'المدير' : urlUserId,
-                    role: isSuper ? 'مدير نظام' : (localStorage.getItem('current_user_role') || 'driver'),
-                    companyId: compId
+                    role: isSuper ? 'مدير نظام' : (cachedUser.role || 'driver'),
+                    companyId: compId,
+                    avatar: cachedUser.avatar || ''
                 };
                 localStorage.setItem('na2la_active_session', JSON.stringify(newUserObj));
                 return newUserObj;
             }
 
-            let storedDriverName = localStorage.getItem('logged_in_driver_name');
-            if (storedDriverName && storedDriverName !== 'المدير') {
-                let isSuper = superAdminsList.includes(storedDriverName) || storedDriverName.toLowerCase() === 'admin';
-                return {
-                    id: storedDriverName,
-                    name: storedDriverName,
-                    role: isSuper ? 'مدير نظام' : (localStorage.getItem('current_user_role') || 'driver'),
-                    companyId: isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || 'company_main')
-                };
-            }
-
-            let cachedUserJson = localStorage.getItem('na2la_active_session');
-            if (cachedUserJson) {
-                try {
-                    let parsed = JSON.parse(cachedUserJson);
-                    if (parsed && parsed.id) {
-                        if (String(parsed.id).toLowerCase() === 'admin' || superAdminsList.includes(parsed.id) || parsed.name === 'المدير') {
-                            parsed.role = 'مدير نظام';
-                            parsed.companyId = 'company_main';
-                            parsed.name = 'المدير';
-                        }
-                        return parsed;
-                    }
-                } catch(e) {}
+            if (cachedUser && cachedUser.id) {
+                if (String(cachedUser.id).toLowerCase() === 'admin' || superAdminsList.includes(cachedUser.id) || cachedUser.name === 'المدير') {
+                    cachedUser.role = 'مدير نظام';
+                    cachedUser.companyId = 'company_main';
+                    cachedUser.name = 'المدير';
+                }
+                return cachedUser;
             }
 
             return {
                 id: 'admin',
                 name: 'المدير',
                 role: 'مدير نظام',
-                companyId: 'company_main'
+                companyId: 'company_main',
+                avatar: ''
             };
         }
 
@@ -645,7 +635,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
-                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name') || '1';
+                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name') || 'admin';
                 let isIdentifierAdmin = superAdminsList.includes(identifier) || superAdminsList.includes(identifier.toLowerCase()) || identifier.toLowerCase() === 'admin' || identifier === 'المدير';
 
                 let foundDoc = null;
@@ -655,7 +645,7 @@
                         id: 'admin',
                         name: 'المدير',
                         role: 'مدير نظام',
-                        avatar: '',
+                        avatar: currentLoggedInUser.avatar || '',
                         companyId: 'company_main'
                     };
                 } else {
@@ -695,7 +685,7 @@
                             name: identifier,
                             role: 'driver',
                             companyId: localStorage.getItem('current_company_id') || 'company_main',
-                            avatar: ''
+                            avatar: currentLoggedInUser.avatar || ''
                         };
                     }
                 }
@@ -720,7 +710,7 @@
             const { collection, onSnapshot } = window.firebaseModules;
             
             onSnapshot(collection(window.db, "drivers"), (snapshot) => {
-                if (isSuperAdmin()) return; // المدير لا يحتاج لمزامنة السائقين الجانبية التي قد تغير صلاحياته
+                if (isSuperAdmin()) return;
                 let identifier = currentLoggedInUser.id || currentLoggedInUser.name;
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
@@ -765,14 +755,14 @@
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
 
         function goToPageWithSession(pageName) {
-            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || '1';
+            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
             let compId = window.currentCompanyId || 'company_main';
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
         }
         window.goToPageWithSession = goToPageWithSession;
 
         function goToMotherPlatform() { 
-            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || '1';
+            let userId = window.currentLoggedInUser?.name || window.currentLoggedInUser?.id || 'admin';
             let compId = window.currentCompanyId || 'company_main';
             window.location.href = `https://karamegy.github.io/Na2la/?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`; 
         }
@@ -803,7 +793,7 @@
             let user = window.currentLoggedInUser || {};
             let post = {
                 id: String(Date.now()),
-                userId: user.id || '1',
+                userId: user.id || 'admin',
                 companyId: currentCompanyId,
                 name: user.name || 'المدير',
                 description: text,
@@ -840,7 +830,7 @@
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
-            if (user.avatar && user.avatar.trim() !== '') {
+            if (user.avatar && String(user.avatar).trim() !== '') {
                 avatarImg.src = user.avatar;
                 avatarImg.style.display = 'block';
                 if (avatarEmoji) avatarEmoji.style.display = 'none';
@@ -891,7 +881,7 @@
             renderAllFinancials();
         }
 
-        // مزامنة آمنة ومدمجة لكافة مجموعات فايربيس مع الربط الدقيق لبيانات العضو والشركة
+        // مزامنة آمنة ومدمجة لكافة مجموعات فايربيس مع العزل الدقيق
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc } = window.firebaseModules;
@@ -924,7 +914,6 @@
                         let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                         window._firestoreCache[targetKey][colName] = colItems;
 
-                        // دمج كافة العناصر من المجموعات المرتبطة بدون فقدان بيانات
                         let mergedMap = new Map();
                         Object.values(window._firestoreCache[targetKey]).forEach(arr => {
                             arr.forEach(item => {
@@ -1035,7 +1024,7 @@
         async function syncItemToCollection(colName, item) {
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
-            item.userId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
+            item.userId = window.currentLoggedInUser ? window.currentLoggedInUser.id : 'admin';
             item.companyId = currentCompanyId;
             try {
                 await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
@@ -1079,7 +1068,7 @@
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بشكل صحيح");
 
             let expObj = { 
-                id: String(Date.now()), userId: window.currentLoggedInUser?.id || '1', companyId: currentCompanyId, 
+                id: String(Date.now()), userId: window.currentLoggedInUser?.id || 'admin', companyId: currentCompanyId, 
                 date: new Date().toLocaleDateString('ar-EG'), accountOwner: owner, name: owner, clientName: owner, 
                 category: category, description: desc, item: desc, amount: amount, price: amount, type: 'debit', status: 'paid' 
             };
@@ -1098,7 +1087,7 @@
             if (isNaN(amt) || amt <= 0) return alert("أدخل مبلغ صحيح");
 
             let tObj = {
-                id: String(Date.now()), userId: window.currentLoggedInUser?.id || '1', companyId: currentCompanyId, 
+                id: String(Date.now()), userId: window.currentLoggedInUser?.id || 'admin', companyId: currentCompanyId, 
                 type: type === 'deposit' ? 'in' : 'out', amount: amt, price: amt, desc: reason, description: reason, date: new Date().toLocaleString('ar-EG')
             };
 
@@ -1129,7 +1118,7 @@
             if (!name || isNaN(amount)) return alert("أدخل بيانات صحيحة");
 
             let record = { 
-                id: String(Date.now()), userId: window.currentLoggedInUser?.id || '1', companyId: currentCompanyId, 
+                id: String(Date.now()), userId: window.currentLoggedInUser?.id || 'admin', companyId: currentCompanyId, 
                 invoiceId: "INV-" + Math.floor(100000000 + Math.random() * 900000000), 
                 date: new Date().toLocaleDateString('ar-EG'), accountOwner: name, name: name, clientName: name,
                 clientPhone: phone, phone: phone, description: "فاتورة أجل", item: "فاتورة أجل",
@@ -1153,7 +1142,7 @@
             if (!desc || isNaN(amount)) return alert("أدخل البيانات بدقة");
 
             let record = { 
-                id: String(Date.now()), userId: window.currentLoggedInUser?.id || '1', companyId: currentCompanyId, 
+                id: String(Date.now()), userId: window.currentLoggedInUser?.id || 'admin', companyId: currentCompanyId, 
                 date: new Date().toLocaleDateString('ar-EG'), accountOwner: owner, name: owner, clientName: owner, 
                 clientPhone: phone, phone: phone, description: desc, item: desc, amount: amount, price: amount, type: type, status: status 
             };
