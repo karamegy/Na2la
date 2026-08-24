@@ -68,7 +68,7 @@
 
         .app-header { padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(180deg, var(--accent-light) 0%, rgba(0,0,0,0) 100%); }
         .user-info { display: flex; align-items: center; gap: 8px; }
-        .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; border: 2px solid var(--accent-main); cursor: pointer; }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; border: 2px solid var(--accent-main); cursor: pointer; overflow: hidden; }
         .settings-btn { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-main); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; }
 
         .theme-picker { display: flex; gap: 6px; padding: 0 14px 6px; align-items: center; font-size: 11px; color: var(--text-muted); overflow-x: auto; }
@@ -132,7 +132,7 @@
 
 <div id="toast-container"></div>
 
-<!-- شاشة قفل وتسجيل الدخول (تظهر تلقائياً عند الدخول أو بعد قفل النظام) -->
+<!-- شاشة قفل وتسجيل الدخول -->
 <div class="login-screen" id="lock-screen" style="display: flex;">
     <div class="login-card" style="text-align: center;">
         <i class="fa-solid fa-shield-halved" style="font-size: 34px; color: var(--accent-main); margin-bottom: 6px;"></i>
@@ -199,7 +199,7 @@
         <header class="app-header">
             <div class="user-info">
                 <button type="button" class="settings-btn" onclick="toggleSidebar()" style="width:32px; height:32px;"><i class="fa-solid fa-bars"></i></button>
-                <div class="avatar" onclick="switchSection('shipments')" id="header-avatar-btn">🐼</div>
+                <div class="avatar" onclick="switchSection('profile')" id="header-avatar-btn" title="الملف الشخصي">🐼</div>
                 <div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <h2 id="header-username" style="font-size: 11px;">زائر</h2>
@@ -353,7 +353,6 @@
 </div>
 
 <script>
-    // إعدادات Firebase الموحدة والمتطابقة تماماً مع المنصة الأم (appStore / mainState)
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
         authDomain: "n2la-642d3.firebaseapp.com",
@@ -418,7 +417,6 @@
     ];
     window.professionalTitles = professionalTitles;
 
-    // تم إزالة تعيين أي اسم وهمي افتراضي، وسيعتمد النظام على التحقق الفعلي من الحسابات المسجلة
     let currentLoggedInUser = null;
     window.currentLoggedInUser = null;
 
@@ -460,7 +458,6 @@
         return null;
     }
 
-    // المزامنة اللحظية الشاملة مع مستند المنصة الأم (appStore / mainState) مع احترام القفل المحلي
     db.collection("appStore").doc("mainState").onSnapshot((docSnap) => {
         if (window._isSavingLocally) return;
 
@@ -551,7 +548,6 @@
         });
     };
 
-    // التحقق الفوري من حالة تسجيل الدخول لحظة فتح الصفحة
     window.addEventListener('DOMContentLoaded', () => {
         const savedUser = localStorage.getItem('transportActiveUser');
         const lockScreen = document.getElementById('lock-screen');
@@ -561,7 +557,7 @@
                 window.currentLoggedInUser = JSON.parse(savedUser);
                 if(lockScreen) lockScreen.style.display = 'none';
                 applyUserPermissionsUI();
-                switchSection('shipments');
+                switchSection('profile');
             } catch(e) {
                 lockSystem();
             }
@@ -575,7 +571,7 @@
 </script>
 
 <script>
-    let currentSectionId = 'shipments';
+    let currentSectionId = 'profile';
 
     function refreshActiveSection() {
         switchSection(currentSectionId, null, true);
@@ -615,7 +611,6 @@
         showToast('تم تغيير الثيم بنجاح');
     }
 
-    // التحقق المطابق من حسابات قاعدة البيانات عند إدخال الرمز السري PIN
     function unlockApp() {
         const pinInput = document.getElementById('pin-input');
         const pin = pinInput ? pinInput.value.trim() : '';
@@ -630,7 +625,7 @@
             logAction('تسجيل دخول ناجح بواسطة الحساب: ' + matchedDriver.name);
             showToast('مرحباً بك يا ' + matchedDriver.name + ' (' + matchedDriver.role + ')');
             applyUserPermissionsUI();
-            switchSection('shipments');
+            switchSection('profile');
         } else {
             showToast('رمز الدخول غير صحيح أو غير مسجل في قاعدة البيانات!', 'warning');
         }
@@ -644,6 +639,16 @@
         
         document.getElementById('header-username').innerText = user.name;
         document.getElementById('header-role-badge').innerText = role === 'admin' ? '👑 (admin) (مدير النظام)' : (role === 'مشرف' ? '⭐ مشرف (صلاحيات محدودة)' : '👨‍✈️ سائق (متابعة فقط)');
+
+        // تحديث صورة الأفاتار في الهيدر بناءً على بيانات المستخدم
+        const avatarEl = document.getElementById('header-avatar-btn');
+        if (avatarEl) {
+            if (user.avatar) {
+                avatarEl.innerHTML = `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">`;
+            } else {
+                avatarEl.innerHTML = '🐼';
+            }
+        }
 
         const adminStats = document.getElementById('admin-stats');
         const adminModulesGrid = document.getElementById('admin-modules-grid');
@@ -671,7 +676,8 @@
 
         if (role === 'admin') {
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 إدارة الشحنات وبوليصات النقل</button>
+                <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي والحساب</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();">📦 إدارة الشحنات وبوليصات النقل</button>
                 <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 غرفة باندا العليا والتحكم الشامل</button>
                 <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 قسم الفواتير المجمعة للشحنات</button>
                 <button onclick="switchSection('centralChat'); toggleSidebar();">📢 الشات المركزي وبث الرسائل</button>
@@ -692,7 +698,8 @@
             `;
         } else if (role === 'مشرف') {
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 عرض وإضافة الشحنات</button>
+                <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();">📦 عرض وإضافة الشحنات</button>
                 <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة الخطي</button>
                 <button onclick="switchSection('fleet'); toggleSidebar();">🚚 الأسطول والمركبات</button>
                 <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
@@ -702,7 +709,8 @@
             `;
         } else {
             sidebarList.innerHTML = `
-                <button onclick="switchSection('shipments'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">📦 عرض الشحنات المتاحة</button>
+                <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();">📦 عرض الشحنات المتاحة</button>
                 <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة الخطي</button>
                 <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
                 <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
@@ -714,28 +722,12 @@
     function renderBottomNavbarByRole() {
         const navbar = document.getElementById('bottom-navbar');
         if(!navbar) return;
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
-
-        if (role === 'admin') {
-            navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-                <div class="nav-item" onclick="switchSection('pandaAdmin', this)"><i class="fa-solid fa-chess-king"></i><span>باندا العليا</span></div>
-                <div class="nav-item" onclick="switchSection('consolidatedInvoices', this)"><i class="fa-solid fa-file-invoice-dollar"></i><span>فواتير</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-            `;
-        } else if (role === 'مشرف') {
-            navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-                <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-route"></i><span>التتبع</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-            `;
-        } else {
-            navbar.innerHTML = `
-                <div class="nav-item active" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
-                <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-route"></i><span>التتبع</span></div>
-                <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
-            `;
-        }
+        navbar.innerHTML = `
+            <div class="nav-item active" onclick="switchSection('profile', this)"><i class="fa-solid fa-user"></i><span>الملف</span></div>
+            <div class="nav-item" onclick="switchSection('shipments', this)"><i class="fa-solid fa-truck-fast"></i><span>الشحنات</span></div>
+            <div class="nav-item" onclick="switchSection('cargoTracking', this)"><i class="fa-solid fa-route"></i><span>التتبع</span></div>
+            <div class="nav-item" onclick="switchSection('chat', this)"><i class="fa-solid fa-comments"></i><span>الشات</span></div>
+        `;
     }
 
     function lockSystem() {
@@ -803,22 +795,35 @@
         let data = appStateData();
         let shipmentsList = data.shipments || data.docs || [];
         
-        if (sectionId === 'overview') {
+        if (sectionId === 'profile') {
+            let user = window.currentLoggedInUser || {};
             content.innerHTML = `
-                <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3><span>👑 لوحة التحكم الشاملة - باندا العليا (V89.2)</span></h3>
-                    <p style="font-size:10px; margin-bottom:6px; opacity:0.8;">مرتبط مباشرة بغرفة باندا والمنصة الأم (Firestore) وجلب وتعديل البيانات يتم سحابياً لحظياً.</p>
-                    ${role === 'admin' ? '<button class="btn-main" onclick="switchSection(\'pandaAdmin\')">الانتقال لمركز إدارة باندا العليا ➔</button>' : ''}
-                </div>
-                <div class="card">
-                    <h3><span>📦 أحدث الشحنات المسجلة في الغرفة</span></h3>
-                    <div class="table-responsive">
-                        <table>
-                            <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>المرحلة</th></tr></thead>
-                            <tbody>
-                                ${shipmentsList.slice(0,5).map(s => `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td><span class="badge bg-transit">${s.milestone || 'تم الاستلام'}</span></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد شحنات</td></tr>'}
-                            </tbody>
-                        </table>
+                <div class="card" style="border: 2px solid var(--accent-main);">
+                    <div style="text-align: center; margin-bottom: 12px;">
+                        <!-- صورة البروفايل الحقيقية أو الرمز الافتراضي 🐼 -->
+                        <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; margin: 0 auto 8px; border: 3px solid var(--accent-main); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                            ${user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : '🐼'}
+                        </div>
+                        <!-- اسم المستخدم -->
+                        <h3 style="font-size: 15px; color: var(--accent-main); justify-content: center; margin-bottom: 2px;">${user.name || 'مستخدم النظام'}</h3>
+                        <!-- الشركة التابع لها -->
+                        <p style="font-size: 10px; color: var(--yellow-warning); font-weight: bold; margin-bottom: 4px;">🏢 ${user.companyName || 'أسطورة الطريق & باندا للخدمات اللوجستية'}</p>
+                        <!-- الرتبة -->
+                        <span class="badge bg-transit" style="font-size: 9px; margin-top: 2px; display: inline-block;">${user.role === 'admin' ? 'مدير النظام (admin)' : (user.role === 'مشرف' ? 'مشرف' : 'سائق')}</span>
+                    </div>
+                    
+                    <!-- تفاصيل الحساب والشركة -->
+                    <div style="font-size: 11px; line-height: 1.8; background: var(--bg-dark); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <p><strong>👤 الاسم الكامل:</strong> ${user.name || 'غير مسجل'}</p>
+                        <p><strong>🏢 الشركة التابع لها:</strong> ${user.companyName || 'أسطورة الطريق & باندا'}</p>
+                        <p><strong>📞 رقم الهاتف:</strong> ${user.phone || 'غير مسجل'}</p>
+                        <p><strong>⭐ اللقب الاحترافي:</strong> <span style="color:var(--yellow-warning); font-weight:bold;">${user.title || 'سائق معتمد'}</span></p>
+                        <p><strong>🟢 الحالة الحالية:</strong> ${user.status || 'متاح'}</p>
+                        <p><strong>🔑 الصلاحيات:</strong> ${user.role === 'admin' ? 'صلاحيات كاملة للتحكم في المنصة والخزينة' : 'صلاحيات متابعة وعرض الشحنات'}</p>
+                    </div>
+
+                    <div style="margin-top: 10px;">
+                        <button class="btn-main" onclick="showToast('تم مزامنة بيانات حسابك والشركة بنجاح 🚀')">تحديث وحفظ المزامنة 🔄</button>
                     </div>
                 </div>
             `;
@@ -843,17 +848,6 @@
                         <p>🟢 حالة المزامنة مع المنصة الأم: <strong style="color:var(--green-success);">متصل بـ Firestore لحظياً</strong></p>
                     </div>
                 </div>
-                <div class="card">
-                    <h3><span>📋 أحدث الشحنات التي تمت إضافتها للغرفة</span></h3>
-                    <div class="table-responsive">
-                        <table>
-                            <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>التاريخ</th></tr></thead>
-                            <tbody>
-                                ${shipmentsList.map(s => `<tr><td>${s.name}</td><td>${s.item}</td><td>${s.price} ج.م</td><td>${s.date || '-'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">لا توجد شحنات مسجلة حالياً</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             `;
         } else if (sectionId === 'consolidatedInvoices') {
             const uniqueClients = [...new Set(shipmentsList.map(s => s.name))];
@@ -874,7 +868,6 @@
                         <button type="submit" class="btn-success">إنشاء الفاتورة المجمعة وحفظها 🚀</button>
                     </form>` : '<p style="font-size:9px; color:var(--text-muted);">عروض وإصدار الفواتير المجمعة مخصصة لمدير النظام (admin) فقط.</p>'}
                 </div>
-
                 <div class="card">
                     <h3><span>📂 سجل الفواتير المجمعة المصدرة</span></h3>
                     <div class="table-responsive">
