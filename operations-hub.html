@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
         
         signInAnonymously(auth).then(() => {
-            console.log("✅ تم المصادقة سحابياً بنجاح في operations-hub.html مع المزامنة اللحظية الحقيقية");
+            console.log("✅ تم المصادقة سحابياً بنجاح في operations-hub.html");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -520,7 +520,7 @@
     </div>
 </div>
 
-<!-- شريط التنقل السفلي المحدث -->
+<!-- شريط التنقل السفلي الموحد -->
 <nav class="bottom-nav-bar" id="bottomNavBar">
     <button class="bottom-nav-item" id="navProfileBtn" onclick="goToPage('driver-profile.html')">
         <span>👤</span>
@@ -559,117 +559,142 @@
         { id: "emerald", name: "الزمردي الفاخر" }
     ];
 
-    const superAdminsList = ['admin', 'مدير'];
-
     let currentThemeIndex = 0;
     let globalDriversCache = []; 
     let globalFleetCache = [];
-    let activeExternalSessionName = '';
     let currentCompanyId = 'company_main';
     let urlUserId = '';
     window.currentCompanyId = currentCompanyId;
 
+    let currentDriverProfile = {
+        name: '',
+        avatar: '',
+        title: 'سائق معتمد',
+        phone: '',
+        role: 'driver',
+        companyId: 'company_main',
+        canAccessSocial: true,
+        subPlan: 'أساسي',
+        subExpiry: 'غير محدد'
+    };
+
     function goToPage(pageName) {
-        let userId = urlUserId || activeExternalSessionName || '';
+        let userId = urlUserId || currentDriverProfile.name || '';
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
 
+    function isSuperAdmin() {
+        let user = currentDriverProfile || {};
+        let userName = String(user.name || '').trim().toLowerCase();
+        let role = String(user.role || '').toLowerCase().trim();
+        return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(userName);
+    }
+    window.isUserAdmin = isSuperAdmin;
+
     async function executeOperationsHubSyncSession() {
         if (!window.db || !window.firebaseModules) return;
-        const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
+        const { collection, getDocs } = window.firebaseModules;
         
         const urlParams = new URLSearchParams(window.location.search);
-        let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
+        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = localStorage.getItem('na2la_userId') || 
                         localStorage.getItem('currentUser') || 
-                        localStorage.getItem('userName') || 
-                        localStorage.getItem('userPhone') || ''; 
+                        localStorage.getItem('userName') || '';
         }
 
         if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
             urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
         }
 
-        if (!urlUserId) {
-            window.currentLoggedInUser = {
-                id: 'guest_driver',
-                name: 'سائق جديد',
-                role: 'driver',
-                companyId: urlCompanyId,
-                canAccessSocial: false,
-                avatar: ''
-            };
-            currentCompanyId = urlCompanyId;
-            updateCurrentInterfacePermissions();
-            initCloudSync();
-            fetchDriversManual();
-            return;
+        if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+            urlUserId = 'Admin1';
         }
 
-        urlUserId = urlUserId.trim();
-        activeExternalSessionName = urlUserId;
         localStorage.setItem('na2la_userId', urlUserId);
         localStorage.setItem('na2la_companyId', urlCompanyId);
 
-        let foundDoc = null;
-        let lowerUserId = urlUserId.toLowerCase();
-        let isSuper = superAdminsList.some(adm => lowerUserId === adm.toLowerCase());
+        urlUserId = urlUserId.trim();
+        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
-        const collectionsToSearch = ["drivers", "users", "team"];
-        for (let col of collectionsToSearch) {
-            try {
-                let docSnap = await getDoc(doc(window.db, col, urlUserId));
-                if (docSnap.exists()) {
-                    foundDoc = { id: docSnap.id, ...docSnap.data() };
-                    break;
-                }
-            } catch(e) {}
-        }
-
-        if (!foundDoc) {
-            for (let col of collectionsToSearch) {
-                const fields = ["id", "name", "fullName", "phone", "mobile", "username"];
-                for (let f of fields) {
-                    try {
-                        let q = query(collection(window.db, col), where(f, "==", urlUserId));
-                        let snap = await getDocs(q);
-                        if (!snap.empty) {
-                            foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                            break;
-                        }
-                    } catch(e) {}
-                }
-                if (foundDoc) break;
-            }
-        }
-
-        if (foundDoc) {
-            let docRole = String(foundDoc.role || foundDoc.rank || '').toLowerCase();
-            if (docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(adm => String(foundDoc.name || '').toLowerCase() === adm.toLowerCase())) {
-                isSuper = true;
-                foundDoc.role = 'admin';
-            } else {
-                isSuper = false;
-                foundDoc.role = 'driver';
-            }
-            window.currentLoggedInUser = foundDoc;
-            currentCompanyId = urlCompanyId || foundDoc.companyId || foundDoc.companyName || 'company_main';
-        } else {
-            window.currentLoggedInUser = { 
-                id: urlUserId, 
-                name: urlUserId, 
-                role: isSuper ? 'admin' : 'driver', 
-                companyId: urlCompanyId || 'company_main', 
-                canAccessSocial: isSuper,
-                avatar: ''
-            };
+        if (isSuper) {
             currentCompanyId = urlCompanyId || 'company_main';
+            currentDriverProfile = {
+                name: 'المدير',
+                avatar: '',
+                title: 'مدير عام النظام',
+                phone: '',
+                role: 'admin',
+                companyId: currentCompanyId,
+                canAccessSocial: true,
+                subPlan: 'مدير عام',
+                subExpiry: 'دائم'
+            };
+            syncProfileAndLoadHub();
+            return;
         }
 
+        try {
+            const snapshot = await getDocs(collection(window.db, 'drivers'));
+            let found = null;
+            globalDriversCache = [];
+            snapshot.forEach(docSnap => {
+                let d = docSnap.data();
+                globalDriversCache.push({ id: docSnap.id, ...d });
+                if (d.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || docSnap.id === urlUserId) {
+                    found = d;
+                }
+            });
+
+            if (found) {
+                currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                currentDriverProfile = {
+                    name: found.name || found.driverName || 'مستخدم',
+                    avatar: found.avatar || found.photoUrl || '',
+                    title: found.title || 'سائق معتمد',
+                    phone: found.phone || '',
+                    role: found.role || found.rank || 'driver',
+                    companyId: currentCompanyId,
+                    canAccessSocial: found.canAccessSocial !== false,
+                    subPlan: found.subPlan || 'أساسي',
+                    subExpiry: found.subExpiry || 'غير محدد'
+                };
+                syncProfileAndLoadHub();
+            } else {
+                currentCompanyId = urlCompanyId || 'company_main';
+                currentDriverProfile = {
+                    name: urlUserId,
+                    avatar: '',
+                    title: 'مشرف / أدمن',
+                    phone: '',
+                    role: 'admin',
+                    companyId: currentCompanyId,
+                    canAccessSocial: true,
+                    subPlan: 'مدير النظام',
+                    subExpiry: 'دائم'
+                };
+                syncProfileAndLoadHub();
+            }
+        } catch (err) {
+            console.error(err);
+            currentDriverProfile = {
+                name: 'المدير',
+                avatar: '',
+                title: 'مدير عام النظام',
+                role: 'admin',
+                companyId: 'company_main',
+                canAccessSocial: true,
+                subPlan: 'مدير',
+                subExpiry: 'دائم'
+            };
+            syncProfileAndLoadHub();
+        }
+    }
+
+    function syncProfileAndLoadHub() {
         window.currentCompanyId = currentCompanyId;
         let headerBadge = document.getElementById('headerCompanyIdDisplay');
         if (headerBadge) headerBadge.innerText = currentCompanyId;
@@ -678,38 +703,6 @@
         initCloudSync();
         fetchDriversManual();
     }
-
-    function getCurrentActiveDriver() {
-        if (window.currentLoggedInUser) return window.currentLoggedInUser;
-        let loggedName = activeExternalSessionName;
-        if (globalDriversCache.length > 0) {
-            let found = globalDriversCache.find(d => 
-                (d.name === loggedName || d.phone === loggedName || d.id === loggedName)
-            );
-            if (found) return found;
-        }
-        return { name: loggedName, companyId: currentCompanyId, role: isUserAdmin() ? 'admin' : 'driver', canAccessSocial: true, avatar: '' };
-    }
-
-    function isUserAdmin() {
-        if (window.currentLoggedInUser) {
-            let role = String(window.currentLoggedInUser.role || window.currentLoggedInUser.rank || '').toLowerCase().trim();
-            if (role === 'admin' || role === 'مدير') return true;
-            let name = String(window.currentLoggedInUser.name || window.currentLoggedInUser.id || '').toLowerCase().trim();
-            if (superAdminsList.some(adm => name === adm.toLowerCase())) return true;
-        }
-        let activeName = String(activeExternalSessionName || '').toLowerCase().trim();
-        if (superAdminsList.some(adm => activeName === adm.toLowerCase())) return true;
-        
-        let driver = globalDriversCache.find(d => {
-            let dName = String(d.name || d.id || d.phone || '').toLowerCase().trim();
-            return dName === activeName && (String(d.role || '').toLowerCase() === 'admin' || String(d.role || '').toLowerCase() === 'مدير');
-        });
-        if (driver) return true;
-
-        return false;
-    }
-    window.isUserAdmin = isUserAdmin;
 
     function openModal(modalId) {
         if (modalId === 'modalUsers') {
@@ -747,7 +740,7 @@
             const querySnapshot = await getDocs(collection(window.db, "drivers"));
             
             globalDriversCache = [];
-            let isSuper = isUserAdmin();
+            let isSuper = isSuperAdmin();
             querySnapshot.forEach((docSnap) => {
                 let d = docSnap.data();
                 if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
@@ -768,7 +761,7 @@
 
         onSnapshot(collection(window.db, "drivers"), (snapshot) => {
             globalDriversCache = [];
-            let isSuper = isUserAdmin();
+            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let d = docSnap.data();
                 if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
@@ -781,7 +774,7 @@
 
         onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
             globalFleetCache = [];
-            let isSuper = isUserAdmin();
+            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let f = docSnap.data();
                 if (isSuper || !f.companyId || f.companyId === currentCompanyId) {
@@ -796,7 +789,7 @@
             if (!container) return;
             container.innerHTML = "";
             let count = 0;
-            let isSuper = isUserAdmin();
+            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let m = docSnap.data();
                 if (isSuper || !m.companyId || m.companyId === currentCompanyId) {
@@ -815,7 +808,7 @@
             container.innerHTML = "";
             let total = 0;
             let count = 0;
-            let isSuper = isUserAdmin();
+            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let ex = docSnap.data();
                 if (isSuper || !ex.companyId || ex.companyId === currentCompanyId) {
@@ -920,7 +913,7 @@
             let roleText = isAdm ? "🛡️ Admin" : "👤 سائق";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
             
-            let hasAccess = d.canAccessSocial === true;
+            let hasAccess = d.canAccessSocial !== false;
             let accessBtnText = hasAccess ? "✅ مفعّل" : "❌ معطل";
             let accessBtnBg = hasAccess ? "background: var(--accent-color); color: #fff;" : "background: var(--danger-color); color: #fff;";
 
@@ -964,7 +957,7 @@
                 role,
                 avatar,
                 companyId: currentCompanyId,
-                canAccessSocial: role === 'admin',
+                canAccessSocial: true,
                 timestamp: Date.now(),
                 createdAt: new Date().toISOString()
             });
@@ -1015,19 +1008,18 @@
     }
 
     function updateCurrentInterfacePermissions() {
-        let activeDriver = getCurrentActiveDriver();
-        let isAdmin = isUserAdmin();
+        let isAdmin = isSuperAdmin();
         
         let labelEl = document.getElementById("currentActiveUserLabel");
         let avatarEl = document.getElementById("currentUserAvatar");
         let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
 
-        let activeName = isAdmin ? 'المدير' : (activeDriver ? (activeDriver.name || activeExternalSessionName) : activeExternalSessionName);
-        let activeAvatar = (activeDriver && activeDriver.avatar && activeDriver.avatar.trim() !== "") 
-            ? activeDriver.avatar 
+        let activeName = currentDriverProfile.name || 'مدير النظام';
+        let activeAvatar = (currentDriverProfile.avatar && currentDriverProfile.avatar.trim() !== "") 
+            ? currentDriverProfile.avatar 
             : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
         
-        let activeRoleText = isAdmin ? "🛡️ Admin (مدير النظام - صلاحيات كاملة)" : "👤 سائق / مستخدم";
+        let activeRoleText = isAdmin ? `🛡️ ${currentDriverProfile.title} (مدير النظام - صلاحيات كاملة)` : `👤 ${currentDriverProfile.title}`;
 
         if (labelEl) labelEl.innerText = activeName;
         if (avatarEl) avatarEl.src = activeAvatar;
