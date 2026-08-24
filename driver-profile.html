@@ -524,6 +524,28 @@
             ]
         };
 
+        // 🔄 دالة جديدة لمزامنة وتسجيل السائق الحالي تلقائياً في قاعدة بيانات فايربيس لكي يراه باقي الأجهزة
+        function autoRegisterUserToFirestore() {
+            if (!activeExternalSessionName || activeExternalSessionName === '1') return;
+            const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
+            driverRef.get().then(docSnap => {
+                if (!docSnap.exists) {
+                    driverRef.set({
+                        id: activeExternalSessionName,
+                        name: activeExternalSessionName,
+                        role: 'driver',
+                        companyId: currentCompanyId,
+                        status: 'متاح 🟢',
+                        phone: '',
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } else {
+                    driverRef.update({ companyId: currentCompanyId }).catch(() => {});
+                }
+            }).catch(() => {});
+        }
+        autoRegisterUserToFirestore();
+
         function toggleChatAccountsListCollapse() {
             const content = document.getElementById('chat-accounts-collapsible-content');
             const arrow = document.getElementById('chat-collapse-arrow');
@@ -964,7 +986,7 @@
             document.getElementById('localVideo').srcObject = null;
         }
 
-        // ✅ الدالة المصححة لعرض حسابات وسائقين الشات دون أي اختفاء أو تضارب
+        // ✅ دالة الشات المحدثة: تعرض جميع الحسابات المتصلة بالأسطول بسلاسة ودون قيود مقيدة للشركة
         function renderChatAccountsList() {
             const container = document.getElementById('chat-accounts-list-container');
             if(!container) return;
@@ -982,35 +1004,31 @@
             });
             
             let filteredAccounts = accounts.filter(acc => {
-                let name = (acc.name || '').toLowerCase();
+                let name = (acc.name || acc.id || '').toLowerCase();
                 let phone = (acc.phone || '').toLowerCase();
-                
-                let accComp = String(acc.companyId || 'company_main').trim();
-                let curComp = String(currentCompanyId || 'company_main').trim();
-                let matchesComp = (activeExternalSessionName === '1' || accComp === curComp || !acc.companyId);
-                
-                return matchesComp && (name.includes(query) || phone.includes(query));
+                return name.includes(query) || phone.includes(query);
             });
 
             if (filteredAccounts.length === 0) {
-                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات مطابقة للبحث في الأسطول</div>`;
+                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات أخرى متصلة حالياً</div>`;
                 return;
             }
 
             filteredAccounts.forEach(acc => {
-                let isManager = acc.role === 'admin' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(acc.name);
+                let accName = acc.name || acc.id || 'سائق';
+                let isManager = acc.role === 'admin' || ['مدير', 'المدير', 'عماد', 'Emad'].includes(accName);
                 let roleBadgeText = isManager ? 'مشرف/مدير 🛡️' : 'سائق 🚚';
                 let roleBadgeColor = isManager ? 'var(--warning)' : 'var(--accent)';
 
                 let div = document.createElement('div');
-                div.className = `chat-account-item ${currentChatTarget === acc.name ? 'active' : ''}`;
-                div.onclick = () => selectChatRoom(acc.name);
+                div.className = `chat-account-item ${currentChatTarget === accName ? 'active' : ''}`;
+                div.onclick = () => selectChatRoom(accName);
                 div.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 1.1rem;">👤</span>
                         <div>
-                            <div style="font-weight: bold; font-size: 11px;">${acc.name || acc.id}</div>
-                            <div style="font-size: 8px; opacity: 0.8; color: ${currentChatTarget === acc.name ? '#fff' : roleBadgeColor};">${roleBadgeText}</div>
+                            <div style="font-weight: bold; font-size: 11px;">${accName}</div>
+                            <div style="font-size: 8px; opacity: 0.8; color: ${currentChatTarget === accName ? '#fff' : roleBadgeColor};">${roleBadgeText}</div>
                         </div>
                     </div>
                     <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.1);">مراسلة 💬</span>
@@ -1291,7 +1309,7 @@
                 compressImage(input.files[0], 1200, 800, 0.9, (url) => {
                     let loggedInUser = getLoggedInUser();
                     loggedInUser.cover = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount());
+                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount().then(() => renderMyAccount()));
                 });
             }
         }
@@ -1362,9 +1380,8 @@
             container.innerHTML = '';
             
             let filtered = (appData.drivers || []).filter(d => {
-                let matchesComp = (activeExternalSessionName === '1' || d.companyId === currentCompanyId);
                 let matchesQuery = (d.name && d.name.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
-                return matchesComp && matchesQuery;
+                return matchesQuery;
             });
 
             filtered.forEach(d => {
