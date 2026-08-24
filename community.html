@@ -441,7 +441,6 @@
                     user: currentDriverProfile.name || 'مجهول'
                 });
 
-                // الاحتفاظ بآخر 100 سجل فقط لتجنب كبر حجم المستند
                 if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
 
                 await mainStateRef.set({ auditLogs: auditLogs }, { merge: true });
@@ -477,6 +476,7 @@
             loadChatMessages();
         }
 
+        // تم التعديل لجلب الصورة الشخصية (avatar) مباشرة من مستند Firestore دون تجاوزها للمدير
         async function fetchCloudSessionFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -502,23 +502,6 @@
             urlUserId = urlUserId.trim();
             let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
-            if (isSuper) {
-                currentCompanyId = urlCompanyId || 'company_main';
-                currentDriverProfile = {
-                    name: 'المدير',
-                    avatar: '',
-                    title: 'مدير عام النظام',
-                    phone: '+201114099799',
-                    role: 'admin',
-                    companyId: currentCompanyId,
-                    canAccessSocial: true,
-                    subPlan: 'مدير عام',
-                    subExpiry: 'دائم'
-                };
-                syncProfileAndLoad();
-                return;
-            }
-
             try {
                 const snapshot = await db.collection('drivers').get();
                 let found = null;
@@ -526,7 +509,7 @@
                 snapshot.forEach(doc => {
                     let d = doc.data();
                     allDrivers.push({ id: doc.id, ...d });
-                    if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.id) === String(urlUserId)) {
+                    if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(doc.id) === String(urlUserId) || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
                         found = d;
                     }
                 });
@@ -534,15 +517,29 @@
                 if (found) {
                     currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
                     currentDriverProfile = {
-                        name: found.name || found.driverName || 'مستخدم',
-                        avatar: found.avatar || found.photoUrl || '',
-                        title: found.title || 'سائق معتمد',
-                        phone: found.phone || '',
-                        role: found.role || found.rank || 'driver',
+                        name: found.name || found.driverName || urlUserId,
+                        avatar: found.avatar || found.photoUrl || '', // جلب الصورة الشخصية من Firestore بنجاح
+                        title: found.title || (isSuper ? 'مدير عام النظام' : 'سائق معتمد'),
+                        phone: found.phone || (isSuper ? '+201114099799' : ''),
+                        role: found.role || found.rank || (isSuper ? 'admin' : 'driver'),
                         companyId: currentCompanyId,
                         canAccessSocial: found.canAccessSocial !== false,
-                        subPlan: found.subPlan || 'أساسي',
-                        subExpiry: found.subExpiry || 'غير محدد'
+                        subPlan: found.subPlan || (isSuper ? 'مدير عام' : 'أساسي'),
+                        subExpiry: found.subExpiry || (isSuper ? 'دائم' : 'غير محدد')
+                    };
+                    syncProfileAndLoad();
+                } else if (isSuper) {
+                    currentCompanyId = urlCompanyId || 'company_main';
+                    currentDriverProfile = {
+                        name: urlUserId,
+                        avatar: '',
+                        title: 'مدير عام النظام',
+                        phone: '+201114099799',
+                        role: 'admin',
+                        companyId: currentCompanyId,
+                        canAccessSocial: true,
+                        subPlan: 'مدير عام',
+                        subExpiry: 'دائم'
                     };
                     syncProfileAndLoad();
                 } else {
@@ -550,27 +547,28 @@
                     currentDriverProfile = {
                         name: urlUserId,
                         avatar: '',
-                        title: 'مشرف / أدمن',
+                        title: 'حساب غير مسجل',
                         phone: '',
-                        role: 'admin',
+                        role: 'driver',
                         companyId: currentCompanyId,
-                        canAccessSocial: true,
-                        subPlan: 'مدير النظام',
-                        subExpiry: 'دائم'
+                        canAccessSocial: false,
+                        subPlan: 'أساسي',
+                        subExpiry: ''
                     };
                     syncProfileAndLoad();
                 }
             } catch (err) {
                 console.error(err);
+                currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
-                    name: 'المدير',
+                    name: urlUserId,
                     avatar: '',
-                    title: 'مدير عام النظام',
-                    role: 'admin',
-                    companyId: 'company_main',
+                    title: isSuper ? 'مدير عام النظام' : 'غير معروف',
+                    role: isSuper ? 'admin' : 'driver',
+                    companyId: currentCompanyId,
                     canAccessSocial: true,
-                    subPlan: 'مدير',
-                    subExpiry: 'دائم'
+                    subPlan: isSuper ? 'مدير عام' : 'أساسي',
+                    subExpiry: ''
                 };
                 syncProfileAndLoad();
             }
