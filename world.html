@@ -588,7 +588,10 @@
                 return externalId;
             }
 
-            return localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id') || '1';
+            return localStorage.getItem('na2la_external_logged_user_id') || 
+                   localStorage.getItem('logged_in_driver_id') || 
+                   localStorage.getItem('driver_phone') || 
+                   localStorage.getItem('phone') || '1';
         }
 
         let activeExternalSessionId = getExternalLoginSession();
@@ -625,31 +628,44 @@
 
         async function executeExternalSyncSession() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
             try {
                 let identifier = activeExternalSessionId || '1';
                 let foundDoc = null;
 
-                let q1 = query(collection(window.db, "drivers"), where("id", "==", identifier));
-                let snap1 = await getDocs(q1);
-                if (!snap1.empty) foundDoc = { id: snap1.docs[0].id, ...snap1.docs[0].data() };
+                // 1. المحاولة الأولى: البحث المباشر بواسطة Document ID في مجموعة drivers
+                try {
+                    let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
+                    if (directDocSnap.exists()) {
+                        foundDoc = { id: directDocSnap.id, ...directDocSnap.data() };
+                    }
+                } catch(e) {}
 
+                // 2. المحاولة الثانية: البحث بالاستعلام عبر الحقول (id, name, phone, mobile)
                 if (!foundDoc) {
-                    let q2 = query(collection(window.db, "drivers"), where("name", "==", identifier));
-                    let snap2 = await getDocs(q2);
-                    if (!snap2.empty) foundDoc = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+                    const fieldsToCheck = ["id", "name", "phone", "mobile"];
+                    for (let field of fieldsToCheck) {
+                        try {
+                            let q = query(collection(window.db, "drivers"), where(field, "==", identifier));
+                            let snap = await getDocs(q);
+                            if (!snap.empty) {
+                                foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                                break;
+                            }
+                        } catch(e) {}
+                    }
                 }
 
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
-                    // تفعيل العزل بدقة: الاعتماد على companyId الخاص بالحساب أو الافتراضي company_main
-                    currentCompanyId = foundDoc.companyId || 'company_main';
+                    currentCompanyId = (foundDoc.companyId && foundDoc.companyId.trim() !== '') ? foundDoc.companyId : 'company_main';
                     window.currentCompanyId = currentCompanyId;
                     localStorage.setItem('current_company_id', currentCompanyId);
                     localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
                 } else {
+                    // 🛡️ التعديل الآمن: توجيه السائق تلقائياً إلى الشركة الرئيسية (company_main) بدلاً من إنشاء شركة عشوائية
                     let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier);
-                    currentCompanyId = isSuper ? 'company_main' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
+                    currentCompanyId = 'company_main';
                     window.currentCompanyId = currentCompanyId;
                     localStorage.setItem('current_company_id', currentCompanyId);
                     
@@ -657,7 +673,7 @@
                         id: identifier, 
                         name: identifier, 
                         role: isSuper ? 'admin' : 'driver', 
-                        companyId: currentCompanyId
+                        companyId: 'company_main'
                     };
                 }
 
@@ -679,7 +695,7 @@
                 let identifier = activeExternalSessionId || '1';
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    if (d.id === identifier || d.name === identifier || docSnap.id === identifier) {
+                    if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
                         let newCompId = d.companyId || 'company_main';
                         if (newCompId !== currentCompanyId) {
                             currentCompanyId = newCompId;
@@ -778,7 +794,6 @@
             
             document.getElementById('header-username').innerText = user.name || 'المدير';
             
-            // 🖼️ تحديث وعرض الصورة الشخصية في الهيدر مثل باقي صفحات المنصة
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
             if (user.avatar) {
@@ -831,7 +846,6 @@
             renderAllFinancials();
         }
 
-        // 🛡️ مزامنة سحابية مع تصفية صارمة لضمان العزل التام بين الحسابات والشركات
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc } = window.firebaseModules;
@@ -850,12 +864,10 @@
                 onSnapshot(collection(window.db, col), (snapshot) => {
                     let items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     
-                    // العزل الأمني المحكم: إذا لم يكن المشرف عاماً، نقوم بفلترة البيانات حصرياً لشركة المستخدم
                     let superAdmin = isSuperAdmin();
                     if (!superAdmin) {
                         items = items.filter(item => {
                             let itemCompId = String(item.companyId || '').trim();
-                            // السماح بالمرور فقط إذا كان معرف الشركة مطابقاً تماماً لمعرف شركة المستخدم الحالي
                             return itemCompId === currentCompanyId;
                         });
                     }
@@ -943,12 +955,11 @@
         }
         window.resolveEmergencyAlert = resolveEmergencyAlert;
 
-        // 🔒 ضمان ختم السجلات حصرياً بمعرف الشركة الحالي أثناء الحفظ
         async function syncItemToCollection(colName, item) {
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
             item.userId = window.currentLoggedInUser ? window.currentLoggedInUser.id : '1';
-            item.companyId = currentCompanyId; // فرض العزل الأمني الإلزامي
+            item.companyId = currentCompanyId;
             try {
                 await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
             } catch(err) { console.error(err); }
@@ -1229,7 +1240,7 @@
             document.getElementById("treasuryBalanceDisplay").innerText = treasuryBalance.toLocaleString() + " ج.م";
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
-            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب: <b>المدير</b> (عزل تام ومحكم).<br>معرف الشراكة الحالي المعزول: <code>${currentCompanyId}</code>.`;
+            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب: <b>${window.currentLoggedInUser?.name || 'مستخدم'}</b>.<br>معرف الشراكة الحالي المعزول: <code>${currentCompanyId}</code>.`;
 
             let treasuryTbody = document.getElementById("treasuryTableBody");
             if (treasuryTbody) {
