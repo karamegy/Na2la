@@ -428,6 +428,7 @@
 
     let unsubscribers = [];
 
+    // [إصلاح الشات والحائط والبيانات عبر الحسابات] تم تعديل الفلترة لتكون مرنة وشاملة لكافة البيانات
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -439,8 +440,9 @@
             const unsub = query.onSnapshot(snapshot => {
                 let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
                 
+                // فلترة مرنة تمنع حجب البيانات القديمة أو المشتركة بين الحسابات
                 if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
-                    appData[colName] = rawData.filter(d => d.companyId === companyId);
+                    appData[colName] = rawData.filter(d => !d.companyId || d.companyId === companyId || d.companyId === 'company_main');
                 } else {
                     appData[colName] = rawData;
                 }
@@ -476,7 +478,6 @@
         }, 1000);
     };
 
-    // الدالة المرنة للبحث وجلب أي حساب أو مدير من السحابة تلقائياً
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -502,7 +503,7 @@
                 snap.forEach(doc => {
                     let d = doc.data();
                     if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.id) === String(urlUserId)) {
-                        found = { id: doc.id, ...d };
+                        found = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
             }
@@ -512,14 +513,14 @@
                     let d = doc.data();
                     let rawRole = String(d.role || '').toLowerCase();
                     if (!found && (d.name === 'المدير' || rawRole.includes('admin') || rawRole.includes('مدير'))) {
-                        found = { id: doc.id, ...d };
+                        found = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
             }
 
             if (!found && snap.docs.length > 0) {
                 let firstDoc = snap.docs[0];
-                found = { id: firstDoc.id, ...firstDoc.data() };
+                found = { docId: firstDoc.id, id: firstDoc.id, ...firstDoc.data() };
             }
 
             if (!found) {
@@ -556,7 +557,6 @@
         }
     }
 
-    // دالة التحقق وتسجيل الدخول المرنة والمتوافقة مع كافة أشكال الـ Document IDs
     async function verifyPhoneAndPIN() {
         const phone = document.getElementById('auth-phone-input').value.trim();
         const pin = document.getElementById('auth-phone-pin').value.trim();
@@ -574,7 +574,7 @@
                 let d = doc.data();
                 if ((String(d.phone) === phone || String(doc.id) === phone || String(d.name) === phone) && 
                     (String(d.pin) === pin || String(d.password) === pin)) {
-                    matchedUser = { id: doc.id, ...d };
+                    matchedUser = { docId: doc.id, id: doc.id, ...d };
                 }
             });
 
@@ -582,7 +582,7 @@
                 snap.forEach(doc => {
                     let d = doc.data();
                     if (d.name === 'المدير' || String(d.role || '').toLowerCase().includes('admin')) {
-                        matchedUser = { id: doc.id, ...d };
+                        matchedUser = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
                 if (!matchedUser) {
@@ -854,7 +854,7 @@
                     </div>
                 </div>
 
-                <!-- حائط النشر الحر على بروفايلي -->
+                <!-- حائط النشر الحر على بروفايلي (تم تفعيله وربطه بالسحابة) -->
                 <div class="card" style="border: 2px solid var(--accent-main);">
                     <h3 style="color: var(--accent-main); font-size: 11px; margin-bottom: 6px;">✍️ حائط النشر الحر على بروفايلي</h3>
                     <textarea id="wall-post-text" placeholder="اكتب تحديثاً، حالة طريق، أو ملاحظة على هذا البروفايل..." style="height: 60px; margin-bottom: 6px;"></textarea>
@@ -1428,6 +1428,7 @@
         showToast('تم إنهاء المكالمة بنجاح');
     }
 
+    // [إصلاح مزامنة البروفايل] تحديث وتطبيق الصورة الشخصية فورياً على المنصة
     function uploadAvatarPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1439,10 +1440,7 @@
                     user.avatar = base64;
                     const docKey = String(user.docId || user.id || user.phone || user.name);
                     db.collection('drivers').doc(docKey).set({ avatar: base64 }, { merge: true }).then(() => {
-                        const headerAvatar = document.getElementById('header-avatar-btn');
-                        if(headerAvatar) {
-                            headerAvatar.innerHTML = `<img src="${base64}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                        }
+                        applyUserPermissionsUI(); // تحديث الهيدر وباقي الأقسام فوراً
                         showToast('تم حفظ وتحديث الصورة الشخصية سحابياً بنجاح! 🖼️');
                         refreshActiveSection();
                     });
@@ -1452,6 +1450,7 @@
         }
     }
 
+    // [إصلاح مزامنة الغلاف] تحديث وحفظ الغلاف سحابياً وتطبيقه فوراً
     function uploadCoverPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1473,6 +1472,28 @@
             };
             reader.readAsDataURL(file);
         }
+    }
+
+    // [إصلاح الحائط] إضافة دالة نشر المنشورات على الحائط وربطها بـ Firestore
+    function publishWallPost() {
+        const text = document.getElementById('wall-post-text').value;
+        if(!text) return;
+        let user = window.currentLoggedInUser || {};
+        let pId = String(Date.now());
+        const newPost = {
+            id: pId,
+            companyId: currentCompanyId,
+            author: user.name || 'مستخدم',
+            user: user.name || 'مستخدم',
+            avatar: user.avatar || '',
+            text: text,
+            time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+        };
+        db.collection('posts').doc(pId).set(newPost).then(() => {
+            document.getElementById('wall-post-text').value = '';
+            showToast('تم النشر على الحائط سحابياً بنجاح! 🚀');
+            refreshActiveSection();
+        });
     }
 
     function calculateTripPreview() {
@@ -1523,6 +1544,9 @@
 
                 db.collection('chat').doc(newMsgId).set(newMsg);
                 showToast('تم إرسال الرسالة سحابياً! 🚀');
+                document.getElementById('chat-input').value = '';
+                fileInput.value = '';
+                document.getElementById('file-chosen-label').innerText = '';
                 switchSection('chat');
             };
             reader.readAsDataURL(file);
@@ -1539,6 +1563,7 @@
 
             db.collection('chat').doc(newMsgId).set(newMsg);
             showToast('تم إرسال الرسالة سحابياً! 🚀');
+            document.getElementById('chat-input').value = '';
             switchSection('chat');
         }
     }
