@@ -538,7 +538,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الشامل المحدث -->
+    <!-- السكريبت البرمجي الشامل المحدث والمصحح -->
     <script>
         const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'system'];
 
@@ -557,18 +557,13 @@
             let activeUserId = '';
             let activeCompanyId = 'company_main';
 
-            // 1. الأولوية المطلقة لمعرف الرابط الحقيقي إن وجد
             if (urlUserId) {
                 activeUserId = urlUserId.trim();
                 activeCompanyId = urlCompanyId ? urlCompanyId.trim() : 'company_main';
-            } 
-            // 2. إذا لم يوجد في الرابط، نتحقق من وجود جلسة سابقة حقيقية مسجلة
-            else if (savedSession && savedSession.id) {
+            } else if (savedSession && savedSession.id) {
                 activeUserId = savedSession.id;
                 activeCompanyId = savedSession.companyId || 'company_main';
-            } 
-            // 3. إذا لم يوجد أي معرف نهائي، يبقي الحقل فارغاً تماماً دون اختلاق أي حساب خلفي
-            else {
+            } else {
                 activeUserId = '';
                 activeCompanyId = 'company_main';
             }
@@ -781,13 +776,14 @@
                 }
             });
 
+            // FIX 1: تم توحيد مجموعات الاستماع لمنع التضارب وجلب البيانات القديمة
             const collectionsMap = {
-                shipments: ['shipments', 'Shipments', 'trip', 'trips', 'رحلات', 'شحنات'],
-                deferredInvoices: ['deferredInvoices', 'deferred', 'Invoices', 'fawateer', 'فواتير'],
-                expenses: ['expenses', 'Expenses', 'مصروفات', 'صرف'],
-                treasury: ['treasury', 'Treasury', 'خزينة', 'cash', 'wallets'],
-                accounts: ['accounts', 'Accounts', 'transactions', 'Transactions', 'قيود', 'حسابات'],
-                communityPosts: ['communityPosts', 'community', 'posts']
+                shipments: ['shipments'],
+                deferredInvoices: ['deferredInvoices'],
+                expenses: ['expenses'],
+                treasury: ['treasury'],
+                accounts: ['accounts'],
+                communityPosts: ['communityPosts']
             };
 
             window._firestoreCache = window._firestoreCache || {};
@@ -1043,15 +1039,34 @@
             alert("تم حفظ القيد وتزامنه بنجاح!");
         }
 
-        function deleteRecord(id, collectionType) {
-            if (confirm("حذف نهائي؟")) {
-                let targetCol = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
-                appData[targetCol] = (appData[targetCol] || []).filter(x => String(x.id) !== String(id));
-                deleteItemFromCollection(targetCol, id);
+        // FIX 2: دالة حذف محسنة تمنع عودة العناصر المحذوفة نهائياً
+        async function deleteRecord(id, collectionType) {
+            if (confirm("هل أنت متأكد من الحذف النهائي؟")) {
+                let targetCol = collectionType === 'deferred' ? 'deferredInvoices' : (collectionType === 'shipments' ? 'shipments' : collectionType);
+                
+                // الحذف الفوري من الذاكرة المحلية لكل الأقسام
+                ['accounts', 'shipments', 'deferredInvoices', 'expenses', 'treasury'].forEach(col => {
+                    if (appData[col]) {
+                        appData[col] = appData[col].filter(x => String(x.id) !== String(id));
+                    }
+                });
+
                 renderAllFinancials();
-                alert("✅ تم الحذف!");
+
+                // الحذف من السيرفر لكل المجموعات المحتملة لمنع عودته
+                if (window.db && window.firebaseModules) {
+                    const { doc, deleteDoc } = window.firebaseModules;
+                    const possibleCols = [targetCol, 'shipments', 'deferredInvoices', 'accounts', 'expenses', 'treasury'];
+                    for (let col of possibleCols) {
+                        try {
+                            await deleteDoc(doc(window.db, col, String(id)));
+                        } catch(e) {}
+                    }
+                }
+                alert("✅ تم الحذف بنجاح!");
             }
         }
+        window.deleteRecord = deleteRecord;
 
         function openEditModal(id, collectionType) {
             let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
@@ -1312,6 +1327,7 @@
         function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
         window.goToOperationsHub = goToOperationsHub;
 
+        // FIX 3 & 4: دالة عرض الحسابات والإحصائيات المُحسنة لمنع الازدواجية والتكرار
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
             let userAccounts = appData.accounts || [];
@@ -1320,37 +1336,54 @@
             let userTreasury = appData.treasury || [];
 
             let totalCredit = 0, totalDebit = 0, totalDeferred = 0, pendingCount = 0;
+            let processedIds = new Set();
 
             userShipments.forEach(s => {
-                let p = getSafeAmount(s);
-                if (getSafeStatus(s) === 'pending') { totalDeferred += p; pendingCount++; }
-                else totalCredit += p;
+                let id = String(s.id);
+                if (!processedIds.has(id)) {
+                    processedIds.add(id);
+                    let p = getSafeAmount(s);
+                    if (getSafeStatus(s) === 'pending' || s.type === 'deferred') { 
+                        totalDeferred += p; 
+                        pendingCount++; 
+                    } else {
+                        totalCredit += p;
+                    }
+                }
             });
             
+            userDeferred.forEach(d => {
+                let id = String(d.id);
+                if (!processedIds.has(id)) {
+                    processedIds.add(id);
+                    let amt = getSafeAmount(d);
+                    if (getSafeStatus(d) === 'pending' || d.type === 'deferred') {
+                        totalDeferred += amt;
+                        pendingCount++;
+                    } else {
+                        totalCredit += amt;
+                    }
+                }
+            });
+
             userAccounts.forEach(a => {
-                let amt = getSafeAmount(a);
-                let st = getSafeStatus(a);
-                if (a.type === 'debit') {
-                    totalDebit += amt;
-                } else if (a.type === 'deferred' || st === 'pending') {
-                    totalDeferred += amt;
-                    pendingCount++;
-                } else if (a.type === 'credit' || a.type === 'invoice') {
-                    totalCredit += amt;
+                let id = String(a.id);
+                if (!processedIds.has(id)) {
+                    processedIds.add(id);
+                    let amt = getSafeAmount(a);
+                    let st = getSafeStatus(a);
+                    if (a.type === 'debit') {
+                        totalDebit += amt;
+                    } else if (a.type === 'deferred' || st === 'pending') {
+                        totalDeferred += amt;
+                        pendingCount++;
+                    } else if (a.type === 'credit' || a.type === 'invoice' || a.type === 'shipment') {
+                        totalCredit += amt;
+                    }
                 }
             });
             
             userExpenses.forEach(e => totalDebit += getSafeAmount(e));
-            
-            userDeferred.forEach(d => {
-                let amt = getSafeAmount(d);
-                if (getSafeStatus(d) === 'pending' || d.type === 'deferred') {
-                    totalDeferred += amt;
-                    pendingCount++;
-                } else {
-                    totalCredit += amt;
-                }
-            });
 
             let treasuryBalance = userTreasury.reduce((sum, t) => sum + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
             let net = totalCredit - totalDebit;
@@ -1400,10 +1433,19 @@
 
             let accTbody = document.getElementById("accountsTableBody");
             if (accTbody) {
-                let combined = [];
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') combined.push(...userShipments.map(s => ({ ...s, collectionSource: 'shipments', type: 'shipment' })));
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') combined.push(...userDeferred.map(d => ({ ...d, collectionSource: 'deferredInvoices', type: 'deferred' })));
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') combined.push(...userAccounts.map(a => ({ ...a, collectionSource: 'accounts' })));
+                let combinedMap = new Map();
+
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') {
+                    userShipments.forEach(s => combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: s.type || 'shipment' }));
+                }
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
+                    userDeferred.forEach(d => combinedMap.set(String(d.id), { ...d, collectionSource: 'deferredInvoices', type: 'deferred' }));
+                }
+                if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') {
+                    userAccounts.forEach(a => combinedMap.set(String(a.id), { ...a, collectionSource: 'accounts' }));
+                }
+
+                let combined = Array.from(combinedMap.values());
 
                 let searchQuery = (document.getElementById("accountsSearchInput")?.value || "").trim().toLowerCase();
                 if (searchQuery) combined = combined.filter(item => getSafeName(item).toLowerCase().includes(searchQuery) || getSafeDesc(item).toLowerCase().includes(searchQuery));
@@ -1411,7 +1453,8 @@
                 document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
 
                 accTbody.innerHTML = combined.map(item => {
-                    let badge = item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : (item.type === 'deferred' ? '<span class="badge-deferred">⏳ آجل</span>' : '<span class="badge-credit">📥 قيد</span>');
+                    let isDef = item.type === 'deferred' || getSafeStatus(item) === 'pending';
+                    let badge = item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : (isDef ? '<span class="badge-deferred">⏳ آجل</span>' : '<span class="badge-credit">📥 قيد</span>');
                     let safeId = item.id || '';
                     let collType = item.collectionSource || 'accounts';
                     let st = getSafeStatus(item);
