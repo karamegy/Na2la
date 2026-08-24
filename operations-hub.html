@@ -586,9 +586,9 @@
 
     function isSuperAdmin() {
         let user = currentDriverProfile || {};
-        let userName = String(user.name || '').trim().toLowerCase();
         let role = String(user.role || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(userName);
+        let name = String(user.name || '').toLowerCase().trim();
+        return role === 'admin' || role === 'مدير' || name === 'المدير' || name === '1';
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -610,32 +610,28 @@
             urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
         }
 
+        // تم إزالة تعيين 'Admin1' الوهمي نهائياً لضمان الاعتماد حصرياً على البيانات الفعلية
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-            urlUserId = 'Admin1';
+            currentCompanyId = urlCompanyId || 'company_main';
+            currentDriverProfile = {
+                name: 'زائر',
+                avatar: '',
+                title: 'غير مسجل الدخول',
+                phone: '',
+                role: 'driver',
+                companyId: currentCompanyId,
+                canAccessSocial: false,
+                subPlan: 'أساسي',
+                subExpiry: ''
+            };
+            syncProfileAndLoadHub();
+            return;
         }
 
         localStorage.setItem('na2la_userId', urlUserId);
         localStorage.setItem('na2la_companyId', urlCompanyId);
 
         urlUserId = urlUserId.trim();
-        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
-
-        if (isSuper) {
-            currentCompanyId = urlCompanyId || 'company_main';
-            currentDriverProfile = {
-                name: 'المدير',
-                avatar: '',
-                title: 'مدير عام النظام',
-                phone: '',
-                role: 'admin',
-                companyId: currentCompanyId,
-                canAccessSocial: true,
-                subPlan: 'مدير عام',
-                subExpiry: 'دائم'
-            };
-            syncProfileAndLoadHub();
-            return;
-        }
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -644,7 +640,7 @@
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                if (d.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || docSnap.id === urlUserId) {
+                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId) {
                     found = d;
                 }
             });
@@ -668,27 +664,28 @@
                 currentDriverProfile = {
                     name: urlUserId,
                     avatar: '',
-                    title: 'مشرف / أدمن',
+                    title: 'حساب غير مسجل',
                     phone: '',
-                    role: 'admin',
+                    role: 'driver',
                     companyId: currentCompanyId,
-                    canAccessSocial: true,
-                    subPlan: 'مدير النظام',
-                    subExpiry: 'دائم'
+                    canAccessSocial: false,
+                    subPlan: 'أساسي',
+                    subExpiry: ''
                 };
                 syncProfileAndLoadHub();
             }
         } catch (err) {
             console.error(err);
+            currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
-                name: 'المدير',
+                name: 'خطأ في الاتصال',
                 avatar: '',
-                title: 'مدير عام النظام',
-                role: 'admin',
-                companyId: 'company_main',
-                canAccessSocial: true,
-                subPlan: 'مدير',
-                subExpiry: 'دائم'
+                title: 'غير معروف',
+                role: 'driver',
+                companyId: currentCompanyId,
+                canAccessSocial: false,
+                subPlan: 'أساسي',
+                subExpiry: ''
             };
             syncProfileAndLoadHub();
         }
