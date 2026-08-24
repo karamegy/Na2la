@@ -100,7 +100,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -123,6 +123,33 @@
 
     window.currentCompanyId = currentCompanyId;
     window.manualAdminOverride = false;
+
+    // دالة سحابية متكاملة لتسجيل العمليات في مصفوفة auditLogs في المستند appStore/mainState
+    async function logAuditAction(actionDesc) {
+        try {
+            const mainStateRef = doc(db, "appStore", "mainState");
+            const docSnap = await getDoc(mainStateRef);
+            
+            let auditLogs = [];
+            if (docSnap.exists() && docSnap.data().auditLogs) {
+                auditLogs = docSnap.data().auditLogs;
+            }
+
+            auditLogs.unshift({
+                action: actionDesc,
+                createdAt: Date.now(),
+                time: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+                user: activeSessionName || 'مجهول'
+            });
+
+            // الاحتفاظ بأحدث 100 سجل فقط لمنع تضخم حجم المستند
+            if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
+
+            await setDoc(mainStateRef, { auditLogs: auditLogs }, { merge: true });
+        } catch (err) {
+            console.error("Audit log error:", err);
+        }
+    }
 
     // استخراج الجلسة ومعرف المستخدم لحظياً من الرابط أو التخزين
     function parseURLSession() {
@@ -330,9 +357,10 @@
 
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
+        const category = document.getElementById("postCategory").value;
         await addDoc(postsRef, {
             author: activeSessionName,
-            category: document.getElementById("postCategory").value,
+            category: category,
             content: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
             companyId: currentCompanyId,
@@ -342,6 +370,7 @@
         });
         document.getElementById("postContent").value = "";
         document.getElementById("videoUrl").value = "";
+        logAuditAction(`نشر مشاركة جديدة (${category}) بواسطة ${activeSessionName}`);
     };
 
     window.likePost = async (id) => {
@@ -365,6 +394,7 @@
     window.deletePost = async (id) => {
         if (confirm("هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
             await deleteDoc(doc(db, "driver_community_posts", id));
+            logAuditAction(`حذف منشور برقم المعرف ${id} بواسطة ${activeSessionName}`);
         }
     };
 
@@ -375,6 +405,7 @@
                 window.manualAdminOverride = true;
                 updateAdminUIStatus();
                 loadPosts();
+                logAuditAction(`تفعيل وضع المؤسس الإشرافي يدوياً بواسطة ${activeSessionName}`);
             } else {
                 alert("كلمة المرور غير صحيحة!");
             }
