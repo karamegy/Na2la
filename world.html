@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - المنصة المتكاملة والمزامنة الشاملة V103 PRO SECURE</title>
+    <title>أسطورة الطريق (Na2la) - المنصة المتكاملة والمزامنة الشاملة V104 PRO SECURE</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -566,7 +566,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المصحح للصلاحيات الدقيقة -->
+    <!-- السكريبت البرمجي المصحح لمنع تكرار الحسابات وربط السشن بـ Upsert آمن -->
     <script>
         const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'system'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -619,7 +619,7 @@
             let defaultName = (savedSession && savedSession.name && savedSession.name !== activeUserId) ? savedSession.name : activeUserId;
             
             let newUserObj = {
-                id: activeUserId,
+                id: activeUserId.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_'),
                 name: defaultName,
                 role: savedSession?.role || defaultRole,
                 rank: savedSession?.rank || defaultRole,
@@ -680,19 +680,21 @@
 
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
-            const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
+            const { doc, getDoc, collection, query, where, getDocs, setDoc } = window.firebaseModules;
             try {
                 let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id');
                 if (!identifier) return;
                 identifier = String(identifier).trim();
 
                 let foundDoc = null;
+                let foundDocId = null;
                 const collectionsToSearch = ["drivers", "users", "team"];
 
                 for (let col of collectionsToSearch) {
                     try {
                         let docSnap = await getDoc(doc(window.db, col, identifier));
                         if (docSnap.exists()) {
+                            foundDocId = docSnap.id;
                             foundDoc = { id: docSnap.id, ...docSnap.data() };
                             break;
                         }
@@ -707,6 +709,7 @@
                                 let q = query(collection(window.db, col), where(field, "==", identifier));
                                 let snap = await getDocs(q);
                                 if (!snap.empty) {
+                                    foundDocId = snap.docs[0].id;
                                     foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
                                     break;
                                 }
@@ -737,19 +740,21 @@
                     return;
                 }
 
+                let targetId = foundDocId || identifier.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+                
                 let roleVal = isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : (foundDoc?.role || 'driver'));
                 let rankVal = isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : (foundDoc?.rank || 'driver'));
                 let permVal = isIdentifierAdmin ? 'Full Access' : (isIdentifierSup ? 'Supervisor Read-Only' : 'Standard');
 
                 window.currentLoggedInUser = {
-                    id: foundDoc ? (foundDoc.id || identifier) : identifier,
+                    id: targetId,
                     name: foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || identifier) : identifier,
                     role: foundDoc?.role || roleVal,
                     rank: foundDoc?.rank || rankVal,
-                    phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : 'غير محدد',
+                    phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : (currentLoggedInUser.phone || 'غير محدد'),
                     permissions: foundDoc?.permissions || permVal,
                     avatar: foundDoc ? (foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '') : '',
-                    companyId: foundDoc ? (foundDoc.companyId || 'company_main') : 'company_main'
+                    companyId: foundDoc ? (foundDoc.companyId || currentCompanyId) : currentCompanyId
                 };
 
                 currentCompanyId = window.currentLoggedInUser.companyId;
@@ -757,6 +762,9 @@
                 localStorage.setItem('current_company_id', currentCompanyId);
                 localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                 
+                // حفظ أو تحديث السجل بمعرف ثابت لمنع التكرار نهائياً (Upsert)
+                await setDoc(doc(window.db, "drivers", targetId), window.currentLoggedInUser, { merge: true });
+
                 applyUserPermissionsUI();
                 initFirestoreSync();
                 initEmergencyAlertsListener();
@@ -863,8 +871,6 @@
                         let superAdmin = isSuperAdmin();
                         let supervisor = isSupervisor();
 
-                        // 1. المدير والمشرف يشاهدان الجميع (حسب الشركة)
-                        // 2. السائق يشاهد حساباته وشحناته الخاصة فقط
                         if (superAdmin || supervisor) {
                             items = items.filter(item => {
                                 let itemCompId = String(item.companyId || '').trim();
@@ -1359,7 +1365,6 @@
                 }
             }
 
-            // إخفاء/إظهار عناصر الإضافة والتعديل حسب الصلاحية
             let addDefBtn = document.getElementById('addDeferredBtn');
             let expForm = document.getElementById('expensesFormWrapper');
             let treasuryForm = document.getElementById('treasuryFormWrapper');
@@ -1371,7 +1376,6 @@
                 if(treasuryForm) treasuryForm.style.display = 'block';
                 if(accForm) accForm.style.display = 'block';
             } else {
-                // السائق أو المشرف (عرض فقط ولا يملكون صلاحيات التعديل أو الإضافة)
                 if(addDefBtn) addDefBtn.style.display = 'none';
                 if(expForm) expForm.style.display = 'none';
                 if(treasuryForm) treasuryForm.style.display = 'none';
