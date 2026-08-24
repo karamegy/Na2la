@@ -538,9 +538,9 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الشامل المحدث والمدعوم بالمزامنة الحية للبروفايل والاسم -->
+    <!-- السكريبت البرمجي الشامل المحدث -->
     <script>
-        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'كرم', 'Karam', 'المدثر', 'Medhat', 'مدثر'];
+        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'system'];
 
         window._globalMembersMap = {};
 
@@ -549,31 +549,61 @@
             let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
-            if (!urlUserId) {
-                urlUserId = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'كرم';
-            }
-            if (!urlCompanyId) {
-                urlCompanyId = localStorage.getItem('current_company_id') || 'company_main';
+            let savedSession = null;
+            try {
+                savedSession = JSON.parse(localStorage.getItem('na2la_active_session'));
+            } catch(e) {}
+
+            let activeUserId = '';
+            let activeCompanyId = 'company_main';
+
+            // 1. الأولوية المطلقة لمعرف الرابط الحقيقي إن وجد
+            if (urlUserId) {
+                activeUserId = urlUserId.trim();
+                activeCompanyId = urlCompanyId ? urlCompanyId.trim() : 'company_main';
+            } 
+            // 2. إذا لم يوجد في الرابط، نتحقق من وجود جلسة سابقة حقيقية مسجلة
+            else if (savedSession && savedSession.id) {
+                activeUserId = savedSession.id;
+                activeCompanyId = savedSession.companyId || 'company_main';
+            } 
+            // 3. إذا لم يوجد أي معرف نهائي، يبقي الحقل فارغاً تماماً دون اختلاق أي حساب خلفي
+            else {
+                activeUserId = '';
+                activeCompanyId = 'company_main';
             }
 
-            urlUserId = urlUserId.trim();
-            localStorage.setItem('na2la_external_logged_user_id', urlUserId);
+            if (!activeUserId) {
+                localStorage.removeItem('na2la_active_session');
+                localStorage.removeItem('na2la_external_logged_user_id');
+                return {
+                    id: '',
+                    name: 'يرجى تحديد الهوية أو تسجيل الدخول',
+                    role: 'زائر',
+                    rank: 'غير محدد',
+                    phone: '',
+                    permissions: 'بانتظار المصادقة',
+                    companyId: 'company_main',
+                    avatar: ''
+                };
+            }
+
+            localStorage.setItem('na2la_external_logged_user_id', activeUserId);
+            localStorage.setItem('current_company_id', activeCompanyId);
             
-            let isSuper = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase()));
-            let compId = isSuper ? 'company_main' : (urlCompanyId.trim() !== '' ? urlCompanyId.trim() : 'company_main');
-            
-            localStorage.setItem('current_company_id', compId);
+            let isSuper = superAdminsList.some(admin => activeUserId.toLowerCase().includes(admin.toLowerCase()));
             
             let newUserObj = {
-                id: urlUserId,
-                name: urlUserId,
-                role: isSuper ? 'المؤسس / مدير عام النظام' : 'سائق الأسطول',
-                rank: isSuper ? 'مدير النظام والمؤسس' : 'سائق مستقل',
-                phone: urlParams.get('phone') || '010xxxxxxxx',
+                id: activeUserId,
+                name: activeUserId,
+                role: isSuper ? 'مدير النظام (Admin)' : 'عضو الأسطول',
+                rank: isSuper ? 'مدير عام النظام' : 'عضو معتمد',
+                phone: urlParams.get('phone') || (savedSession?.phone ?? ''),
                 permissions: isSuper ? 'صلاحيات مطلقة (Full Access)' : 'صلاحيات تشغيلية',
-                companyId: compId,
-                avatar: ''
+                companyId: activeCompanyId,
+                avatar: savedSession?.avatar || ''
             };
+            
             localStorage.setItem('na2la_active_session', JSON.stringify(newUserObj));
             return newUserObj;
         }
@@ -591,7 +621,7 @@
         window.appData = appData;
 
         window.addEventListener('storage', (event) => {
-            if (event.key === 'na2la_active_session' || event.key === 'current_company_id' || event.key === 'logged_in_driver_name') location.reload();
+            if (event.key === 'na2la_active_session' || event.key === 'current_company_id') location.reload();
         });
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -609,7 +639,8 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
-                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name');
+                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id');
+                if (!identifier) return;
                 identifier = String(identifier).trim();
 
                 let foundDoc = null;
@@ -651,7 +682,7 @@
                         <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f1020; color: #fff; font-family: 'Segoe UI', sans-serif; direction: rtl; text-align: center; padding: 20px;">
                             <div style="background: #181a30; border: 2px solid #ff416c; padding: 30px; border-radius: 20px; max-width: 400px; width: 100%; box-shadow: 0 10px 30px rgba(255,65,108,0.3);">
                                 <h2 style="color: #ff416c; margin-bottom: 12px; font-size: 20px;">🚫 عذراً، الوصول مرفوض</h2>
-                                <p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">هذا الحساب غير مسجل في قائمة السائقين المعتمدين بالمنصة. لا يمكن عرض أي بيانات أو مزامنتها.</p>
+                                <p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">هذا الحساب غير مسجل في قائمة الأعضاء المعتمدين بالمنصة. لا يمكن عرض أي بيانات أو مزامنتها.</p>
                                 <button onclick="location.reload()" style="background: linear-gradient(135deg, #00f2fe, #4facfe); color: #0f1020; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 900; cursor: pointer; font-size: 13px; width: 100%;">🔄 المحاولة مرة أخرى</button>
                             </div>
                         </div>
@@ -662,8 +693,8 @@
                 window.currentLoggedInUser = {
                     id: foundDoc ? (foundDoc.id || identifier) : identifier,
                     name: foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || identifier) : identifier,
-                    role: foundDoc ? (foundDoc.role || foundDoc.title || (isIdentifierAdmin ? 'المؤسس / مدير عام النظام' : 'سائق')) : (isIdentifierAdmin ? 'المؤسس / مدير عام النظام' : 'سائق'),
-                    rank: foundDoc ? (foundDoc.rank || (isIdentifierAdmin ? 'المؤسس العام' : 'سائق معتمد')) : (isIdentifierAdmin ? 'المؤسس العام' : 'سائق معتمد'),
+                    role: foundDoc ? (foundDoc.role || foundDoc.title || (isIdentifierAdmin ? 'مدير النظام (Admin)' : 'عضو')) : (isIdentifierAdmin ? 'مدير النظام (Admin)' : 'عضو'),
+                    rank: foundDoc ? (foundDoc.rank || (isIdentifierAdmin ? 'مدير عام النظام' : 'عضو معتمد')) : (isIdentifierAdmin ? 'مدير عام النظام' : 'عضو معتمد'),
                     phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : 'غير محدد',
                     permissions: foundDoc ? (foundDoc.permissions || (isIdentifierAdmin ? 'صلاحيات مطلقة' : 'صلاحيات تشغيلية')) : (isIdentifierAdmin ? 'صلاحيات مطلقة' : 'صلاحيات تشغيلية'),
                     avatar: foundDoc ? (foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '') : '',
@@ -678,14 +709,13 @@
                 applyUserPermissionsUI();
                 initFirestoreSync();
                 initEmergencyAlertsListener();
-                initUserLiveSync(); // تفعيل التحديث اللحظي للبروفايل والصورة
+                initUserLiveSync();
 
             } catch (err) {
                 console.error("خطأ في المزامنة الخلفية:", err);
             }
         }
 
-        // استماع لحظي لتحديثات بيانات المستخدم وصورته واسمه فور تعديلها من المنصة الأم
         function initUserLiveSync() {
             if (!window.db || !window.firebaseModules || !window.currentLoggedInUser) return;
             const { doc, onSnapshot } = window.firebaseModules;
@@ -1167,7 +1197,7 @@
                 id: String(Date.now()),
                 userId: user.id || 'admin',
                 companyId: currentCompanyId,
-                name: user.name || 'سائق',
+                name: user.name || 'عضو',
                 description: text,
                 date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
@@ -1195,11 +1225,11 @@
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'سائق الأسطول', role: 'driver', rank: 'سائق', phone: 'غير محدد', permissions: 'تشغيلي' };
+            let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'visitor', rank: 'غير محدد', phone: 'غير محدد', permissions: 'بانتظار المصادقة' };
             
             document.getElementById('header-username').innerText = user.name || 'مستخدم';
             
-            let detailsLine = `رتبة: ${user.rank || 'المؤسس'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'مطلقة'}`;
+            let detailsLine = `رتبة: ${user.rank || 'غير محدد'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'مطلقة'}`;
             document.getElementById('header-details-line').innerText = detailsLine;
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
