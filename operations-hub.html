@@ -9,7 +9,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -26,7 +26,7 @@
         const db = getFirestore(app);
 
         window.db = db;
-        window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot };
+        window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
         
         signInAnonymously(auth).then(() => {
             console.log("✅ تم المصادقة سحابياً بنجاح في operations-hub.html مع العزل التام ومزامنة الشراكة");
@@ -343,8 +343,8 @@
     <div id="authBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-3d);">
         <img id="currentUserAvatar" src="https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);" alt="صورة المستخدم">
         <div>
-            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري التحميل...</b>
-            <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">متصل بقاعدة البيانات سحابياً</div>
+            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري التحقق من الهوية سحابياً...</b>
+            <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">مزامنة فورية بدون تضارب</div>
         </div>
     </div>
 
@@ -565,9 +565,15 @@
     let currentThemeIndex = 0;
     let globalDriversCache = []; 
     let globalFleetCache = [];
+    let activeExternalSessionName = '1';
+    let currentCompanyId = 'company_main';
+    window.currentCompanyId = currentCompanyId;
 
-    // 🔥 التعديل السليم: قراءة الجلسة ومعرف الشركة من رابط الـ URL أو التخزين المحلي بدون إعادة ضبط إجبارية
-    function getActiveSessionAndCompany() {
+    // 🛡️ دورة مزامنة الجلسة السحابية الفورية المتزامنة لمنع أي تضارب أو تأخير
+    async function executeOperationsHubSyncSession() {
+        if (!window.db || !window.firebaseModules) return;
+        const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
+        
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
@@ -581,30 +587,59 @@
             }
         }
 
-        let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || '1';
-        activeName = activeName.trim();
+        let identifier = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || '1';
+        identifier = identifier.trim();
+        activeExternalSessionName = identifier;
 
-        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
-        let compId = isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || 'company_main');
+        let foundDoc = null;
+        try {
+            let directSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
+            if (directSnap.exists()) {
+                foundDoc = { id: directSnap.id, ...directSnap.data() };
+            }
+        } catch(e) {}
+
+        if (!foundDoc) {
+            const fields = ["id", "name", "phone", "mobile"];
+            for (let f of fields) {
+                try {
+                    let q = query(collection(window.db, "drivers"), where(f, "==", identifier));
+                    let snap = await getDocs(q);
+                    if (!snap.empty) {
+                        foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                        break;
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if (foundDoc) {
+            window.currentLoggedInUser = foundDoc;
+            currentCompanyId = (foundDoc.companyId && foundDoc.companyId.trim() !== '') ? foundDoc.companyId : 'company_main';
+        } else {
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier);
+            currentCompanyId = urlCompanyId || localStorage.getItem('current_company_id') || 'company_main';
+            window.currentLoggedInUser = {
+                id: identifier,
+                name: identifier,
+                role: isSuper ? 'admin' : 'driver',
+                companyId: currentCompanyId
+            };
+        }
+
+        window.currentCompanyId = currentCompanyId;
+        localStorage.setItem('current_company_id', currentCompanyId);
         
-        return { activeName, compId, isSuper };
+        let headerBadge = document.getElementById('headerCompanyIdDisplay');
+        if (headerBadge) headerBadge.innerText = currentCompanyId;
+
+        updateCurrentInterfacePermissions();
+        initCloudSync();
+        fetchDriversManual();
     }
 
-    let sessionData = getActiveSessionAndCompany();
-    let activeExternalSessionName = sessionData.activeName;
-    let currentCompanyId = sessionData.compId;
-    window.currentCompanyId = currentCompanyId;
-
-    let headerBadge = document.getElementById('headerCompanyIdDisplay');
-    if (headerBadge) headerBadge.innerText = currentCompanyId;
-
-    document.addEventListener("DOMContentLoaded", () => {
-        let labelEl = document.getElementById("currentActiveUserLabel");
-        if (labelEl) labelEl.innerText = activeExternalSessionName;
-        updateCurrentInterfacePermissions();
-    });
-
     function getCurrentActiveDriver() {
+        if (window.currentLoggedInUser) return window.currentLoggedInUser;
         let loggedName = activeExternalSessionName;
         if (globalDriversCache.length > 0) {
             let found = globalDriversCache.find(d => 
@@ -616,6 +651,10 @@
     }
 
     function isUserAdmin() {
+        if (window.currentLoggedInUser) {
+            let role = String(window.currentLoggedInUser.role || '').toLowerCase().trim();
+            if (role === 'admin' || role === 'مدير') return true;
+        }
         let activeName = String(activeExternalSessionName || '').trim();
         if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName)) {
             return true;
@@ -640,8 +679,10 @@
                         currentCompanyId = d.companyId;
                         window.currentCompanyId = currentCompanyId;
                         localStorage.setItem('current_company_id', currentCompanyId);
+                        window.currentLoggedInUser = { id: change.doc.id, ...d };
                         let badge = document.getElementById('headerCompanyIdDisplay');
                         if(badge) badge.innerText = currentCompanyId;
+                        updateCurrentInterfacePermissions();
                         fetchDriversManual();
                     }
                 }
@@ -1109,20 +1150,17 @@
         }
     }
 
-    window.addEventListener('firebase-ready', () => {
+    // 🛡️ دورة حياة الصفحة المتزامنة المانعة للتضارب
+    window.addEventListener('DOMContentLoaded', async () => {
         loadSavedTheme();
-        initCloudSync();
-        fetchDriversManual();
-    });
-
-    window.onload = function() {
-        loadSavedTheme();
-        updateCurrentInterfacePermissions();
         if (window.db && window.firebaseModules) {
-            initCloudSync();
-            fetchDriversManual();
+            await executeOperationsHubSyncSession();
+        } else {
+            window.addEventListener('firebase-ready', async () => {
+                await executeOperationsHubSyncSession();
+            }, { once: true });
         }
-    };
+    });
 </script>
 
 </body>
