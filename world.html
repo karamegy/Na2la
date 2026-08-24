@@ -538,7 +538,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الشامل المحدث والمصحح -->
+    <!-- السكريبت البرمجي الشامل والمصحح جذرياً -->
     <script>
         const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'system'];
 
@@ -1105,14 +1105,16 @@
         }
 
         function toggleRecordStatus(id, collectionType) {
-            let colName = collectionType === 'deferred' ? 'deferredInvoices' : collectionType;
+            let colName = collectionType === 'deferred' ? 'deferredInvoices' : (collectionType === 'shipments' ? 'shipments' : collectionType);
             let item = (appData[colName] || []).find(x => String(x.id) === String(id));
             if (item) {
-                item.status = getSafeStatus(item) === 'pending' ? 'paid' : 'pending';
+                let currentSt = getSafeStatus(item);
+                item.status = (currentSt === 'pending') ? 'paid' : 'pending';
                 syncItemToCollection(colName, item);
                 renderAllFinancials();
             }
         }
+        window.toggleRecordStatus = toggleRecordStatus;
 
         function fillExportTemplate(item) {
             document.getElementById("expInvId").innerText = item.invoiceId || item.id || '-';
@@ -1138,6 +1140,7 @@
             } catch (err) { alert("خطأ."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
+        window.downloadInvoiceAsImage = downloadInvoiceAsImage;
 
         async function downloadInvoiceAsPDF(item) {
             fillExportTemplate(item);
@@ -1153,6 +1156,7 @@
             } catch (err) { alert("خطأ."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
+        window.downloadInvoiceAsPDF = downloadInvoiceAsPDF;
 
         function exportAccountsToCSV() {
             let csv = "\uFEFFالتاريخ,العميل,الهاتف,البيان,المبلغ,النوع,الحالة\n";
@@ -1188,10 +1192,17 @@
         function getSafePhone(item) { return item ? (item.clientPhone || item.phone || item.mobile || item.tel || 'غير محدد') : 'غير محدد'; }
         function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
         function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
+        
+        // ✨ [التعديل الجذري والمصحح]: دالة التحقق من الحالة الآجلة/المعلقة بدقة تامة لتفادي اعتبار الشحنات الآجلة مسددة خطأً
         function getSafeStatus(item) {
             if (!item) return 'paid';
-            let s = String(item.status || item.paymentStatus || '').toLowerCase();
-            return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
+            let s = String(item.status || item.paymentStatus || item.paymentType || '').toLowerCase();
+            let type = String(item.type || '').toLowerCase();
+            
+            if (s === 'pending' || s === 'معلق' || s === 'آجل' || s === 'deferred' || type === 'deferred') {
+                return 'pending';
+            }
+            return 'paid';
         }
 
         function openCommunityModal() {
@@ -1323,7 +1334,7 @@
         function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
         window.goToOperationsHub = goToOperationsHub;
 
-        // دالة عرض الحسابات والإحصائيات المُحسنة لمعالجة الشحنات المعلقة والآجلة بدقة
+        // ✨ [التعديل المالي المتزامن والمصحح]: معالجة عرض وحسابات الشحنات والآجل بدقة تامة
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
             let userAccounts = appData.accounts || [];
@@ -1339,9 +1350,11 @@
                 if (!processedIds.has(id)) {
                     processedIds.add(id);
                     let p = getSafeAmount(s);
-                    if (getSafeStatus(s) === 'pending' || s.type === 'deferred') { 
+                    let isDef = (s.type === 'deferred' || getSafeStatus(s) === 'pending');
+                    if (isDef) { 
                         totalDeferred += p; 
                         pendingCount++; 
+                        s.status = 'pending';
                     } else {
                         totalCredit += p;
                     }
@@ -1353,9 +1366,11 @@
                 if (!processedIds.has(id)) {
                     processedIds.add(id);
                     let amt = getSafeAmount(d);
-                    if (getSafeStatus(d) === 'pending' || d.type === 'deferred') {
+                    let isDef = (d.type === 'deferred' || getSafeStatus(d) === 'pending');
+                    if (isDef) {
                         totalDeferred += amt;
                         pendingCount++;
+                        d.status = 'pending';
                     } else {
                         totalCredit += amt;
                     }
@@ -1433,13 +1448,11 @@
 
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') {
                     userShipments.forEach(s => {
-                        // إذا كنا نعرض الشحنات وحدها، نتأكد أن غير المعلقة تظهر، أو حسب الرغبة
                         combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: s.type || 'shipment' });
                     });
                 }
                 if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
                     userDeferred.forEach(d => combinedMap.set(String(d.id), { ...d, collectionSource: 'deferredInvoices', type: 'deferred' }));
-                    // دمج الشحنات المعلقة (الآجلة) ضمن فلتر الآجل تلقائياً
                     userShipments.forEach(s => {
                         if (getSafeStatus(s) === 'pending' || s.type === 'deferred') {
                             combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: 'deferred' });
@@ -1458,7 +1471,6 @@
                 document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
 
                 accTbody.innerHTML = combined.map(item => {
-                    // إصلاح الأولوية: جعل شارة الآجل تظهر أولاً لأي عنصر حالته معلقة أو نوعه أجل
                     let isDef = item.type === 'deferred' || getSafeStatus(item) === 'pending';
                     let badge = isDef ? '<span class="badge-deferred">⏳ آجل</span>' : (item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : '<span class="badge-credit">📥 قيد</span>');
                     
