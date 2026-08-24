@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المعزولة V101 PRO SECURE ISOLATED</title>
+    <title>أسطورة الطريق (Na2la) - الخزينة والإدارة المالية المعزولة V102 PRO SECURE ISOLATED</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -396,8 +396,8 @@
                             <option value="invoice">📄 فاتورة مجمعة</option>
                         </select>
                         <select id="accPaymentStatus" class="calc-input" style="margin-bottom:0;">
-                            <option value="paid">مسدد ✅</option>
-                            <option value="pending" selected>معلق / آجل ⏳</option>
+                            <option value="paid" selected>مسدد ✅</option>
+                            <option value="pending">معلق / آجل ⏳</option>
                         </select>
                     </div>
                     <button class="submit-btn" onclick="addFinancialRecord()" style="width: 100%; padding: 10px;">حفظ وترحيل آمن ومعزول 🚀</button>
@@ -546,7 +546,7 @@
     <script>
         const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'كرم', 'Karam'];
 
-        // دالة التقاط الجلسة الموحدة والربط التلقائي مع المنصة الأم
+        // دالة التقاط الجلسة الموحدة بدقة دون فرض المدير الوهمي
         function getInstantSessionOnLoad() {
             const urlParams = new URLSearchParams(window.location.search);
             let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
@@ -576,7 +576,7 @@
                 
                 let newUserObj = {
                     id: urlUserId,
-                    name: isSuper ? 'المدير' : urlUserId,
+                    name: urlUserId,
                     role: isSuper ? 'مدير نظام' : (cachedUser.role || 'driver'),
                     companyId: compId,
                     avatar: cachedUser.avatar || ''
@@ -586,18 +586,14 @@
             }
 
             if (cachedUser && cachedUser.id) {
-                if (String(cachedUser.id).toLowerCase() === 'admin' || superAdminsList.includes(cachedUser.id) || cachedUser.name === 'المدير') {
-                    cachedUser.role = 'مدير نظام';
-                    cachedUser.companyId = 'company_main';
-                    cachedUser.name = 'المدير';
-                }
                 return cachedUser;
             }
 
+            // افتراضي محايد غير إداري في حال عدم وجود جلسة
             return {
-                id: 'admin',
-                name: 'المدير',
-                role: 'مدير نظام',
+                id: 'driver_default',
+                name: 'سائق الأسطول',
+                role: 'driver',
                 companyId: 'company_main',
                 avatar: ''
             };
@@ -630,25 +626,17 @@
             executeBackgroundSyncSession(); 
         });
 
-        // مزامنة البروفايل والصلاحيات مع حماية تامة لحساب المدير
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
-                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name') || 'admin';
-                let isIdentifierAdmin = superAdminsList.includes(identifier) || superAdminsList.includes(identifier.toLowerCase()) || identifier.toLowerCase() === 'admin' || identifier === 'المدير';
+                let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_name');
+                if (!identifier) return;
 
+                let isIdentifierAdmin = superAdminsList.includes(identifier) || superAdminsList.includes(identifier.toLowerCase()) || identifier.toLowerCase() === 'admin' || identifier === 'المدير';
                 let foundDoc = null;
 
-                if (isIdentifierAdmin) {
-                    window.currentLoggedInUser = {
-                        id: 'admin',
-                        name: 'المدير',
-                        role: 'مدير نظام',
-                        avatar: currentLoggedInUser.avatar || '',
-                        companyId: 'company_main'
-                    };
-                } else {
+                if (!isIdentifierAdmin) {
                     try {
                         let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
                         if (directDocSnap.exists()) {
@@ -678,14 +666,6 @@
                             role: foundDoc.role || 'driver',
                             avatar: userAvatar,
                             companyId: foundDoc.companyId || 'company_main'
-                        };
-                    } else {
-                        window.currentLoggedInUser = {
-                            id: identifier,
-                            name: identifier,
-                            role: 'driver',
-                            companyId: localStorage.getItem('current_company_id') || 'company_main',
-                            avatar: currentLoggedInUser.avatar || ''
                         };
                     }
                 }
@@ -795,7 +775,7 @@
                 id: String(Date.now()),
                 userId: user.id || 'admin',
                 companyId: currentCompanyId,
-                name: user.name || 'المدير',
+                name: user.name || 'سائق',
                 description: text,
                 date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
@@ -823,10 +803,10 @@
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'المدير', role: 'مدير نظام' };
+            let user = window.currentLoggedInUser || { name: 'سائق الأسطول', role: 'driver' };
             let role = getUserRole();
             
-            document.getElementById('header-username').innerText = user.name || 'المدير';
+            document.getElementById('header-username').innerText = user.name || 'سائق الأسطول';
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
@@ -881,7 +861,6 @@
             renderAllFinancials();
         }
 
-        // مزامنة آمنة ومدمجة لكافة مجموعات فايربيس مع العزل الدقيق
         function initFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc } = window.firebaseModules;
@@ -1265,6 +1244,7 @@
             a.click();
         }
 
+        // تم تصحيح دقة حساب الإجماليات لتفادي الأرقام التراكمية الخاطئة
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
             let userAccounts = appData.accounts || [];
@@ -1283,16 +1263,26 @@
             userAccounts.forEach(a => {
                 let amt = getSafeAmount(a);
                 let st = getSafeStatus(a);
-                if (a.type === 'debit') totalDebit += amt;
-                else if (st === 'paid' && (a.type === 'credit' || a.type === 'invoice')) totalCredit += amt;
-                else { totalDeferred += amt; pendingCount++; }
+                if (a.type === 'debit') {
+                    totalDebit += amt;
+                } else if (a.type === 'deferred' || st === 'pending') {
+                    totalDeferred += amt;
+                    pendingCount++;
+                } else if (a.type === 'credit' || a.type === 'invoice') {
+                    totalCredit += amt;
+                }
             });
             
             userExpenses.forEach(e => totalDebit += getSafeAmount(e));
+            
             userDeferred.forEach(d => {
                 let amt = getSafeAmount(d);
-                if (getSafeStatus(d) === 'pending') { totalDeferred += amt; pendingCount++; }
-                else totalCredit += amt;
+                if (getSafeStatus(d) === 'pending' || d.type === 'deferred') {
+                    totalDeferred += amt;
+                    pendingCount++;
+                } else {
+                    totalCredit += amt;
+                }
             });
 
             let treasuryBalance = userTreasury.reduce((sum, t) => sum + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
