@@ -566,7 +566,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المصحح والمضبوط لجلب الحساب الحقيقي من قاعدة البيانات -->
+    <!-- السكريبت البرمجي المصحح والمضبوط للمزامنة الفردية الدقيقة -->
     <script>
         const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system', 'عماد', 'emad', 'باندا', 'karam', 'كرم'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -605,10 +605,10 @@
                 urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
             }
 
-            // 2. البحث الذكي في قاعدة البيانات (drivers, users, team) أولاً لجلب الملف الحقيقي للمدير بدلاً من إنشاء حساب وهمي
             let foundDoc = null;
             const collectionsToSearch = ["drivers", "users", "team"];
 
+            // 2. البحث الدقيق عن حساب المستخدم في قواعد البيانات السحابية
             if (urlUserId && urlUserId !== 'null' && urlUserId !== '') {
                 urlUserId = String(urlUserId).trim();
                 for (let col of collectionsToSearch) {
@@ -639,68 +639,39 @@
                 }
             }
 
-            // 3. إذا لم يوجد معرف، نبحث عن أول مستند مدير مسجل في قاعدة البيانات لضمان جلب الحساب الحقيقي تلقائياً
+            // 3. التصحيح الجذري لمنع التوريث الخاطئ لصلاحيات المدير: 
+            // إذا لم يوجد المستند، لا يتم جلب المدير كبديل، بل ينشئ حساباً خاصاً بالسائق بالاسم المُدخل ودون صلاحيات مدير.
             if (!foundDoc) {
-                for (let col of collectionsToSearch) {
-                    try {
-                        let snap = await getDocs(collection(window.db, col));
-                        if (!snap.empty) {
-                            // نحاول إيجاد أول مستند رتبته admin أو اسمه المدير
-                            let adminDoc = snap.docs.find(d => {
-                                let data = d.data();
-                                let r = String(data.role || data.rank || '').toLowerCase();
-                                let n = String(data.name || '').toLowerCase();
-                                return r === 'admin' || n.includes('المدير') || n.includes('admin');
-                            });
-                            if (adminDoc) {
-                                foundDoc = { id: adminDoc.id, ...adminDoc.data() };
-                                break;
-                            } else {
-                                // أخذ أول مستند متوفر كحل بديل
-                                foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                                break;
-                            }
-                        }
-                    } catch(e) {}
-                }
-            }
+                let fallbackName = urlUserId && urlUserId !== 'null' && urlUserId !== '' ? urlUserId : 'سائق جديد';
+                let lowerFallback = fallbackName.toLowerCase();
+                let isExplicitAdmin = superAdminsList.some(admin => lowerFallback === admin.toLowerCase() || lowerFallback.includes('المدير'));
 
-            // إذا وجدنا المستند الحقيقي، نعتمد بياناته واسمه وصورته بالكامل
-            if (foundDoc) {
-                urlUserId = foundDoc.id || urlUserId;
-            } else {
-                urlUserId = urlUserId || 'المدير';
-            }
-
-            localStorage.setItem('na2la_userId', urlUserId);
-            localStorage.setItem('na2la_companyId', urlCompanyId || 'company_main');
-
-            let lowerNameOrId = String(urlUserId).toLowerCase();
-            let docRole = foundDoc ? String(foundDoc.role || foundDoc.rank || '').toLowerCase() : '';
-            let isIdentifierAdmin = docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(admin => lowerNameOrId.includes(admin.toLowerCase()) || String(foundDoc?.name || '').toLowerCase().includes(admin.toLowerCase()));
-
-            let isIdentifierSup = supervisorsList.some(sup => lowerNameOrId.includes(sup.toLowerCase())) || 
-                                  (foundDoc && (docRole === 'supervisor' || docRole === 'مشرف'));
-
-            if (!foundDoc) {
                 foundDoc = { 
-                    id: urlUserId, 
-                    name: isIdentifierAdmin ? 'المدير' : urlUserId, 
-                    role: isIdentifierAdmin ? 'admin' : 'driver', 
-                    rank: isIdentifierAdmin ? 'admin' : 'driver',
+                    id: urlUserId || 'driver_' + Date.now(), 
+                    name: fallbackName, 
+                    role: isExplicitAdmin ? 'admin' : 'driver', 
+                    rank: isExplicitAdmin ? 'admin' : 'driver',
                     companyId: urlCompanyId || 'company_main'
                 };
             }
 
-            let resolvedCompanyId = urlCompanyId || (foundDoc?.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : 'company_main');
-            currentCompanyId = resolvedCompanyId;
+            urlUserId = foundDoc.id;
+            localStorage.setItem('na2la_userId', urlUserId);
+            localStorage.setItem('na2la_companyId', foundDoc.companyId || urlCompanyId || 'company_main');
+
+            let docRole = String(foundDoc.role || foundDoc.rank || '').toLowerCase();
+            let isIdentifierAdmin = docRole === 'admin' || docRole === 'مدير' || superAdminsList.some(admin => String(foundDoc.name || '').toLowerCase().includes(admin.toLowerCase()));
+            let isIdentifierSup = supervisorsList.some(sup => String(foundDoc.name || '').toLowerCase().includes(sup.toLowerCase())) || docRole === 'supervisor' || docRole === 'مشرف';
+
+            currentCompanyId = foundDoc.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : (urlCompanyId || 'company_main');
             window.currentCompanyId = currentCompanyId;
 
+            // تعيين بيانات المستخدم الحالي بدقة
             window.currentLoggedInUser = {
-                id: foundDoc.id || urlUserId,
-                name: isIdentifierAdmin ? (foundDoc.name || 'المدير') : (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || urlUserId),
-                role: isIdentifierAdmin ? 'admin' : (foundDoc.role || (isIdentifierSup ? 'supervisor' : 'driver')),
-                rank: isIdentifierAdmin ? 'admin' : (foundDoc.rank || (isIdentifierSup ? 'supervisor' : 'driver')),
+                id: foundDoc.id,
+                name: foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || urlUserId,
+                role: isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver'),
+                rank: isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver'),
                 phone: foundDoc.phone || foundDoc.mobile || 'غير محدد',
                 permissions: foundDoc.permissions || (isIdentifierAdmin ? 'Full Access' : 'Standard'),
                 avatar: foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '',
