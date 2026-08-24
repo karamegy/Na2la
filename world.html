@@ -566,9 +566,9 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المعتمد كلياً على الاتصال الحي السحابي بدون تخزين محلي -->
+    <!-- السكريبت البرمجي المصحح والمضبوط لمنع تداخل الجلسات -->
     <script>
-        const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'system'];
+        const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'system', 'عماد', 'emad', 'باندا'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
 
         window._globalMembersMap = {};
@@ -594,57 +594,74 @@
             let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            // 🟢 التحديث التلقائي: حفظ المعرف في الذاكرة أو استرجاعه إن وجد، أو افتراضي admin
-            if (urlUserId) {
-                localStorage.setItem('na2la_userId', urlUserId);
-                if (urlCompanyId) {
-                    localStorage.setItem('na2la_companyId', urlCompanyId);
-                }
-            } else {
-                urlUserId = localStorage.getItem('na2la_userId') || 'admin';
-                urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
+            // 1. البحث في الذاكرة المحلية (localStorage) إذا لم يوجد في الرابط لمنع اختفاء الجلسة
+            if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+                urlUserId = localStorage.getItem('na2la_userId') || 
+                            localStorage.getItem('currentUser') || 
+                            localStorage.getItem('userName') || '';
             }
+
+            if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
+                urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
+            }
+
+            // 2. إذا لم يتم العثور على أي مستخدم، يتم تعيين حساب الأدمن كملجأ لضمان العمل الفوري
+            if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
+                urlUserId = 'Admin1';
+            }
+
+            // حفظ المعرف في الذاكرة المحلية لضمان استقرار الجلسة
+            localStorage.setItem('na2la_userId', urlUserId);
+            localStorage.setItem('na2la_companyId', urlCompanyId);
 
             urlUserId = String(urlUserId).trim();
             let foundDoc = null;
             const collectionsToSearch = ["drivers", "users", "team"];
 
-            for (let col of collectionsToSearch) {
-                try {
-                    let docSnap = await getDoc(doc(window.db, col, urlUserId));
-                    if (docSnap.exists()) {
-                        foundDoc = { id: docSnap.id, ...docSnap.data() };
-                        break;
-                    }
-                } catch(e) {}
-            }
+            let isIdentifierAdmin = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase()));
 
-            if (!foundDoc) {
+            if (!isIdentifierAdmin) {
                 for (let col of collectionsToSearch) {
-                    const fieldsToCheck = ["id", "name", "fullName", "phone", "mobile", "username"];
-                    for (let field of fieldsToCheck) {
-                        try {
-                            let q = query(collection(window.db, col), where(field, "==", urlUserId));
-                            let snap = await getDocs(q);
-                            if (!snap.empty) {
-                                foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
-                                break;
-                            }
-                        } catch(e) {}
+                    try {
+                        let docSnap = await getDoc(doc(window.db, col, urlUserId));
+                        if (docSnap.exists()) {
+                            foundDoc = { id: docSnap.id, ...docSnap.data() };
+                            break;
+                        }
+                    } catch(e) {}
+                }
+
+                if (!foundDoc) {
+                    for (let col of collectionsToSearch) {
+                        const fieldsToCheck = ["id", "name", "fullName", "phone", "mobile", "username"];
+                        for (let field of fieldsToCheck) {
+                            try {
+                                let q = query(collection(window.db, col), where(field, "==", urlUserId));
+                                let snap = await getDocs(q);
+                                if (!snap.empty) {
+                                    foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                                    break;
+                                }
+                            } catch(e) {}
+                        }
+                        if (foundDoc) break;
                     }
-                    if (foundDoc) break;
                 }
             }
 
-            let isIdentifierAdmin = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase())) || 
-                                    (foundDoc && (String(foundDoc.role).toLowerCase() === 'admin' || String(foundDoc.rank).toLowerCase() === 'admin'));
+            if (foundDoc) {
+                if (String(foundDoc.role).toLowerCase() === 'admin' || String(foundDoc.rank).toLowerCase() === 'admin') {
+                    isIdentifierAdmin = true;
+                }
+            }
 
             let isIdentifierSup = supervisorsList.some(sup => urlUserId.toLowerCase().includes(sup.toLowerCase())) || 
                                   (foundDoc && (String(foundDoc.role).toLowerCase() === 'supervisor' || String(foundDoc.rank).toLowerCase() === 'supervisor' || String(foundDoc.role).includes('مشرف')));
 
-            if (!foundDoc && !isIdentifierAdmin && !isIdentifierSup) {
-                foundDoc = { id: 'admin', name: 'مدير النظام العام', role: 'admin', rank: 'admin', companyId: urlCompanyId };
-                isIdentifierAdmin = true;
+            if (!foundDoc && isIdentifierAdmin) {
+                foundDoc = { id: urlUserId, name: 'المدير', role: 'admin', rank: 'admin', companyId: urlCompanyId };
+            } else if (!foundDoc && !isIdentifierAdmin && !isIdentifierSup) {
+                foundDoc = { id: urlUserId, name: urlUserId, role: 'driver', rank: 'driver', companyId: urlCompanyId };
             }
 
             let resolvedCompanyId = urlCompanyId || (foundDoc?.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : 'company_main');
@@ -653,9 +670,9 @@
 
             window.currentLoggedInUser = {
                 id: foundDoc ? foundDoc.id : urlUserId,
-                name: foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || urlUserId) : urlUserId,
-                role: foundDoc?.role || (isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver')),
-                rank: foundDoc?.rank || (isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : 'driver')),
+                name: isIdentifierAdmin ? 'المدير' : (foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || urlUserId) : urlUserId),
+                role: isIdentifierAdmin ? 'admin' : (foundDoc?.role || (isIdentifierSup ? 'supervisor' : 'driver')),
+                rank: isIdentifierAdmin ? 'admin' : (foundDoc?.rank || (isIdentifierSup ? 'supervisor' : 'driver')),
                 phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : (urlParams.get('phone') || 'غير محدد'),
                 permissions: foundDoc?.permissions || (isIdentifierAdmin ? 'Full Access' : (isIdentifierSup ? 'Supervisor Read-Only' : 'Standard')),
                 avatar: foundDoc ? (foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '') : '',
@@ -682,9 +699,11 @@
                         let newAvatar = d.avatar || d.img || d.photo || d.picture || d.imageUrl || d.profileImage;
                         let updated = false;
 
-                        if (newName && newName !== window.currentLoggedInUser.name) {
-                            window.currentLoggedInUser.name = newName;
-                            updated = true;
+                        if (!isSuperAdmin()) {
+                            if (newName && newName !== window.currentLoggedInUser.name) {
+                                window.currentLoggedInUser.name = newName;
+                                updated = true;
+                            }
                         }
                         if (newAvatar !== undefined && newAvatar !== window.currentLoggedInUser.avatar) {
                             window.currentLoggedInUser.avatar = newAvatar;
