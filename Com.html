@@ -169,7 +169,6 @@
         @media(max-width: 600px) { .tool-grid { grid-template-columns: 1fr; } }
         .result-box { background: var(--accent-glow); border: 1px solid var(--accent); padding: 10px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-top: 8px; text-align: center; }
 
-        /* شريط التنقل السفلي الاحترافي */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0;
             background-color: var(--card-bg); border-top: 1px solid var(--border-color);
@@ -430,10 +429,9 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // متغيرات الجلسة السحابية الحية المرنة
         let currentCompanyId = 'company_main';
         let currentDriverProfile = {
-            name: 'المدير العام',
+            name: 'المدير',
             avatar: '',
             title: 'مدير النظام',
             phone: '',
@@ -453,7 +451,6 @@
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
 
-        // تهيئة التطبيق بلا قيود مع مزامنة حية فورية
         async function initApp() {
             try {
                 if (!auth.currentUser) {
@@ -482,7 +479,7 @@
             }
 
             if (!urlUserId) {
-                urlUserId = '1';
+                urlUserId = '1'; // الافتراضي هو مستند المدير الذي يحمل الرقم 1
             }
 
             localStorage.setItem('na2la_userId', urlUserId);
@@ -492,54 +489,40 @@
             currentCompanyId = urlCompanyId;
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
-
-            if (isSuper) {
-                currentDriverProfile = {
-                    id: '1',
-                    name: 'المدير العام',
-                    rank: 'admin',
-                    title: 'مدير النظام',
-                    permissions: 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات',
-                    avatar: '',
-                    phone: ''
-                };
-                syncProfileAndLoad();
-                return;
-            }
-
-            startRealtimeSessionSync(urlUserId);
-        }
-
-        function startRealtimeSessionSync(identifier) {
-            db.collection('drivers').onSnapshot(snapshot => {
+            try {
+                const snapshot = await db.collection('drivers').get();
                 let found = null;
                 allDrivers = [];
                 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
-                    if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
-                        found = d;
+                    if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || urlUserId === '1') {
+                        if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || docSnap.id === '1') {
+                            found = { id: docSnap.id, ...d };
+                        }
                     }
                 });
 
                 if (found) {
                     currentCompanyId = found.companyId || currentCompanyId;
                     localStorage.setItem('na2la_companyId', currentCompanyId);
+                    let roleStr = String(found.role || found.rank || '').toLowerCase();
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || found.name === 'المدير' || found.id === '1';
+
                     currentDriverProfile = {
-                        id: found.id || found.name,
+                        id: found.id,
                         name: found.name || found.driverName || 'مستخدم',
                         phone: found.phone || 'غير متوفر',
-                        rank: found.role || found.rank || 'driver',
-                        title: found.title || (found.role === 'admin' ? 'مدير نظام' : found.role === 'مشرف' ? 'مشرف أسطول' : 'سائق معتمد'),
-                        permissions: found.role === 'admin' ? 'صلاحيات كاملة لإدارة النظام والأسطول' : found.role === 'مشرف' ? 'صلاحيات إشراف وتوجيه الأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات، شحنات، ومراسلات',
+                        rank: isAdmin ? 'admin' : (found.role || 'driver'),
+                        title: found.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد'),
+                        permissions: isAdmin ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                         avatar: found.avatar || found.photoUrl || ''
                     };
                 } else {
                     currentDriverProfile = {
-                        id: identifier,
-                        name: identifier,
+                        id: urlUserId,
+                        name: urlUserId,
                         rank: 'driver',
                         title: 'سائق معتمد',
                         permissions: 'صلاحيات تشغيلية أساسية',
@@ -547,10 +530,11 @@
                         avatar: ''
                     };
                 }
+            } catch (err) {
+                console.error("Error fetching session:", err);
+            }
 
-                document.getElementById('companyIdLabel').innerText = currentCompanyId;
-                syncProfileAndLoad();
-            });
+            syncProfileAndLoad();
         }
 
         function syncProfileAndLoad() {
