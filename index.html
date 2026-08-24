@@ -1668,6 +1668,20 @@
         ];
 
         let isListenersInitialized = false;
+        
+        // 🛠️ الحل الجذري لمنع تعليق الصفحة: تأخير ذكي لتحديث الواجهة ومنع التكرار المفرط
+        let _renderTimer = null;
+        function scheduleSmartRender() {
+            if (_renderTimer) return;
+            _renderTimer = setTimeout(() => {
+                _renderTimer = null;
+                const activeTag = document.activeElement ? document.activeElement.tagName : '';
+                if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+                    render();
+                }
+            }, 600);
+        }
+
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
             isListenersInitialized = true;
@@ -1678,7 +1692,6 @@
                 db.collection(colName).onSnapshot(snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // 🔒 تطبيق العزل السحابي الصارم لكل شركة لضمان استقلالية حسابات الشركات وعدم تداخل البيانات نهائياً
                     if (currentCompanyId && currentCompanyId !== 'company_main' && loggedInDriverName !== 'المدير') {
                         appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
                     } else {
@@ -1705,7 +1718,10 @@
                     }
 
                     localStorage.setItem('transportAppV90', JSON.stringify(appData));
-                    render();
+                    
+                    // استخدام العرض الذكي المحمي من التعليق
+                    scheduleSmartRender();
+
                     if (typeof renderChatMessages === 'function') renderChatMessages();
                     if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
                     if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
@@ -3853,7 +3869,6 @@
                 renderDriverDropdownOptions();
                 renderRSSTicker();
                 
-                // التحكم في إظهار زر إضافة الشركات بناءً على ما إذا كان المستخدم هو الماستر أدمن الأساسي ("المدير")
                 const addCompBtnMain = document.getElementById('add-company-btn-main');
                 if (addCompBtnMain) {
                     addCompBtnMain.style.display = (loggedInDriverName === 'المدير') ? 'block' : 'none';
@@ -4134,4 +4149,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
