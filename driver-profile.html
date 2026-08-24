@@ -474,7 +474,6 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
-        // 🛡️ تصحيح قراءة الجلسة ومعرف الشركة بدون الوقوع في خطأ الاعتماد التلقائي على المدير
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -501,7 +500,6 @@
         let activeExternalSessionName = getExternalLoginSession();
         let loggedInDriverId = activeExternalSessionName;
         
-        // 🛡️ منع تعليق بروفايل شخص آخر عن طريق مزامنة viewingProfileId مع المستخدم الحالي عند التحديث
         const urlParamsCheck = new URLSearchParams(window.location.search);
         let urlUserIdParam = urlParamsCheck.get('userId') || urlParamsCheck.get('id') || urlParamsCheck.get('phone') || urlParamsCheck.get('driver') || urlParamsCheck.get('name');
         
@@ -966,23 +964,36 @@
             document.getElementById('localVideo').srcObject = null;
         }
 
+        // ✅ الدالة المصححة لعرض حسابات وسائقين الشات دون أي اختفاء أو تضارب
         function renderChatAccountsList() {
             const container = document.getElementById('chat-accounts-list-container');
             if(!container) return;
             const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase().trim();
             container.innerHTML = '';
             
-            let accounts = (appData.drivers || []).filter(d => d.name !== activeExternalSessionName);
+            let accounts = (appData.drivers || []).filter(d => {
+                let dId = String(d.id || '').trim();
+                let dName = String(d.name || '').trim();
+                let dPhone = String(d.phone || '').trim();
+                let session = String(activeExternalSessionName || '').trim();
+                
+                let isMe = (dId === session || dName === session || dPhone === session);
+                return !isMe;
+            });
             
             let filteredAccounts = accounts.filter(acc => {
                 let name = (acc.name || '').toLowerCase();
                 let phone = (acc.phone || '').toLowerCase();
-                let matchesComp = (activeExternalSessionName === '1' || acc.companyId === currentCompanyId);
+                
+                let accComp = String(acc.companyId || 'company_main').trim();
+                let curComp = String(currentCompanyId || 'company_main').trim();
+                let matchesComp = (activeExternalSessionName === '1' || accComp === curComp || !acc.companyId);
+                
                 return matchesComp && (name.includes(query) || phone.includes(query));
             });
 
             if (filteredAccounts.length === 0) {
-                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات مطابقة للبحث في شركتك</div>`;
+                container.innerHTML = `<div style="padding: 10px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات مطابقة للبحث في الأسطول</div>`;
                 return;
             }
 
@@ -998,7 +1009,7 @@
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 1.1rem;">👤</span>
                         <div>
-                            <div style="font-weight: bold; font-size: 11px;">${acc.name}</div>
+                            <div style="font-weight: bold; font-size: 11px;">${acc.name || acc.id}</div>
                             <div style="font-size: 8px; opacity: 0.8; color: ${currentChatTarget === acc.name ? '#fff' : roleBadgeColor};">${roleBadgeText}</div>
                         </div>
                     </div>
