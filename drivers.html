@@ -354,7 +354,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -405,6 +405,32 @@
         let superAdmin = isSuperAdmin();
         document.getElementById('companyIdLabel').innerText = superAdmin ? `${currentCompanyId} (رؤية شاملة للمدير العام 👑)` : currentCompanyId;
 
+        // دالة سحابية لتسجيل العمليات في مصفوفة auditLogs (حسب هيكل appStore/mainState)
+        async function logAuditAction(actionDesc) {
+            try {
+                const mainStateRef = doc(db, "appStore", "mainState");
+                const docSnap = await getDoc(mainStateRef);
+                
+                let auditLogs = [];
+                if (docSnap.exists() && docSnap.data().auditLogs) {
+                    auditLogs = docSnap.data().auditLogs;
+                }
+
+                auditLogs.unshift({
+                    action: actionDesc,
+                    createdAt: Date.now(),
+                    time: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
+                    user: activeSessionName || 'مجهول'
+                });
+
+                if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
+
+                await setDoc(mainStateRef, { auditLogs: auditLogs }, { merge: true });
+            } catch (err) {
+                console.error("Audit log error:", err);
+            }
+        }
+
         window.toggleTheme = function() {
             const body = document.body;
             const currentTheme = body.getAttribute("data-theme");
@@ -426,9 +452,7 @@
             });
         };
 
-        // ✅ إصلاح تسريب المستمعات: تشغيل المستمعين بشكل مستقل وثابت مرة واحدة فقط
         function initRealtimeListeners() {
-            // مستمع الشحنات الثابت
             onSnapshot(collection(db, "shipments"), (shipSnapshot) => {
                 globalShipmentsData = [];
                 shipSnapshot.forEach(docSnap => {
@@ -437,7 +461,6 @@
                 filterAndRenderDrivers();
             });
 
-            // مستمع السائقين الثابت
             onSnapshot(collection(db, "drivers"), (snapshot) => {
                 globalDriversData = [];
                 let isSuper = isSuperAdmin();
@@ -561,6 +584,8 @@
                     createdAt: new Date().toISOString()
                 });
 
+                logAuditAction(`إضافة سائق جديد: ${name} (سيارة: ${car}) بواسطة ${activeSessionName}`);
+
                 document.getElementById("newDriverName").value = "";
                 document.getElementById("newDriverCar").value = "";
                 document.getElementById("newDriverPhone").value = "";
@@ -577,6 +602,7 @@
                 await updateDoc(doc(db, "drivers", docId), {
                     status: newStatus
                 });
+                logAuditAction(`تغيير حالة السائق برقم المعرف ${docId} إلى (${newStatus}) بواسطة ${activeSessionName}`);
             } catch (e) {
                 console.error("خطأ في التحديث: ", e);
             }
@@ -586,6 +612,7 @@
             if(confirm("هل أنت متأكد من حذف هذا السائق من الأسطول؟")) {
                 try {
                     await deleteDoc(doc(db, "drivers", docId));
+                    logAuditAction(`حذف سائق برقم المعرف ${docId} بواسطة ${activeSessionName}`);
                 } catch (e) {
                     console.error("خطأ في الحذف: ", e);
                 }
