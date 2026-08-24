@@ -538,9 +538,9 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الشامل والمصحح جذرياً -->
+    <!-- السكريبت البرمجي المصحح نهائياً -->
     <script>
-        const superAdminsList = ['1', 'admin', 'Admin1', 'المدير', 'مدير', 'system'];
+        const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'system'];
 
         window._globalMembersMap = {};
 
@@ -563,9 +563,6 @@
             } else if (savedSession && savedSession.id) {
                 activeUserId = savedSession.id;
                 activeCompanyId = savedSession.companyId || 'company_main';
-            } else {
-                activeUserId = '';
-                activeCompanyId = 'company_main';
             }
 
             if (!activeUserId) {
@@ -574,8 +571,8 @@
                 return {
                     id: '',
                     name: 'يرجى تحديد الهوية أو تسجيل الدخول',
-                    role: 'زائر',
-                    rank: 'غير محدد',
+                    role: 'visitor',
+                    rank: 'Visitor',
                     phone: '',
                     permissions: 'بانتظار المصادقة',
                     companyId: 'company_main',
@@ -587,14 +584,15 @@
             localStorage.setItem('current_company_id', activeCompanyId);
             
             let isSuper = superAdminsList.some(admin => activeUserId.toLowerCase().includes(admin.toLowerCase()));
+            let defaultName = (savedSession && savedSession.name && savedSession.name !== activeUserId) ? savedSession.name : activeUserId;
             
             let newUserObj = {
                 id: activeUserId,
-                name: activeUserId,
-                role: isSuper ? 'مدير النظام (Admin)' : 'عضو الأسطول',
-                rank: isSuper ? 'مدير عام النظام' : 'عضو معتمد',
+                name: defaultName,
+                role: savedSession?.role || (isSuper ? 'admin' : 'driver'),
+                rank: savedSession?.rank || (isSuper ? 'Admin' : 'Driver'),
                 phone: urlParams.get('phone') || (savedSession?.phone ?? ''),
-                permissions: isSuper ? 'صلاحيات مطلقة (Full Access)' : 'صلاحيات تشغيلية',
+                permissions: savedSession?.permissions || (isSuper ? 'Full Access' : 'Standard'),
                 companyId: activeCompanyId,
                 avatar: savedSession?.avatar || ''
             };
@@ -668,7 +666,8 @@
                     }
                 }
 
-                let isIdentifierAdmin = superAdminsList.some(admin => identifier.toLowerCase().includes(admin.toLowerCase()));
+                let isIdentifierAdmin = superAdminsList.some(admin => identifier.toLowerCase().includes(admin.toLowerCase())) || 
+                                        (foundDoc && (String(foundDoc.role).toLowerCase() === 'admin' || String(foundDoc.rank).toLowerCase() === 'admin'));
 
                 if (!foundDoc && !isIdentifierAdmin) {
                     localStorage.removeItem('na2la_active_session');
@@ -688,10 +687,10 @@
                 window.currentLoggedInUser = {
                     id: foundDoc ? (foundDoc.id || identifier) : identifier,
                     name: foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || identifier) : identifier,
-                    role: foundDoc ? (foundDoc.role || foundDoc.title || (isIdentifierAdmin ? 'مدير النظام (Admin)' : 'عضو')) : (isIdentifierAdmin ? 'مدير النظام (Admin)' : 'عضو'),
-                    rank: foundDoc ? (foundDoc.rank || (isIdentifierAdmin ? 'مدير عام النظام' : 'عضو معتمد')) : (isIdentifierAdmin ? 'مدير عام النظام' : 'عضو معتمد'),
+                    role: foundDoc ? (foundDoc.role || (isIdentifierAdmin ? 'admin' : 'driver')) : (isIdentifierAdmin ? 'admin' : 'driver'),
+                    rank: foundDoc ? (foundDoc.rank || (isIdentifierAdmin ? 'Admin' : 'Driver')) : (isIdentifierAdmin ? 'Admin' : 'Driver'),
                     phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : 'غير محدد',
-                    permissions: foundDoc ? (foundDoc.permissions || (isIdentifierAdmin ? 'صلاحيات مطلقة' : 'صلاحيات تشغيلية')) : (isIdentifierAdmin ? 'صلاحيات مطلقة' : 'صلاحيات تشغيلية'),
+                    permissions: foundDoc ? (foundDoc.permissions || (isIdentifierAdmin ? 'Full Access' : 'Standard')) : (isIdentifierAdmin ? 'Full Access' : 'Standard'),
                     avatar: foundDoc ? (foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '') : '',
                     companyId: foundDoc ? (foundDoc.companyId || 'company_main') : 'company_main'
                 };
@@ -1193,7 +1192,6 @@
         function getSafeAmount(item) { return item ? (Number(item.amount ?? item.price ?? item.total ?? item.remainingAmount ?? item.remaining ?? item.value ?? 0) || 0) : 0; }
         function getSafeDesc(item) { return item ? (item.description || item.item || item.desc || item.notes || item.details || 'معاملة مالية') : 'معاملة مالية'; }
         
-        // ✨ [التعديل الجذري والمصحح]: دالة التحقق من الحالة الآجلة/المعلقة بدقة تامة لتفادي اعتبار الشحنات الآجلة مسددة خطأً
         function getSafeStatus(item) {
             if (!item) return 'paid';
             let s = String(item.status || item.paymentStatus || item.paymentType || '').toLowerCase();
@@ -1247,11 +1245,11 @@
         }
 
         function applyUserPermissionsUI() {
-            let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'visitor', rank: 'غير محدد', phone: 'غير محدد', permissions: 'بانتظار المصادقة' };
+            let user = window.currentLoggedInUser || { name: 'المستخدم', role: 'visitor', rank: 'Visitor', phone: 'غير محدد', permissions: 'Standard' };
             
             document.getElementById('header-username').innerText = user.name || 'مستخدم';
             
-            let detailsLine = `رتبة: ${user.rank || 'غير محدد'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'مطلقة'}`;
+            let detailsLine = `رتبة: ${user.rank || 'Visitor'} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${user.permissions || 'Standard'}`;
             document.getElementById('header-details-line').innerText = detailsLine;
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
@@ -1307,8 +1305,9 @@
         function isSuperAdmin() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase();
+            let rank = String(user.rank || '').toLowerCase();
             let userName = String(user.name || user.id || '').trim().toLowerCase();
-            return role.includes('مدير') || role.includes('مؤسس') || role === 'admin' || superAdminsList.some(admin => userName.includes(admin.toLowerCase()));
+            return role === 'admin' || rank === 'admin' || superAdminsList.some(admin => userName.includes(admin.toLowerCase()));
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -1334,7 +1333,7 @@
         function goToOperationsHub() { goToPageWithSession("operations-hub.html"); }
         window.goToOperationsHub = goToOperationsHub;
 
-        // ✨ [التعديل المالي المتزامن والمصحح]: معالجة عرض وحسابات الشحنات والآجل بدقة تامة
+        // دمج البيانات في خريطة فريدة حسب الـ ID ومنع التكرار نهائياً
         function renderAllFinancials() {
             let userShipments = appData.shipments || [];
             let userAccounts = appData.accounts || [];
@@ -1343,57 +1342,46 @@
             let userTreasury = appData.treasury || [];
 
             let totalCredit = 0, totalDebit = 0, totalDeferred = 0, pendingCount = 0;
-            let processedIds = new Set();
+            let allItemsMap = new Map();
 
             userShipments.forEach(s => {
                 let id = String(s.id);
-                if (!processedIds.has(id)) {
-                    processedIds.add(id);
-                    let p = getSafeAmount(s);
-                    let isDef = (s.type === 'deferred' || getSafeStatus(s) === 'pending');
-                    if (isDef) { 
-                        totalDeferred += p; 
-                        pendingCount++; 
-                        s.status = 'pending';
-                    } else {
-                        totalCredit += p;
-                    }
-                }
+                allItemsMap.set(id, { ...s, sourceCollection: 'shipments', itemType: s.type || 'shipment' });
             });
-            
+
             userDeferred.forEach(d => {
                 let id = String(d.id);
-                if (!processedIds.has(id)) {
-                    processedIds.add(id);
-                    let amt = getSafeAmount(d);
-                    let isDef = (d.type === 'deferred' || getSafeStatus(d) === 'pending');
-                    if (isDef) {
-                        totalDeferred += amt;
-                        pendingCount++;
-                        d.status = 'pending';
-                    } else {
-                        totalCredit += amt;
-                    }
+                if (!allItemsMap.has(id)) {
+                    allItemsMap.set(id, { ...d, sourceCollection: 'deferredInvoices', itemType: 'deferred' });
+                } else {
+                    let existing = allItemsMap.get(id);
+                    existing.itemType = 'deferred';
+                    existing.status = 'pending';
                 }
             });
 
             userAccounts.forEach(a => {
                 let id = String(a.id);
-                if (!processedIds.has(id)) {
-                    processedIds.add(id);
-                    let amt = getSafeAmount(a);
-                    let st = getSafeStatus(a);
-                    if (a.type === 'debit') {
-                        totalDebit += amt;
-                    } else if (a.type === 'deferred' || st === 'pending') {
-                        totalDeferred += amt;
-                        pendingCount++;
-                    } else if (a.type === 'credit' || a.type === 'invoice' || a.type === 'shipment') {
-                        totalCredit += amt;
-                    }
+                if (!allItemsMap.has(id)) {
+                    allItemsMap.set(id, { ...a, sourceCollection: 'accounts', itemType: a.type || 'account' });
                 }
             });
-            
+
+            allItemsMap.forEach(item => {
+                let amt = getSafeAmount(item);
+                let st = getSafeStatus(item);
+                let type = String(item.type || item.itemType || '').toLowerCase();
+
+                if (type === 'debit') {
+                    totalDebit += amt;
+                } else if (type === 'deferred' || st === 'pending' || item.itemType === 'deferred') {
+                    totalDeferred += amt;
+                    pendingCount++;
+                } else {
+                    totalCredit += amt;
+                }
+            });
+
             userExpenses.forEach(e => totalDebit += getSafeAmount(e));
 
             let treasuryBalance = userTreasury.reduce((sum, t) => sum + (t.type === 'in' ? getSafeAmount(t) : -getSafeAmount(t)), 0);
@@ -1407,7 +1395,7 @@
             document.getElementById("treasuryBalanceDisplay").innerText = treasuryBalance.toLocaleString() + " ج.م";
             document.getElementById("analyticsPendingCount").innerText = `${pendingCount} معاملات`;
 
-            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب الموثق: <b>${window.currentLoggedInUser?.name || 'مستخدم'}</b>.<br>الرتبة: <b>${window.currentLoggedInUser?.rank || 'مدير'}</b> | الصلاحيات: <b>${window.currentLoggedInUser?.permissions || 'مطلقة'}</b>.`;
+            document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب الموثق: <b>${window.currentLoggedInUser?.name || 'مستخدم'}</b>.<br>الرتبة: <b>${window.currentLoggedInUser?.rank || 'admin'}</b> | الصلاحيات: <b>${window.currentLoggedInUser?.permissions || 'Full Access'}</b>.`;
 
             let treasuryTbody = document.getElementById("treasuryTableBody");
             if (treasuryTbody) {
@@ -1444,38 +1432,32 @@
 
             let accTbody = document.getElementById("accountsTableBody");
             if (accTbody) {
-                let combinedMap = new Map();
+                let filteredArray = Array.from(allItemsMap.values());
 
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'shipments') {
-                    userShipments.forEach(s => {
-                        combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: s.type || 'shipment' });
-                    });
+                if (currentAccountFilter === 'shipments') {
+                    filteredArray = filteredArray.filter(i => i.sourceCollection === 'shipments' || i.itemType === 'shipment');
+                } else if (currentAccountFilter === 'deferred') {
+                    filteredArray = filteredArray.filter(i => i.itemType === 'deferred' || getSafeStatus(i) === 'pending' || i.type === 'deferred');
+                } else if (currentAccountFilter === 'accounts') {
+                    filteredArray = filteredArray.filter(i => i.sourceCollection === 'accounts');
                 }
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'deferred') {
-                    userDeferred.forEach(d => combinedMap.set(String(d.id), { ...d, collectionSource: 'deferredInvoices', type: 'deferred' }));
-                    userShipments.forEach(s => {
-                        if (getSafeStatus(s) === 'pending' || s.type === 'deferred') {
-                            combinedMap.set(String(s.id), { ...s, collectionSource: 'shipments', type: 'deferred' });
-                        }
-                    });
-                }
-                if (currentAccountFilter === 'all' || currentAccountFilter === 'accounts') {
-                    userAccounts.forEach(a => combinedMap.set(String(a.id), { ...a, collectionSource: 'accounts' }));
-                }
-
-                let combined = Array.from(combinedMap.values());
 
                 let searchQuery = (document.getElementById("accountsSearchInput")?.value || "").trim().toLowerCase();
-                if (searchQuery) combined = combined.filter(item => getSafeName(item).toLowerCase().includes(searchQuery) || getSafeDesc(item).toLowerCase().includes(searchQuery));
+                if (searchQuery) {
+                    filteredArray = filteredArray.filter(item => 
+                        getSafeName(item).toLowerCase().includes(searchQuery) || 
+                        getSafeDesc(item).toLowerCase().includes(searchQuery)
+                    );
+                }
 
-                document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${combined.length}`;
+                document.getElementById("recordCountIndicator").innerText = `إجمالي المعاملات: ${filteredArray.length}`;
 
-                accTbody.innerHTML = combined.map(item => {
-                    let isDef = item.type === 'deferred' || getSafeStatus(item) === 'pending';
-                    let badge = isDef ? '<span class="badge-deferred">⏳ آجل</span>' : (item.type === 'shipment' ? '<span class="badge-invoice">📦 شحنة</span>' : '<span class="badge-credit">📥 قيد</span>');
+                accTbody.innerHTML = filteredArray.map(item => {
+                    let isDef = (item.itemType === 'deferred' || item.type === 'deferred' || getSafeStatus(item) === 'pending');
+                    let badge = isDef ? '<span class="badge-deferred">⏳ آجل</span>' : (item.sourceCollection === 'shipments' ? '<span class="badge-invoice">📦 شحنة</span>' : '<span class="badge-credit">📥 قيد</span>');
                     
                     let safeId = item.id || '';
-                    let collType = item.collectionSource || 'accounts';
+                    let collType = item.sourceCollection || 'accounts';
                     let st = getSafeStatus(item);
 
                     let statusBadge = st === 'pending' ? 
