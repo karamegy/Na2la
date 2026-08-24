@@ -422,11 +422,11 @@
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
             if (saved) return saved.trim();
 
-            return 'المدير';
+            return '1'; // الافتراضي الحساب الرئيسي رقم 1
         }
 
         let activeExternalSessionName = getExternalLoginSessionAndSync();
-        let isSuper = ['Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName);
+        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName);
 
         let currentDriverProfile = {
             name: activeExternalSessionName,
@@ -434,7 +434,7 @@
             title: isSuper ? 'مدير عام النظام' : 'سائق معتمد',
             phone: '',
             role: isSuper ? 'admin' : 'driver',
-            companyId: currentCompanyId,
+            companyId: isSuper ? 'company_main' : currentCompanyId,
             canAccessSocial: true,
             subPlan: 'أساسي',
             subExpiry: 'غير محدد'
@@ -450,12 +450,12 @@
             } catch(e) {}
         }
 
-        // 👑 دالة فحص المدير العام للمنصة (Super Admin)
+        // 👑 دالة فحص المدير العام للمنصة (Super Admin) الشاملة والآمنة
         function isSuperAdmin() {
             let user = currentDriverProfile || {};
             let userName = String(user.name || '').trim();
             let role = String(user.role || '').toLowerCase().trim();
-            return role === 'admin' || role === 'مدير' || ['المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'Admin1'].includes(userName);
+            return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'Admin1'].includes(userName);
         }
         window.isSuperAdmin = isSuperAdmin;
 
@@ -491,24 +491,35 @@
         async function syncProfileAndLoad() {
             try {
                 let identifier = currentDriverProfile.name;
-                let matchedDrv = null;
-                let snapshot = await db.collection('drivers').get();
-                allDrivers = [];
-
-                snapshot.forEach(doc => {
-                    let d = doc.data();
-                    allDrivers.push({ id: doc.id, ...d });
-                    if (d.name === identifier || doc.id === identifier || d.phone === identifier) {
-                        matchedDrv = { id: doc.id, ...d };
-                    }
-                });
-
-                if (matchedDrv) {
-                    currentDriverProfile = { ...currentDriverProfile, ...matchedDrv };
-                    currentCompanyId = currentDriverProfile.companyId || (isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + matchedDrv.id));
+                
+                // 🛡️ تأمين مطلق للحساب الرئيسي رقم 1 أو أسماء الإدارة لربطها فوراً بـ company_main
+                if (identifier === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier)) {
+                    currentCompanyId = 'company_main';
+                    window.currentCompanyId = currentCompanyId;
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    currentDriverProfile.name = 'المدير';
+                    currentDriverProfile.role = 'admin';
+                    currentDriverProfile.companyId = 'company_main';
                 } else {
-                    currentCompanyId = isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_'));
-                    currentDriverProfile.companyId = currentCompanyId;
+                    let matchedDrv = null;
+                    let snapshot = await db.collection('drivers').get();
+                    allDrivers = [];
+
+                    snapshot.forEach(doc => {
+                        let d = doc.data();
+                        allDrivers.push({ id: doc.id, ...d });
+                        if (d.name === identifier || doc.id === identifier || d.phone === identifier) {
+                            matchedDrv = { id: doc.id, ...d };
+                        }
+                    });
+
+                    if (matchedDrv) {
+                        currentDriverProfile = { ...currentDriverProfile, ...matchedDrv };
+                        currentCompanyId = currentDriverProfile.companyId || ('comp_' + matchedDrv.id);
+                    } else {
+                        currentCompanyId = 'comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_');
+                        currentDriverProfile.companyId = currentCompanyId;
+                    }
                 }
 
                 localStorage.setItem('current_company_id', currentCompanyId);
@@ -518,7 +529,7 @@
 
             } catch (e) { 
                 console.error("خطأ في المزامنة:", e);
-                currentCompanyId = isSuperAdmin() ? 'comp_1787481011714' : ('comp_' + currentDriverProfile.name.replace(/[^a-zA-Z0-9]/g, '_'));
+                currentCompanyId = isSuperAdmin() ? 'company_main' : ('comp_' + currentDriverProfile.name.replace(/[^a-zA-Z0-9]/g, '_'));
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
             }
