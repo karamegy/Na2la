@@ -490,11 +490,11 @@
             try {
                 let identifier = currentDriverProfile.name;
                 
-                if (identifier === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier)) {
+                if (identifier === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier) || isSuperAdmin()) {
                     currentCompanyId = 'company_main';
                     window.currentCompanyId = currentCompanyId;
                     localStorage.setItem('current_company_id', currentCompanyId);
-                    currentDriverProfile.name = 'المدير';
+                    currentDriverProfile.name = currentDriverProfile.name === '1' ? 'المدير' : currentDriverProfile.name;
                     currentDriverProfile.role = 'admin';
                     currentDriverProfile.companyId = 'company_main';
                 } else {
@@ -512,11 +512,12 @@
 
                     if (matchedDrv) {
                         currentDriverProfile = { ...currentDriverProfile, ...matchedDrv };
-                        currentCompanyId = currentDriverProfile.companyId || ('comp_' + matchedDrv.id);
+                        currentCompanyId = (matchedDrv.companyId && !matchedDrv.companyId.startsWith('comp_')) ? matchedDrv.companyId : 'company_main';
                     } else {
-                        currentCompanyId = 'comp_' + identifier.replace(/[^a-zA-Z0-9]/g, '_');
-                        currentDriverProfile.companyId = currentCompanyId;
+                        // توحيد الشركة لضمان عدم ظهور المعرفات الخاطئة الناتجة عن الحروف العربية
+                        currentCompanyId = 'company_main';
                     }
+                    currentDriverProfile.companyId = currentCompanyId;
                 }
 
                 localStorage.setItem('current_company_id', currentCompanyId);
@@ -526,7 +527,7 @@
 
             } catch (e) { 
                 console.error("خطأ في المزامنة:", e);
-                currentCompanyId = isSuperAdmin() ? 'company_main' : ('comp_' + currentDriverProfile.name.replace(/[^a-zA-Z0-9]/g, '_'));
+                currentCompanyId = 'company_main';
                 localStorage.setItem('current_company_id', currentCompanyId);
                 window.currentCompanyId = currentCompanyId;
             }
@@ -550,7 +551,6 @@
                 document.getElementById('social-content-wrapper').style.display = 'block';
             }
 
-            // تفعيل المزامنة اللحظية الحقيقية لجدول السائقين والشات
             db.collection('drivers').onSnapshot(snapshot => {
                 allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderChatUsersList();
@@ -1017,7 +1017,6 @@
             });
         }
 
-        // ✅ دالة قائمة الأعضاء المحدثة (تدمج السائقين ومرسلي الشات وتعمل بلحظية التحديث)
         function renderChatUsersList() {
             const listContainer = document.getElementById('chat-users-list');
             if(!listContainer) return;
@@ -1026,7 +1025,6 @@
             let superAdmin = isSuperAdmin();
             let accountsMap = new Map();
 
-            // 1. إضافة السائقين من جدول drivers
             (allDrivers || []).forEach(drv => {
                 let name = String(drv.name || drv.id || '').trim();
                 if(name) {
@@ -1038,7 +1036,6 @@
                 }
             });
 
-            // 2. إضافة أي مرسلين تم رصدهم في الشات لضمان ظهور المدير وباقي الأجهزة فوراً
             (allChatMessagesCache || []).forEach(m => {
                 let sender = String(m.sender || '').trim();
                 if(sender && sender !== 'general' && !accountsMap.has(sender)) {
@@ -1123,7 +1120,6 @@
                 const box = document.getElementById('chat-messages-box');
                 allChatMessagesCache = snapshot.docs.map(doc => doc.data());
                 
-                // تحديث قائمة الأعضاء فور وصول رسائل جديدة لضمان المزامنة التامة
                 renderChatUsersList();
 
                 if(!box) return;
