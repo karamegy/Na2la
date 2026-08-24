@@ -471,20 +471,30 @@
                         urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            // إذا لم يتم تمرير معرف في الرابط، يتم فتح الحساب الافتراضي بصلاحيات الإدارة لتجنب أي قيود
             if (!urlUserId) {
-                currentCompanyId = urlCompanyId || 'company_main';
-                document.getElementById('companyIdLabel').innerText = currentCompanyId;
-                startRealtimeSessionSync('1');
-                return;
+                urlUserId = localStorage.getItem('na2la_userId') || 
+                            localStorage.getItem('currentUser') || 
+                            localStorage.getItem('userName') || '';
             }
 
+            if (!urlCompanyId) {
+                urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
+            }
+
+            if (!urlUserId) {
+                urlUserId = '1';
+            }
+
+            localStorage.setItem('na2la_userId', urlUserId);
+            localStorage.setItem('na2la_companyId', urlCompanyId);
+
             urlUserId = urlUserId.trim();
-            currentCompanyId = urlCompanyId || 'company_main';
+            currentCompanyId = urlCompanyId;
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
-            // فحص إذا كان المدير
-            if (urlUserId === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId)) {
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
+
+            if (isSuper) {
                 currentDriverProfile = {
                     id: '1',
                     name: 'المدير العام',
@@ -498,7 +508,6 @@
                 return;
             }
 
-            // الاستعلام اللحظي من مجموعة السائقين
             startRealtimeSessionSync(urlUserId);
         }
 
@@ -509,10 +518,7 @@
                 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    if (d.companyId && d.companyId !== currentCompanyId && currentDriverProfile.rank !== 'admin') {
-                        return;
-                    }
-                    allDrivers.push(d);
+                    allDrivers.push({ id: docSnap.id, ...d });
                     if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
                         found = d;
                     }
@@ -520,6 +526,7 @@
 
                 if (found) {
                     currentCompanyId = found.companyId || currentCompanyId;
+                    localStorage.setItem('na2la_companyId', currentCompanyId);
                     currentDriverProfile = {
                         id: found.id || found.name,
                         name: found.name || found.driverName || 'مستخدم',
@@ -527,10 +534,9 @@
                         rank: found.role || found.rank || 'driver',
                         title: found.title || (found.role === 'admin' ? 'مدير نظام' : found.role === 'مشرف' ? 'مشرف أسطول' : 'سائق معتمد'),
                         permissions: found.role === 'admin' ? 'صلاحيات كاملة لإدارة النظام والأسطول' : found.role === 'مشرف' ? 'صلاحيات إشراف وتوجيه الأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات، شحنات، ومراسلات',
-                        avatar: found.avatar || ''
+                        avatar: found.avatar || found.photoUrl || ''
                     };
                 } else {
-                    // حساب مرن افتراضي في حال عدم المطابقة التامة لتجنب أي توقف
                     currentDriverProfile = {
                         id: identifier,
                         name: identifier,
