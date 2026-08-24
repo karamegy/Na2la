@@ -29,7 +29,7 @@
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc };
 
         signInAnonymously(auth).then(() => {
-            console.log("✅ تمت المصادقة السحابية الآمنة بنجاح مع العزل التام");
+            console.log("✅ تمت المصادقة السحابية الآمنة بنجاح مع العزل التام لصفحة World");
             window.dispatchEvent(new Event('firebase-ready'));
         }).catch((error) => {
             console.error("⚠️ خطأ في المصادقة السحابية:", error);
@@ -542,7 +542,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي مع العزل والتزامن الآمن المنضبط -->
+    <!-- السكريبت البرمجي مع الجلب اللحظي الصارم للجلسة والتزامن التام لصفحة World -->
     <script>
         let currentAccountFilter = 'all';
         let currentCompanyId = 'company_main';
@@ -571,41 +571,54 @@
             return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
         }
 
-        function getExternalLoginSession() {
+        // 🚀 الجلب اللحظي الفوري والصارم (أولوية مطلقة لمعرف الرابط ثم الكاش الحديث بدون افتراضات خاطئة)
+        function getInstantSessionOnLoad() {
             const urlParams = new URLSearchParams(window.location.search);
-            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
+            let urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
             
-            if (externalId) {
-                externalId = externalId.trim();
-                localStorage.setItem('na2la_external_logged_user_id', externalId);
-                if (urlCompanyId) {
+            if (urlUserId && urlUserId.trim() !== '' && urlUserId !== 'null') {
+                urlUserId = urlUserId.trim();
+                localStorage.setItem('na2la_external_logged_user_id', urlUserId);
+                if (urlCompanyId && urlCompanyId.trim() !== '') {
                     currentCompanyId = urlCompanyId.trim();
                     localStorage.setItem('current_company_id', currentCompanyId);
-                    window.currentCompanyId = currentCompanyId;
                 }
-                return externalId;
+                
+                let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId);
+                let newUserObj = {
+                    id: urlUserId,
+                    name: urlUserId,
+                    role: isSuper ? 'admin' : 'driver',
+                    companyId: currentCompanyId
+                };
+                localStorage.setItem('na2la_active_session', JSON.stringify(newUserObj));
+                return newUserObj;
             }
 
-            return localStorage.getItem('na2la_external_logged_user_id') || 
-                   localStorage.getItem('logged_in_driver_id') || 
-                   localStorage.getItem('driver_phone') || 
-                   localStorage.getItem('phone') || '1';
+            let cachedUserJson = localStorage.getItem('na2la_active_session');
+            if (cachedUserJson) {
+                try {
+                    let parsed = JSON.parse(cachedUserJson);
+                    if (parsed && parsed.id) return parsed;
+                } catch(e) {}
+            }
+
+            let fallbackId = localStorage.getItem('na2la_external_logged_user_id') || '1';
+            let isSuperFallback = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(fallbackId);
+            return {
+                id: fallbackId,
+                name: fallbackId,
+                role: isSuperFallback ? 'admin' : 'driver',
+                companyId: localStorage.getItem('current_company_id') || 'company_main'
+            };
         }
 
-        let activeExternalSessionId = getExternalLoginSession();
-        
-        let initialUserObj = { id: activeExternalSessionId || '1', name: activeExternalSessionId === '1' ? 'المدير' : activeExternalSessionId, role: 'admin', title: 'مدير عام النظام' };
-        let cachedSession = localStorage.getItem('na2la_active_session');
-        if (cachedSession) {
-            try {
-                let parsed = JSON.parse(cachedSession);
-                if (parsed && parsed.id) initialUserObj = parsed;
-            } catch(e) {}
-        }
-
-        let currentLoggedInUser = initialUserObj;
+        let activeExternalSessionId = getInstantSessionOnLoad().id;
+        let currentLoggedInUser = getInstantSessionOnLoad();
         window.currentLoggedInUser = currentLoggedInUser;
+        currentCompanyId = currentLoggedInUser.companyId || 'company_main';
+        window.currentCompanyId = currentCompanyId;
 
         let appData = { 
             accounts: [], shipments: [], expenses: [], deferredInvoices: [], treasury: [], drivers: [],
@@ -618,25 +631,23 @@
             if (event.key === 'na2la_active_session' || event.key === 'current_company_id') location.reload();
         });
 
-        // 🛡️ دورة الحياة المتزامنة الجديدة: ننتظر انتهاء مزامنة الجلسة تماماً قبل تشغيل الواجهة والمستمعات لمنع التداخل والخلط
-        window.addEventListener('DOMContentLoaded', async () => {
-            const usernameElem = document.getElementById('header-username');
-            if (usernameElem) usernameElem.innerText = "جاري التحقق من هوية الجلسة...";
-
+        // 🛡️ التطبيق اللحظي الفوري للواجهة بمجرد تحميل DOM بدون أي تأخير
+        window.addEventListener('DOMContentLoaded', () => {
+            applyUserPermissionsUI();
             if (window.db && window.firebaseModules) {
-                await executeExternalSyncSession();
-            } else {
-                window.addEventListener('firebase-ready', async () => {
-                    await executeExternalSyncSession();
-                }, { once: true });
+                executeBackgroundSyncSession();
             }
         });
 
-        async function executeExternalSyncSession() {
+        window.addEventListener('firebase-ready', () => { 
+            executeBackgroundSyncSession(); 
+        });
+
+        async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, query, where, doc, getDoc } = window.firebaseModules;
             try {
-                let identifier = activeExternalSessionId || '1';
+                let identifier = currentLoggedInUser.id || activeExternalSessionId;
                 let foundDoc = null;
 
                 try {
@@ -663,29 +674,18 @@
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
                     currentCompanyId = (foundDoc.companyId && foundDoc.companyId.trim() !== '') ? foundDoc.companyId : 'company_main';
-                } else {
-                    let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier);
-                    currentCompanyId = 'company_main';
-                    window.currentLoggedInUser = { 
-                        id: identifier, 
-                        name: identifier, 
-                        role: isSuper ? 'admin' : 'driver', 
-                        companyId: 'company_main'
-                    };
+                    window.currentCompanyId = currentCompanyId;
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
+                    applyUserPermissionsUI();
                 }
 
-                window.currentCompanyId = currentCompanyId;
-                localStorage.setItem('current_company_id', currentCompanyId);
-                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-
-                // 🎯 تشغيل الواجهة والمستمعات بعد ضبط الهوية والشركة بدقة متناهية
-                applyUserPermissionsUI();
                 initFirestoreSync();
                 initRealtimeAccountSync();
                 initEmergencyAlertsListener();
 
             } catch (err) {
-                console.error("خطأ في مزامنة الجلسة:", err);
+                console.error("خطأ في المزامنة الخلفية:", err);
             }
         }
 
@@ -694,16 +694,17 @@
             const { collection, onSnapshot } = window.firebaseModules;
             
             onSnapshot(collection(window.db, "drivers"), (snapshot) => {
-                let identifier = activeExternalSessionId || '1';
+                let identifier = currentLoggedInUser.id;
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     if (d.id === identifier || d.name === identifier || d.phone === identifier || docSnap.id === identifier) {
                         let newCompId = d.companyId || 'company_main';
-                        if (newCompId !== currentCompanyId) {
+                        if (newCompId !== currentCompanyId || d.name !== currentLoggedInUser.name) {
                             currentCompanyId = newCompId;
                             window.currentCompanyId = currentCompanyId;
                             localStorage.setItem('current_company_id', currentCompanyId);
                             window.currentLoggedInUser = { id: docSnap.id, ...d };
+                            localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
                             applyUserPermissionsUI();
                             renderAllFinancials();
                         }
@@ -744,7 +745,7 @@
             if (inputId && inputId.trim() !== "") {
                 activeExternalSessionId = inputId.trim();
                 localStorage.setItem('na2la_external_logged_user_id', activeExternalSessionId);
-                executeExternalSyncSession();
+                executeBackgroundSyncSession();
             }
         }
         window.openSwitchAccountPrompt = openSwitchAccountPrompt;
@@ -798,7 +799,7 @@
             
             let avatarImg = document.getElementById('userHeaderAvatarImg');
             let avatarEmoji = document.getElementById('userHeaderAvatarEmoji');
-            if (user.avatar) {
+            if (user.avatar && user.avatar.trim() !== '') {
                 avatarImg.src = user.avatar;
                 avatarImg.style.display = 'block';
                 if (avatarEmoji) avatarEmoji.style.display = 'none';
