@@ -130,7 +130,6 @@
         .comment-item { background: var(--bg); padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color); }
         .comment-input-box { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
 
-        /* تصميم الشات الموسع المطور والمرن */
         .chat-layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; height: 460px; }
         @media(max-width: 700px) { .chat-layout { grid-template-columns: 1fr; height: 420px; } }
         
@@ -146,7 +145,6 @@
         .chat-bubble.driver { background: #334155; color: white; align-self: flex-end; box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
         .chat-input-area { display: flex; padding: 8px; background: var(--card-bg); border-top: 1px solid var(--border-color); gap: 6px; }
 
-        /* الشريط السفلي المتناسق */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); border-top: 1px solid var(--border-color);
             display: flex; justify-content: space-around; align-items: center; padding: 8px 4px calc(8px + env(safe-area-inset-bottom, 0px)) 4px; 
@@ -192,7 +190,6 @@
         </div>
     </header>
 
-    <!-- العنصر القابل للتصدير كصورة -->
     <div id="exportable-profile-card-wrapper">
         <div class="gplus-profile-card">
             <div id="gplus-cover-banner-preview" class="gplus-cover-banner">
@@ -477,19 +474,12 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
+        // 🛡️ تصحيح قراءة الجلسة ومعرف الشركة بدون الوقوع في خطأ الاعتماد التلقائي على المدير
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            // 🛡️ تأمين قاطع ومطلق للحساب الرئيسي رقم '1' وصلاحيات المدير لضمان التوافق التام
-            if (externalId === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(externalId)) {
-                localStorage.setItem('current_company_id', 'company_main');
-                localStorage.setItem('logged_in_driver_name', 'المدير');
-                localStorage.setItem('na2la_external_logged_user_id', '1');
-                return '1';
-            }
-            
             if (externalId) {
                 externalId = externalId.trim();
                 localStorage.setItem('logged_in_driver_name', externalId);
@@ -502,18 +492,22 @@
 
             let saved = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || localStorage.getItem('logged_in_driver_id');
             if (saved) {
-                if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(saved)) {
-                    localStorage.setItem('current_company_id', 'company_main');
-                }
                 return saved.trim();
             }
 
-            return '1'; // الافتراضي الحساب الرئيسي 1
+            return '1';
         }
 
         let activeExternalSessionName = getExternalLoginSession();
         let loggedInDriverId = activeExternalSessionName;
-        let viewingProfileId = localStorage.getItem('viewing_profile_id') || loggedInDriverId;
+        
+        // 🛡️ منع تعليق بروفايل شخص آخر عن طريق مزامنة viewingProfileId مع المستخدم الحالي عند التحديث
+        const urlParamsCheck = new URLSearchParams(window.location.search);
+        let urlUserIdParam = urlParamsCheck.get('userId') || urlParamsCheck.get('id') || urlParamsCheck.get('phone') || urlParamsCheck.get('driver') || urlParamsCheck.get('name');
+        
+        let viewingProfileId = urlUserIdParam ? loggedInDriverId : (localStorage.getItem('viewing_profile_id') || loggedInDriverId);
+        localStorage.setItem('viewing_profile_id', viewingProfileId);
+
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         window.currentCompanyId = currentCompanyId;
         let currentChatTarget = 'general';
@@ -645,7 +639,19 @@
         }
 
         function getLoggedInUser() {
-            if (activeExternalSessionName === '1' || ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeExternalSessionName)) {
+            let sessionName = String(activeExternalSessionName || '').trim();
+            let isExplicitAdmin = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(sessionName);
+            
+            if (appData.drivers && appData.drivers.length > 0) {
+                let drv = appData.drivers.find(d => 
+                    String(d.id) === sessionName || 
+                    String(d.name).trim() === sessionName || 
+                    String(d.phone).trim() === sessionName
+                );
+                if (drv) return drv;
+            }
+
+            if (isExplicitAdmin) {
                 return {
                     id: '1',
                     name: 'المدير',
@@ -656,13 +662,10 @@
                     companyId: 'company_main'
                 };
             }
-            if (appData.drivers && appData.drivers.length > 0) {
-                let drv = appData.drivers.find(d => d.name === activeExternalSessionName || d.id === activeExternalSessionName || d.phone === activeExternalSessionName);
-                if (drv) return drv;
-            }
+
             return {
-                id: activeExternalSessionName,
-                name: activeExternalSessionName,
+                id: sessionName,
+                name: sessionName,
                 role: 'driver',
                 title: 'أسطورة الطريق',
                 status: 'متاح 🟢',
