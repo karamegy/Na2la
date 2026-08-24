@@ -542,7 +542,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي مع العزل التام والدعم الكامل لحساب المدير رقم '1' والصورة الشخصية -->
+    <!-- السكريبت البرمجي مع العزل والتزامن الآمن المنضبط -->
     <script>
         let currentAccountFilter = 'all';
         let currentCompanyId = 'company_main';
@@ -571,7 +571,6 @@
             return (s === 'pending' || s === 'معلق' || s === 'آجل') ? 'pending' : 'paid';
         }
 
-        // 🔄 قراءة الجلسة ومعرف الشركة من الرابط أو التخزين المحلي بدقة تامة
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
@@ -619,12 +618,19 @@
             if (event.key === 'na2la_active_session' || event.key === 'current_company_id') location.reload();
         });
 
-        window.addEventListener('DOMContentLoaded', () => {
-            applyUserPermissionsUI();
-            if (window.db && window.firebaseModules) executeExternalSyncSession();
-        });
+        // 🛡️ دورة الحياة المتزامنة الجديدة: ننتظر انتهاء مزامنة الجلسة تماماً قبل تشغيل الواجهة والمستمعات لمنع التداخل والخلط
+        window.addEventListener('DOMContentLoaded', async () => {
+            const usernameElem = document.getElementById('header-username');
+            if (usernameElem) usernameElem.innerText = "جاري التحقق من هوية الجلسة...";
 
-        window.addEventListener('firebase-ready', () => { executeExternalSyncSession(); });
+            if (window.db && window.firebaseModules) {
+                await executeExternalSyncSession();
+            } else {
+                window.addEventListener('firebase-ready', async () => {
+                    await executeExternalSyncSession();
+                }, { once: true });
+            }
+        });
 
         async function executeExternalSyncSession() {
             if (!window.db || !window.firebaseModules) return;
@@ -633,7 +639,6 @@
                 let identifier = activeExternalSessionId || '1';
                 let foundDoc = null;
 
-                // 1. المحاولة الأولى: البحث المباشر بواسطة Document ID في مجموعة drivers
                 try {
                     let directDocSnap = await getDoc(doc(window.db, "drivers", String(identifier)));
                     if (directDocSnap.exists()) {
@@ -641,7 +646,6 @@
                     }
                 } catch(e) {}
 
-                // 2. المحاولة الثانية: البحث بالاستعلام عبر الحقول (id, name, phone, mobile)
                 if (!foundDoc) {
                     const fieldsToCheck = ["id", "name", "phone", "mobile"];
                     for (let field of fieldsToCheck) {
@@ -659,16 +663,9 @@
                 if (foundDoc) {
                     window.currentLoggedInUser = foundDoc;
                     currentCompanyId = (foundDoc.companyId && foundDoc.companyId.trim() !== '') ? foundDoc.companyId : 'company_main';
-                    window.currentCompanyId = currentCompanyId;
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                    localStorage.setItem('na2la_active_session', JSON.stringify(foundDoc));
                 } else {
-                    // 🛡️ التعديل الآمن: توجيه السائق تلقائياً إلى الشركة الرئيسية (company_main) بدلاً من إنشاء شركة عشوائية
                     let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(identifier);
                     currentCompanyId = 'company_main';
-                    window.currentCompanyId = currentCompanyId;
-                    localStorage.setItem('current_company_id', currentCompanyId);
-                    
                     window.currentLoggedInUser = { 
                         id: identifier, 
                         name: identifier, 
@@ -677,6 +674,11 @@
                     };
                 }
 
+                window.currentCompanyId = currentCompanyId;
+                localStorage.setItem('current_company_id', currentCompanyId);
+                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+
+                // 🎯 تشغيل الواجهة والمستمعات بعد ضبط الهوية والشركة بدقة متناهية
                 applyUserPermissionsUI();
                 initFirestoreSync();
                 initRealtimeAccountSync();
