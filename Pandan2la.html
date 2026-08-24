@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم والكود الثاني) -->
+    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -397,7 +397,6 @@
 
     let unsubscribers = [];
 
-    // مطابقة تامة لبنية الكود الثاني في الاستماع المباشر للمجموعات المستقلة
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -409,7 +408,6 @@
             const unsub = query.onSnapshot(snapshot => {
                 let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
                 
-                // التصفية بمعرف الشركة إذا وجد
                 if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
                     appData[colName] = rawData.filter(d => d.companyId === companyId);
                 } else {
@@ -447,16 +445,11 @@
         }, 1000);
     };
 
-    window.saveDataAll = function() {
-        // يتم الحفظ مباشرة لكل مجموعة عبر الدوال المخصصة تماماً مثل الكود الثاني لضمان التطابق
-    };
-
+    // دالة المزامنة التلقائية الشاملة لأي مستخدم (مدير، مشرف، سائق)
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
-
-        const lockScreen = document.getElementById('lock-screen');
 
         if (urlUserId && urlUserId !== 'null') {
             localStorage.setItem('na2la_userId', urlUserId);
@@ -464,31 +457,16 @@
                 localStorage.setItem('na2la_companyId', urlCompanyId);
             }
         } else {
-            urlUserId = localStorage.getItem('na2la_userId') || 'admin';
+            urlUserId = localStorage.getItem('na2la_userId') || 'المدير';
             urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
         }
 
         currentCompanyId = urlCompanyId || 'company_main';
         if (!urlUserId || urlUserId.trim() === '' || urlUserId === 'null') {
-            urlUserId = 'admin';
+            urlUserId = 'المدير';
         }
 
         urlUserId = urlUserId.trim();
-        const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'مدير النظام', 'system', '1', 'عماد', 'Emad', 'باندا', 'Chevrolet Pickup'];
-        let isSuper = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase()));
-
-        if (isSuper) {
-            window.currentLoggedInUser = {
-                name: 'المدير',
-                role: 'admin',
-                companyName: currentCompanyId,
-                title: 'مدير عام المنصة'
-            };
-            applyUserPermissionsUI();
-            initFirebaseListeners(currentCompanyId);
-            switchSection('profile');
-            return;
-        }
 
         try {
             let found = null;
@@ -508,31 +486,47 @@
             if(found) {
                 let rawRole = String(found.role || '').toLowerCase();
                 if (rawRole.includes('admin') || rawRole.includes('مدير') || rawRole.includes('مشرف')) {
-                    found.role = 'admin';
+                    found.role = rawRole.includes('مشرف') ? 'مشرف' : 'admin';
+                } else {
+                    found.role = 'سائق';
                 }
-
                 window.currentLoggedInUser = found;
                 currentCompanyId = urlCompanyId || found.companyId || 'company_main';
-                applyUserPermissionsUI();
-                initFirebaseListeners(currentCompanyId);
-                switchSection('profile');
             } else {
-                window.currentLoggedInUser = {
-                    name: urlUserId,
-                    role: 'admin',
-                    companyName: currentCompanyId,
-                    title: 'مدير عام المنصة'
-                };
-                applyUserPermissionsUI();
-                initFirebaseListeners(currentCompanyId);
-                switchSection('profile');
+                const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'مدير النظام', 'system', '1', 'عماد', 'Emad', 'باندا', 'Chevrolet Pickup'];
+                let isSuper = superAdminsList.some(admin => urlUserId.toLowerCase().includes(admin.toLowerCase()));
+
+                if (isSuper) {
+                    window.currentLoggedInUser = {
+                        name: 'المدير',
+                        role: 'admin',
+                        companyName: currentCompanyId === 'company_main' ? 'أسطورة الطريق الرئيسية' : currentCompanyId,
+                        title: 'مدير عام المنصة',
+                        phone: '+201114099799',
+                        avatar: '',
+                        cover: ''
+                    };
+                } else {
+                    window.currentLoggedInUser = {
+                        name: urlUserId,
+                        role: 'سائق',
+                        companyName: currentCompanyId,
+                        title: 'سائق معتمد',
+                        phone: '',
+                        status: 'متاح 🟢'
+                    };
+                }
             }
+            applyUserPermissionsUI();
+            initFirebaseListeners(currentCompanyId);
+            switchSection('profile');
         } catch(e) {
             window.currentLoggedInUser = {
-                name: 'مدير النظام العام',
+                name: urlUserId,
                 role: 'admin',
-                companyName: currentCompanyId,
-                title: 'مدير عام المنصة'
+                companyName: 'أسطورة الطريق الرئيسية',
+                title: 'مدير عام المنصة',
+                phone: '+201114099799'
             };
             applyUserPermissionsUI();
             initFirebaseListeners(currentCompanyId);
@@ -571,15 +565,6 @@
     function appStateData() {
         if(!window.appData) window.appData = { shipments: [], deferredInvoices: [], consolidatedInvoices: [], treasury: [], expenses: [], customers: [], drivers: [], communityPosts: [], posts: [], wallPosts: [], trucks: [], maintenanceLogs: [], chat: [], centralBroadcasts: [], auditLogs: [], files: [] };
         return window.appData;
-    }
-
-    function logAction(actionText) {
-        let role = window.currentLoggedInUser ? window.currentLoggedInUser.role : 'سائق';
-        if (role === 'سائق') return;
-        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
-        let newLogId = String(Date.now());
-        let logObj = { id: newLogId, companyId: currentCompanyId, action: actionText, user: userName, time: new Date().toLocaleTimeString('ar-EG'), createdAt: Date.now() };
-        db.collection('auditLogs').doc(newLogId).set(logObj);
     }
 
     function setTheme(theme) {
@@ -734,28 +719,58 @@
         let shipmentsList = data.shipments || [];
         
         if (sectionId === 'profile') {
+            let userPhone = user.phone || '+201114099799';
+            let userCompanyName = user.companyName === 'company_main' ? 'أسطورة الطريق الرئيسية' : (user.companyName || 'أسطورة الطريق الرئيسية');
+            
             content.innerHTML = `
-                <div class="card" style="border: 2px solid var(--accent-main);">
-                    <div style="text-align: center; margin-bottom: 12px;">
-                        <div style="width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); display: flex; align-items: center; justify-content: center; font-size: 26px; color: #fff; margin: 0 auto 8px; border: 3px solid var(--accent-main); overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
-                            ${user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : '🐼'}
+                <div class="card" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color);">
+                    <!-- صورة الغلاف -->
+                    <div style="height: 120px; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); position: relative;">
+                        <button type="button" class="btn-sm" style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #fff; border: none; font-size: 8px; padding: 3px 6px; border-radius: 4px;">📷 تغيير الغلاف</button>
+                        <!-- الصورة الشخصية -->
+                        <div style="width: 70px; height: 70px; border-radius: 50%; background: var(--card-bg); position: absolute; bottom: -30px; right: 20px; border: 3px solid var(--card-bg); overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                            ${user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width:100%; height:100%; background:var(--accent-main); display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff;">🐼</div>`}
                         </div>
-                        <h3 style="font-size: 15px; color: var(--accent-main); justify-content: center; margin-bottom: 2px;">${user.name || 'مستخدم النظام'}</h3>
-                        <p style="font-size: 10px; color: var(--yellow-warning); font-weight: bold; margin-bottom: 4px;">🏢 ${user.companyName || currentCompanyId}</p>
-                        <span class="badge bg-transit" style="font-size: 9px; margin-top: 2px; display: inline-block;">${isAdmin ? 'مدير النظام (admin)' : 'سائق'}</span>
-                    </div>
-                    
-                    <div style="font-size: 11px; line-height: 1.8; background: var(--bg-dark); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <p><strong>👤 الاسم الكامل:</strong> ${user.name || 'غير مسجل'}</p>
-                        <p><strong>🏢 الشركة التابع لها:</strong> ${user.companyName || currentCompanyId}</p>
-                        <p><strong>📞 رقم الهاتف:</strong> ${user.phone || 'غير مسجل'}</p>
-                        <p><strong>⭐ اللقب الاحترافي:</strong> <span style="color:var(--yellow-warning); font-weight:bold;">${user.title || 'سائق معتمد'}</span></p>
-                        <p><strong>🟢 الحالة الحالية:</strong> ${user.status || 'متاح'}</p>
-                        <p><strong>🔑 الصلاحيات:</strong> ${isAdmin ? 'صلاحيات كاملة للتحكم في المنصة والخزينة' : 'صلاحيات متابعة وعرض الشحنات'}</p>
                     </div>
 
-                    <div style="margin-top: 10px;">
-                        <button class="btn-main" onclick="manualRefreshData()">تحديث ومزامنة سحابية يدوية 🔄</button>
+                    <div style="padding: 35px 14px 14px 14px;">
+                        <h3 style="font-size: 15px; color: var(--accent-main); margin-bottom: 2px; border: none; padding: 0;">${user.name || 'مستخدم النظام'}</h3>
+                        <p style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px;">
+                            الشركة: ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? 'admin' : (user.role || 'سائق')}
+                        </p>
+
+                        <!-- إحصائيات مصغرة داخل البروفايل -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--bg-dark); padding: 8px; border-radius: 8px; text-align: center; margin-bottom: 12px; border: 1px solid var(--border-color);">
+                            <div>
+                                <span style="font-size: 8px; color: var(--text-muted);">الشحنات</span>
+                                <p style="font-size: 11px; font-weight: bold; color: var(--text-main);">${(appStateData().shipments || []).length}</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 8px; color: var(--text-muted);">الرتبة</span>
+                                <p style="font-size: 11px; font-weight: bold; color: var(--accent-main);">${isAdmin ? 'admin' : (user.role || 'سائق')}</p>
+                            </div>
+                            <div>
+                                <span style="font-size: 8px; color: var(--text-muted);">الحالة</span>
+                                <p style="font-size: 11px; font-weight: bold; color: var(--green-success);">🟢 ${user.status || 'متاح'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- حائط النشر الحر على بروفايلي -->
+                <div class="card" style="border: 2px solid var(--accent-main);">
+                    <h3 style="color: var(--accent-main); font-size: 11px; margin-bottom: 6px;">✍️ حائط النشر الحر على بروفايلي</h3>
+                    <textarea id="wall-post-text" placeholder="اكتب تحديثاً، حالة طريق، أو ملاحظة على هذا البروفايل..." style="height: 60px; margin-bottom: 6px;"></textarea>
+                    <button type="button" class="btn-main" onclick="publishWallPost()" style="margin-bottom: 8px;">نشر على الحائط 🚀</button>
+                    <div id="wall-posts-container">
+                        ${(appStateData().wallPosts || []).map(p => `
+                            <div style="background:var(--bg-dark); padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; border:1px solid var(--border-color);">
+                                <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--text-muted); margin-bottom:3px;">
+                                    <strong>${p.author || p.user}</strong><span>${p.time}</span>
+                                </div>
+                                <p>${p.text}</p>
+                            </div>
+                        `).join('') || '<p style="font-size:9px; text-align:center; color:var(--text-muted);">لا توجد منشورات على الحائط بعد</p>'}
                     </div>
                 </div>
             `;
@@ -1401,7 +1416,7 @@
             showToast('تحصيل الفواتير مخصص للمدير فقط!', 'warning');
             return;
         }
-        db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: db.FieldValue ? firebase.firestore.FieldValue.increment(0) : 0, remainingAmount: 0 }, { merge: true }).then(() => {
+        db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: 0, remainingAmount: 0 }, { merge: true }).then(() => {
             switchSection('deferredInvoices');
             showToast('تم تحصيل الفاتورة المؤجلة وتحديث السحابة بنجاح! ✅');
         });
