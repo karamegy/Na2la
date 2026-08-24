@@ -566,7 +566,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المحدث لتوحيد معرف الشركة وطرد التكرار -->
+    <!-- السكريبت البرمجي المعدل لمنع إنشاء الحسابات الوهمية أو الكتابة التلقائية -->
     <script>
         const superAdminsList = ['admin', 'Admin1', 'المدير', 'مدير', 'system'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -584,25 +584,24 @@
             } catch(e) {}
 
             let activeUserId = '';
-            // توحيد الشركة لتكون company_main افتراضياً لجميع حسابات الأسطول
             let activeCompanyId = 'company_main';
 
             if (urlUserId) {
                 activeUserId = urlUserId.trim();
                 if (urlCompanyId && !urlCompanyId.startsWith('comp_')) {
                     activeCompanyId = urlCompanyId.trim();
+                } else if (savedSession && savedSession.companyId) {
+                    activeCompanyId = savedSession.companyId;
                 }
-            } else if (savedSession && savedSession.id) {
-                activeUserId = savedSession.id;
+            } else if (savedSession && (savedSession.id || savedSession.name)) {
+                activeUserId = savedSession.id || savedSession.name;
                 if (savedSession.companyId && !savedSession.companyId.startsWith('comp_')) {
                     activeCompanyId = savedSession.companyId;
                 }
             }
 
             if (!activeUserId) {
-                localStorage.removeItem('na2la_active_session');
-                localStorage.removeItem('na2la_external_logged_user_id');
-                return {
+                return savedSession || {
                     id: '',
                     name: 'يرجى تحديد الهوية أو تسجيل الدخول',
                     role: 'visitor',
@@ -621,11 +620,11 @@
             let isSup = supervisorsList.some(sup => activeUserId.toLowerCase().includes(sup.toLowerCase()));
             let defaultRole = isSuper ? 'admin' : (isSup ? 'supervisor' : 'driver');
 
-            let defaultName = (savedSession && savedSession.name && savedSession.name !== activeUserId) ? savedSession.name : activeUserId;
+            let defaultName = (savedSession && savedSession.name) ? savedSession.name : activeUserId;
             let stableId = activeUserId.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
             
             let newUserObj = {
-                id: stableId,
+                id: savedSession?.id || stableId,
                 name: defaultName,
                 role: savedSession?.role || defaultRole,
                 rank: savedSession?.rank || defaultRole,
@@ -686,21 +685,19 @@
 
         async function executeBackgroundSyncSession() {
             if (!window.db || !window.firebaseModules) return;
-            const { doc, getDoc, collection, query, where, getDocs, setDoc } = window.firebaseModules;
+            const { doc, getDoc, collection, query, where, getDocs } = window.firebaseModules;
             try {
                 let identifier = currentLoggedInUser.id || localStorage.getItem('na2la_external_logged_user_id');
                 if (!identifier) return;
                 identifier = String(identifier).trim();
 
                 let foundDoc = null;
-                let foundDocId = null;
                 const collectionsToSearch = ["drivers", "users", "team"];
 
                 for (let col of collectionsToSearch) {
                     try {
                         let docSnap = await getDoc(doc(window.db, col, identifier));
                         if (docSnap.exists()) {
-                            foundDocId = docSnap.id;
                             foundDoc = { id: docSnap.id, ...docSnap.data() };
                             break;
                         }
@@ -715,7 +712,6 @@
                                 let q = query(collection(window.db, col), where(field, "==", identifier));
                                 let snap = await getDocs(q);
                                 if (!snap.empty) {
-                                    foundDocId = snap.docs[0].id;
                                     foundDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
                                     break;
                                 }
@@ -732,45 +728,27 @@
                                       (foundDoc && (String(foundDoc.role).toLowerCase() === 'supervisor' || String(foundDoc.rank).toLowerCase() === 'supervisor' || String(foundDoc.role).includes('مشرف')));
 
                 if (!foundDoc && !isIdentifierAdmin && !isIdentifierSup) {
-                    localStorage.removeItem('na2la_active_session');
-                    localStorage.removeItem('na2la_external_logged_user_id');
-                    document.body.innerHTML = `
-                        <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0f1020; color: #fff; font-family: 'Segoe UI', sans-serif; direction: rtl; text-align: center; padding: 20px;">
-                            <div style="background: #181a30; border: 2px solid #ff416c; padding: 30px; border-radius: 20px; max-width: 400px; width: 100%; box-shadow: 0 10px 30px rgba(255,65,108,0.3);">
-                                <h2 style="color: #ff416c; margin-bottom: 12px; font-size: 20px;">🚫 عذراً، الوصول مرفوض</h2>
-                                <p style="color: #a0aec0; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">هذا الحساب غير مسجل في قائمة الأعضاء المعتمدين بالمنصة. لا يمكن عرض أي بيانات أو مزامنتها.</p>
-                                <button onclick="location.reload()" style="background: linear-gradient(135deg, #00f2fe, #4facfe); color: #0f1020; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 900; cursor: pointer; font-size: 13px; width: 100%;">🔄 المحاولة مرة أخرى</button>
-                            </div>
-                        </div>
-                    `;
+                    // إذا لم يتم العثور على الحساب، نكتفي بالبيانات الحالية المخزنة محلياً دون توليد حساب وهمي جديد يغير الشركة
                     return;
                 }
 
-                let targetId = foundDocId || identifier.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
-                
-                let roleVal = isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : (foundDoc?.role || 'driver'));
-                let rankVal = isIdentifierAdmin ? 'admin' : (isIdentifierSup ? 'supervisor' : (foundDoc?.rank || 'driver'));
-                let permVal = isIdentifierAdmin ? 'Full Access' : (isIdentifierSup ? 'Supervisor Read-Only' : 'Standard');
-                
-                let resolvedCompanyId = foundDoc?.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : 'company_main';
+                if (foundDoc) {
+                    window.currentLoggedInUser = {
+                        id: foundDoc.id,
+                        name: foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || currentLoggedInUser.name,
+                        role: foundDoc.role || currentLoggedInUser.role,
+                        rank: foundDoc.rank || currentLoggedInUser.rank,
+                        phone: foundDoc.phone || foundDoc.mobile || currentLoggedInUser.phone,
+                        permissions: foundDoc.permissions || currentLoggedInUser.permissions,
+                        avatar: foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || currentLoggedInUser.avatar,
+                        companyId: (foundDoc.companyId && !foundDoc.companyId.startsWith('comp_')) ? foundDoc.companyId : currentLoggedInUser.companyId
+                    };
 
-                window.currentLoggedInUser = {
-                    id: targetId,
-                    name: foundDoc ? (foundDoc.name || foundDoc.fullName || foundDoc.accountOwner || identifier) : identifier,
-                    role: foundDoc?.role || roleVal,
-                    rank: foundDoc?.rank || rankVal,
-                    phone: foundDoc ? (foundDoc.phone || foundDoc.mobile || 'غير محدد') : (currentLoggedInUser.phone || 'غير محدد'),
-                    permissions: foundDoc?.permissions || permVal,
-                    avatar: foundDoc ? (foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.picture || foundDoc.imageUrl || foundDoc.profileImage || '') : '',
-                    companyId: resolvedCompanyId
-                };
-
-                currentCompanyId = window.currentLoggedInUser.companyId;
-                window.currentCompanyId = currentCompanyId;
-                localStorage.setItem('current_company_id', currentCompanyId);
-                localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
-                
-                await setDoc(doc(window.db, "drivers", targetId), window.currentLoggedInUser, { merge: true });
+                    currentCompanyId = window.currentLoggedInUser.companyId;
+                    window.currentCompanyId = currentCompanyId;
+                    localStorage.setItem('current_company_id', currentCompanyId);
+                    localStorage.setItem('na2la_active_session', JSON.stringify(window.currentLoggedInUser));
+                }
 
                 applyUserPermissionsUI();
                 initFirestoreSync();
