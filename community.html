@@ -476,14 +476,14 @@
             await fetchCloudSessionFromURL();
         }
 
-        // استخراج الهوية والشركة حصرياً من معاملات الـ URL دون أي تخزين محلي
+        // قراءة الهوية ورقم الشركة حصرياً من معاملات الـ URL دون تخزين محلي أو فرض أي مدير سابق
         async function fetchCloudSessionFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
             if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-                urlUserId = 'المدير';
+                urlUserId = 'زائر';
             }
 
             if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
@@ -492,7 +492,6 @@
 
             currentCompanyId = urlCompanyId.trim();
             urlUserId = urlUserId.trim();
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
             try {
                 const snapshot = await db.collection('drivers').get();
@@ -508,44 +507,34 @@
 
                 if (found) {
                     currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                    let roleStr = String(found.role || found.rank || '').toLowerCase();
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
+
                     currentDriverProfile = {
                         name: found.name || found.driverName || urlUserId,
                         avatar: found.avatar || found.photoUrl || '',
-                        title: found.title || (isSuper ? 'مدير عام النظام' : 'سائق معتمد'),
-                        phone: found.phone || (isSuper ? '+201114099799' : ''),
-                        role: found.role || found.rank || (isSuper ? 'admin' : 'driver'),
+                        title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                        phone: found.phone || '',
+                        role: isAdmin ? 'admin' : (found.role || 'driver'),
                         companyId: currentCompanyId,
                         canAccessSocial: found.canAccessSocial !== false,
-                        subPlan: found.subPlan || (isSuper ? 'مدير عام' : 'أساسي'),
-                        subExpiry: found.subExpiry || (isSuper ? 'دائم' : 'غير محدد')
-                    };
-                    syncProfileAndLoad();
-                } else if (isSuper) {
-                    currentCompanyId = urlCompanyId || 'company_main';
-                    currentDriverProfile = {
-                        name: urlUserId,
-                        avatar: '',
-                        title: 'مدير عام النظام',
-                        phone: '+201114099799',
-                        role: 'admin',
-                        companyId: currentCompanyId,
-                        canAccessSocial: true,
-                        subPlan: 'مدير عام',
-                        subExpiry: 'دائم'
+                        subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
+                        subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
                     };
                     syncProfileAndLoad();
                 } else {
+                    let isAdmCheck = ['1', 'المدير', 'مدير', 'admin'].includes(urlUserId.toLowerCase());
                     currentCompanyId = urlCompanyId || 'company_main';
                     currentDriverProfile = {
                         name: urlUserId,
                         avatar: '',
-                        title: 'حساب غير مسجل',
+                        title: isAdmCheck ? 'مدير عام النظام' : 'سائق معتمد',
                         phone: '',
-                        role: 'driver',
+                        role: isAdmCheck ? 'admin' : 'driver',
                         companyId: currentCompanyId,
-                        canAccessSocial: false,
-                        subPlan: 'أساسي',
-                        subExpiry: ''
+                        canAccessSocial: true,
+                        subPlan: isAdmCheck ? 'مدير عام' : 'أساسي',
+                        subExpiry: isAdmCheck ? 'دائم' : 'مفعل'
                     };
                     syncProfileAndLoad();
                 }
@@ -554,11 +543,11 @@
                 currentDriverProfile = {
                     name: urlUserId,
                     avatar: '',
-                    title: isSuper ? 'مدير عام النظام' : 'غير معروف',
-                    role: isSuper ? 'admin' : 'driver',
+                    title: 'حساب معزول',
+                    role: 'driver',
                     companyId: currentCompanyId,
                     canAccessSocial: true,
-                    subPlan: isSuper ? 'مدير عام' : 'أساسي',
+                    subPlan: 'أساسي',
                     subExpiry: ''
                 };
                 syncProfileAndLoad();
@@ -567,14 +556,13 @@
 
         function isSuperAdmin() {
             let user = currentDriverProfile || {};
-            let userName = String(user.name || '').trim().toLowerCase();
             let role = String(user.role || '').toLowerCase().trim();
-            return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(userName);
+            return role === 'admin' || role === 'مدير';
         }
 
         async function syncProfileAndLoad() {
             let superAdmin = isSuperAdmin();
-            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير عام المنصة' : currentDriverProfile.title} (شركة: ${currentCompanyId})`;
+            document.getElementById('logged-user-label').innerText = `${currentDriverProfile.name} | ${superAdmin ? 'مدير المنصة' : currentDriverProfile.title} (شركة: ${currentCompanyId})`;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
             const avatarContainer = document.getElementById('header-avatar-container');
