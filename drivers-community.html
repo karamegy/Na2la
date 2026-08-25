@@ -115,22 +115,20 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    let activeSessionName = 'المدير';
-    let currentCompanyId = 'comp_1787481011714';
-    let currentUserRole = 'admin';
-    let currentUserPermissions = 'صلاحيات كاملة لإدارة النظام والأسطول';
+    let activeSessionName = 'زائر';
+    let currentCompanyId = 'company_main';
+    let currentUserRole = 'driver';
+    let currentUserPermissions = 'صلاحيات تشغيلية أساسية';
     let currentUserAvatar = '';
 
     window.currentCompanyId = currentCompanyId;
     window.manualAdminOverride = false;
 
-    // دالة لتمرير معاملات الرابط (الشركة والمستخدم) عند التنقل بين الصفحات
     window.navigateToPage = function(pageName) {
         const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
         window.location.href = pageName + queryParams;
     };
 
-    // دالة سحابية متكاملة لتسجيل العمليات في مصفوفة auditLogs في المستند appStore/mainState
     async function logAuditAction(actionDesc) {
         try {
             const mainStateRef = doc(db, "appStore", "mainState");
@@ -156,7 +154,7 @@
         }
     }
 
-    // استخراج الجلسة ومعرف المستخدم لحظياً حصرياً من الرابط (URL) دون أي استخدام للتخزين المحلي
+    // استخراج الجلسة ومعرف الشركة حصرياً من الـ URL دون أي قيم افتراضية ثابتة
     function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -166,18 +164,13 @@
             activeSessionName = externalId.trim();
         }
 
-        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
-
         if (urlComp && urlComp.trim() !== '' && urlComp !== 'null') {
             currentCompanyId = urlComp.trim();
-        } else {
-            currentCompanyId = isSuper ? 'company_main' : ('comp_' + activeSessionName.replace(/[^a-zA-Z0-9]/g, '_'));
         }
     }
 
     parseURLSession();
 
-    // تشغيل المصادقة المجهولة لتجنب أي قيود أمنية على قاعدة البيانات
     async function initAuth() {
         try {
             if (!auth.currentUser) {
@@ -194,11 +187,9 @@
         setupRealtimeSync();
     });
 
-    // مزامنة حية لبيانات السائق، الصلاحيات، والشركة من قاعدة البيانات مع فلترة companyId
     function setupRealtimeSync() {
         onSnapshot(collection(db, "drivers"), (snapshot) => {
             let foundDriver = null;
-            let isSuper = isSuperAdmin();
 
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
@@ -207,19 +198,18 @@
                 }
             });
 
-            if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
-                activeSessionName = 'المدير العام';
-                currentUserRole = 'admin';
-                currentUserPermissions = 'صلاحيات كاملة: إدارة الأسطول، الحسابات، والخزنة';
-            } else if (foundDriver) {
+            let roleStr = String(foundDriver?.role || foundDriver?.rank || '').toLowerCase();
+            let isAdm = roleStr === 'admin' || roleStr === 'مدير' || ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(activeSessionName.toLowerCase());
+
+            if (foundDriver) {
                 activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
-                currentUserRole = foundDriver.role || foundDriver.rank || 'driver';
-                currentUserPermissions = foundDriver.role === 'admin' ? 'صلاحيات كاملة لإدارة النظام والأسطول' : foundDriver.role === 'مشرف' ? 'صلاحيات إشراف وتوجيه الأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات وشحنات';
+                currentUserRole = isAdm ? 'admin' : 'driver';
+                currentUserPermissions = isAdm ? 'صلاحيات كاملة لإدارة النظام والأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات وشحنات';
                 currentUserAvatar = foundDriver.avatar || '';
                 if (foundDriver.companyId) currentCompanyId = foundDriver.companyId;
             } else {
-                currentUserRole = 'driver';
-                currentUserPermissions = 'صلاحيات تشغيلية أساسية';
+                currentUserRole = isAdm ? 'admin' : 'driver';
+                currentUserPermissions = isAdm ? 'صلاحيات كاملة لإدارة النظام والأسطول' : 'صلاحيات تشغيلية أساسية';
             }
 
             window.currentCompanyId = currentCompanyId;
@@ -234,7 +224,7 @@
         document.getElementById('authorName').value = activeSessionName;
         document.getElementById('company-badge-display').innerText = `🏢 الشراكة / الشركة: ${currentCompanyId}`;
         document.getElementById('profileNameText').innerText = activeSessionName;
-        document.getElementById('profileTitleText').innerText = currentUserRole === 'admin' ? 'مدير عام النظام' : currentUserRole === 'مشرف' ? 'مشرف أسطول' : 'سائق معتمد';
+        document.getElementById('profileTitleText').innerText = currentUserRole === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
         document.getElementById('profilePermissionsText').innerText = currentUserPermissions;
         document.getElementById('profileCompanyText').innerText = currentCompanyId;
 
@@ -247,7 +237,7 @@
     }
 
     function isSuperAdmin() {
-        return window.manualAdminOverride || currentUserRole === 'admin' || ['Admin1', 'المدير العام', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+        return window.manualAdminOverride || currentUserRole === 'admin';
     }
     window.isSuperAdmin = isSuperAdmin;
 
@@ -272,7 +262,6 @@
 
     function loadPosts() {
         let superAdmin = isSuperAdmin();
-        // عزل المنشورات بناءً على الشراكة باستخدام where إذا لم يكن مدير عام
         const q = superAdmin ? query(postsRef, orderBy("timestamp", "desc")) : query(postsRef, where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"));
         
         onSnapshot(q, async (snapshot) => {
