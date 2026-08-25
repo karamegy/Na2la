@@ -1331,14 +1331,19 @@
 
             try {
                 await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
+                
+                // إضافة الحساب سريعا في ذاكرة التطبيق فوراً
+                if (!appData.drivers) appData.drivers = [];
+                appData.drivers.push(newCompanyAdmin);
+
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
                 
                 alert(`تم إنشاء شركة (${companyName}) بنجاح! 🎉\nرمز الشركة: ${newCompanyId}\nتاريخ انتهاء الاشتراك: ${expiryStr}\nيمكن للمدير الجديد تسجيل الدخول برقم الهاتف والـ PIN الخاص به.`);
                 
-                if (typeof renderMemberSubscriptionsList === 'function') {
-                    renderMemberSubscriptionsList();
-                }
+                if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
+                if (typeof renderDriversListTable === 'function') renderDriversListTable();
+                render();
             } catch (err) {
                 alert('حدث خطأ أثناء إضافة الشركة سحابياً: ' + err.message);
             }
@@ -1417,28 +1422,67 @@
             });
         }
 
-        function approveSubscriptionRequest(reqId, driverId, months) {
-            if (loggedInDriverName !== 'المدير') { alert('عذراً، تفعيل الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط!'); return; }
+        async function approveSubscriptionRequest(reqId, driverId, months) {
+            if (loggedInDriverName !== 'المدير') { 
+                alert('عذراً، تفعيل الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط!'); 
+                return; 
+            }
 
-            db.collection('drivers').doc(String(driverId)).get().then(doc => {
-                let currentExpiry = doc.exists && doc.data().subExpiry ? new Date(doc.data().subExpiry) : new Date();
-                if (currentExpiry < new Date()) currentExpiry = new Date();
+            try {
+                // جلب تفاصيل طلب التحويل لمعرفة رقم المرسل أو اسم الشركة
+                const reqDoc = await db.collection('subscription_requests').doc(String(reqId)).get();
+                const reqData = reqDoc.exists ? reqDoc.data() : null;
+
+                // البحث عن الحساب في قاعدة البيانات
+                let targetDriverDoc = null;
+                const driversSnapshot = await db.collection('drivers').get();
+                
+                driversSnapshot.forEach(doc => {
+                    let d = doc.data();
+                    if (doc.id === String(driverId) || (reqData && (d.phone === reqData.senderPhone || d.name === reqData.driverName))) {
+                        targetDriverDoc = { id: doc.id, ...d };
+                    }
+                });
+
+                if (!targetDriverDoc) {
+                    alert('لم يتم العثور على حساب العضو/الشركة المرتبط بهذا الطلب!');
+                    return;
+                }
+
+                let currentExpiry = targetDriverDoc.subExpiry ? new Date(targetDriverDoc.subExpiry) : new Date();
+                if (isNaN(currentExpiry.getTime()) || currentExpiry < new Date()) currentExpiry = new Date();
                 
                 currentExpiry.setMonth(currentExpiry.getMonth() + Number(months));
                 let newExpiryStr = currentExpiry.toISOString().split('T')[0];
 
-                db.collection('drivers').doc(String(driverId)).set({
+                // تحديث الحساب الرئيسي بالسحابة
+                await db.collection('drivers').doc(targetDriverDoc.id).set({
                     subStatus: 'active',
-                    subPlan: months === 12 ? 'yearly' : 'monthly',
+                    subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
                     subExpiry: newExpiryStr
                 }, { merge: true });
 
-                db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
+                // تحديث حالة الطلب إلى مقبول
+                await db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
 
-                alert(`تم تفعيل اشتراك العضو/الشركة بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
+                // تحديث البيانات في الذاكرة المحلية فوراً (0ms)
+                let localDrv = (appData.drivers || []).find(d => String(d.id) === String(targetDriverDoc.id));
+                if (localDrv) {
+                    localDrv.subStatus = 'active';
+                    localDrv.subPlan = months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly');
+                    localDrv.subExpiry = newExpiryStr;
+                }
+
+                alert(`تم تفعيل اشتراك العضو/الشركة (${targetDriverDoc.name || targetDriverDoc.companyName}) بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
+                
                 if (typeof enquirePaymentCode === 'function') enquirePaymentCode();
                 renderAdminPendingCashRequests();
-            });
+                renderMemberSubscriptionsList();
+                render();
+
+            } catch (err) {
+                alert('حدث خطأ أثناء تفعيل الاشتراك: ' + err.message);
+            }
         }
 
         function renderAdminPendingCashRequests() {
@@ -3109,10 +3153,11 @@
 
             try {
                 let uid = String(Date.now());
+                let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid,
                     companyId: currentCompanyId,
-                    companyName: 'أسطورة الطريق',
+                    companyName: (currentAdminDrv && currentAdminDrv.companyName) ? currentAdminDrv.companyName : 'أسطورة الطريق',
                     name: name,
                     phone: phone,
                     pin: pin,
@@ -3128,9 +3173,14 @@
                 };
 
                 await db.collection('drivers').doc(uid).set(newDrv);
+                
+                if (!appData.drivers) appData.drivers = [];
+                appData.drivers.push(newDrv);
+
                 closeDriverRegister();
                 alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
                 document.getElementById('public-driver-form').reset();
+                render();
             } catch (err) {
                 alert('فشل التسجيل السحابي: ' + err.message);
             }
@@ -3346,17 +3396,34 @@
 
             try {
                 let uid = String(Date.now());
+                let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid, 
                     companyId: currentCompanyId,
-                    companyName: 'أسطورة الطريق',
-                    name, phone, pin, role, title: role === 'admin' ? 'مدير عام' : 'سائق معتمد', status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180,
-                    subPlan: 'monthly', subStatus: 'active', subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
+                    companyName: (currentAdminDrv && currentAdminDrv.companyName) ? currentAdminDrv.companyName : 'أسطورة الطريق',
+                    name: name,
+                    phone: phone, 
+                    pin: pin, 
+                    role: role, 
+                    title: role === 'admin' ? 'مدير عام' : 'سائق معتمد', 
+                    status: 'متاح 🟢', 
+                    avatar: '', 
+                    cover: '', 
+                    coverHeight: 180,
+                    subPlan: 'monthly', 
+                    subStatus: 'active', 
+                    subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
                 
                 await db.collection('drivers').doc(uid).set(newDrv);
+                
+                if (!appData.drivers) appData.drivers = [];
+                appData.drivers.push(newDrv);
+
                 document.getElementById('driver-profile-form').reset();
                 alert('تم إضافة الحساب السحابي بنجاح! 🚀');
+                renderDriversListTable();
+                render();
             } catch (err) {
                 alert('فشل إنشاء الحساب: ' + err.message);
             }
@@ -4147,4 +4214,4 @@
         }
     </script>
 </body>
-</html>
+        </html>
