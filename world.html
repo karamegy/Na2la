@@ -581,15 +581,21 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المنقح بدقة (بدون حسابات وهمية ومعتمد على الدور الفعلي في قاعدة البيانات) -->
+    <!-- السكريبت البرمجي المنقح بدقة -->
     <script>
-        // قصر القائمة على الأدوار التقنية الصارمة فقط بدون أي أسماء شخصية
         const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
 
         window._globalMembersMap = {};
         let currentLoggedInUser = null;
         let currentCompanyId = 'company_main';
+
+        // استخراج معرف الشركة تلقائياً من الرابط (URL) إن وجد
+        const urlParams = new URLSearchParams(window.location.search);
+        let urlComp = urlParams.get('companyId');
+        if (urlComp && urlComp.trim() !== '') {
+            currentCompanyId = urlComp.trim();
+        }
 
         let appData = { 
             accounts: [], shipments: [], expenses: [], deferredInvoices: [], treasury: [], drivers: [],
@@ -602,7 +608,6 @@
             checkStoredSessionOrShowAuth(); 
         });
 
-        // التحقق من الجلسة المحفوظة أو إظهار نافذة تسجيل الدخول
         async function checkStoredSessionOrShowAuth() {
             let savedPhone = localStorage.getItem('na2la_userPhone');
             let savedId = localStorage.getItem('na2la_userId');
@@ -624,7 +629,6 @@
             document.getElementById("authModal").style.display = "flex";
         }
 
-        // دالة مطابقة رقم الهاتف وكلمة السر مع قاعدة بيانات Firebase حصرياً (بدون حسابات خلفية وهمية)
         async function verifyPhoneAndPIN() {
             let phoneInput = document.getElementById("authPhoneInput").value.trim();
             let pinInput = document.getElementById("authPinInput").value.trim();
@@ -683,12 +687,13 @@
             document.getElementById("authModal").style.display = "none";
 
             let docRole = String(foundDoc.role || foundDoc.rank || '').toLowerCase();
-            
-            // مطابقة الرتبة بصرامة تامة مع الحقل الموجود في القاعدة
             let isIdentifierAdmin = docRole === 'admin' || docRole === 'مدير' || superAdminsList.includes(docRole);
             let isIdentifierSup = supervisorsList.includes(docRole) || docRole === 'supervisor' || docRole === 'مشرف';
 
-            currentCompanyId = foundDoc.companyId && !foundDoc.companyId.startsWith('comp_') ? foundDoc.companyId : 'company_main';
+            // اعتماد معرف الشركة من الحساب إن وُجد، وإلا البقاء على المعرف القادم من الابط أو الافتراضي
+            if (foundDoc.companyId && String(foundDoc.companyId).trim() !== '') {
+                currentCompanyId = String(foundDoc.companyId).trim();
+            }
             window.currentCompanyId = currentCompanyId;
 
             window.currentLoggedInUser = {
@@ -742,9 +747,10 @@
             });
         }
 
+        // **دالة المزامنة السحابية المفصولة تماماً حسب الشركة (معزل تام للبيانات)**
         function initLiveFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, doc } = window.firebaseModules;
+            const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
 
             ['drivers', 'users', 'team'].forEach(colName => {
                 onSnapshot(collection(window.db, colName), (snapshot) => {
@@ -755,7 +761,6 @@
                         
                         window._globalMembersMap[docId] = memberName;
                         if (data.phone) window._globalMembersMap[data.phone] = memberName;
-                        if (data.mobile) window._globalMembersMap[data.mobile] = memberName;
                     });
                     renderAllFinancials();
                 }, err => {});
@@ -771,77 +776,72 @@
             });
 
             const collectionsMap = {
-                shipments: ['shipments'],
-                deferredInvoices: ['deferredInvoices'],
-                expenses: ['expenses'],
-                treasury: ['treasury'],
-                accounts: ['accounts'],
-                communityPosts: ['communityPosts']
+                shipments: 'shipments',
+                deferredInvoices: 'deferredInvoices',
+                expenses: 'expenses',
+                treasury: 'treasury',
+                accounts: 'accounts',
+                communityPosts: 'communityPosts'
             };
 
-            window._firestoreCache = window._firestoreCache || {};
+            let superAdmin = isSuperAdmin();
+            let supervisor = isSupervisor();
 
             Object.keys(collectionsMap).forEach(targetKey => {
-                window._firestoreCache[targetKey] = window._firestoreCache[targetKey] || {};
-                let possibleNames = collectionsMap[targetKey];
-                
-                possibleNames.forEach(colName => {
-                    onSnapshot(collection(window.db, colName), (snapshot) => {
-                        let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                        window._firestoreCache[targetKey][colName] = colItems;
+                let colName = collectionsMap[targetKey];
+                let q;
 
-                        let mergedMap = new Map();
-                        Object.values(window._firestoreCache[targetKey]).forEach(arr => {
-                            arr.forEach(item => {
-                                mergedMap.set(String(item.id), item);
-                            });
+                // تصفية استعلامات فايبربيس بناءً على معرف الشركة بدقة تامة
+                if (currentCompanyId && currentCompanyId !== 'company_main') {
+                    q = query(collection(window.db, colName), where("companyId", "==", currentCompanyId));
+                } else {
+                    q = collection(window.db, colName);
+                }
+
+                onSnapshot(q, (snapshot) => {
+                    let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // فلترة إضافية حسب صلاحيات السائق أو المشرف داخل الشركة
+                    if (!superAdmin && !supervisor) {
+                        let currentName = String(window.currentLoggedInUser?.name || '').trim();
+                        let currentId = String(window.currentLoggedInUser?.id || '').trim();
+
+                        colItems = colItems.filter(item => {
+                            let itemDriver = String(item.assignedDriver || item.accountOwner || item.clientName || item.name || '').trim();
+                            let itemUserId = String(item.userId || '').trim();
+                            return (itemDriver && (itemDriver === currentName || itemDriver === currentId)) || (itemUserId === currentId);
                         });
+                    }
 
-                        let items = Array.from(mergedMap.values());
-                        let superAdmin = isSuperAdmin();
-                        let supervisor = isSupervisor();
-
-                        if (superAdmin || supervisor) {
-                            items = items.filter(item => {
-                                let itemCompId = String(item.companyId || '').trim();
-                                return (!itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main');
-                            });
-                        } else {
-                            let currentName = String(window.currentLoggedInUser?.name || '').trim();
-                            let currentId = String(window.currentLoggedInUser?.id || '').trim();
-
-                            items = items.filter(item => {
-                                let itemDriver = String(item.assignedDriver || item.accountOwner || item.clientName || item.name || '').trim();
-                                let itemUserId = String(item.userId || '').trim();
-                                
-                                let matchesUser = (itemDriver && (itemDriver === currentName || itemDriver === currentId)) || (itemUserId === currentId);
-                                return matchesUser;
-                            });
-                        }
-
-                        appData[targetKey] = items;
-                        renderAllFinancials();
-                        if(targetKey === 'communityPosts') renderCommunityPosts();
-                    }, err => {});
+                    appData[targetKey] = colItems;
+                    renderAllFinancials();
+                    if(targetKey === 'communityPosts') renderCommunityPosts();
+                }, err => {
+                    console.error(`خطأ في استماع المجموعة ${colName}:`, err);
                 });
             });
         }
 
         function initLiveEmergencyListener() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot } = window.firebaseModules;
+            const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-            onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
+            let q;
+            if (currentCompanyId && currentCompanyId !== 'company_main') {
+                q = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
+            } else {
+                q = collection(window.db, "viper_logistics");
+            }
+
+            onSnapshot(q, (snapshot) => {
                 let alerts = [];
                 let superAdmin = isSuperAdmin();
                 let supervisor = isSupervisor();
+                
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    let itemCompId = String(d.companyId || '').trim();
-                    if (superAdmin || supervisor || !itemCompId || itemCompId === currentCompanyId || itemCompId === 'company_main') {
-                        if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
-                            alerts.push({ id: docSnap.id, ...d });
-                        }
+                    if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
+                        alerts.push({ id: docSnap.id, ...d });
                     }
                 });
                 alerts.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
@@ -914,7 +914,7 @@
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
             item.userId = window.currentLoggedInUser ? window.currentLoggedInUser.id : 'admin';
-            item.companyId = currentCompanyId;
+            item.companyId = currentCompanyId; // ضمان ربط العنصر بمعرف الشركة الحالية بدقة
             try {
                 await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
             } catch(err) { console.error(err); }
@@ -1232,7 +1232,6 @@
             `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات سحابية</p>';
         }
 
-        // دالة التحقق الدقيقة للمدير معتمدة على الدور السحابي حصرياً
         function isSuperAdmin() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase();
@@ -1241,7 +1240,6 @@
         }
         window.isSuperAdmin = isSuperAdmin;
 
-        // دالة التحقق للمشرف
         function isSupervisor() {
             let user = window.currentLoggedInUser || {};
             let role = String(user.role || '').toLowerCase();
@@ -1536,4 +1534,4 @@
         function setTheme(theme) { document.body.setAttribute('data-theme', theme); }
     </script>
 </body>
-    </html>
+</html>
