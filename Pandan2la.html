@@ -216,7 +216,7 @@
         </div>
     </div>
 
-    <!-- نافذة تسجيل الدخول برقم الهاتف وكلمة السر (التحقق المزدوج) -->
+    <!-- نافذة تسجيل الدخول برقم الهاتف وكلمة السر -->
     <div id="authModal" class="custom-modal" style="display:none; flex-direction:column;">
         <div class="card" style="width: 100%; max-width: 380px; text-align: center;">
             <h3 style="color: var(--yellow-warning); margin-bottom: 10px; border:none; justify-content:center;">🔐 تسجيل الدخول الآمن</h3>
@@ -428,7 +428,6 @@
 
     let unsubscribers = [];
 
-    // [إصلاح الشات والحائط والبيانات عبر الحسابات] تم تعديل الفلترة لتكون مرنة وشاملة لكافة البيانات
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -440,7 +439,6 @@
             const unsub = query.onSnapshot(snapshot => {
                 let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
                 
-                // فلترة مرنة تمنع حجب البيانات القديمة أو المشتركة بين الحسابات
                 if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
                     appData[colName] = rawData.filter(d => !d.companyId || d.companyId === companyId || d.companyId === 'company_main');
                 } else {
@@ -815,13 +813,11 @@
 
             content.innerHTML = `
                 <div class="card" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color);">
-                    <!-- صورة الغلاف المتزامنة مع الحساب المتصل -->
                     <div style="height: 120px; background: ${coverBgStyle}; position: relative;" id="profile-cover-container">
                         <label style="position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #fff; border: none; font-size: 8px; padding: 3px 6px; border-radius: 4px; cursor: pointer;">
                             📷 تغيير الغلاف <input type="file" accept="image/*" style="display:none;" onchange="uploadCoverPhoto(this)">
                         </label>
                         
-                        <!-- الصورة الشخصية مع زر التغيير المباشر -->
                         <div style="width: 75px; height: 75px; border-radius: 50%; background: var(--card-bg); position: absolute; bottom: -32px; right: 20px; border: 3px solid var(--card-bg); overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3);" id="profile-avatar-container">
                             ${avatarContent}
                             <label style="position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.7); color: #fff; font-size: 7px; text-align: center; cursor: pointer; padding: 2px 0;">
@@ -836,7 +832,6 @@
                             الشركة: ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? 'admin' : (user.role || 'سائق')}
                         </p>
 
-                        <!-- إحصائيات مصغرة داخل البروفايل -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--bg-dark); padding: 8px; border-radius: 8px; text-align: center; margin-bottom: 12px; border: 1px solid var(--border-color);">
                             <div>
                                 <span style="font-size: 8px; color: var(--text-muted);">الشحنات</span>
@@ -854,7 +849,6 @@
                     </div>
                 </div>
 
-                <!-- حائط النشر الحر على بروفايلي (تم تفعيله وربطه بالسحابة) -->
                 <div class="card" style="border: 2px solid var(--accent-main);">
                     <h3 style="color: var(--accent-main); font-size: 11px; margin-bottom: 6px;">✍️ حائط النشر الحر على بروفايلي</h3>
                     <textarea id="wall-post-text" placeholder="اكتب تحديثاً، حالة طريق، أو ملاحظة على هذا البروفايل..." style="height: 60px; margin-bottom: 6px;"></textarea>
@@ -1313,16 +1307,37 @@
                 </div>
             `;
         } else if (sectionId === 'chat') {
+            let driversList = data.drivers || [];
             content.innerHTML = `
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                         <h3 style="margin:0;">💬 المحادثات الفورية للأسطول</h3>
                         <div style="display:flex; gap:4px;">
-                            <button type="button" class="btn-success btn-sm" onclick="startVideoCall(true)">📹 فيديو</button>
-                            <button type="button" class="btn-warning btn-sm" onclick="startVideoCall(false)">📞 صوت</button>
+                            <button type="button" class="btn-success btn-sm" onclick="startVideoCall(true)">📹 فيديو عام</button>
+                            <button type="button" class="btn-warning btn-sm" onclick="startVideoCall(false)">📞 صوت عام</button>
                         </div>
                     </div>
-                    <div style="background:var(--bg-dark); height:220px; overflow-y:auto; padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;" id="chat-messages-box">
+
+                    <!-- قائمة أعضاء الأسطول المتاحين للاتصال المباشر -->
+                    <div style="margin-bottom: 8px; background: var(--bg-dark); padding: 6px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <span style="font-size: 9px; color: var(--yellow-warning); font-weight: bold; display: block; margin-bottom: 4px;">👥 أعضاء الأسطول المتاحين للاتصال المباشر:</span>
+                        <div style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; scrollbar-width: thin;">
+                            ${driversList.map(d => `
+                                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; align-items: center; min-width: 85px; flex-shrink: 0; gap: 3px;">
+                                    <div style="width: 30px; height: 30px; border-radius: 50%; overflow: hidden; background: var(--accent-main); display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff;">
+                                        ${d.avatar ? `<img src="${d.avatar}" style="width:100%; height:100%; object-fit:cover;">` : '🐼'}
+                                    </div>
+                                    <span style="font-size: 8px; font-weight: bold; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">${d.name}</span>
+                                    <div style="display: flex; gap: 3px;">
+                                        <button type="button" class="btn-success btn-sm" style="padding: 2px 4px; font-size: 7px;" onclick="startVideoCallForUser('${d.name}', true)" title="مكالمة فيديو">📹</button>
+                                        <button type="button" class="btn-warning btn-sm" style="padding: 2px 4px; font-size: 7px;" onclick="startVideoCallForUser('${d.name}', false)" title="مكالمة صوتية">📞</button>
+                                    </div>
+                                </div>
+                            `).join('') || '<p style="font-size: 8px; color: var(--text-muted); text-align:center; width:100%;">لا توجد أعضاء متاحين</p>'}
+                        </div>
+                    </div>
+
+                    <div style="background:var(--bg-dark); height:190px; overflow-y:auto; padding:8px; border-radius:6px; margin-bottom:6px; font-size:10px; display:flex; flex-direction:column; gap:6px;" id="chat-messages-box">
                         ${(data.chat || []).map(m => `
                             <div style="background:var(--card-bg); padding:6px; border-radius:6px; border:1px solid var(--border-color);">
                                 <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--text-muted);">
@@ -1402,6 +1417,14 @@
         }
     }
 
+    function startVideoCallForUser(userName, isVideo = true) {
+        startVideoCall(isVideo);
+        const titleEl = document.getElementById('call-modal-title');
+        if(titleEl) {
+            titleEl.innerText = isVideo ? `📹 مكالمة فيديو مع: ${userName}` : `📞 مكالمة صوتية مع: ${userName}`;
+        }
+    }
+
     async function toggleCameraFacing() {
         currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
         if(localStream) {
@@ -1428,7 +1451,6 @@
         showToast('تم إنهاء المكالمة بنجاح');
     }
 
-    // [إصلاح مزامنة البروفايل] تحديث وتطبيق الصورة الشخصية فورياً على المنصة
     function uploadAvatarPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1440,7 +1462,7 @@
                     user.avatar = base64;
                     const docKey = String(user.docId || user.id || user.phone || user.name);
                     db.collection('drivers').doc(docKey).set({ avatar: base64 }, { merge: true }).then(() => {
-                        applyUserPermissionsUI(); // تحديث الهيدر وباقي الأقسام فوراً
+                        applyUserPermissionsUI();
                         showToast('تم حفظ وتحديث الصورة الشخصية سحابياً بنجاح! 🖼️');
                         refreshActiveSection();
                     });
@@ -1450,7 +1472,6 @@
         }
     }
 
-    // [إصلاح مزامنة الغلاف] تحديث وحفظ الغلاف سحابياً وتطبيقه فوراً
     function uploadCoverPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1474,7 +1495,6 @@
         }
     }
 
-    // [إصلاح الحائط] إضافة دالة نشر المنشورات على الحائط وربطها بـ Firestore
     function publishWallPost() {
         const text = document.getElementById('wall-post-text').value;
         if(!text) return;
