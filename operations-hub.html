@@ -330,7 +330,7 @@
     
     <div class="top-brand-container">
         <h1 class="na2la-3d-logo">نقلة Na2la</h1>
-        <div class="logo-subtext">غرفة العمليات التشغيلية الذكية - PURE CLOUD OS</div>
+        <div class="logo-subtext">غرفة العمليات التشغيلية الذكية - PURE CLOUD ISOLATED</div>
     </div>
 
     <div class="company-badge-box">
@@ -610,7 +610,6 @@
             urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
         }
 
-        // تم إزالة تعيين 'Admin1' الوهمي نهائياً لضمان الاعتماد حصرياً على البيانات الفعلية
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
@@ -630,7 +629,6 @@
 
         localStorage.setItem('na2la_userId', urlUserId);
         localStorage.setItem('na2la_companyId', urlCompanyId);
-
         urlUserId = urlUserId.trim();
 
         try {
@@ -733,16 +731,13 @@
         if(container) container.innerHTML = "<div style='text-align:center; color:var(--warning-color); padding: 12px;'>جاري جلب السائقين وصلاحياتهم المعزولة لشراكة الشركة...</div>";
 
         try {
-            const { collection, getDocs } = window.firebaseModules;
-            const querySnapshot = await getDocs(collection(window.db, "drivers"));
+            const { collection, getDocs, query, where } = window.firebaseModules;
+            let q = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+            const querySnapshot = await getDocs(q);
             
             globalDriversCache = [];
-            let isSuper = isSuperAdmin();
             querySnapshot.forEach((docSnap) => {
-                let d = docSnap.data();
-                if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
-                    globalDriversCache.push({ id: docSnap.id, ...d });
-                }
+                globalDriversCache.push({ id: docSnap.id, ...docSnap.data() });
             });
 
             renderDriversTable(globalDriversCache);
@@ -754,65 +749,59 @@
 
     function initCloudSync() {
         if (!window.db || !window.firebaseModules) return;
-        const { collection, onSnapshot } = window.firebaseModules;
+        const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-        onSnapshot(collection(window.db, "drivers"), (snapshot) => {
+        // 1. مزامنة السائقين مع فصل الشركات الحقيقي
+        let qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+        onSnapshot(qDrivers, (snapshot) => {
             globalDriversCache = [];
-            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
-                let d = docSnap.data();
-                if (isSuper || !d.companyId || d.companyId === currentCompanyId) {
-                    globalDriversCache.push({ id: docSnap.id, ...d });
-                }
+                globalDriversCache.push({ id: docSnap.id, ...docSnap.data() });
             });
             renderDriversTable(globalDriversCache);
             updateCurrentInterfacePermissions();
         });
 
-        onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
+        // 2. مزامنة الأسطول مع فصل الشركات الحقيقي
+        let qFleet = query(collection(window.db, "viper_fleet_ops"), where("companyId", "==", currentCompanyId));
+        onSnapshot(qFleet, (snapshot) => {
             globalFleetCache = [];
-            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
-                let f = docSnap.data();
-                if (isSuper || !f.companyId || f.companyId === currentCompanyId) {
-                    globalFleetCache.push({ id: docSnap.id, ...f });
-                }
+                globalFleetCache.push({ id: docSnap.id, ...docSnap.data() });
             });
             renderFleetTableAndStats();
         });
 
-        onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
+        // 3. مزامنة الشحن مع فصل الشركات الحقيقي
+        let qLogistics = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
+        onSnapshot(qLogistics, (snapshot) => {
             let container = document.getElementById("logisticsContainer");
             if (!container) return;
             container.innerHTML = "";
             let count = 0;
-            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let m = docSnap.data();
-                if (isSuper || !m.companyId || m.companyId === currentCompanyId) {
-                    count++;
-                    container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${m.client || ''}</b> (${m.cargo || ''})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button></div>`;
-                }
+                count++;
+                container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${m.client || ''}</b> (${m.cargo || ''})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button></div>`;
             });
             if (count === 0) {
                 container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد شحنات مسجلة لشراكتك.</div>";
             }
         });
 
-        onSnapshot(collection(window.db, "viper_finance"), (snapshot) => {
+        // 4. مزامنة المالية مع فصل الشركات الحقيقي
+        let qFinance = query(collection(window.db, "viper_finance"), where("companyId", "==", currentCompanyId));
+        onSnapshot(qFinance, (snapshot) => {
             let container = document.getElementById("financeContainer");
             if (!container) return;
             container.innerHTML = "";
             let total = 0;
             let count = 0;
-            let isSuper = isSuperAdmin();
             snapshot.forEach((docSnap) => {
                 let ex = docSnap.data();
-                if (isSuper || !ex.companyId || ex.companyId === currentCompanyId) {
-                    count++;
-                    total += Number(ex.cost) || 0;
-                    container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item || ''}: <span style="color:var(--warning-color);">${ex.cost || 0} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
-                }
+                count++;
+                total += Number(ex.cost) || 0;
+                container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item || ''}: <span style="color:var(--warning-color);">${ex.cost || 0} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
             });
             if (count === 0) {
                 container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد تقارير مالية مسجلة لشراكتك.</div>";
@@ -847,7 +836,7 @@
 
             html += `
                 <tr>
-                    <td><b>${item.truck || 'بدون اسم'}</b> ${item.companyId ? `<br><small style="opacity:0.6;">شراكة: ${item.companyId}</small>` : ''}</td>
+                    <td><b>${item.truck || 'بدون اسم'}</b></td>
                     <td>${item.mission || '-'}</td>
                     <td><span style="padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; ${badgeStyle}">${statusText}</span></td>
                     <td>
@@ -919,7 +908,7 @@
                     <td style="text-align: center;">
                         <img src="${dAvatar}" style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid var(--primary-color);" alt="صورة">
                     </td>
-                    <td><b>${dName}</b> ${d.companyId ? `<br><small style="opacity:0.6;">شراكة: ${d.companyId}</small>` : ''}</td>
+                    <td><b>${dName}</b></td>
                     <td>${dPhone}</td>
                     <td style="text-align: center;">
                         <button onclick="toggleDriverRole('${d.id}', '${d.role || 'driver'}')" style="border: none; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer; ${roleBtnBg}">${roleText}</button>
