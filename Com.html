@@ -472,23 +472,18 @@
                         urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            if (!urlUserId) {
-                urlUserId = localStorage.getItem('na2la_userId') || 
-                            localStorage.getItem('currentUser') || 
-                            localStorage.getItem('userName') || '';
+            if (!urlUserId || urlUserId.trim() === '' || urlUserId === 'null') {
+                urlUserId = 'المدير';
             }
 
-            if (!urlCompanyId) {
-                urlCompanyId = localStorage.getItem('na2la_companyId') || localStorage.getItem('companyId') || 'company_main';
-            }
-
-            if (!urlUserId) {
-                urlUserId = '1';
+            urlUserId = urlUserId.trim();
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId);
+            
+            if (!urlCompanyId || urlCompanyId.trim() === '' || urlCompanyId === 'null') {
+                urlCompanyId = isSuper ? 'company_main' : ('comp_' + urlUserId.replace(/[^a-zA-Z0-9]/g, '_'));
             }
 
             currentCompanyId = urlCompanyId.trim();
-            localStorage.setItem('na2la_userId', urlUserId);
-            localStorage.setItem('na2la_companyId', currentCompanyId);
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
@@ -499,22 +494,19 @@
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
-                    if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || urlUserId === '1') {
-                        if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || docSnap.id === '1') {
-                            found = { id: docSnap.id, ...d };
-                        }
+                    if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || isSuper) {
+                        found = { id: docSnap.id, ...d };
                     }
                 });
 
                 if (found) {
                     currentCompanyId = found.companyId || currentCompanyId;
-                    localStorage.setItem('na2la_companyId', currentCompanyId);
                     let roleStr = String(found.role || found.rank || '').toLowerCase();
-                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || found.name === 'المدير' || found.id === '1';
+                    let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير' || found.name === 'المدير' || found.id === '1';
 
                     currentDriverProfile = {
                         id: found.id,
-                        name: found.name || found.driverName || 'مستخدم',
+                        name: found.name || found.driverName || urlUserId,
                         phone: found.phone || 'غير متوفر',
                         rank: isAdmin ? 'admin' : (found.role || 'driver'),
                         title: found.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد'),
@@ -525,14 +517,24 @@
                     currentDriverProfile = {
                         id: urlUserId,
                         name: urlUserId,
-                        rank: 'driver',
-                        title: 'سائق معتمد',
-                        permissions: 'صلاحيات تشغيلية أساسية',
+                        rank: isSuper ? 'admin' : 'driver',
+                        title: isSuper ? 'مدير النظام' : 'سائق معتمد',
+                        permissions: isSuper ? 'صلاحيات كاملة' : 'صلاحيات تشغيلية أساسية',
                         phone: '',
                         avatar: ''
                     };
                 }
-            } catch (err) {}
+            } catch (err) {
+                currentDriverProfile = {
+                    id: urlUserId,
+                    name: urlUserId,
+                    rank: isSuper ? 'admin' : 'driver',
+                    title: isSuper ? 'مدير النظام' : 'سائق معتمد',
+                    permissions: 'صلاحيات أساسية',
+                    phone: '',
+                    avatar: ''
+                };
+            }
 
             syncProfileAndLoad();
         }
@@ -651,7 +653,6 @@
             });
         }
 
-        // الاستماع المباشر والمعزول لمدخلات الرادار الحية المعزولة للشركة
         function loadCommunityPosts() {
             if (communityUnsubscribe) communityUnsubscribe();
             
@@ -778,7 +779,6 @@
         }
         function closeMediaViewer() { document.getElementById('mediaViewerModal').style.display = 'none'; }
 
-        // الاستماع المباشر والمعزول لشحنات الشركة عبر where("companyId", "==", currentCompanyId)
         function loadMyCargoFromShipments() {
             if (shipmentsUnsubscribe) shipmentsUnsubscribe();
 
@@ -840,7 +840,6 @@
             });
         }
 
-        // الاستماع المباشر والمعزول لمعاملات الخزنة عبر where("companyId", "==", currentCompanyId)
         function loadTreasuryData() {
             if (safeUnsubscribe) safeUnsubscribe();
 
@@ -912,7 +911,6 @@
             });
         }
 
-        // الاستماع المعزول للسائقين عبر where("companyId", "==", currentCompanyId)
         function loadDriversList() {
             if (driversUnsubscribe) driversUnsubscribe();
 
@@ -975,7 +973,6 @@
             db.collection('chat').doc(newMsg.id).set(newMsg).then(() => { input.value = ''; });
         }
 
-        // الاستماع المباشر والمعزول للرسائل عبر where("companyId", "==", currentCompanyId)
         function loadChatMessages() {
             if (chatUnsubscribe) chatUnsubscribe();
 
