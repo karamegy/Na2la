@@ -665,20 +665,34 @@
             renderChatAccountsList();
         });
 
-        // ✅ الاستماع للمكالمات الواردة بالاسم النظيف حصرياً لضمان رن الهاتف عند المستلم فورا
+        // ✅ نظام استقبال المكالمات الفائق المرونة (يتحقق برمجياً لتجنب مشاكل تأخير جلب أسماء السائقين)
         db.collection('webrtc_calls')
-          .where('callee', '==', getCleanDriverName(activeExternalSessionName))
           .where('status', '==', 'calling')
           .onSnapshot(snapshot => {
               snapshot.docChanges().forEach(change => {
                   if (change.type === 'added') {
                       let callData = change.doc.data();
                       currentCallId = change.doc.id;
-                      let callerCleanName = getCleanDriverName(callData.caller);
-                      if (confirm(`📞 لديك مكالمة واردة من (${callerCleanName}). هل تريد الرد؟`)) {
-                          answerWebRTCCall(currentCallId, callData.isVideo);
-                      } else {
-                          db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
+                      
+                      let loggedInUser = getLoggedInUser();
+                      let targetCallee = String(callData.callee || '').trim();
+                      let myName = String(loggedInUser.name || '').trim();
+                      let mySession = String(activeExternalSessionName || '').trim();
+                      
+                      // مطابقة ذكية تضمن رن المكالمة بغض النظر عن طريقة حفظ الاسم
+                      let isForMe = (
+                          targetCallee === myName ||
+                          targetCallee === mySession ||
+                          getCleanDriverName(targetCallee) === myName
+                      );
+
+                      if (isForMe) {
+                          let callerCleanName = getCleanDriverName(callData.caller);
+                          if (confirm(`📞 لديك مكالمة واردة من (${callerCleanName}). هل تريد الرد؟`)) {
+                              answerWebRTCCall(currentCallId, callData.isVideo);
+                          } else {
+                              db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
+                          }
                       }
                   }
               });
