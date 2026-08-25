@@ -1439,10 +1439,11 @@
         renderStats();
     }
 
-    // دوال مكالمات WebRTC السحابية ومؤثرات الوجوه المعالجة بدقة
+    // دوال مكالمات WebRTC السحابية ومعالجة تدفق الفيديو والصوت وأسماء المستخدمين بدقة
     let pc = null;
     let currentCallId = null;
     let localStream = null;
+    let remoteStream = null;
     let currentFacingMode = 'user';
     let handledCalls = new Set();
     const servers = {
@@ -1478,13 +1479,20 @@
         openModal('videoCallModal');
         playRingTone();
 
-        document.getElementById('call-modal-title').innerText = isVideo ? `📹 جاري الاتصال بـ: ${receiverName}` : `📞 مكالمة صوتية مع: ${receiverName}`;
+        // تحديث عنوان المكالمة بالاسم الصحيح للطرف الآخر
+        document.getElementById('call-modal-title').innerText = isVideo ? `📹 مكالمة فيديو مع: ${receiverName}` : `📞 مكالمة صوتية مع: ${receiverName}`;
         
         currentCallId = 'call_' + Date.now();
         const callDoc = db.collection('webrtc_calls').doc(currentCallId);
         
         pc = new RTCPeerConnection(servers);
+        remoteStream = new MediaStream();
         
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = remoteStream;
+        }
+
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ 
                 video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: currentFacingMode } : false, 
@@ -1498,11 +1506,12 @@
             return;
         }
 
+        // استقبال تدفق الصوت والفيديو وإضافته بسلاسة عبر MediaStream
         pc.ontrack = event => {
-            const remoteVideo = document.getElementById('remoteVideo');
+            event.streams[0].getTracks().forEach(track => {
+                remoteStream.addTrack(track);
+            });
             if (remoteVideo) {
-                remoteVideo.srcObject = event.streams[0];
-                remoteVideo.muted = false;
                 remoteVideo.play().catch(err => console.log("Remote video play error:", err));
             }
         };
@@ -1517,8 +1526,9 @@
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
+        let currentUserName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
         await callDoc.set({
-            caller: window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم',
+            caller: currentUserName,
             receiver: receiverName,
             offer: { type: offer.type, sdp: offer.sdp },
             status: 'ringing',
@@ -1575,6 +1585,8 @@
                         
                         if (acceptCall) {
                             openModal('videoCallModal');
+                            // تحديث عنوان المكالمة باسم المُتصل (Caller)
+                            document.getElementById('call-modal-title').innerText = callData.isVideo ? `📹 مكالمة فيديو مع: ${callData.caller}` : `📞 مكالمة صوتية مع: ${callData.caller}`;
                             await answerCloudVideoCall(currentCallId, callData);
                         } else {
                             db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
@@ -1587,6 +1599,12 @@
     async function answerCloudVideoCall(callId, callData) {
         const callDoc = db.collection('webrtc_calls').doc(callId);
         pc = new RTCPeerConnection(servers);
+        remoteStream = new MediaStream();
+
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = remoteStream;
+        }
 
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ 
@@ -1602,10 +1620,10 @@
         }
 
         pc.ontrack = event => {
-            const remoteVideo = document.getElementById('remoteVideo');
+            event.streams[0].getTracks().forEach(track => {
+                remoteStream.addTrack(track);
+            });
             if (remoteVideo) {
-                remoteVideo.srcObject = event.streams[0];
-                remoteVideo.muted = false;
                 remoteVideo.play().catch(err => console.log("Remote video play error:", err));
             }
         };
@@ -1658,6 +1676,10 @@
         if(localStream) {
             localStream.getTracks().forEach(track => track.stop());
             localStream = null;
+        }
+        if(remoteStream) {
+            remoteStream.getTracks().forEach(track => track.stop());
+            remoteStream = null;
         }
         if(pc) {
             pc.close();
