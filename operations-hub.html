@@ -600,7 +600,6 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // إذا لم يكن هناك أي مستخدم في الرابط، نضع قيمة فارغة لكي يظهر الحساب الفعلي القادم أو زائر جديد دون فرضه كمدير
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = 'زائر';
         }
@@ -619,15 +618,20 @@
             
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
-                globalDriversCache.push({ id: docSnap.id, ...d });
-                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
+                let docId = docSnap.id;
+                globalDriversCache.push({ id: docId, ...d });
+                
+                // مطابقة ذكية ودقيقة تشمل الـ ID، الاسم، أو رقم الهاتف
+                if (docId === urlUserId || 
+                    (d.name && d.name.toString().trim().toLowerCase() === urlUserId.toLowerCase()) || 
+                    (d.phone && d.phone.toString().trim() === urlUserId)) {
                     found = d;
                 }
             });
 
-            // مزامنة الحساب الفعلي المتصل عبر الـ URL أياً كان (سائق، مدير، أو تابع لشركة أخرى)
             if (found) {
-                currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                // سحب معرف الشركة الخاص بالحساب الموجود في قاعدة البيانات إن وجد، وإلا نستخدم القادم من الرابط
+                currentCompanyId = found.companyId || found.companyName || urlCompanyId || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
                 let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
 
@@ -642,9 +646,7 @@
                     subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
                     subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
                 };
-                syncProfileAndLoadHub();
             } else {
-                // إذا كان الحساب جديداً ولم يتم العثور عليه في قاعدة البيانات، تتم مزامنته وعزله لشركته تلقائياً
                 let isAdmCheck = ['1', 'المدير', 'مدير', 'admin'].includes(urlUserId.toLowerCase());
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
@@ -658,8 +660,8 @@
                     subPlan: isAdmCheck ? 'مدير عام' : 'أساسي',
                     subExpiry: isAdmCheck ? 'دائم' : 'مفعل'
                 };
-                syncProfileAndLoadHub();
             }
+            syncProfileAndLoadHub();
         } catch (err) {
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
