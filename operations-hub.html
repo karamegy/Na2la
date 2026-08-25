@@ -567,7 +567,7 @@
     window.currentCompanyId = currentCompanyId;
 
     let currentDriverProfile = {
-        name: '',
+        name: 'جاري التحميل...',
         avatar: '',
         title: 'سائق معتمد',
         phone: '',
@@ -579,7 +579,7 @@
     };
 
     function goToPage(pageName) {
-        let userId = urlUserId || currentDriverProfile.name || 'admin';
+        let userId = urlUserId || currentDriverProfile.name || '';
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
@@ -587,9 +587,7 @@
     function isSuperAdmin() {
         let user = currentDriverProfile || {};
         let role = String(user.role || '').toLowerCase().trim();
-        let name = String(user.name || '').toLowerCase().trim();
-        let docId = String(user.id || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير' || docId === 'admin' || ['1', 'admin', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(name) || ['admin', 'admin1'].includes(docId);
+        return role === 'admin' || role === 'مدير';
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -598,13 +596,12 @@
         const { collection, getDocs } = window.firebaseModules;
         
         const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || localStorage.getItem('logged_in_driver_name') || 'admin';
+        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || localStorage.getItem('logged_in_driver_name') || '';
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || 'company_main';
 
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
         let targetIdLower = urlUserId.toLowerCase();
-        let isSuperIdentifier = ['1', 'admin', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(targetIdLower);
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -627,7 +624,7 @@
             if (found) {
                 currentCompanyId = found.companyId || urlCompanyId || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
-                let isDocAdmin = isSuperIdentifier || docIdIsAdmin(found.id) || roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
+                let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
 
                 currentDriverProfile = {
                     id: found.id,
@@ -641,17 +638,34 @@
                     subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
                     subExpiry: found.subExpiry || (isDocAdmin ? 'دائم' : 'غير محدد')
                 };
+            } else if (globalDriversCache.length > 0) {
+                // إذا لم يتم العثور على اسم مطابق في الرابط، اختر أول مستخدم حقيقي في القاعدة بدلاً من إنشاء حساب وهمي
+                let firstD = globalDriversCache[0];
+                let roleStr = String(firstD.role || '').toLowerCase();
+                let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير';
+                currentDriverProfile = {
+                    id: firstD.id,
+                    name: firstD.name || 'مستخدم',
+                    avatar: firstD.avatar || '',
+                    title: firstD.title || 'سائق معتمد',
+                    phone: firstD.phone || '',
+                    role: isDocAdmin ? 'admin' : 'driver',
+                    companyId: firstD.companyId || currentCompanyId,
+                    canAccessSocial: firstD.canAccessSocial !== false,
+                    subPlan: firstD.subPlan || 'أساسي',
+                    subExpiry: ''
+                };
             } else {
                 currentDriverProfile = {
-                    id: urlUserId,
-                    name: urlUserId,
+                    id: 'guest',
+                    name: urlUserId || 'زائر',
                     avatar: '',
-                    title: isSuperIdentifier ? 'مدير عام النظام' : 'سائق معتمد',
+                    title: 'زائر',
                     phone: '',
-                    role: isSuperIdentifier ? 'admin' : 'driver',
+                    role: 'driver',
                     companyId: currentCompanyId,
                     canAccessSocial: true,
-                    subPlan: isSuperIdentifier ? 'مدير عام' : 'أساسي',
+                    subPlan: 'أساسي',
                     subExpiry: ''
                 };
             }
@@ -660,23 +674,18 @@
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
-                id: urlUserId,
-                name: urlUserId,
+                id: 'guest',
+                name: urlUserId || 'زائر',
                 avatar: '',
-                title: isSuperIdentifier ? 'مدير عام النظام' : 'سائق معتمد',
-                role: isSuperIdentifier ? 'admin' : 'driver',
+                title: 'زائر',
+                role: 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
-                subPlan: isSuperIdentifier ? 'مدير عام' : 'أساسي',
+                subPlan: 'أساسي',
                 subExpiry: ''
             };
             syncProfileAndLoadHub();
         }
-    }
-
-    function docIdIsAdmin(docId) {
-        let id = String(docId || '').toLowerCase().trim();
-        return id === 'admin' || id === 'admin1' || id === '1';
     }
 
     function syncProfileAndLoadHub() {
@@ -989,7 +998,7 @@
         let avatarEl = document.getElementById("currentUserAvatar");
         let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
 
-        let activeName = currentDriverProfile.name || 'مدير النظام';
+        let activeName = currentDriverProfile.name || 'مستخدم النظام';
         let activeAvatar = (currentDriverProfile.avatar && currentDriverProfile.avatar.trim() !== "") 
             ? currentDriverProfile.avatar 
             : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
@@ -1100,7 +1109,7 @@
     async function deleteCloudItem(collectionName, docId) {
         if (confirm("هل أنت متأكد من الحذف النهائي لهذا السجل؟")) {
             try {
-                if (!window.db || !window.firebaseModules) throw new Error("q قاعدة البيانات غير جاهزة");
+                if (!window.db || !window.firebaseModules) throw new Error("قاعدة البيانات غير جاهزة");
                 const { doc, deleteDoc } = window.firebaseModules;
                 await deleteDoc(doc(window.db, collectionName, docId));
                 if (collectionName === 'drivers') {
