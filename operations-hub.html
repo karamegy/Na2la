@@ -600,7 +600,7 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // الاعتماد بالكامل على الرابط (URL) فقط بدون جلب أو حفظ في localStorage
+        // جلب البيانات من الرابط أو محاولة التعديل بالاعتماد على القيم الفعالة
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = 'المدير';
         }
@@ -617,24 +617,31 @@
             const snapshot = await getDocs(collection(window.db, 'drivers'));
             let found = null;
             globalDriversCache = [];
+            
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
+                
+                // مطابقة أدق بالـ ID أو الاسم أو الهاتف لتفادي ضياع الحساب
+                let dName = String(d.name || '').trim().toLowerCase();
+                let dPhone = String(d.phone || '').trim();
+                let targetId = String(urlUserId).trim().toLowerCase();
+
+                if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
                     found = d;
                 }
             });
 
             if (found) {
-                currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                currentCompanyId = found.companyId || urlCompanyId || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
-                let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير';
+                let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
 
                 currentDriverProfile = {
                     name: found.name || found.driverName || urlUserId,
                     avatar: found.avatar || found.photoUrl || '',
                     title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
-                    phone: found.phone || (isAdmin ? '+201114099799' : ''),
+                    phone: found.phone || '',
                     role: isAdmin ? 'admin' : (found.role || 'driver'),
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
