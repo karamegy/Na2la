@@ -20,7 +20,7 @@
         .btn:hover { opacity: 0.9; }
         .btn-danger { background-color: var(--danger); }
         .btn-success { background-color: var(--success); width: auto; padding: 5px 12px; font-size: 0.85rem; }
-        .btn-nav { background: #475569; color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; display: inline-block; font-weight: bold; }
+        .btn-nav { background: #475569; color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; display: inline-block; font-weight: bold; cursor: pointer; }
         .post-card { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 18px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); position: relative; }
         .post-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
         .post-author { font-weight: bold; color: var(--primary); }
@@ -40,8 +40,8 @@
 
 <div class="comm-container">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
-        <a href="index.html" class="btn-nav">🏠 الرئيسية</a>
-        <a href="operations-hub.html" class="btn-nav" style="background: #2563eb;">🚀 العمليات</a>
+        <a onclick="navigateToPage('index.html')" class="btn-nav">🏠 الرئيسية</a>
+        <a onclick="navigateToPage('operations-hub.html')" class="btn-nav" style="background: #2563eb;">🚀 العمليات</a>
         <span id="company-badge-display" style="font-size: 0.8rem; background: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-weight: bold;">الشركة: جاري التحميل...</span>
     </div>
 
@@ -99,8 +99,8 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs, getDoc, setDoc, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -124,6 +124,12 @@
     window.currentCompanyId = currentCompanyId;
     window.manualAdminOverride = false;
 
+    // دالة لتمرير معاملات الرابط (الشركة والمستخدم) عند التنقل بين الصفحات
+    window.navigateToPage = function(pageName) {
+        const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
+        window.location.href = pageName + queryParams;
+    };
+
     // دالة سحابية متكاملة لتسجيل العمليات في مصفوفة auditLogs في المستند appStore/mainState
     async function logAuditAction(actionDesc) {
         try {
@@ -142,7 +148,6 @@
                 user: activeSessionName || 'مجهول'
             });
 
-            // الاحتفاظ بأحدث 100 سجل فقط لمنع تضخم حجم المستند
             if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
 
             await setDoc(mainStateRef, { auditLogs: auditLogs }, { merge: true });
@@ -151,25 +156,22 @@
         }
     }
 
-    // استخراج الجلسة ومعرف المستخدم لحظياً من الرابط أو التخزين
+    // استخراج الجلسة ومعرف المستخدم لحظياً حصرياً من الرابط (URL) دون أي استخدام للتخزين المحلي
     function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlComp = urlParams.get('companyId') || urlParams.get('company');
 
         if (externalId && externalId.trim() !== '' && externalId !== 'null') {
-            externalId = externalId.trim();
-            localStorage.setItem('logged_in_driver_name', externalId);
-            localStorage.setItem('na2la_external_logged_user_id', externalId);
+            activeSessionName = externalId.trim();
         }
 
-        let savedName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id');
-        if (savedName) activeSessionName = savedName.trim();
-        if (urlComp) {
+        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+
+        if (urlComp && urlComp.trim() !== '' && urlComp !== 'null') {
             currentCompanyId = urlComp.trim();
-            localStorage.setItem('current_company_id', currentCompanyId);
-        } else if (localStorage.getItem('current_company_id')) {
-            currentCompanyId = localStorage.getItem('current_company_id');
+        } else {
+            currentCompanyId = isSuper ? 'company_main' : ('comp_' + activeSessionName.replace(/[^a-zA-Z0-9]/g, '_'));
         }
     }
 
@@ -192,26 +194,23 @@
         setupRealtimeSync();
     });
 
-    // مزامنة حية لبيانات السائق، الصلاحيات، والشركة من قاعدة البيانات
+    // مزامنة حية لبيانات السائق، الصلاحيات، والشركة من قاعدة البيانات مع فلترة companyId
     function setupRealtimeSync() {
         onSnapshot(collection(db, "drivers"), (snapshot) => {
             let foundDriver = null;
-            let allDriversList = [];
+            let isSuper = isSuperAdmin();
 
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
-                allDriversList.push(d);
                 if (d.name === activeSessionName || d.id === activeSessionName || d.phone === activeSessionName || docSnap.id === activeSessionName) {
                     foundDriver = d;
                 }
             });
 
-            // التحقق من حساب المدير العام
             if (['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName)) {
                 activeSessionName = 'المدير العام';
                 currentUserRole = 'admin';
                 currentUserPermissions = 'صلاحيات كاملة: إدارة الأسطول، الحسابات، والخزنة';
-                currentCompanyId = currentCompanyId || 'comp_1787481011714';
             } else if (foundDriver) {
                 activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
                 currentUserRole = foundDriver.role || foundDriver.rank || 'driver';
@@ -224,7 +223,6 @@
             }
 
             window.currentCompanyId = currentCompanyId;
-            localStorage.setItem('current_company_id', currentCompanyId);
 
             updateProfileUI();
             updateAdminUIStatus();
@@ -273,19 +271,17 @@
     const postsRef = collection(db, "driver_community_posts");
 
     function loadPosts() {
-        const q = query(postsRef, orderBy("timestamp", "desc"));
+        let superAdmin = isSuperAdmin();
+        // عزل المنشورات بناءً على الشراكة باستخدام where إذا لم يكن مدير عام
+        const q = superAdmin ? query(postsRef, orderBy("timestamp", "desc")) : query(postsRef, where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"));
+        
         onSnapshot(q, async (snapshot) => {
             allPostsData = [];
-            let superAdmin = isSuperAdmin();
 
             for (const docSnap of snapshot.docs) {
                 const post = docSnap.data();
                 const id = docSnap.id;
                 
-                if (!superAdmin && post.companyId && post.companyId !== currentCompanyId) {
-                    continue;
-                }
-
                 const commentsSnap = await getDocs(collection(db, "driver_community_posts", id, "comments"));
                 let comments = [];
                 commentsSnap.forEach(c => {
