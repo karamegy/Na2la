@@ -579,7 +579,7 @@
     };
 
     function goToPage(pageName) {
-        let userId = urlUserId || currentDriverProfile.name || '';
+        let userId = urlUserId || currentDriverProfile.name || 'admin';
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
@@ -598,16 +598,8 @@
         const { collection, getDocs } = window.firebaseModules;
         
         const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
-
-        if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-            urlUserId = 'admin';
-        }
-
-        if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
-            urlCompanyId = 'company_main';
-        }
+        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || localStorage.getItem('logged_in_driver_name') || 'admin';
+        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || 'company_main';
 
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
@@ -649,38 +641,21 @@
                     subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
                     subExpiry: found.subExpiry || (isDocAdmin ? 'دائم' : 'غير محدد')
                 };
-                syncProfileAndLoadHub();
-            } else if (isSuperIdentifier) {
-                currentCompanyId = urlCompanyId || 'company_main';
-                currentDriverProfile = {
-                    id: 'admin',
-                    name: urlUserId,
-                    avatar: '',
-                    title: 'مدير عام النظام',
-                    phone: '+201114099799',
-                    role: 'admin',
-                    companyId: currentCompanyId,
-                    canAccessSocial: true,
-                    subPlan: 'مدير عام',
-                    subExpiry: 'دائم'
-                };
-                syncProfileAndLoadHub();
             } else {
-                currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     id: urlUserId,
                     name: urlUserId,
                     avatar: '',
-                    title: 'حساب غير مسجل',
+                    title: isSuperIdentifier ? 'مدير عام النظام' : 'سائق معتمد',
                     phone: '',
-                    role: 'driver',
+                    role: isSuperIdentifier ? 'admin' : 'driver',
                     companyId: currentCompanyId,
-                    canAccessSocial: false,
-                    subPlan: 'أساسي',
+                    canAccessSocial: true,
+                    subPlan: isSuperIdentifier ? 'مدير عام' : 'أساسي',
                     subExpiry: ''
                 };
-                syncProfileAndLoadHub();
             }
+            syncProfileAndLoadHub();
         } catch (err) {
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
@@ -688,7 +663,7 @@
                 id: urlUserId,
                 name: urlUserId,
                 avatar: '',
-                title: isSuperIdentifier ? 'مدير عام النظام' : 'غير معروف',
+                title: isSuperIdentifier ? 'مدير عام النظام' : 'سائق معتمد',
                 role: isSuperIdentifier ? 'admin' : 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
@@ -706,6 +681,9 @@
 
     function syncProfileAndLoadHub() {
         window.currentCompanyId = currentCompanyId;
+        localStorage.setItem('current_company_id', currentCompanyId);
+        localStorage.setItem('logged_in_driver_name', currentDriverProfile.name);
+        
         let headerBadge = document.getElementById('headerCompanyIdDisplay');
         if (headerBadge) headerBadge.innerText = currentCompanyId;
 
@@ -1122,7 +1100,7 @@
     async function deleteCloudItem(collectionName, docId) {
         if (confirm("هل أنت متأكد من الحذف النهائي لهذا السجل؟")) {
             try {
-                if (!window.db || !window.firebaseModules) throw new Error("قاعدة البيانات غير جاهزة");
+                if (!window.db || !window.firebaseModules) throw new Error("q قاعدة البيانات غير جاهزة");
                 const { doc, deleteDoc } = window.firebaseModules;
                 await deleteDoc(doc(window.db, collectionName, docId));
                 if (collectionName === 'drivers') {
