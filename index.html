@@ -1134,8 +1134,8 @@
 
     <!-- صفحة التقارير والفواتير -->
     <section id="reports-tab" class="app-section">
-        <!-- قسم تفعيل وتفقد طلبات تحويل الكاش (الماستر أدمن) -->
-        <div class="card" style="border: 2px solid var(--success); margin-bottom: 12px;">
+        <!-- قسم تفعيل وتفقد طلبات تحويل الكاش (مخصص للماستر أدمن الأساسي فقط) -->
+        <div class="card" id="master-cash-requests-card" style="border: 2px solid var(--success); margin-bottom: 12px; display: none;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3 style="color: var(--success); margin:0;">💵 استعلام ومراجعة طلبات الكاش (الماستر أدمن)</h3>
                 <button type="button" class="btn-purple btn-sm" onclick="openMasterEnquiryModal()">🔍 فتح محرك الاستعلام للأكواد</button>
@@ -1144,8 +1144,8 @@
             <div id="admin-pending-cash-requests" style="max-height: 250px; overflow-y: auto;"></div>
         </div>
 
-        <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء وحسابات الشركات (Multi-Tenant SaaS) -->
-        <div class="card" style="border: 2px solid var(--purple); margin-bottom: 12px;">
+        <!-- بطاقة إدارة الاشتراكات الفردية للأعضاء وحسابات الشركات (مخصصة للماستر أدمن فقط) -->
+        <div class="card" id="master-saas-hub-card" style="border: 2px solid var(--purple); margin-bottom: 12px; display: none;">
             <button type="button" class="btn-purple" id="add-company-btn-main" onclick="openAddCompanyModal()" style="margin-bottom: 10px; width: 100%; padding: 10px; display: none;">
                 🏢 إضافة شركة جديدة وتفعيل اشتراكها 🚀
             </button>
@@ -1155,6 +1155,20 @@
             <input type="text" id="member-sub-search" class="search-box" placeholder="ابحث باسم الشركة، العضو، أو رقم الهاتف..." onkeyup="renderMemberSubscriptionsList()">
             
             <div style="max-height: 320px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container"></div>
+        </div>
+
+        <!-- بطاقة عرض معلومات الاشتراك ومحافظ الدفع الكاش لأدمن الشركة (بدون إمكانية التجديد الذاتي) -->
+        <div class="card" id="company-admin-sub-card" style="border: 2px solid var(--accent); margin-bottom: 12px; display: none;">
+            <h3 style="color: var(--accent);">📊 معلومات صلاحية اشتراك شركتك</h3>
+            <div id="company-sub-info-box" style="font-size: 11px; line-height: 1.6; background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 10px;">
+                <!-- يتم تعبئتها ديناميكياً -->
+            </div>
+            <div class="wallet-box" style="text-align: right; padding: 10px;">
+                💳 لتجديد الاشتراك، يرجى التحويل على محافظنا المعتمدة أدناه ثم إبلاغ الإدارة أو طلب التجديد:<br>
+                📱 فوري كاش: <span style="font-size:12px; color:#fde047; font-weight:bold;">01114099799</span><br>
+                📱 وي كاش (WE): <span style="font-size:12px; color:#fde047; font-weight:bold;">01554440996</span>
+            </div>
+            <button type="button" class="btn-success" onclick="openCashModal()" style="padding: 10px;">💵 إرسال طلب كود التحويل للإدارة للتجديد</button>
         </div>
 
         <div class="card" style="border: 2px solid var(--accent);">
@@ -1429,11 +1443,9 @@
             }
 
             try {
-                // جلب تفاصيل طلب التحويل لمعرفة رقم المرسل أو اسم الشركة
                 const reqDoc = await db.collection('subscription_requests').doc(String(reqId)).get();
                 const reqData = reqDoc.exists ? reqDoc.data() : null;
 
-                // البحث عن الحساب في قاعدة البيانات
                 let targetDriverDoc = null;
                 const driversSnapshot = await db.collection('drivers').get();
                 
@@ -1455,17 +1467,14 @@
                 currentExpiry.setMonth(currentExpiry.getMonth() + Number(months));
                 let newExpiryStr = currentExpiry.toISOString().split('T')[0];
 
-                // تحديث الحساب الرئيسي بالسحابة
                 await db.collection('drivers').doc(targetDriverDoc.id).set({
                     subStatus: 'active',
                     subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
                     subExpiry: newExpiryStr
                 }, { merge: true });
 
-                // تحديث حالة الطلب إلى مقبول
                 await db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
 
-                // تحديث البيانات في الذاكرة المحلية فوراً (0ms)
                 let localDrv = (appData.drivers || []).find(d => String(d.id) === String(targetDriverDoc.id));
                 if (localDrv) {
                     localDrv.subStatus = 'active';
@@ -1778,6 +1787,7 @@
                     if (document.getElementById('reports-tab').classList.contains('active')) {
                         renderMemberSubscriptionsList();
                         renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
                     }
                 }, error => {
                     console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
@@ -1793,7 +1803,7 @@
         }
 
         function renderMemberSubscriptionsList() {
-            if (currentUserRole !== 'admin') return;
+            if (loggedInDriverName !== 'المدير') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
             const container = document.getElementById('members-subscriptions-container');
             if (!container) return;
@@ -1843,9 +1853,35 @@
             });
         }
 
+        function renderCompanyAdminSubscriptionView() {
+            const card = document.getElementById('company-admin-sub-card');
+            const infoBox = document.getElementById('company-sub-info-box');
+            if (!card || !infoBox) return;
+
+            // إذا لم يكن المدير الأساسي، نظهر له تفاصيل اشتراكه ومحافظ الدفع دون أزرار تفعيل ذاتية
+            if (loggedInDriverName !== 'المدير') {
+                card.style.display = 'block';
+                let currentDrv = getCurrentDriver();
+                let plan = currentDrv.subPlan || 'monthly';
+                let expiry = currentDrv.subExpiry || 'لم يُحدد';
+                let status = currentDrv.subStatus || 'active';
+                let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
+
+                infoBox.innerHTML = `
+                    <p><strong>اسم الحساب/الشركة:</strong> ${currentDrv.name || loggedInDriverName} (${currentDrv.companyName || 'شركة جديدة'})</p>
+                    <p><strong>الهاتف:</strong> ${currentDrv.phone || 'غير مسجل'}</p>
+                    <p><strong>الباقة الحالية:</strong> ${plan} | <strong>الحالة:</strong> ${statusBadge}</p>
+                    <p><strong>تاريخ انتهاء الصلاحية:</strong> <span style="color:var(--danger); font-weight:bold;">${expiry}</span></p>
+                    <p style="margin-top:6px; font-size:10px; opacity:0.85;">⚠️ ملاحظة: لتجديد اشتراك شركتك، يرجى تحويل الرسوم وإرسال كود العملية للإدارة.</p>
+                `;
+            } else {
+                card.style.display = 'none';
+            }
+        }
+
         function updateMemberSub(driverId) {
-            if (currentUserRole !== 'admin') {
-                alert('عذراً، التحكم في الاشتراكات مخصص لمدير النظام فقط.');
+            if (loggedInDriverName !== 'المدير') {
+                alert('عذراً، التحكم في الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط.');
                 return;
             }
             let driver = (appData.drivers || []).find(d => String(d.id) === String(driverId));
@@ -2323,6 +2359,7 @@
                 updateInvoiceDropdown();
                 renderMemberSubscriptionsList();
                 renderAdminPendingCashRequests();
+                renderCompanyAdminSubscriptionView();
             }
             if(tabId === 'consolidated-invoices-tab') renderConsolidatedInvoicesSection();
             if(tabId === 'deferred-invoices-tab') loadDeferredInvoicesTable();
@@ -3939,9 +3976,19 @@
                     addCompBtnMain.style.display = (loggedInDriverName === 'المدير') ? 'block' : 'none';
                 }
 
-                if (currentUserRole === 'admin') {
-                    renderMemberSubscriptionsList();
-                    renderAdminPendingCashRequests();
+                const masterCashCard = document.getElementById('master-cash-requests-card');
+                const masterSaasCard = document.getElementById('master-saas-hub-card');
+                if (masterCashCard && masterSaasCard) {
+                    if (loggedInDriverName === 'المدير') {
+                        masterCashCard.style.display = 'block';
+                        masterSaasCard.style.display = 'block';
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                    } else {
+                        masterCashCard.style.display = 'none';
+                        masterSaasCard.style.display = 'none';
+                        renderCompanyAdminSubscriptionView();
+                    }
                 }
                 
                 let shipments = appData.shipments || [];
@@ -4214,4 +4261,4 @@
         }
     </script>
 </body>
-        </html>
+</html>
