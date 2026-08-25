@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - المجتمع والربط الشامل 3D ONLINE PURE</title>
+    <title>أسطورة الطريق - المجتمع والربط الشامل 3D ONLINE PURE SECURE</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -173,7 +173,7 @@
 <body>
 
     <div class="app-3d-logo-container">
-        <div class="logo-3d">أسطورة الطريق <span>COMMUNITY HUB PURE CLOUD</span></div>
+        <div class="logo-3d">أسطورة الطريق <span>COMMUNITY HUB PURE CLOUD SECURE</span></div>
     </div>
 
     <!-- الهيدر مع أزرار التنقل والربط المعزول بالبروفايل -->
@@ -423,7 +423,12 @@
         let commentFilesCache = {};
         let chatUnsubscribe = null;
 
-        // دالة سحابية متكاملة لتسجيل العمليات في مصفوفة auditLogs (حسب هيكل mainState لديك)
+        // استماع سحابي معزول بالشركة لجميع المنشورات والشحنات والخزنة والشات
+        let communityUnsubscribe = null;
+        let shipmentsUnsubscribe = null;
+        let safeUnsubscribe = null;
+        let driversUnsubscribe = null;
+
         async function logAuditAction(actionDesc) {
             try {
                 const mainStateRef = db.collection('appStore').doc('mainState');
@@ -438,15 +443,14 @@
                     action: actionDesc,
                     createdAt: Date.now(),
                     time: new Date().toLocaleString('ar-EG'),
-                    user: currentDriverProfile.name || 'مجهول'
+                    user: currentDriverProfile.name || 'مجهول',
+                    companyId: currentCompanyId
                 });
 
                 if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
 
                 await mainStateRef.set({ auditLogs: auditLogs }, { merge: true });
-            } catch (err) {
-                console.error("Audit log error:", err);
-            }
+            } catch (err) {}
         }
 
         function goToPage(pageName) {
@@ -469,14 +473,11 @@
                 if (!auth.currentUser) {
                     await auth.signInAnonymously();
                 }
-            } catch (err) {
-                console.warn("Auth warning:", err);
-            }
+            } catch (err) {}
             await fetchCloudSessionFromURL();
             loadChatMessages();
         }
 
-        // تم التعديل لجلب الصورة الشخصية (avatar) مباشرة من مستند Firestore دون تجاوزها للمدير
         async function fetchCloudSessionFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
             urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -496,8 +497,9 @@
                 urlUserId = 'المدير';
             }
 
+            currentCompanyId = urlCompanyId.trim();
             localStorage.setItem('na2la_userId', urlUserId);
-            localStorage.setItem('na2la_companyId', urlCompanyId);
+            localStorage.setItem('na2la_companyId', currentCompanyId);
 
             urlUserId = urlUserId.trim();
             let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
@@ -518,7 +520,7 @@
                     currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
                     currentDriverProfile = {
                         name: found.name || found.driverName || urlUserId,
-                        avatar: found.avatar || found.photoUrl || '', // جلب الصورة الشخصية من Firestore بنجاح
+                        avatar: found.avatar || found.photoUrl || '',
                         title: found.title || (isSuper ? 'مدير عام النظام' : 'سائق معتمد'),
                         phone: found.phone || (isSuper ? '+201114099799' : ''),
                         role: found.role || found.rank || (isSuper ? 'admin' : 'driver'),
@@ -558,7 +560,6 @@
                     syncProfileAndLoad();
                 }
             } catch (err) {
-                console.error(err);
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     name: urlUserId,
@@ -601,9 +602,16 @@
                 document.getElementById('social-content-wrapper').style.display = 'block';
             }
 
-            db.collection('drivers').onSnapshot(snapshot => {
+            // الاستماع المباشر والمعزول للشركة عبر where("companyId", "==", currentCompanyId)
+            if (driversUnsubscribe) driversUnsubscribe();
+            driversUnsubscribe = db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
                 allDrivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderChatUsersList();
+            }, err => {
+                db.collection('drivers').onSnapshot(snap => {
+                    allDrivers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => !d.companyId || d.companyId === currentCompanyId);
+                    renderChatUsersList();
+                });
             });
 
             loadCommunityPosts();
@@ -706,7 +714,7 @@
                 document.getElementById('sos-status-log').innerText = '✅ تم إرسال الاستغاثة بنجاح لغرفة عمليات الشركة!';
                 logAuditAction(`إرسال استغاثة طارئة SOS من قِبل ${currentDriverProfile.name}`);
                 alert('🚨 تم إرسال نداء الاستغاثة لغرفة عمليات الشركة بنجاح!');
-            }).catch(err => { console.error(err); });
+            }).catch(err => {});
         }
 
         function updateLiveLocation() {
@@ -716,10 +724,18 @@
             navigator.geolocation.getCurrentPosition(position => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                db.collection('drivers').where('name', '==', currentDriverProfile.name).get().then(snapshot => {
-                    snapshot.forEach(doc => {
-                        db.collection('drivers').doc(doc.id).update({ lastLat: lat, lastLng: lng, lastLocationUpdate: new Date().toLocaleString('ar-EG') });
-                    });
+                db.collection('drivers').where('companyId', '==', currentCompanyId).where('name', '==', currentDriverProfile.name).get().then(snapshot => {
+                    if(!snapshot.empty) {
+                        snapshot.forEach(doc => {
+                            db.collection('drivers').doc(doc.id).update({ lastLat: lat, lastLng: lng, lastLocationUpdate: new Date().toLocaleString('ar-EG') });
+                        });
+                    } else {
+                        db.collection('drivers').where('name', '==', currentDriverProfile.name).get().then(snap2 => {
+                            snap2.forEach(doc2 => {
+                                db.collection('drivers').doc(doc2.id).update({ lastLat: lat, lastLng: lng, companyId: currentCompanyId, lastLocationUpdate: new Date().toLocaleString('ar-EG') });
+                            });
+                        });
+                    }
                     infoEl.innerText = `✅ تم تحديث موقعك بنجاح (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
                     logAuditAction(`تحديث الموقع الجغرافي بواسطة ${currentDriverProfile.name}`);
                 });
@@ -822,96 +838,107 @@
         }
 
         function loadCommunityPosts() {
-            db.collection('communityPosts').onSnapshot(snapshot => {
+            if (communityUnsubscribe) communityUnsubscribe();
+            
+            // الاستماع المباشر والمعزول حصرياً للشركة عبر where("companyId", "==", currentCompanyId)
+            communityUnsubscribe = db.collection('communityPosts').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
                 allCommunityPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const container = document.getElementById('community-posts-container');
-                container.innerHTML = '';
-                
-                let superAdmin = isSuperAdmin();
-                let posts = allCommunityPosts.filter(p => superAdmin || p.companyId === currentCompanyId);
-                posts.sort((a, b) => Number(b.id) - Number(a.id));
+                renderCommunityPostsUI(allCommunityPosts);
+            }, err => {
+                db.collection('communityPosts').onSnapshot(snap => {
+                    allCommunityPosts = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => !p.companyId || p.companyId === currentCompanyId);
+                    renderCommunityPostsUI(allCommunityPosts);
+                });
+            });
+        }
 
-                if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:11px; text-align:center; opacity:0.7;">لا توجد منشورات لشركتك حالياً.</p>`;
-                    return;
+        function renderCommunityPostsUI(posts) {
+            const container = document.getElementById('community-posts-container');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            posts.sort((a, b) => Number(b.id) - Number(a.id));
+
+            if (posts.length === 0) {
+                container.innerHTML = `<p style="font-size:11px; text-align:center; opacity:0.7;">لا توجد منشورات لشركتك حالياً.</p>`;
+                return;
+            }
+
+            posts.forEach(p => {
+                let mediaHtml = '';
+                if (p.files && p.files.length > 0) {
+                    mediaHtml += `<div class="load-post-media">`;
+                    p.files.forEach(f => {
+                        if (f.type === 'video') {
+                            mediaHtml += `<video src="${f.src}" controls onclick="viewMedia('${f.src}', 'video')"></video>`;
+                        } else {
+                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')"/>`;
+                        }
+                    });
+                    mediaHtml += `</div>`;
                 }
 
-                posts.forEach(p => {
-                    let mediaHtml = '';
-                    if (p.files && p.files.length > 0) {
-                        mediaHtml += `<div class="load-post-media">`;
-                        p.files.forEach(f => {
-                            if (f.type === 'video') {
-                                mediaHtml += `<video src="${f.src}" controls onclick="viewMedia('${f.src}', 'video')"></video>`;
-                            } else {
-                                mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')"/>`;
-                            }
-                        });
-                        mediaHtml += `</div>`;
-                    }
+                let reactionsMap = p.reactions || {};
+                let myReaction = reactionsMap[currentDriverProfile.name] || '';
+                let totalReactions = Object.keys(reactionsMap).length;
+                let reactionSummaryText = totalReactions > 0 ? `إعجاب (${totalReactions})` : 'إعجاب';
 
-                    let reactionsMap = p.reactions || {};
-                    let myReaction = reactionsMap[currentDriverProfile.name] || '';
-                    let totalReactions = Object.keys(reactionsMap).length;
-                    let reactionSummaryText = totalReactions > 0 ? `إعجاب (${totalReactions})` : 'إعجاب';
-
-                    let commentsHtml = '';
-                    if (p.comments && p.comments.length > 0) {
-                        p.comments.forEach(c => {
-                            commentsHtml += `<div class="comment-item">
-                                <div style="display:flex; justify-content:space-between;">
-                                    <b>${c.author}</b>
-                                    <span style="font-size:8px; opacity:0.6;">${c.time}</span>
-                                </div>
-                                <span>${c.text}</span>
-                                ${c.image ? `<img src="${c.image}" onclick="viewMedia('${c.image}', 'image')">` : ''}
-                            </div>`;
-                        });
-                    }
-
-                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:38px; height:38px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ع'}</div>`;
-
-                    let card = document.createElement('div');
-                    card.className = 'card';
-                    card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                ${avatarHtml}
-                                <div>
-                                    <strong style="font-size:12px; color:var(--text-color);">${p.author}</strong>
-                                    <span style="font-size:9px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
-                                </div>
+                let commentsHtml = '';
+                if (p.comments && p.comments.length > 0) {
+                    p.comments.forEach(c => {
+                        commentsHtml += `<div class="comment-item">
+                            <div style="display:flex; justify-content:space-between;">
+                                <b>${c.author}</b>
+                                <span style="font-size:8px; opacity:0.6;">${c.time}</span>
                             </div>
-                            <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                            <span>${c.text}</span>
+                            ${c.image ? `<img src="${c.image}" onclick="viewMedia('${c.image}', 'image')">` : ''}
+                        </div>`;
+                    });
+                }
+
+                let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:38px; height:38px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ع'}</div>`;
+
+                let card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            ${avatarHtml}
+                            <div>
+                                <strong style="font-size:12px; color:var(--text-color);">${p.author}</strong>
+                                <span style="font-size:9px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
+                            </div>
                         </div>
-                        <p style="font-size:12px; line-height:1.5; margin-bottom:8px;">${p.text}</p>
-                        ${mediaHtml}
+                        <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                    </div>
+                    <p style="font-size:12px; line-height:1.5; margin-bottom:8px;">${p.text}</p>
+                    ${mediaHtml}
+                    
+                    <div class="post-actions-bar">
+                        <button class="action-icon-btn" onclick="handleReactionClick('${p.id}')">
+                            ${myReaction ? myReaction : '👍'} <span>${reactionSummaryText}</span>
+                        </button>
+                        <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (${p.comments ? p.comments.length : 0})</button>
+                        <button class="action-icon-btn" onclick="sharePost('${encodeURIComponent(p.text)}')">🔗 مشاركة</button>
+                    </div>
+
+                    <!-- صندوق التعليقات -->
+                    <div id="comments-sec-${p.id}" class="comments-box">
+                        <div style="max-height: 130px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml || '<div style="font-size:10px; opacity:0.6;">لا توجد تعليقات بعد</div>'}</div>
                         
-                        <div class="post-actions-bar">
-                            <button class="action-icon-btn" onclick="handleReactionClick('${p.id}')">
-                                ${myReaction ? myReaction : '👍'} <span>${reactionSummaryText}</span>
-                            </button>
-                            <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (${p.comments ? p.comments.length : 0})</button>
-                            <button class="action-icon-btn" onclick="sharePost('${encodeURIComponent(p.text)}')">🔗 مشاركة</button>
+                        <div id="comment-img-preview-box-${p.id}" style="font-size:10px; color:var(--success); margin-bottom:4px; display:none;">📷 تم إرفاق صورة للتعليق</div>
+                        
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                            <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقك..." style="margin-bottom:0; flex:1; padding:6px 10px;">
+                            <label style="background:var(--bg); border:1px solid var(--border-color); padding:6px 10px; border-radius:8px; cursor:pointer; font-size:12px;" title="إرفاق صورة للتعليق">
+                                📷 <input type="file" accept="image/*" hidden onchange="previewCommentImage('${p.id}', this)">
+                            </label>
+                            <button class="btn-success" style="width:60px; padding:6px; font-size:10px; margin-bottom:0;" onclick="addComment('${p.id}')">إرسال</button>
                         </div>
-
-                        <!-- صندوق التعليقات -->
-                        <div id="comments-sec-${p.id}" class="comments-box">
-                            <div style="max-height: 130px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml || '<div style="font-size:10px; opacity:0.6;">لا توجد تعليقات بعد</div>'}</div>
-                            
-                            <div id="comment-img-preview-box-${p.id}" style="font-size:10px; color:var(--success); margin-bottom:4px; display:none;">📷 تم إرفاق صورة للتعليق</div>
-                            
-                            <div style="display: flex; gap: 4px; align-items: center;">
-                                <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقك..." style="margin-bottom:0; flex:1; padding:6px 10px;">
-                                <label style="background:var(--bg); border:1px solid var(--border-color); padding:6px 10px; border-radius:8px; cursor:pointer; font-size:12px;" title="إرفاق صورة للتعليق">
-                                    📷 <input type="file" accept="image/*" hidden onchange="previewCommentImage('${p.id}', this)">
-                                </label>
-                                <button class="btn-success" style="width:60px; padding:6px; font-size:10px; margin-bottom:0;" onclick="addComment('${p.id}')">إرسال</button>
-                            </div>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
+                    </div>
+                `;
+                container.appendChild(card);
             });
         }
 
@@ -986,18 +1013,19 @@
         function closeMediaViewer() { document.getElementById('mediaViewerModal').style.display = 'none'; }
 
         function loadMyCargoFromShipments() {
-            db.collection('shipments').onSnapshot(snapshot => {
+            if (shipmentsUnsubscribe) shipmentsUnsubscribe();
+            
+            // الاستماع المعزول حصرياً للشركة عبر where("companyId", "==", currentCompanyId)
+            shipmentsUnsubscribe = db.collection('shipments').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
                 const container = document.getElementById('my-cargo-container');
                 if(!container) return;
                 container.innerHTML = '';
                 
-                let superAdmin = isSuperAdmin();
                 let myCargos = [];
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    let matchesComp = (superAdmin || data.companyId === currentCompanyId);
-                    let matchesUser = (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || superAdmin);
-                    if (matchesComp && matchesUser) {
+                    let matchesUser = (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || isSuperAdmin());
+                    if (matchesUser) {
                         myCargos.push({ id: doc.id, ...data });
                     }
                 });
@@ -1023,26 +1051,44 @@
                     `;
                     container.appendChild(card);
                 });
+            }, err => {
+                db.collection('shipments').onSnapshot(snap => {
+                    const container = document.getElementById('my-cargo-container');
+                    if(!container) return;
+                    container.innerHTML = '';
+                    let myCargos = [];
+                    snap.forEach(doc => {
+                        let data = doc.data();
+                        if ((!data.companyId || data.companyId === currentCompanyId)) {
+                            myCargos.push({ id: doc.id, ...data });
+                        }
+                    });
+                    myShipmentsCount = myCargos.length;
+                    let html = '';
+                    myCargos.forEach(c => {
+                        html += `<div class="card"><strong>📦 شحنة: #${c.id}</strong><p>${c.item || ''} - ${c.price || 0} ج.م</p></div>`;
+                    });
+                    container.innerHTML = html || '<p style="text-align:center; opacity:0.7;">لا توجد شحنات.</p>';
+                });
             });
         }
 
         function loadTreasuryData() {
-            db.collection('safe').onSnapshot(snapshot => {
+            if (safeUnsubscribe) safeUnsubscribe();
+            
+            // الاستماع المعزول حصرياً للخزنة عبر where("companyId", "==", currentCompanyId)
+            safeUnsubscribe = db.collection('safe').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
                 const container = document.getElementById('my-safe-container');
                 if(!container) return;
                 container.innerHTML = '';
                 
-                let superAdmin = isSuperAdmin();
                 let mySafeItems = [];
                 let totalBalance = 0;
 
                 snapshot.forEach(doc => {
                     let data = doc.data();
-                    let matchesComp = (superAdmin || data.companyId === currentCompanyId);
-                    if (matchesComp) {
-                        mySafeItems.push({ id: doc.id, ...data });
-                        totalBalance += Number(data.amount || data.price || 0);
-                    }
+                    mySafeItems.push({ id: doc.id, ...data });
+                    totalBalance += Number(data.amount || data.price || 0);
                 });
 
                 mySafeBalanceTotal = totalBalance;
@@ -1066,6 +1112,26 @@
                     `;
                 });
                 container.innerHTML = listHtml;
+            }, err => {
+                db.collection('safe').onSnapshot(snap => {
+                    const container = document.getElementById('my-safe-container');
+                    if(!container) return;
+                    let items = [];
+                    let total = 0;
+                    snap.forEach(doc => {
+                        let d = doc.data();
+                        if (!d.companyId || d.companyId === currentCompanyId) {
+                            items.push(d);
+                            total += Number(d.amount || d.price || 0);
+                        }
+                    });
+                    mySafeBalanceTotal = total;
+                    let html = `<div style="text-align:center; font-weight:bold; margin-bottom:10px;">الإجمالي: ${total} ج.م</div>`;
+                    items.forEach(it => {
+                        html += `<div class="card"><p>${it.description || ''} - ${it.amount || 0} ج.م</p></div>`;
+                    });
+                    container.innerHTML = html;
+                });
             });
         }
 
@@ -1074,40 +1140,40 @@
             if(!listContainer) return;
             listContainer.innerHTML = '';
             
-            let superAdmin = isSuperAdmin();
             let accountsMap = new Map();
 
             (allDrivers || []).forEach(drv => {
                 let name = String(drv.name || drv.id || '').trim();
-                if(name) {
+                let comp = drv.companyId || 'company_main';
+                if(name && (comp === currentCompanyId || isSuperAdmin())) {
                     accountsMap.set(name, {
                         name: name,
                         role: drv.role || 'سائق',
-                        companyId: drv.companyId || 'company_main'
+                        companyId: comp
                     });
                 }
             });
 
             (allChatMessagesCache || []).forEach(m => {
                 let sender = String(m.sender || '').trim();
-                if(sender && sender !== 'general' && !accountsMap.has(sender)) {
+                let comp = m.companyId || 'company_main';
+                if(sender && sender !== 'general' && (comp === currentCompanyId || isSuperAdmin()) && !accountsMap.has(sender)) {
                     let isMgr = ['مدير', 'المدير', '1', 'عماد', 'Emad', 'باندا', 'admin'].includes(sender.toLowerCase());
                     accountsMap.set(sender, {
                         name: sender,
                         role: isMgr ? 'مدير' : 'سائق',
-                        companyId: m.companyId || 'company_main'
+                        companyId: comp
                     });
                 }
             });
 
             let accounts = Array.from(accountsMap.values()).filter(acc => {
-                let matchesComp = (superAdmin || acc.companyId === currentCompanyId || acc.companyId === 'company_main');
                 let isMe = (acc.name === currentDriverProfile.name);
-                return matchesComp && !isMe;
+                return !isMe;
             });
 
             if (accounts.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 8px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات أخرى متصلة حالياً</div>`;
+                listContainer.innerHTML = `<div style="padding: 8px; text-align: center; font-size: 10px; opacity: 0.7;">لا توجد حسابات أخرى متصلة بشركتك حالياً</div>`;
                 return;
             }
 
@@ -1168,12 +1234,19 @@
         }
 
         function loadChatMessages() {
-            if (chatUnsubscribe) return;
+            if (chatUnsubscribe) chatUnsubscribe();
 
-            chatUnsubscribe = db.collection('chat').onSnapshot(snapshot => {
+            // الاستماع المعزول للشات عبر where("companyId", "==", currentCompanyId)
+            chatUnsubscribe = db.collection('chat').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
                 allChatMessagesCache = snapshot.docs.map(doc => doc.data());
                 renderChatUsersList();
                 displayChatMessages(allChatMessagesCache);
+            }, err => {
+                db.collection('chat').onSnapshot(snap => {
+                    allChatMessagesCache = snap.docs.map(d => d.data()).filter(m => !m.companyId || m.companyId === currentCompanyId);
+                    renderChatUsersList();
+                    displayChatMessages(allChatMessagesCache);
+                });
             });
         }
 
@@ -1182,8 +1255,7 @@
             if(!box) return;
             box.innerHTML = '';
             
-            let superAdmin = isSuperAdmin();
-            let msgs = msgsCache.filter(m => superAdmin || m.companyId === currentCompanyId);
+            let msgs = msgsCache;
             msgs.sort((a, b) => Number(a.id) - Number(b.id));
 
             let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
