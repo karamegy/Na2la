@@ -600,7 +600,7 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // إذا قام المدير بتسجيل خروج أو لم يتم تمرير مستخدم بالرابط، نثبّت جلسة المدير حصرياً
+        // إذا لم يتم تمرير مستخدم في الرابط، نفترض جلسة المدير كحالة افتراضية
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = 'المدير';
         }
@@ -612,7 +612,7 @@
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
         
-        // التحقق مما إذا كان المستخدم الحالي هو المدير العام للنظام
+        // التحقق مما إذا كان الحساب هو حساب المدير (لتثبيته وعزله عن أي تداخل مع السائقين)
         let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
         try {
@@ -628,11 +628,11 @@
                 }
             });
 
-            // استثناء المدير تماماً من المزج مع السائقين حتى لو حدث تسجيل خروج
+            // تثبيت جلسة المدير حصرياً دون مزامنتها مع بيانات السائقين أو تأثير تسجيل الخروج
             if (isSuper) {
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
-                    name: urlUserId,
+                    name: 'المدير',
                     avatar: '',
                     title: 'مدير عام النظام',
                     phone: '+201114099799',
@@ -642,10 +642,12 @@
                     subPlan: 'مدير عام',
                     subExpiry: 'دائم'
                 };
+                urlUserId = 'المدير';
                 syncProfileAndLoadHub();
                 return;
             }
 
+            // إذا كان المستخدم المتصل سائقاً أو حساباً آخر، يتم مزامنة بياناته وعزل شركته بدقة
             if (found) {
                 currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
@@ -664,12 +666,12 @@
                 };
                 syncProfileAndLoadHub();
             } else {
-                // الحسابات الجديدة التي تسجل عبر الاندكس يتم مزامنتها تلقائياً
+                // مزامنة أي حساب جديد متصل عبر المنصة تلقائياً وتخصيصه لشركة معزولة
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     name: urlUserId,
                     avatar: '',
-                    title: 'سائق معتمد جديد',
+                    title: 'سائق معتمد',
                     phone: '',
                     role: 'driver',
                     companyId: currentCompanyId,
@@ -685,7 +687,7 @@
             currentDriverProfile = {
                 name: urlUserId,
                 avatar: '',
-                title: isSuper ? 'مدير عام النظام' : 'حساب سحابي معزول',
+                title: isSuper ? 'مدير عام النظام' : 'حساب معزول',
                 role: isSuper ? 'admin' : 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
@@ -758,7 +760,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-        // 1. مزامنة السائقين مع فصل الشركات الحقيقي
+        // 1. مزامنة السائقين مع عزل تام للشركات الحالية
         let qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
         onSnapshot(qDrivers, (snapshot) => {
             globalDriversCache = [];
@@ -769,7 +771,7 @@
             updateCurrentInterfacePermissions();
         });
 
-        // 2. مزامنة الأسطول مع فصل الشركات الحقيقي
+        // 2. مزامنة الأسطول مع عزل تام للشركات الحالية
         let qFleet = query(collection(window.db, "viper_fleet_ops"), where("companyId", "==", currentCompanyId));
         onSnapshot(qFleet, (snapshot) => {
             globalFleetCache = [];
@@ -779,7 +781,7 @@
             renderFleetTableAndStats();
         });
 
-        // 3. مزامنة الشحن مع فصل الشركات الحقيقي
+        // 3. مزامنة الشحن مع عزل تام للشركات الحالية
         let qLogistics = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
         onSnapshot(qLogistics, (snapshot) => {
             let container = document.getElementById("logisticsContainer");
@@ -796,7 +798,7 @@
             }
         });
 
-        // 4. مزامنة المالية مع فصل الشركات الحقيقي
+        // 4. مزامنة المالية مع عزل تام للشركات الحالية
         let qFinance = query(collection(window.db, "viper_finance"), where("companyId", "==", currentCompanyId));
         onSnapshot(qFinance, (snapshot) => {
             let container = document.getElementById("financeContainer");
