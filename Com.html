@@ -431,13 +431,13 @@
 
         let currentCompanyId = 'company_main';
         let currentDriverProfile = {
-            name: 'المدير',
+            name: 'كابتن الأسطول',
             avatar: '',
-            title: 'مدير النظام',
+            title: 'سائق معتمد',
             phone: '',
-            rank: 'admin',
-            permissions: 'صلاحيات كاملة لإدارة النظام والأسطول',
-            id: '1'
+            rank: 'driver',
+            permissions: 'صلاحيات تشغيلية',
+            id: ''
         };
 
         let currentChatTarget = 'general';
@@ -452,7 +452,7 @@
         let driversUnsubscribe = null;
 
         function goToPage(pageName) {
-            let userId = currentDriverProfile.id || urlUserId || '1';
+            let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
@@ -472,17 +472,9 @@
                         urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
             let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-            if (!urlUserId || urlUserId.trim() === '' || urlUserId === 'null') {
-                urlUserId = 'المدير';
-            }
-
-            urlUserId = urlUserId.trim();
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(urlUserId.toLowerCase());
-            
             if (!urlCompanyId || urlCompanyId.trim() === '' || urlCompanyId === 'null') {
                 urlCompanyId = 'company_main';
             }
-
             currentCompanyId = urlCompanyId.trim();
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
@@ -495,59 +487,74 @@
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
                     
-                    let dName = String(d.name || '').trim().toLowerCase();
-                    let dPhone = String(d.phone || '').trim();
-                    let targetId = String(urlUserId).trim().toLowerCase();
+                    if (urlUserId) {
+                        let dName = String(d.name || '').trim().toLowerCase();
+                        let dPhone = String(d.phone || '').trim();
+                        let targetId = String(urlUserId).trim().toLowerCase();
 
-                    if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
-                        found = { id: docSnap.id, ...d };
+                        if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
+                            found = { id: docSnap.id, ...d };
+                        }
                     }
                 });
 
                 if (found) {
                     currentCompanyId = found.companyId || urlCompanyId || 'company_main';
                     let roleStr = String(found.role || found.rank || '').toLowerCase();
-                    let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
-
-                    // فحص شامل لجميع حقول الصور المحتملة في قاعدة البيانات
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
                     let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || '';
 
                     currentDriverProfile = {
                         id: found.id,
-                        name: found.name || found.driverName || urlUserId,
+                        name: found.name || found.driverName || 'سائق معتمد',
                         phone: found.phone || 'غير متوفر',
                         rank: isAdmin ? 'admin' : (found.role || 'driver'),
                         title: found.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد'),
                         permissions: isAdmin ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                         avatar: userAvatar
                     };
-                } else if (isSuper) {
+                } else if (urlUserId) {
+                    let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(String(urlUserId).toLowerCase());
                     currentDriverProfile = {
                         id: urlUserId,
                         name: urlUserId,
-                        rank: 'admin',
-                        title: 'مدير النظام',
-                        permissions: 'صلاحيات كاملة',
-                        phone: '+201114099799',
-                        avatar: ''
-                    };
-                } else {
-                    currentDriverProfile = {
-                        id: urlUserId,
-                        name: urlUserId,
-                        rank: 'driver',
-                        title: 'سائق معتمد',
-                        permissions: 'صلاحيات تشغيلية أساسية',
+                        rank: isSuper ? 'admin' : 'driver',
+                        title: isSuper ? 'مدير النظام' : 'سائق معتمد',
+                        permissions: isSuper ? 'صلاحيات كاملة' : 'صلاحيات تشغيلية أساسية',
                         phone: '',
                         avatar: ''
                     };
+                } else {
+                    // إذا لم يتم تمرير أي مستخدم بالرابط، يتم أخذ أول سائق متاح أو حساب افتراضي لكي لا يظهر اسم "المدير" خطأً
+                    if (allDrivers.length > 0) {
+                        let firstDrv = allDrivers[0];
+                        currentDriverProfile = {
+                            id: firstDrv.id,
+                            name: firstDrv.name || 'سائق الأسطول',
+                            phone: firstDrv.phone || '',
+                            rank: firstDrv.role || 'driver',
+                            title: firstDrv.title || 'سائق معتمد',
+                            permissions: 'صلاحيات تشغيلية',
+                            avatar: firstDrv.avatar || firstDrv.photoUrl || ''
+                        };
+                    } else {
+                        currentDriverProfile = {
+                            id: 'guest',
+                            name: 'زائر / كابتن',
+                            rank: 'driver',
+                            title: 'سائق معتمد',
+                            permissions: 'صلاحيات تشغيلية',
+                            phone: '',
+                            avatar: ''
+                        };
+                    }
                 }
             } catch (err) {
                 currentDriverProfile = {
-                    id: urlUserId,
-                    name: urlUserId,
-                    rank: isSuper ? 'admin' : 'driver',
-                    title: isSuper ? 'مدير النظام' : 'سائق معتمد',
+                    id: urlUserId || 'guest',
+                    name: urlUserId || 'كابتن الأسطول',
+                    rank: 'driver',
+                    title: 'سائق معتمد',
                     permissions: 'صلاحيات أساسية',
                     phone: '',
                     avatar: ''
@@ -570,7 +577,7 @@
                 modalAvatar.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
             } else {
                 avatarContainer.style.display = 'none';
-                modalAvatar.innerText = currentDriverProfile.name ? currentDriverProfile.name.charAt(0) : 'ز';
+                modalAvatar.innerText = currentDriverProfile.name ? currentDriverProfile.name.charAt(0) : 'ك';
             }
 
             document.getElementById('modalNameText').innerText = currentDriverProfile.name;
@@ -704,7 +711,7 @@
                         });
                     }
 
-                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ع'}</div>`;
+                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
 
                     let card = document.createElement('div');
                     card.className = 'card';
