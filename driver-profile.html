@@ -524,11 +524,10 @@
             ]
         };
 
-        // دالة لمنع تخزين أرقام الـ Timestamps كأَسماء وهمية وتحويلها لأسماء صحيحة
+        // دالة تنقية الأسماء لضمان عدم ظهور أرقام الـ Timestamps وتحويلها لأسماء حقيقية
         function getCleanDriverName(rawName) {
             if (!rawName) return 'سائق معتمد';
             let str = String(rawName).trim();
-            // إذا كان الاسم عبارة عن أرقام فقط (مثل طابع زمني 1787608533281)
             if (/^\d{10,}$/.test(str)) {
                 let foundDrv = (appData.drivers || []).find(d => String(d.id) === str || String(d.phone) === str);
                 if (foundDrv && foundDrv.name && !/^\d{10,}$/.test(foundDrv.name)) {
@@ -666,8 +665,9 @@
             renderChatAccountsList();
         });
 
+        // ✅ الاستماع للمكالمات الواردة بالاسم النظيف حصرياً لضمان رن الهاتف عند المستلم فورا
         db.collection('webrtc_calls')
-          .where('callee', '==', activeExternalSessionName)
+          .where('callee', '==', getCleanDriverName(activeExternalSessionName))
           .where('status', '==', 'calling')
           .onSnapshot(snapshot => {
               snapshot.docChanges().forEach(change => {
@@ -1011,7 +1011,6 @@
             document.getElementById('localVideo').srcObject = null;
         }
 
-        // ✅ دالة عرض قائمة الحسابات في الشات مع تنقية أي أرقام وهمية أو تtimestamps
         function renderChatAccountsList() {
             const container = document.getElementById('chat-accounts-list-container');
             if(!container) return;
@@ -1020,7 +1019,6 @@
             
             let accountsMap = new Map();
             
-            // 1. إضافة السائقين المسجلين في جدول drivers بالاسم الحقيقي
             (appData.drivers || []).forEach(d => {
                 let name = getCleanDriverName(d.name || d.id);
                 if(name && name !== 'سائق معتمد') {
@@ -1032,7 +1030,6 @@
                 }
             });
             
-            // 2. إضافة أي مرسلين نشطين في جدول الشات
             (appData.chat || []).forEach(m => {
                 let rawSender = String(m.sender || '').trim();
                 let sender = getCleanDriverName(rawSender);
