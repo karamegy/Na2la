@@ -989,16 +989,15 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
-        // استخراج جلسة المستخدم ومعرف الشركة حصرياً من معاملات الـ URL دون تخزين محلي
+        // قراءة الجلسة ومعرف الشركة حصرياً من معاملات الـ URL دون أي قيم افتراضية لمدير سابق
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
             if (externalId && externalId.trim() !== '' && externalId !== 'null') {
                 return externalId.trim();
             }
-            return '1';
+            return 'زائر';
         }
 
         let activeExternalSessionName = getExternalLoginSession();
@@ -1013,7 +1012,6 @@
         let currentCompanyId = (urlCompanyIdParam && urlCompanyIdParam.trim() !== '' && urlCompanyIdParam !== 'null') ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
 
-        // دالة التنقل بين الصفحات مع الحفاظ على معاملات الـ URL بدقة
         function navigateToPage(pageName) {
             const queryParams = `?userId=${encodeURIComponent(activeExternalSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
             window.location.href = pageName + queryParams;
@@ -1107,21 +1105,20 @@
         };
 
         function getCleanDriverName(rawName) {
-            if (!rawName) return 'سائق معتمد';
+            if (!rawName) return 'مستخدم';
             let str = String(rawName).trim();
             if (/^\d{10,}$/.test(str)) {
                 let foundDrv = (appData.drivers || []).find(d => String(d.id) === str || String(d.phone) === str);
                 if (foundDrv && foundDrv.name && !/^\d{10,}$/.test(foundDrv.name)) {
                     return foundDrv.name;
                 }
-                return 'سائق معتمد';
+                return str;
             }
             return str;
         }
 
         function getLoggedInUser() {
             let sessionName = String(activeExternalSessionName || '').trim();
-            let isExplicitAdmin = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(sessionName);
             
             if (appData.drivers && appData.drivers.length > 0) {
                 let drv = appData.drivers.find(d => 
@@ -1131,27 +1128,19 @@
                 );
                 if (drv) {
                     let cleanN = getCleanDriverName(drv.name);
-                    return { ...drv, name: (cleanN === 'سائق معتمد' && isExplicitAdmin) ? 'المدير' : cleanN };
+                    let roleStr = String(drv.role || '').toLowerCase();
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
+                    return { ...drv, name: cleanN, role: isAdmin ? 'admin' : 'driver' };
                 }
             }
 
-            if (isExplicitAdmin) {
-                return {
-                    id: '1',
-                    name: 'المدير',
-                    role: 'admin',
-                    title: 'مدير عام النظام',
-                    status: 'متاح 🟢',
-                    advances: 0,
-                    companyId: currentCompanyId
-                };
-            }
+            let roleStr = ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(sessionName.toLowerCase()) ? 'admin' : 'driver';
 
             return {
                 id: sessionName,
                 name: getCleanDriverName(sessionName),
-                role: 'driver',
-                title: 'أسطورة الطريق',
+                role: roleStr,
+                title: roleStr === 'admin' ? 'مدير عام النظام' : 'سائق معتمد',
                 status: 'متاح 🟢',
                 advances: 0,
                 companyId: currentCompanyId
@@ -1170,7 +1159,7 @@
         }
 
         function autoRegisterUserToFirestore() {
-            if (!activeExternalSessionName || activeExternalSessionName === '1') return;
+            if (!activeExternalSessionName || activeExternalSessionName === 'زائر') return;
             const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
             driverRef.get().then(docSnap => {
                 if (!docSnap.exists) {
@@ -1217,12 +1206,12 @@
             let loggedInUser = getLoggedInUser();
             let displayName = loggedInUser.name;
             document.getElementById('gplus-name-display').innerText = displayName;
-            document.getElementById('gplus-badge-display').innerText = loggedInUser.role === 'admin' ? 'مدير النظام' : 'أسطورة الطريق';
+            document.getElementById('gplus-badge-display').innerText = loggedInUser.role === 'admin' ? 'مدير النظام' : 'سائق معتمد';
             document.getElementById('user-role-badge').innerText = `متصل بالمنصة ☁️ (${currentCompanyId})`;
         }
         renderInitialUIInstant();
 
-        // 🔄 المزامنة اللحظية المعزولة حصرياً بالشركة عبر where("companyId", "==", currentCompanyId)
+        // 🔄 مزامنة حية معزولة حصرياً بالشركة الحالية
         db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
@@ -1362,7 +1351,7 @@
 
             let displayName = targetDrv.name || 'مستخدم';
             document.getElementById('gplus-name-display').innerText = displayName;
-            document.getElementById('gplus-badge-display').innerText = targetDrv.title || 'عضو معتمد';
+            document.getElementById('gplus-badge-display').innerText = targetDrv.title || (targetDrv.role === 'admin' ? 'مدير النظام' : 'سائق معتمد');
             document.getElementById('gplus-tagline-display').innerText = `الهاتف: ${targetDrv.phone || 'غير متوفر'} | الرتبة: ${targetDrv.role === 'admin' ? 'مدير النظام' : 'سائق'} | شركة: ${currentCompanyId}`;
             
             let targetShipments = (appData.shipments || []).filter(s => {
@@ -1370,7 +1359,7 @@
                 let assigned = (s.assignedDriver || s.driver || '').trim();
                 let clientName = (s.name || s.client || '').trim();
                 
-                if (loggedInUser.role === 'admin' || loggedInUser.name === 'المدير') {
+                if (loggedInUser.role === 'admin') {
                     return true;
                 }
                 return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
@@ -1709,7 +1698,7 @@
             
             (appData.drivers || []).forEach(d => {
                 let name = getCleanDriverName(d.name || d.id);
-                if(name && name !== 'سائق معتمد') {
+                if(name && name !== 'مستخدم') {
                     accountsMap.set(name, {
                         name: name,
                         phone: d.phone || '',
@@ -1860,7 +1849,7 @@
 
         function deleteWallPost(docId, authorName) {
             let loggedInUser = getLoggedInUser();
-            let isAdmin = loggedInUser.role === 'admin' || loggedInUser.name === 'المدير';
+            let isAdmin = loggedInUser.role === 'admin';
             
             if(isAdmin || String(authorName) === String(loggedInUser.name)) {
                 if(confirm('هل أنت متأكد من حذف هذا المنشور نهائياً؟')) {
@@ -1913,7 +1902,7 @@
                     `;
                 });
 
-                let isAdmin = loggedInUser.role === 'admin' || loggedInUser.name === 'المدير';
+                let isAdmin = loggedInUser.role === 'admin';
                 let canDelete = isAdmin || String(cleanAuthor) === String(loggedInUser.name);
                 let deleteBtnHtml = canDelete ? `<button type="button" class="btn-danger btn-sm" onclick="deleteWallPost('${p.docId}', '${cleanAuthor}')" style="width:auto; padding:3px 8px; font-size:9px;">حذف المنشور 🗑️</button>` : '';
 
@@ -2112,7 +2101,7 @@
             let filtered = (appData.drivers || []).filter(d => {
                 let cleanN = getCleanDriverName(d.name);
                 let matchesQuery = (cleanN && cleanN.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
-                return matchesQuery && cleanN !== 'سائق معتمد';
+                return matchesQuery && cleanN !== 'مستخدم';
             });
 
             filtered.forEach(d => {
