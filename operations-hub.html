@@ -588,7 +588,8 @@
         let user = currentDriverProfile || {};
         let role = String(user.role || '').toLowerCase().trim();
         let name = String(user.name || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(name);
+        let docId = String(user.id || '').toLowerCase().trim();
+        return role === 'admin' || role === 'مدير' || docId === 'admin' || ['1', 'admin', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(name) || ['admin', 'admin1'].includes(docId);
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -601,7 +602,7 @@
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-            urlUserId = 'المدير';
+            urlUserId = 'admin';
         }
 
         if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
@@ -610,7 +611,8 @@
 
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
-        let isSuper = ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
+        let targetIdLower = urlUserId.toLowerCase();
+        let isSuperIdentifier = ['1', 'admin', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(targetIdLower);
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -621,35 +623,37 @@
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
                 
+                let docId = String(docSnap.id || '').trim().toLowerCase();
                 let dName = String(d.name || '').trim().toLowerCase();
                 let dPhone = String(d.phone || '').trim();
-                let targetId = String(urlUserId).trim().toLowerCase();
 
-                if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
-                    found = d;
+                if (docId === targetIdLower || dName === targetIdLower || dPhone === targetIdLower) {
+                    found = { id: docSnap.id, ...d };
                 }
             });
 
             if (found) {
                 currentCompanyId = found.companyId || urlCompanyId || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
-                let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
+                let isDocAdmin = isSuperIdentifier || docIdIsAdmin(found.id) || roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
 
                 currentDriverProfile = {
+                    id: found.id,
                     name: found.name || found.driverName || urlUserId,
                     avatar: found.avatar || found.photoUrl || '',
-                    title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                    title: found.title || (isDocAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
                     phone: found.phone || '',
-                    role: isAdmin ? 'admin' : (found.role || 'driver'),
+                    role: isDocAdmin ? 'admin' : (found.role || 'driver'),
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
-                    subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
-                    subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
+                    subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
+                    subExpiry: found.subExpiry || (isDocAdmin ? 'دائم' : 'غير محدد')
                 };
                 syncProfileAndLoadHub();
-            } else if (isSuper) {
+            } else if (isSuperIdentifier) {
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
+                    id: 'admin',
                     name: urlUserId,
                     avatar: '',
                     title: 'مدير عام النظام',
@@ -664,6 +668,7 @@
             } else {
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
+                    id: urlUserId,
                     name: urlUserId,
                     avatar: '',
                     title: 'حساب غير مسجل',
@@ -680,17 +685,23 @@
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
+                id: urlUserId,
                 name: urlUserId,
                 avatar: '',
-                title: isSuper ? 'مدير عام النظام' : 'غير معروف',
-                role: isSuper ? 'admin' : 'driver',
+                title: isSuperIdentifier ? 'مدير عام النظام' : 'غير معروف',
+                role: isSuperIdentifier ? 'admin' : 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
-                subPlan: isSuper ? 'مدير عام' : 'أساسي',
+                subPlan: isSuperIdentifier ? 'مدير عام' : 'أساسي',
                 subExpiry: ''
             };
             syncProfileAndLoadHub();
         }
+    }
+
+    function docIdIsAdmin(docId) {
+        let id = String(docId || '').toLowerCase().trim();
+        return id === 'admin' || id === 'admin1' || id === '1';
     }
 
     function syncProfileAndLoadHub() {
