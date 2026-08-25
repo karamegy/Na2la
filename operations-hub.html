@@ -600,7 +600,7 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // إذا قام المدير بتسجيل خروج أو لم يتم تمرير مستخدم بالرابط، نثبّت جلسة المدير حصرياً
+        // الاعتماد بالكامل على الرابط (URL) فقط بدون جلب أو حفظ في localStorage
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
             urlUserId = 'المدير';
         }
@@ -611,25 +611,38 @@
 
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
-        
-        // التحقق مما إذا كان المستخدم الحالي هو المدير العام للنظام
         let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
             let found = null;
             globalDriversCache = [];
-            
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                if (!isSuper && (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase())) {
+                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
                     found = d;
                 }
             });
 
-            // استثناء المدير تماماً من المزج مع السائقين حتى لو حدث تسجيل خروج
-            if (isSuper) {
+            if (found) {
+                currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                let roleStr = String(found.role || found.rank || '').toLowerCase();
+                let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير';
+
+                currentDriverProfile = {
+                    name: found.name || found.driverName || urlUserId,
+                    avatar: found.avatar || found.photoUrl || '',
+                    title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                    phone: found.phone || (isAdmin ? '+201114099799' : ''),
+                    role: isAdmin ? 'admin' : (found.role || 'driver'),
+                    companyId: currentCompanyId,
+                    canAccessSocial: found.canAccessSocial !== false,
+                    subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
+                    subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
+                };
+                syncProfileAndLoadHub();
+            } else if (isSuper) {
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     name: urlUserId,
@@ -643,39 +656,18 @@
                     subExpiry: 'دائم'
                 };
                 syncProfileAndLoadHub();
-                return;
-            }
-
-            if (found) {
-                currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
-                let roleStr = String(found.role || found.rank || '').toLowerCase();
-                let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
-
-                currentDriverProfile = {
-                    name: found.name || found.driverName || urlUserId,
-                    avatar: found.avatar || found.photoUrl || '',
-                    title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
-                    phone: found.phone || '',
-                    role: isAdmin ? 'admin' : (found.role || 'driver'),
-                    companyId: currentCompanyId,
-                    canAccessSocial: found.canAccessSocial !== false,
-                    subPlan: found.subPlan || 'أساسي',
-                    subExpiry: found.subExpiry || 'غير محدد'
-                };
-                syncProfileAndLoadHub();
             } else {
-                // الحسابات الجديدة التي تسجل عبر الاندكس يتم مزامنتها تلقائياً
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     name: urlUserId,
                     avatar: '',
-                    title: 'سائق معتمد جديد',
+                    title: 'حساب غير مسجل',
                     phone: '',
                     role: 'driver',
                     companyId: currentCompanyId,
-                    canAccessSocial: true,
+                    canAccessSocial: false,
                     subPlan: 'أساسي',
-                    subExpiry: 'مفعل'
+                    subExpiry: ''
                 };
                 syncProfileAndLoadHub();
             }
@@ -685,7 +677,7 @@
             currentDriverProfile = {
                 name: urlUserId,
                 avatar: '',
-                title: isSuper ? 'مدير عام النظام' : 'حساب سحابي معزول',
+                title: isSuper ? 'مدير عام النظام' : 'غير معروف',
                 role: isSuper ? 'admin' : 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
@@ -1142,4 +1134,4 @@
 </script>
 
 </body>
-</html>
+                        </html>
