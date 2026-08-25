@@ -13,7 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase (الإصدار الثامن المتطابق مع المنصة الأم) -->
+    <!-- مكتبات Firebase (الإصدار الثامن) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -202,7 +202,7 @@
 
     <main class="content-area" id="main-content"></main>
 
-    <!-- نافذة مكالمات الفيديو والصوت مع مؤثرات الوجوه والملصقات -->
+    <!-- نافذة مكالمات الفيديو والصوت -->
     <div id="videoCallModal" class="custom-modal" style="flex-direction:column; background:rgba(0,0,0,0.9);">
         <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative;">
             <h3 style="color:var(--accent-main); margin-bottom:10px; border:none;" id="call-modal-title">📹 مكالمة فيديو للأسطول عالية الجودة</h3>
@@ -227,7 +227,7 @@
         </div>
     </div>
 
-    <!-- نافذة تسجيل الدخول برقم الهاتف وكلمة السر المحدثة (مع لوجو باندا وزر الرجوع للرئيسية) -->
+    <!-- نافذة تسجيل الدخول -->
     <div id="authModal" class="custom-modal" style="display:flex; flex-direction:column; backdrop-filter: blur(8px);">
         <div class="card" style="width: 100%; max-width: 380px; text-align: center; background: var(--card-bg); border: 2px solid var(--accent-main); box-shadow: 0 10px 30px rgba(0,0,0,0.8); border-radius: 16px; padding: 20px;">
             <div style="width: 65px; height: 65px; margin: 0 auto 12px auto; background: linear-gradient(135deg, var(--accent-main), var(--purple-color)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: 0 4px 15px rgba(37,99,235,0.4); border: 2px solid #fff;">🐼</div>
@@ -284,7 +284,7 @@
         <button type="button" class="btn-danger" onclick="closeModal('qr-modal')" style="margin-top:10px; width:100px;">إغلاق</button>
     </div>
 
-    <!-- نافذة تصدير وإرسال بوليصة الشحن كصورة وواتساب -->
+    <!-- نافذة تصدير وإرسال بوليصة الشحن -->
     <div id="image-export-modal" class="custom-modal" style="flex-direction:column;">
         <div id="invoice-preview-container" style="margin-bottom: 10px;">
             <div id="invoice-preview-card">
@@ -470,6 +470,7 @@
 
     let unsubscribers = [];
 
+    // تهيئة مستمعي السحابة مع فصل الشركات الدقيق متزامن مع الاندكس
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -478,14 +479,16 @@
 
         collections.forEach(colName => {
             let query = db.collection(colName);
+
+            // تصفية وقراءة البيانات بناءً على معرف الشركة (فصل حساب الشركات)
+            if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
+                query = query.where('companyId', '==', companyId);
+            }
+
             const unsub = query.onSnapshot(snapshot => {
                 let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
                 
-                if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
-                    appData[colName] = rawData.filter(d => !d.companyId || d.companyId === companyId || d.companyId === 'company_main');
-                } else {
-                    appData[colName] = rawData;
-                }
+                appData[colName] = rawData;
 
                 if (colName === 'posts') {
                     appData.wallPosts = appData.posts;
@@ -854,7 +857,7 @@
         
         if (sectionId === 'profile') {
             let userPhone = user.phone || '+201114099799';
-            let userCompanyName = user.companyName === 'company_main' ? 'أسطورة الطريق الرئيسية' : (user.companyName || 'أسطورة الطريق الرئيسية');
+            let userCompanyName = user.companyName === 'company_main' ? 'أسطورة الطريق الرئيسية' : (user.companyName || currentCompanyId);
             
             let coverBgStyle = user.coverUrl || user.cover ? `url('${user.coverUrl || user.cover}') center/cover` : 'linear-gradient(135deg, var(--accent-main), var(--purple-color))';
             let avatarContent = user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width:100%; height:100%; background:var(--accent-main); display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff;">🐼</div>`;
@@ -1390,7 +1393,7 @@
                                     <strong>${m.sender}</strong><span>${m.time}</span>
                                 </div>
                                 <p style="margin-top:2px;">${m.text || ''}</p>
-                                ${m.mediaUrl ? (m.mediaType === 'image' ? `<img src="${m.mediaUrl}" style="max-width:100%; border-radius:6px; margin-top:4px; max-height:150px; object-fit:cover;">` : `<video src="${m.mediaUrl}" controls style="max-width:100%; border-radius:6px; margin-top:4px; max-height:150px;"></video>`) : ''}
+                                ${m.mediaUrl ? (m.mediaType === 'video' ? `<video src="${m.mediaUrl}" controls style="max-width:100%; border-radius:6px; margin-top:4px; max-height:150px;"></video>` : `<img src="${m.mediaUrl}" style="max-width:100%; border-radius:6px; margin-top:4px; max-height:150px; object-fit:cover;">`) : ''}
                             </div>
                         `).join('') || '<p style="text-align:center; font-size:9px; color:var(--text-muted);">لا توجد رسائل</p>'}
                     </div>
@@ -1533,6 +1536,7 @@
         await callDoc.set({
             caller: currentUserName,
             receiver: receiverName,
+            companyId: currentCompanyId,
             offer: { type: offer.type, sdp: offer.sdp },
             status: 'ringing',
             isVideo: isVideo,
@@ -1712,7 +1716,7 @@
                 if(user) {
                     user.avatar = base64;
                     const docKey = String(user.docId || user.id || user.phone || user.name);
-                    db.collection('drivers').doc(docKey).set({ avatar: base64 }, { merge: true }).then(() => {
+                    db.collection('drivers').doc(docKey).set({ avatar: base64, companyId: currentCompanyId }, { merge: true }).then(() => {
                         applyUserPermissionsUI();
                         showToast('تم حفظ وتحديث الصورة الشخصية سحابياً بنجاح! 🖼️');
                         refreshActiveSection();
@@ -1733,7 +1737,7 @@
                 if(user) {
                     user.coverUrl = base64;
                     const docKey = String(user.docId || user.id || user.phone || user.name);
-                    db.collection('drivers').doc(docKey).set({ coverUrl: base64 }, { merge: true }).then(() => {
+                    db.collection('drivers').doc(docKey).set({ coverUrl: base64, companyId: currentCompanyId }, { merge: true }).then(() => {
                         const coverContainer = document.getElementById('profile-cover-container');
                         if(coverContainer) {
                             coverContainer.style.background = `url('${base64}') center/cover`;
@@ -1911,7 +1915,7 @@
             showToast('تحصيل الفواتير مخصص للمدير فقط!', 'warning');
             return;
         }
-        db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: 0, remainingAmount: 0 }, { merge: true }).then(() => {
+        db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: 0, remainingAmount: 0, companyId: currentCompanyId }, { merge: true }).then(() => {
             switchSection('deferredInvoices');
             showToast('تم تحصيل الفاتورة المؤجلة وتحديث السحابة بنجاح! ✅');
         });
@@ -1954,6 +1958,7 @@
         let amount = prompt('أدخل المبلغ المراد سداده:', '0');
         if(amount && !isNaN(amount)) {
             cust.debt = Math.max(0, Number(cust.debt) - Number(amount));
+            cust.companyId = currentCompanyId;
             db.collection('customers').doc(String(cust.docId || cust.id)).set(cust, { merge: true }).then(() => {
                 showToast('تم سداد جزء من الدين سحابياً بنجاح!');
                 switchSection('customers');
@@ -2061,6 +2066,7 @@
             item.address = document.getElementById('edit-address').value;
             item.item = document.getElementById('edit-item').value;
             item.price = Number(document.getElementById('edit-price').value);
+            item.companyId = currentCompanyId;
             
             db.collection('shipments').doc(String(docId)).set(item, { merge: true }).then(() => {
                 closeModal('editItemModal');
@@ -2286,6 +2292,7 @@
         if(s) {
             s.milestone = newMilestone;
             s.status = newMilestone;
+            s.companyId = currentCompanyId;
             db.collection('shipments').doc(String(docId)).set(s, { merge: true }).then(() => {
                 showToast('تم تحديث مرحلة الشحنة سحابياً بنجاح!');
                 renderTrackingDetails();
@@ -2355,7 +2362,7 @@
             showToast('تعديل الحسابات مخصص للمدير فقط!', 'warning');
             return;
         }
-        db.collection('drivers').doc(String(docId)).set({ [field]: value }, { merge: true }).then(() => {
+        db.collection('drivers').doc(String(docId)).set({ [field]: value, companyId: currentCompanyId }, { merge: true }).then(() => {
             showToast('تم التحديث السحابي بنجاح');
         });
     }
@@ -2418,6 +2425,22 @@
         });
     }
 
+    function saveTruck(e) {
+        e.preventDefault();
+        let trId = String(Date.now());
+        const newTruck = {
+            id: trId,
+            companyId: currentCompanyId,
+            num: document.getElementById('tr-num').value,
+            driver: document.getElementById('tr-driver').value,
+            km: Number(document.getElementById('tr-km').value || 0)
+        };
+        db.collection('trucks').doc(trId).set(newTruck).then(() => {
+            switchSection('fleet');
+            showToast('تم إضافة المركبة بالأسطول سحابياً!');
+        });
+    }
+
     function saveTreasury(e) {
         e.preventDefault();
         let user = window.currentLoggedInUser || {};
@@ -2462,6 +2485,27 @@
         db.collection('expenses').doc(exId).set(newEx).then(() => {
             switchSection('expenses');
             showToast('تم حفظ المصروف سحابياً بنجاح!');
+        });
+    }
+
+    function publishFeedPost() {
+        const text = document.getElementById('feed-text').value;
+        if (!text) return;
+        let pId = String(Date.now());
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'مستخدم';
+        const newPost = {
+            id: pId,
+            companyId: currentCompanyId,
+            author: userName,
+            user: userName,
+            text: text,
+            desc: text,
+            date: new Date().toLocaleDateString('ar-EG')
+        };
+        db.collection('posts').doc(pId).set(newPost).then(() => {
+            document.getElementById('feed-text').value = '';
+            showToast('تم نشر الإعلان سحابياً!');
+            switchSection('publicFeed');
         });
     }
 
