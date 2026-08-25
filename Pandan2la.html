@@ -201,7 +201,7 @@
 
     <main class="content-area" id="main-content"></main>
 
-    <!-- نافذة مكالمات الفيديو والصوت مع مؤثرات الوجوه والملصقات (بدون تغيير ألوان) -->
+    <!-- نافذة مكالمات الفيديو والصوت مع مؤثرات الوجوه والملصقات -->
     <div id="videoCallModal" class="custom-modal" style="flex-direction:column; background:rgba(0,0,0,0.9);">
         <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative;">
             <h3 style="color:var(--accent-main); margin-bottom:10px; border:none;" id="call-modal-title">📹 مكالمة فيديو للأسطول عالية الجودة</h3>
@@ -1439,11 +1439,12 @@
         renderStats();
     }
 
-    // دوال مكالمات WebRTC السحابية عالية الجودة ومؤثرات الوجوه
+    // دوال مكالمات WebRTC السحابية ومؤثرات الوجوه المعالجة بدقة
     let pc = null;
     let currentCallId = null;
     let localStream = null;
     let currentFacingMode = 'user';
+    let handledCalls = new Set();
     const servers = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
@@ -1485,7 +1486,6 @@
         pc = new RTCPeerConnection(servers);
         
         try {
-            // تحسين الجودة ومنع التقطع والتحميل باستخدام دقة HD وصوت نقي معزز
             localStream = await navigator.mediaDevices.getUserMedia({ 
                 video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: currentFacingMode } : false, 
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
@@ -1526,12 +1526,16 @@
             timestamp: Date.now()
         });
 
+        let isConnectedShown = false;
         callDoc.onSnapshot(async snapshot => {
             const data = snapshot.data();
             if (!pc.currentRemoteDescription && data && data.answer) {
                 const answerDescriptor = new RTCSessionDescription(data.answer);
                 await pc.setRemoteDescription(answerDescriptor);
-                showToast('تم اتصال المكالمة بجودة عالية بنجاح! 🟢');
+                if (!isConnectedShown) {
+                    isConnectedShown = true;
+                    showToast('تم اتصال المكالمة بجودة عالية بنجاح! 🟢');
+                }
             }
         });
 
@@ -1555,8 +1559,16 @@
             .onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(async change => {
                     if (change.type === 'added') {
+                        const callId = change.doc.id;
                         const callData = change.doc.data();
-                        currentCallId = change.doc.id;
+                        
+                        if (handledCalls.has(callId)) return;
+                        if (callData.timestamp && (Date.now() - callData.timestamp > 30000)) {
+                            return; // تجاهل المكالمات القديمة أكثر من 30 ثانية
+                        }
+                        
+                        handledCalls.add(callId);
+                        currentCallId = callId;
                         
                         playRingTone();
                         let acceptCall = confirm(`📞 مكاتب أسطورة الطريق: مكالمة واردة من ${callData.caller}. هل تريد الرد؟`);
