@@ -445,7 +445,7 @@
     let currentLoggedInUser = null;
     window.currentLoggedInUser = null;
     let urlUserId = '';
-    let currentCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
+    let currentCompanyId = 'company_main';
 
     let appData = {
         shipments: [],
@@ -470,7 +470,7 @@
 
     let unsubscribers = [];
 
-    // تهيئة مستمعي السحابة مع فصل الشركات الدقيق متزامن مع الاندكس
+    // تهيئة مستمعي السحابة مع فصل الشركات الدقيق متزامن مع الاندكس (بدون تخزين محلي)
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -480,7 +480,6 @@
         collections.forEach(colName => {
             let query = db.collection(colName);
 
-            // تصفية وقراءة البيانات بناءً على معرف الشركة (فصل حساب الشركات)
             if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
                 query = query.where('companyId', '==', companyId);
             }
@@ -523,22 +522,22 @@
         }, 1000);
     };
 
+    // جلسة سحابية خالصة تعتمد حصرياً على معاملات الـ URL (userId و companyId) بدون استخدام التخزين المحلي
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        if (urlUserId && urlUserId !== 'null') {
-            localStorage.setItem('na2la_userId', urlUserId);
-            if (urlCompanyId) {
-                localStorage.setItem('na2la_companyId', urlCompanyId);
-            }
-        } else {
-            urlUserId = localStorage.getItem('na2la_userId') || '';
-            urlCompanyId = localStorage.getItem('na2la_companyId') || 'company_main';
+        if (!urlUserId || urlUserId === 'null') {
+            urlUserId = 'المدير';
         }
 
-        currentCompanyId = urlCompanyId || 'company_main';
+        if (!urlCompanyId || urlCompanyId === 'null') {
+            urlCompanyId = 'company_main';
+        }
+
+        currentCompanyId = urlCompanyId.trim();
+        urlUserId = urlUserId.trim();
 
         try {
             let found = null;
@@ -547,7 +546,7 @@
             if (urlUserId) {
                 snap.forEach(doc => {
                     let d = doc.data();
-                    if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.id) === String(urlUserId)) {
+                    if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(doc.id) === String(urlUserId)) {
                         found = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
@@ -570,10 +569,10 @@
 
             if (!found) {
                 found = {
-                    name: 'المدير',
+                    name: urlUserId,
                     phone: '+201114099799',
                     role: 'admin',
-                    companyName: 'أسطورة الطريق الرئيسية',
+                    companyName: currentCompanyId,
                     title: 'مدير عام المنصة',
                     avatar: '',
                     coverUrl: ''
@@ -652,8 +651,9 @@
                 }
 
                 window.currentLoggedInUser = matchedUser;
-                localStorage.setItem('na2la_userId', matchedUser.name || matchedUser.id);
-                localStorage.setItem('na2la_companyId', matchedUser.companyId || currentCompanyId);
+                urlUserId = matchedUser.name || matchedUser.id;
+                currentCompanyId = matchedUser.companyId || currentCompanyId;
+                
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية بنجاح! ✅');
                 applyUserPermissionsUI();
