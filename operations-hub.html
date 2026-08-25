@@ -600,9 +600,9 @@
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
         let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
 
-        // إذا لم يتم تمرير مستخدم في الرابط، نفترض جلسة المدير كحالة افتراضية
+        // إذا لم يكن هناك أي مستخدم في الرابط، نضع قيمة فارغة لكي يظهر الحساب الفعلي القادم أو زائر جديد دون فرضه كمدير
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-            urlUserId = 'المدير';
+            urlUserId = 'زائر';
         }
 
         if (!urlCompanyId || urlCompanyId === 'null' || urlCompanyId === '') {
@@ -611,9 +611,6 @@
 
         currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
-        
-        // التحقق مما إذا كان الحساب هو حساب المدير (لتثبيته وعزله عن أي تداخل مع السائقين)
-        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -623,31 +620,12 @@
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                if (!isSuper && (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase())) {
+                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
                     found = d;
                 }
             });
 
-            // تثبيت جلسة المدير حصرياً دون مزامنتها مع بيانات السائقين أو تأثير تسجيل الخروج
-            if (isSuper) {
-                currentCompanyId = urlCompanyId || 'company_main';
-                currentDriverProfile = {
-                    name: 'المدير',
-                    avatar: '',
-                    title: 'مدير عام النظام',
-                    phone: '+201114099799',
-                    role: 'admin',
-                    companyId: currentCompanyId,
-                    canAccessSocial: true,
-                    subPlan: 'مدير عام',
-                    subExpiry: 'دائم'
-                };
-                urlUserId = 'المدير';
-                syncProfileAndLoadHub();
-                return;
-            }
-
-            // إذا كان المستخدم المتصل سائقاً أو حساباً آخر، يتم مزامنة بياناته وعزل شركته بدقة
+            // مزامنة الحساب الفعلي المتصل عبر الـ URL أياً كان (سائق، مدير، أو تابع لشركة أخرى)
             if (found) {
                 currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
@@ -661,23 +639,24 @@
                     role: isAdmin ? 'admin' : (found.role || 'driver'),
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
-                    subPlan: found.subPlan || 'أساسي',
-                    subExpiry: found.subExpiry || 'غير محدد'
+                    subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
+                    subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
                 };
                 syncProfileAndLoadHub();
             } else {
-                // مزامنة أي حساب جديد متصل عبر المنصة تلقائياً وتخصيصه لشركة معزولة
+                // إذا كان الحساب جديداً ولم يتم العثور عليه في قاعدة البيانات، تتم مزامنته وعزله لشركته تلقائياً
+                let isAdmCheck = ['1', 'المدير', 'مدير', 'admin'].includes(urlUserId.toLowerCase());
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     name: urlUserId,
                     avatar: '',
-                    title: 'سائق معتمد',
+                    title: isAdmCheck ? 'مدير عام النظام' : 'سائق معتمد',
                     phone: '',
-                    role: 'driver',
+                    role: isAdmCheck ? 'admin' : 'driver',
                     companyId: currentCompanyId,
                     canAccessSocial: true,
-                    subPlan: 'أساسي',
-                    subExpiry: 'مفعل'
+                    subPlan: isAdmCheck ? 'مدير عام' : 'أساسي',
+                    subExpiry: isAdmCheck ? 'دائم' : 'مفعل'
                 };
                 syncProfileAndLoadHub();
             }
@@ -687,11 +666,11 @@
             currentDriverProfile = {
                 name: urlUserId,
                 avatar: '',
-                title: isSuper ? 'مدير عام النظام' : 'حساب معزول',
-                role: isSuper ? 'admin' : 'driver',
+                title: 'حساب معزول',
+                role: 'driver',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
-                subPlan: isSuper ? 'مدير عام' : 'أساسي',
+                subPlan: 'أساسي',
                 subExpiry: ''
             };
             syncProfileAndLoadHub();
@@ -760,7 +739,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, onSnapshot, query, where } = window.firebaseModules;
 
-        // 1. مزامنة السائقين مع عزل تام للشركات الحالية
+        // 1. مزامنة السائقين مع عزل تام للشركة الحالية فقط
         let qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
         onSnapshot(qDrivers, (snapshot) => {
             globalDriversCache = [];
@@ -771,7 +750,7 @@
             updateCurrentInterfacePermissions();
         });
 
-        // 2. مزامنة الأسطول مع عزل تام للشركات الحالية
+        // 2. مزامنة الأسطول مع عزل تام للشركة الحالية فقط
         let qFleet = query(collection(window.db, "viper_fleet_ops"), where("companyId", "==", currentCompanyId));
         onSnapshot(qFleet, (snapshot) => {
             globalFleetCache = [];
@@ -781,7 +760,7 @@
             renderFleetTableAndStats();
         });
 
-        // 3. مزامنة الشحن مع عزل تام للشركات الحالية
+        // 3. مزامنة الشحن مع عزل تام للشركة الحالية فقط
         let qLogistics = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
         onSnapshot(qLogistics, (snapshot) => {
             let container = document.getElementById("logisticsContainer");
@@ -798,7 +777,7 @@
             }
         });
 
-        // 4. مزامنة المالية مع عزل تام للشركات الحالية
+        // 4. مزامنة المالية مع عزل تام للشركة الحالية فقط
         let qFinance = query(collection(window.db, "viper_finance"), where("companyId", "==", currentCompanyId));
         onSnapshot(qFinance, (snapshot) => {
             let container = document.getElementById("financeContainer");
@@ -1009,7 +988,7 @@
         let avatarEl = document.getElementById("currentUserAvatar");
         let roleSubLabel = document.getElementById("currentActiveUserRoleLabel");
 
-        let activeName = currentDriverProfile.name || 'مدير النظام';
+        let activeName = currentDriverProfile.name || 'مستخدم النظام';
         let activeAvatar = (currentDriverProfile.avatar && currentDriverProfile.avatar.trim() !== "") 
             ? currentDriverProfile.avatar 
             : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
