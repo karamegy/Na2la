@@ -581,7 +581,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المنقح بدقة -->
+    <!-- السكريبت البرمجي المعدل (بدون تخزين محلي نهائياً) -->
     <script>
         const superAdminsList = ['admin', 'admin1', 'المدير', 'مدير', 'system'];
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
@@ -590,7 +590,6 @@
         let currentLoggedInUser = null;
         let currentCompanyId = 'company_main';
 
-        // استخراج معرف الشركة تلقائياً من الرابط (URL) إن وجد
         const urlParams = new URLSearchParams(window.location.search);
         let urlComp = urlParams.get('companyId');
         if (urlComp && urlComp.trim() !== '') {
@@ -608,24 +607,8 @@
             checkStoredSessionOrShowAuth(); 
         });
 
-        async function checkStoredSessionOrShowAuth() {
-            let savedPhone = localStorage.getItem('na2la_userPhone');
-            let savedId = localStorage.getItem('na2la_userId');
-            
-            if (savedPhone && savedId && window.db && window.firebaseModules) {
-                const { collection, getDocs, query, where } = window.firebaseModules;
-                try {
-                    let q = query(collection(window.db, "drivers"), where("phone", "==", savedPhone));
-                    let snap = await getDocs(q);
-                    if (!snap.empty) {
-                        let dData = snap.docs[0].data();
-                        if (String(dData.id || snap.docs[0].id) === String(savedId)) {
-                            finalizeLogin({ id: snap.docs[0].id, ...dData });
-                            return;
-                        }
-                    }
-                } catch(e) {}
-            }
+        function checkStoredSessionOrShowAuth() {
+            // إظهار نافذة تسجيل الدخول مباشرة لعدم الاعتماد على التخزين المحلي
             document.getElementById("authModal").style.display = "flex";
         }
 
@@ -690,7 +673,6 @@
             let isIdentifierAdmin = docRole === 'admin' || docRole === 'مدير' || superAdminsList.includes(docRole);
             let isIdentifierSup = supervisorsList.includes(docRole) || docRole === 'supervisor' || docRole === 'مشرف';
 
-            // اعتماد معرف الشركة من الحساب إن وُجد، وإلا البقاء على المعرف القادم من الابط أو الافتراضي
             if (foundDoc.companyId && String(foundDoc.companyId).trim() !== '') {
                 currentCompanyId = String(foundDoc.companyId).trim();
             }
@@ -706,10 +688,6 @@
                 avatar: foundDoc.avatar || foundDoc.img || foundDoc.photo || foundDoc.imageUrl || '',
                 companyId: currentCompanyId
             };
-
-            localStorage.setItem('na2la_userId', foundDoc.id);
-            localStorage.setItem('na2la_userPhone', foundDoc.phone || '');
-            localStorage.setItem('na2la_companyId', currentCompanyId);
 
             applyUserPermissionsUI();
             initLiveFirestoreSync();
@@ -747,7 +725,6 @@
             });
         }
 
-        // **دالة المزامنة السحابية المفصولة تماماً حسب الشركة (معزل تام للبيانات)**
         function initLiveFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
@@ -791,7 +768,6 @@
                 let colName = collectionsMap[targetKey];
                 let q;
 
-                // تصفية استعلامات فايبربيس بناءً على معرف الشركة بدقة تامة
                 if (currentCompanyId && currentCompanyId !== 'company_main') {
                     q = query(collection(window.db, colName), where("companyId", "==", currentCompanyId));
                 } else {
@@ -801,7 +777,6 @@
                 onSnapshot(q, (snapshot) => {
                     let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                    // فلترة إضافية حسب صلاحيات السائق أو المشرف داخل الشركة
                     if (!superAdmin && !supervisor) {
                         let currentName = String(window.currentLoggedInUser?.name || '').trim();
                         let currentId = String(window.currentLoggedInUser?.id || '').trim();
@@ -914,7 +889,7 @@
             if (!item || !item.id || !window.db || !window.firebaseModules) return;
             const { doc, setDoc } = window.firebaseModules;
             item.userId = window.currentLoggedInUser ? window.currentLoggedInUser.id : 'admin';
-            item.companyId = currentCompanyId; // ضمان ربط العنصر بمعرف الشركة الحالية بدقة
+            item.companyId = currentCompanyId;
             try {
                 await setDoc(doc(window.db, colName, String(item.id)), item, { merge: true });
             } catch(err) { console.error(err); }
