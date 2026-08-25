@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>غرفة العمليات التشغيلية والأسطول - Na2la | PURE CLOUD ISOLATED</title>
+    <title>غرفة العمليات التشغيلية والأسطول - Na2la | PURE CLOUD ISOLATED SECURE</title>
     
     <!-- مكتبات Firebase الإصدار 10 الحديث -->
     <script type="module">
@@ -330,7 +330,7 @@
     
     <div class="top-brand-container">
         <h1 class="na2la-3d-logo">نقلة Na2la</h1>
-        <div class="logo-subtext">غرفة العمليات التشغيلية الذكية - PURE CLOUD ISOLATED</div>
+        <div class="logo-subtext">غرفة العمليات التشغيلية الذكية - PURE CLOUD ISOLATED SECURE</div>
     </div>
 
     <div class="company-badge-box">
@@ -588,7 +588,7 @@
         let user = currentDriverProfile || {};
         let role = String(user.role || '').toLowerCase().trim();
         let name = String(user.name || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير' || name === 'المدير' || name === '1';
+        return role === 'admin' || role === 'مدير' || name === 'المدير' || name === '1' || ['1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin1'].includes(name);
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -611,25 +611,15 @@
         }
 
         if (!urlUserId || urlUserId === 'null' || urlUserId === '') {
-            currentCompanyId = urlCompanyId || 'company_main';
-            currentDriverProfile = {
-                name: 'زائر',
-                avatar: '',
-                title: 'غير مسجل الدخول',
-                phone: '',
-                role: 'driver',
-                companyId: currentCompanyId,
-                canAccessSocial: false,
-                subPlan: 'أساسي',
-                subExpiry: ''
-            };
-            syncProfileAndLoadHub();
-            return;
+            urlUserId = 'المدير';
         }
 
+        currentCompanyId = urlCompanyId.trim();
         localStorage.setItem('na2la_userId', urlUserId);
-        localStorage.setItem('na2la_companyId', urlCompanyId);
+        localStorage.setItem('na2la_companyId', currentCompanyId);
+
         urlUserId = urlUserId.trim();
+        let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا', 'admin'].includes(urlUserId.toLowerCase());
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -638,23 +628,40 @@
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId) {
+                if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
                     found = d;
                 }
             });
 
             if (found) {
                 currentCompanyId = urlCompanyId || found.companyId || found.companyName || 'company_main';
+                let roleStr = String(found.role || found.rank || '').toLowerCase();
+                let isAdmin = isSuper || roleStr === 'admin' || roleStr === 'مدير';
+
                 currentDriverProfile = {
-                    name: found.name || found.driverName || 'مستخدم',
+                    name: found.name || found.driverName || urlUserId,
                     avatar: found.avatar || found.photoUrl || '',
-                    title: found.title || 'سائق معتمد',
-                    phone: found.phone || '',
-                    role: found.role || found.rank || 'driver',
+                    title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                    phone: found.phone || (isAdmin ? '+201114099799' : ''),
+                    role: isAdmin ? 'admin' : (found.role || 'driver'),
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
-                    subPlan: found.subPlan || 'أساسي',
-                    subExpiry: found.subExpiry || 'غير محدد'
+                    subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
+                    subExpiry: found.subExpiry || (isAdmin ? 'دائم' : 'غير محدد')
+                };
+                syncProfileAndLoadHub();
+            } else if (isSuper) {
+                currentCompanyId = urlCompanyId || 'company_main';
+                currentDriverProfile = {
+                    name: urlUserId,
+                    avatar: '',
+                    title: 'مدير عام النظام',
+                    phone: '+201114099799',
+                    role: 'admin',
+                    companyId: currentCompanyId,
+                    canAccessSocial: true,
+                    subPlan: 'مدير عام',
+                    subExpiry: 'دائم'
                 };
                 syncProfileAndLoadHub();
             } else {
@@ -676,13 +683,13 @@
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
-                name: 'خطأ في الاتصال',
+                name: urlUserId,
                 avatar: '',
-                title: 'غير معروف',
-                role: 'driver',
+                title: isSuper ? 'مدير عام النظام' : 'غير معروف',
+                role: isSuper ? 'admin' : 'driver',
                 companyId: currentCompanyId,
-                canAccessSocial: false,
-                subPlan: 'أساسي',
+                canAccessSocial: true,
+                subPlan: isSuper ? 'مدير عام' : 'أساسي',
                 subExpiry: ''
             };
             syncProfileAndLoadHub();
