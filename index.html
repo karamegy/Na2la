@@ -1266,7 +1266,7 @@
         };
 
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
-        let storedPin = localStorage.getItem('app_pin') || '01036';
+        let storedPin = '01036';
         let currentUserRole = localStorage.getItem('current_user_role') || ''; 
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
         let viewingProfileName = null;
@@ -1280,13 +1280,8 @@
         let communityFilesArr = [];
         let profileWallFilesArr = [];
 
-        // التحميل الفوري المباشر للبيانات المخزنة محلياً لضمان سرعة الاستجابة لحظياً (0ms)
-        let localCacheRaw = localStorage.getItem('transportAppV90');
-        let appData = localCacheRaw ? Object.assign({ 
-            shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
-            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [], subscriptionRequests: [],
-            newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة والمزامنة اللحظية الشاملة 🚀'
-        }, JSON.parse(localCacheRaw)) : { 
+        // هيكل البيانات السحابي المباشر بالكامل دون أي اعتماد على التخزين المحلي
+        let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
             drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [], subscriptionRequests: [],
             newsText: '🌟 تم ربط النظام سحابياً عبر مجموعات Firestore المستقلة والمزامنة اللحظية الشاملة 🚀'
@@ -1345,10 +1340,6 @@
 
             try {
                 await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
-                
-                // إضافة الحساب سريعا في ذاكرة التطبيق فوراً
-                if (!appData.drivers) appData.drivers = [];
-                appData.drivers.push(newCompanyAdmin);
 
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
@@ -1474,13 +1465,6 @@
                 }, { merge: true });
 
                 await db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
-
-                let localDrv = (appData.drivers || []).find(d => String(d.id) === String(targetDriverDoc.id));
-                if (localDrv) {
-                    localDrv.subStatus = 'active';
-                    localDrv.subPlan = months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly');
-                    localDrv.subExpiry = newExpiryStr;
-                }
 
                 alert(`تم تفعيل اشتراك العضو/الشركة (${targetDriverDoc.name || targetDriverDoc.companyName}) بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
                 
@@ -1776,8 +1760,6 @@
                         };
                         db.collection('drivers').doc("1").set(defaultAdmin, { merge: true });
                     }
-
-                    localStorage.setItem('transportAppV90', JSON.stringify(appData));
                     
                     scheduleSmartRender();
 
@@ -1858,7 +1840,6 @@
             const infoBox = document.getElementById('company-sub-info-box');
             if (!card || !infoBox) return;
 
-            // إذا لم يكن المدير الأساسي، نظهر له تفاصيل اشتراكه ومحافظ الدفع دون أزرار تفعيل ذاتية
             if (loggedInDriverName !== 'المدير') {
                 card.style.display = 'block';
                 let currentDrv = getCurrentDriver();
@@ -2093,7 +2074,6 @@
                 const newPass = prompt('أدخل كلمة السر الجديدة (رمز PIN):');
                 if (newPass && newPass.trim() !== '') {
                     storedPin = newPass;
-                    localStorage.setItem('app_pin', newPass);
                     let adminDrv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (adminDrv) { 
                         adminDrv.pin = newPass; 
@@ -2837,13 +2817,6 @@
                 }
             }
 
-            if (!drv && !viewingProfileName) {
-                let cachedData = localStorage.getItem('logged_in_driver_cache');
-                if (cachedData) {
-                    try { drv = JSON.parse(cachedData); } catch(e) {}
-                }
-            }
-
             if (!drv) {
                 drv = {
                     id: 'default_admin_id',
@@ -2859,12 +2832,6 @@
                     coverHeight: 180,
                     advances: 0
                 };
-            } else {
-                if (!viewingProfileName) {
-                    localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
-                    localStorage.setItem('logged_in_driver_id', drv.id);
-                    localStorage.setItem('logged_in_driver_name', drv.name);
-                }
             }
             return drv;
         }
@@ -2932,7 +2899,6 @@
             let newH = Math.min(450, Math.max(100, currentH + delta));
             drv.coverHeight = newH;
             db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
-                localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                 renderMyAccount();
             });
         }
@@ -2949,7 +2915,6 @@
                     let drv = getCurrentDriver();
                     drv.avatar = compressedUrl;
                     db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
-                        localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                         renderMyAccount();
                         alert('تم رفع وتحديث الصورة الشخصية بجودة عالية بنجاح! 📷');
                     });
@@ -2964,7 +2929,6 @@
                     let drv = getCurrentDriver();
                     drv.cover = compressedUrl;
                     db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
-                        localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                         renderMyAccount();
                         alert('تم تحديث صورة الغلاف بجودة عالية بنجاح! 🖼️✨');
                     });
@@ -2982,7 +2946,6 @@
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
             
             db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
-                localStorage.setItem('logged_in_driver_cache', JSON.stringify(drv));
                 alert('تم تحديث بروفايلك الشخصي ورقم الهاتف بنجاح! 💾');
                 renderMyAccount();
             }).catch(err => {
@@ -3210,9 +3173,6 @@
                 };
 
                 await db.collection('drivers').doc(uid).set(newDrv);
-                
-                if (!appData.drivers) appData.drivers = [];
-                appData.drivers.push(newDrv);
 
                 closeDriverRegister();
                 alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
@@ -3453,9 +3413,6 @@
                 };
                 
                 await db.collection('drivers').doc(uid).set(newDrv);
-                
-                if (!appData.drivers) appData.drivers = [];
-                appData.drivers.push(newDrv);
 
                 document.getElementById('driver-profile-form').reset();
                 alert('تم إضافة الحساب السحابي بنجاح! 🚀');
@@ -4255,7 +4212,6 @@
         function clearAll() {
             if (currentUserRole !== 'admin') { alert('صلاحية المدير فقط.'); return; }
             if (confirm('تنبيه: مسح كافة البيانات والمجموعات السحابية؟')) {
-                localStorage.removeItem('transportAppV90');
                 location.reload();
             }
         }
