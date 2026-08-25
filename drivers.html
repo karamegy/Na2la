@@ -275,9 +275,9 @@
     <header>
         <div class="logo">🚚 إدارة الأسطول والسائقين (Advanced Hub)</div>
         <div class="nav-links">
-            <a href="index.html">🏠 الرئيسية</a>
-            <a href="operations-hub.html">🚀 العمليات</a>
-            <a href="driver-community.html">💬 المجتمع</a>
+            <a href="#" onclick="navigateToPage('index.html')">🏠 الرئيسية</a>
+            <a href="#" onclick="navigateToPage('operations-hub.html')">🚀 العمليات</a>
+            <a href="#" onclick="navigateToPage('driver-community.html')">💬 المجتمع</a>
             <button onclick="toggleTheme()">🌓</button>
         </div>
     </header>
@@ -354,7 +354,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -373,24 +373,22 @@
         let globalDriversData = [];
         let globalShipmentsData = [];
 
+        // استخراج جلسة المستخدم ومعرف الشركة من معاملات الـ URL حصرياً بدون تخديم أو تخزين محلي
         function getActiveSessionAndCompany() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-            
-            if (externalId && externalId.trim() !== '' && externalId !== 'null') {
-                externalId = externalId.trim();
-                localStorage.setItem('logged_in_driver_name', externalId);
-                localStorage.setItem('na2la_external_logged_user_id', externalId);
+            let externalComp = urlParams.get('companyId') || urlParams.get('company');
+
+            if (!externalId || externalId.trim() === '' || externalId === 'null') {
+                externalId = 'المدير';
             }
 
-            let activeName = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_external_logged_user_id') || 'المدير';
-            activeName = activeName.trim();
-
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeName);
-            let compId = isSuper ? 'company_main' : (localStorage.getItem('current_company_id') || ('comp_' + activeName.replace(/[^a-zA-Z0-9]/g, '_')));
+            externalId = externalId.trim();
+            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(externalId);
             
-            localStorage.setItem('current_company_id', compId);
-            return { activeName, compId, isSuper };
+            let compId = externalComp && externalComp.trim() !== '' ? externalComp.trim() : (isSuper ? 'company_main' : ('comp_' + externalId.replace(/[^a-zA-Z0-9]/g, '_')));
+            
+            return { activeName: externalId, compId, isSuper };
         }
 
         let sessionData = getActiveSessionAndCompany();
@@ -405,7 +403,12 @@
         let superAdmin = isSuperAdmin();
         document.getElementById('companyIdLabel').innerText = superAdmin ? `${currentCompanyId} (رؤية شاملة للمدير العام 👑)` : currentCompanyId;
 
-        // دالة سحابية لتسجيل العمليات في مصفوفة auditLogs (حسب هيكل appStore/mainState)
+        // دالة لتمرير معاملات الرابط بين الصفحات عند التنقل
+        window.navigateToPage = function(pageName) {
+            const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
+            window.location.href = pageName + queryParams;
+        };
+
         async function logAuditAction(actionDesc) {
             try {
                 const mainStateRef = doc(db, "appStore", "mainState");
@@ -436,13 +439,9 @@
             const currentTheme = body.getAttribute("data-theme");
             const newTheme = currentTheme === "light" ? "dark" : "light";
             body.setAttribute("data-theme", newTheme);
-            localStorage.setItem("drivers_theme", newTheme);
         };
 
         window.onload = function() {
-            const savedTheme = localStorage.getItem("drivers_theme") || "light";
-            document.body.setAttribute("data-theme", savedTheme);
-
             signInAnonymously(auth).then(() => {
                 document.getElementById('syncStatusBadge').innerText = "متصل وسحابي لحظياً 🟢";
                 initRealtimeListeners();
@@ -453,7 +452,9 @@
         };
 
         function initRealtimeListeners() {
-            onSnapshot(collection(db, "shipments"), (shipSnapshot) => {
+            // مزامنة الشحنات مع عزل الشركة بالـ where إذا لم يكن مدير عام
+            let shipmentsQuery = superAdmin ? collection(db, "shipments") : query(collection(db, "shipments"), where("companyId", "==", currentCompanyId));
+            onSnapshot(shipmentsQuery, (shipSnapshot) => {
                 globalShipmentsData = [];
                 shipSnapshot.forEach(docSnap => {
                     globalShipmentsData.push({ id: docSnap.id, ...docSnap.data() });
@@ -461,21 +462,16 @@
                 filterAndRenderDrivers();
             });
 
-            onSnapshot(collection(db, "drivers"), (snapshot) => {
+            // مزامنة السائقين مع عزل الشركة بالـ where إذا لم يكن مدير عام
+            let driversQuery = superAdmin ? collection(db, "drivers") : query(collection(db, "drivers"), where("companyId", "==", currentCompanyId));
+            onSnapshot(driversQuery, (snapshot) => {
                 globalDriversData = [];
-                let isSuper = isSuperAdmin();
-
                 snapshot.forEach((docSnap) => {
                     const data = docSnap.data();
-                    if (data.test) return;
-
-                    if (!isSuper && data.companyId && data.companyId !== currentCompanyId) {
-                        return;
+                    if (!data.test) {
+                        globalDriversData.push({ id: docSnap.id, ...data });
                     }
-
-                    globalDriversData.push({ id: docSnap.id, ...data });
                 });
-
                 filterAndRenderDrivers();
             });
         }
