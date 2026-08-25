@@ -209,7 +209,7 @@
 
     <main class="content-area" id="main-content"></main>
 
-    <!-- نافذة مكالمات الفيديو والصوت داخل الشات مع فلاتر وثيمات الفيديو -->
+    <!-- نافذة مكالمات الفيديو والصوت داخل الشات (تم انعكاس الشاشات: الطرف الآخر كبير وشاشتي صغيرة) -->
     <div id="videoCallModal" class="custom-modal" style="flex-direction:column; background:rgba(0,0,0,0.9);">
         <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative;">
             <h3 style="color:var(--accent-main); margin-bottom:10px; border:none;" id="call-modal-title">📹 مكالمة فيديو للأسطول</h3>
@@ -224,8 +224,10 @@
             </div>
 
             <div style="position:relative; width:100%; height:260px; background:#000; border-radius:8px; overflow:hidden; margin-bottom:10px;">
-                <video id="localVideo" class="filter-normal" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover;"></video>
-                <video id="remoteVideo" class="filter-normal" autoplay playsinline style="position:absolute; top:10px; right:10px; width:90px; height:120px; object-fit:cover; border:2px solid #fff; border-radius:6px; background:#222;"></video>
+                <!-- الفيديو الرئيسي الكبير للطرف الآخر -->
+                <video id="remoteVideo" class="filter-normal" autoplay playsinline style="width:100%; height:100%; object-fit:cover; background:#222;"></video>
+                <!-- فيديو شاشتي الصغير في الزاوية العلوية -->
+                <video id="localVideo" class="filter-normal" autoplay playsinline muted style="position:absolute; top:10px; right:10px; width:90px; height:120px; object-fit:cover; border:2px solid #fff; border-radius:6px; z-index:2;"></video>
             </div>
             <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px;">
                 <button type="button" class="btn-warning btn-sm" onclick="toggleCameraFacing()">🔄 تبديل الكاميرا</button>
@@ -397,6 +399,34 @@
         } catch(e) {}
     }
 
+    // دالة إصدار رنين قوي ومستمر عند الاتصال بالطرف الآخر
+    function playRingTone() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let now = audioCtx.currentTime;
+            for (let i = 0; i < 4; i++) {
+                let osc1 = audioCtx.createOscillator();
+                let osc2 = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                
+                osc1.frequency.setValueAtTime(440, now + (i * 1.4));
+                osc2.frequency.setValueAtTime(480, now + (i * 1.4));
+                
+                gain.gain.setValueAtTime(0.35, now + (i * 1.4)); // رنين قوي
+                gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 1.4) + 0.7);
+                
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc1.start(now + (i * 1.4));
+                osc2.start(now + (i * 1.4));
+                osc1.stop(now + (i * 1.4) + 0.7);
+                osc2.stop(now + (i * 1.4) + 0.7);
+            }
+        } catch(e) {}
+    }
+
     window.showToast = function(message, type = 'success') {
         playBeep(type === 'success' ? 'success' : 'error');
         const container = document.getElementById('toast-container');
@@ -485,7 +515,6 @@
             }
         });
 
-        // تفعيل الاستماع للمكالمات الواردة للمستخدم الحالي
         listenForIncomingCalls();
     }
 
@@ -1442,6 +1471,9 @@
 
     async function startCloudVideoCall(receiverName, isVideo = true) {
         openModal('videoCallModal');
+        // تشغيل رنين قوي عند بدء الاتصال بالطرف الآخر
+        playRingTone();
+
         document.getElementById('call-modal-title').innerText = isVideo ? `📹 جاري الاتصال بـ: ${receiverName}` : `📞 مكالمة صوتية مع: ${receiverName}`;
         
         currentCallId = 'call_' + Date.now();
@@ -1515,7 +1547,8 @@
                         const callData = change.doc.data();
                         currentCallId = change.doc.id;
                         
-                        playBeep('success');
+                        // رنين قوي عند استقبال مكالمة واردة
+                        playRingTone();
                         let acceptCall = confirm(`📞 مكاتب أسطورة الطريق: مكالمة واردة من ${callData.caller}. هل تريد الرد؟`);
                         
                         if (acceptCall) {
