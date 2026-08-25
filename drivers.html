@@ -373,22 +373,21 @@
         let globalDriversData = [];
         let globalShipmentsData = [];
 
-        // استخراج جلسة المستخدم ومعرف الشركة من معاملات الـ URL حصرياً بدون تخديم أو تخزين محلي
+        // استخراج جلسة المستخدم ومعرف الشركة من الـ URL حصرياً بدون قيم افتراضية ثابتة أو تخزين محلي
         function getActiveSessionAndCompany() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
             let externalComp = urlParams.get('companyId') || urlParams.get('company');
 
             if (!externalId || externalId.trim() === '' || externalId === 'null') {
-                externalId = 'المدير';
+                externalId = 'زائر';
             }
 
-            externalId = externalId.trim();
-            let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(externalId);
-            
-            let compId = externalComp && externalComp.trim() !== '' ? externalComp.trim() : (isSuper ? 'company_main' : ('comp_' + externalId.replace(/[^a-zA-Z0-9]/g, '_')));
-            
-            return { activeName: externalId, compId, isSuper };
+            if (!externalComp || externalComp.trim() === '' || externalComp === 'null') {
+                externalComp = 'company_main';
+            }
+
+            return { activeName: externalId.trim(), compId: externalComp.trim() };
         }
 
         let sessionData = getActiveSessionAndCompany();
@@ -397,13 +396,13 @@
         window.currentCompanyId = currentCompanyId;
 
         function isSuperAdmin() {
-            return ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(activeSessionName);
+            let roleStr = String(activeSessionName).toLowerCase();
+            return ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'admin'].includes(roleStr);
         }
 
         let superAdmin = isSuperAdmin();
         document.getElementById('companyIdLabel').innerText = superAdmin ? `${currentCompanyId} (رؤية شاملة للمدير العام 👑)` : currentCompanyId;
 
-        // دالة لتمرير معاملات الرابط بين الصفحات عند التنقل
         window.navigateToPage = function(pageName) {
             const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
             window.location.href = pageName + queryParams;
@@ -452,7 +451,6 @@
         };
 
         function initRealtimeListeners() {
-            // مزامنة الشحنات مع عزل الشركة بالـ where إذا لم يكن مدير عام
             let shipmentsQuery = superAdmin ? collection(db, "shipments") : query(collection(db, "shipments"), where("companyId", "==", currentCompanyId));
             onSnapshot(shipmentsQuery, (shipSnapshot) => {
                 globalShipmentsData = [];
@@ -462,7 +460,6 @@
                 filterAndRenderDrivers();
             });
 
-            // مزامنة السائقين مع عزل الشركة بالـ where إذا لم يكن مدير عام
             let driversQuery = superAdmin ? collection(db, "drivers") : query(collection(db, "drivers"), where("companyId", "==", currentCompanyId));
             onSnapshot(driversQuery, (snapshot) => {
                 globalDriversData = [];
@@ -473,6 +470,18 @@
                     }
                 });
                 filterAndRenderDrivers();
+            }, err => {
+                // في حال عدم وجود الفهارس المركبة، يتم جلب البيانات محلياً مع التصفية البرمجية
+                onSnapshot(collection(db, "drivers"), snap => {
+                    globalDriversData = [];
+                    snap.forEach(docSnap => {
+                        let d = docSnap.data();
+                        if (!d.test && (superAdmin || !d.companyId || d.companyId === currentCompanyId)) {
+                            globalDriversData.push({ id: docSnap.id, ...d });
+                        }
+                    });
+                    filterAndRenderDrivers();
+                });
             });
         }
 
