@@ -208,7 +208,6 @@
 
         .post-actions { display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; flex-wrap: wrap; align-items: center; position: relative; }
         
-        /* Reaction Picker Popup System */
         .reaction-wrapper { position: relative; display: inline-block; }
         .reaction-picker-popup {
             position: absolute; bottom: 100%; right: 0; background: var(--card-bg); border: 1px solid var(--border-color);
@@ -312,7 +311,7 @@
         </div>
     </div>
 
-    <!-- الشريط العلوي المطور مرتبط بحساب المدير -->
+    <!-- الشريط العلوي المطور مرتبط بحساب المدير والمستخدم الحالي -->
     <header class="na2la-top-bar">
         <div class="na2la-brand-area">
             <div id="topBarUserAvatar" class="na2la-user-mini-avatar">👤</div>
@@ -507,11 +506,12 @@
         </div>
     </div>
 
+    <!-- كود الجافاسكريبت المحدث والمزامن تماماً مع index.html وسشن المستخدم الحالي والصورة -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { 
             getFirestore, collection, addDoc, getDocs, doc, updateDoc, 
-            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc 
+            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc, where 
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -528,14 +528,16 @@
         const db = getFirestore(app);
         window.db = db;
 
-        window.companyId = "company_main";
+        // استرجاع معلومات الشركة واسم المستخدم النشط من المنصة الأم (index.html) عبر localStorage
+        window.companyId = localStorage.getItem('current_company_id') || "company_main";
+        const savedDriverName = localStorage.getItem('logged_in_driver_name') || "المدير";
         const companyDisplayName = "اسطورة الطريق الرئيسية";
 
-        // الحساب الافتراضي للمدير يتم جلبه مباشرة من مجموعة drivers في فايربيس (بدون تخزين محلي نهائياً)
+        // هيكل الحساب الأولي مع ربطه بالاسم المخزن في المنصة الأم
         window.currentAccount = {
-            id: "admin_01114099799",
-            name: "المدير",
-            details: `${companyDisplayName} | الهاتف: 01114099799 | الرتبة: admin`,
+            id: "admin_default",
+            name: savedDriverName,
+            details: `${companyDisplayName} | الرتبة: admin`,
             badge: "admin",
             role: "admin",
             status: "available",
@@ -562,21 +564,40 @@
             window.isAdminMode = (role === 'admin' || badge === 'admin' || window.currentAccount.name === 'المدير');
         }
 
-        // مزامنة فورية لحساب المدير من فايربيس مباشرة بدون localStorage
-        function initRealtimeUserSync() {
-            const userDocRef = doc(db, 'drivers', window.currentAccount.id);
-            onSnapshot(userDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    window.currentAccount = docSnap.data();
+        // مزامنة فورية للبيانات وصورة الحساب بالبحث عن السائق المسجل بالمنصة الأم (index.html) في مجموعة drivers
+        async function initRealtimeUserSync() {
+            try {
+                const driversRef = collection(db, 'drivers');
+                const q = query(driversRef, where("name", "==", savedDriverName));
+                const querySnapshot = await getDocs(q);
+
+                if (!querySnapshot.empty) {
+                    querySnapshot.forEach((documentSnapshot) => {
+                        window.currentAccount = { id: documentSnapshot.id, ...documentSnapshot.data() };
+                    });
+                    
+                    // الاستماع للتحديثات الحية على مستند السائق في فايربيس
+                    onSnapshot(doc(db, 'drivers', window.currentAccount.id), (docSnap) => {
+                        if (docSnap.exists()) {
+                            window.currentAccount = { id: docSnap.id, ...docSnap.data() };
+                        }
+                        updateAdminPrivileges();
+                        window.updateAccountUI();
+                    });
                 } else {
-                    setDoc(userDocRef, window.currentAccount, { merge: true }).catch(() => {});
+                    // محاولة جلب مستند الافتراضي في حال لم يتم العثور على الاسم بالتحديد
+                    const defaultRef = doc(db, 'drivers', "1");
+                    const defSnap = await getDoc(defaultRef);
+                    if (defSnap.exists()) {
+                        window.currentAccount = { id: defSnap.id, ...defSnap.data() };
+                    }
                 }
                 updateAdminPrivileges();
                 window.updateAccountUI();
-            }, (error) => {
+            } catch (e) {
                 updateAdminPrivileges();
                 window.updateAccountUI();
-            });
+            }
         }
 
         window.updateAccountUI = async function() {
@@ -616,7 +637,9 @@
         async function syncUserProfileToCloud() {
             try {
                 updateAdminPrivileges();
-                await setDoc(doc(db, 'drivers', window.currentAccount.id), window.currentAccount, { merge: true });
+                if(window.currentAccount.id && window.currentAccount.id !== "admin_default") {
+                    await setDoc(doc(db, 'drivers', window.currentAccount.id), window.currentAccount, { merge: true });
+                }
             } catch(e) {}
         }
 
@@ -650,7 +673,6 @@
             } catch(e) {}
         }
 
-        // ضغط الصورة الشخصية ورفعها إلى فايربيس (بدون تخزين محلي)
         window.handleProfileAvatarUpload = function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -731,7 +753,6 @@
         }
         window.closeBottomSheet = function(e) { if(e.target.id === 'bottomSheetModal') document.getElementById('bottomSheetModal').style.display = 'none'; }
 
-        // مزامنة وعرض الخزينة من فايربيس مباشرة (بدون تخزين محلي)
         window.openTreasuryModal = async function() {
             const modal = document.getElementById('bottomSheetModal');
             const contentEl = document.getElementById('bottomSheetDynamicContent');
@@ -1130,9 +1151,9 @@
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
             await addDoc(getCol("posts"), {
                 author: window.currentAccount.name,
-                badge: window.currentAccount.badge,
+                badge: window.currentAccount.badge || window.currentAccount.role || 'admin',
                 avatar: window.currentAccount.avatar || '',
-                status: window.currentAccount.status,
+                status: window.currentAccount.status || 'available',
                 category: category,
                 text: text,
                 media: mediaData,
@@ -1174,7 +1195,6 @@
             await updateDoc(postRef, { poll: poll });
         }
 
-        // إظهار وإخفاء قائمة الأيقونات التفاعلية عند الضغط على زر الإعجاب (Like)
         window.toggleReactionPicker = function(postId) {
             const popup = document.getElementById(`reactionPicker_${postId}`);
             if(popup) {
@@ -1183,7 +1203,6 @@
         }
 
         window.reactToPost = async function(postId, reactionType) {
-            // إخفاء القائمة المنسدلة عند الاختيار
             const popup = document.getElementById(`reactionPicker_${postId}`);
             if(popup) popup.classList.remove('active');
 
@@ -1209,7 +1228,6 @@
             await updateDoc(postRef, { reactions: reactions, reactedUsers: reactedUsers });
         }
 
-        // إضافة تعليق مدمج بصورة أو فيديو
         window.handleCommentMediaPreview = function(input, postId) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -1362,7 +1380,6 @@
                     `;
                 }).join('');
 
-                // نقل زر الإدارة ليصبح بجانب وفوق أيقونة التصنيف (مثل نقاشات عامة / الفئة) في أعلى المنشور
                 let adminPostDeleteBtn = window.isAdminMode ? `
                     <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color); padding: 3px 8px; font-size: 0.65rem;" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف إداري</button>
                 ` : '';
