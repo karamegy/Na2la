@@ -584,11 +584,20 @@
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
 
-    // 🌟 فحص الرتبة حصرياً بناءً على المنصة (admin / driver)
+    // 🧠 دالة ذكية للتحقق الموحد والشامل لكافة تخمينات ومسميات حسابات الأدمن والمدير
+    function isUserAdmin(roleValue, nameValue) {
+        let role = String(roleValue || '').toLowerCase().trim();
+        let name = String(nameValue || '').toLowerCase().trim();
+        
+        // التخمينات والمسميات المعتمدة للأدمن والمدير
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام'];
+        
+        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
+    }
+
     function isSuperAdmin() {
         let user = currentDriverProfile || {};
-        let role = String(user.role || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير';
+        return isUserAdmin(user.role, user.name);
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -596,7 +605,7 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, getDocs } = window.firebaseModules;
         
-        // جلب المعاملات من الرابط فقط (بدون أي تخزين محلي)
+        // جلب المعاملات من الرابط فقط (بدون تخزين محلي)
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || '').trim();
         let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || 'أسطورة الطريق الرئيسية').trim();
@@ -622,12 +631,10 @@
                 }
             });
 
-            // إذا وُجد المستخدم في السحابة، يتم تطبيق بياناته وصلاحياته الحقيقية تماماً
             if (found) {
                 currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : urlCompanyId;
                 
-                let roleStr = String(found.role || '').toLowerCase().trim();
-                let isDocAdmin = (roleStr === 'admin' || roleStr === 'مدير');
+                let isDocAdmin = isUserAdmin(found.role, found.name);
 
                 currentDriverProfile = {
                     id: found.id,
@@ -635,14 +642,13 @@
                     avatar: found.avatar || '',
                     title: isDocAdmin ? 'مدير النظام' : 'سائق معتمد',
                     phone: found.phone || '',
-                    role: roleStr || 'driver',
+                    role: found.role || (isDocAdmin ? 'admin' : 'driver'),
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
                     subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
                     subExpiry: found.subExpiry || 'دائم'
                 };
             } else {
-                // منع التخزين الوهمي تماماً: إذا لم يطابق سجلاً سحابياً، يعامل كزائر بدون منح صلاحيات إدارية وهمية
                 currentDriverProfile = {
                     id: '',
                     name: urlUserId || 'زائر',
@@ -878,8 +884,9 @@
             let dName = d.name || 'بدون اسم';
             let dPhone = d.phone || '-';
             let dAvatar = d.avatar && d.avatar.trim() !== '' ? d.avatar : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
-            let roleStr = String(d.role || '').toLowerCase().trim();
-            let isAdm = (roleStr === 'admin' || roleStr === 'مدير');
+            
+            // مطابقة ذكية لتحديد ما إذا كان أدمن أو سائق عبر التخمينات المختلفة
+            let isAdm = isUserAdmin(d.role, dName);
             let roleText = isAdm ? "🛡️ admin" : "👤 driver";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
             
@@ -944,7 +951,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
             let roleStr = String(currentRole || '').toLowerCase().trim();
-            let newRole = (roleStr === 'admin' || roleStr === 'مدير') ? 'driver' : 'admin';
+            let newRole = (roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير نظام') ? 'driver' : 'admin';
             await updateDoc(doc(window.db, "drivers", driverId), { role: newRole });
             fetchDriversManual();
         } catch (err) {
