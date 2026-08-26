@@ -167,7 +167,6 @@
         <div class="logo-3d">أسطورة الطريق <span>COMMUNITY HUB PURE CLOUD SECURE</span></div>
     </div>
 
-    <!-- الهيدر مع أزرار التنقل والربط المعزول بالبروفايل -->
     <header>
         <div class="header-profile-section">
             <div id="header-avatar-container" class="header-avatar-3d" onclick="openProfileModal()" title="انقر لعرض تفاصيل حسابك">جاري</div>
@@ -390,6 +389,7 @@
         let driversUnsubscribe = null;
         let chatUnsubscribe = null;
 
+        // 🧠 دالة فحص ذكية وموحدة لجميع مسميات وصلاحيات الإدارة (عربي/إنجليزي)
         function isUserAdmin(roleValue, nameValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
@@ -679,34 +679,6 @@
                 infoEl.innerText = `✅ تم تحديث موقعك بنجاح (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
                 logAuditAction(`تحديث الموقع الجغرافي بواسطة ${currentDriverProfile.name}`);
             }, () => { infoEl.innerText = '❌ تعذر تحديد الموقع.'; });
-        }
-
-        async function addRoadExpense() {
-            if (!window.db || !window.firebaseModules) return;
-            const type = document.getElementById('expense-type').value;
-            const amount = Number(document.getElementById('expense-amount').value);
-            const note = document.getElementById('expense-note').value.trim();
-
-            if (!amount || amount <= 0) { alert('أدخل مبلغ صحيح!'); return; }
-
-            const transactionId = String(Date.now());
-            const expenseRecord = {
-                id: transactionId,
-                driverName: currentDriverProfile.name,
-                accountOwner: currentDriverProfile.name,
-                companyId: currentCompanyId,
-                amount: -Math.abs(amount),
-                description: `مصروف طريق (${type}): ${note || 'بدون تفاصيل'}`,
-                date: new Date().toLocaleString('ar-EG')
-            };
-
-            const { doc, setDoc } = window.firebaseModules;
-            await setDoc(doc(window.db, 'safe', transactionId), expenseRecord);
-            alert('✅ تم تسجيل المصروف بنجاح وتحديث خزينة الشركة!');
-            logAuditAction(`تسجيل مصروف طريق بقيمة ${amount} ج.م بواسطة ${currentDriverProfile.name}`);
-            document.getElementById('expense-amount').value = '';
-            document.getElementById('expense-note').value = '';
-            switchSection('safe-sec', document.querySelectorAll('.nav-tab-btn')[4]);
         }
 
         let communityFilesArr = [];
@@ -1068,6 +1040,7 @@
             });
         }
 
+        // 🌟 دالة محدثة ومصححة لجلب وعرض رتب المستخدمين في الشات بدقة تامة من قاعدة البيانات
         function renderChatUsersList() {
             const listContainer = document.getElementById('chat-users-list');
             if(!listContainer) return;
@@ -1075,23 +1048,29 @@
             
             let accountsMap = new Map();
 
+            // 1. جلب السائقين والمستخدمين من جدول drivers مع رتبهم الحقيقية
             (allDrivers || []).forEach(drv => {
                 let name = String(drv.name || drv.id || '').trim();
                 let comp = drv.companyId || 'company_main';
                 if(name && (comp === currentCompanyId || isSuperAdmin())) {
+                    let realRole = drv.role || drv.rank || 'driver';
+                    let isAdminRole = isUserAdmin(realRole, name);
                     accountsMap.set(name, {
                         name: name,
-                        role: drv.role || 'سائق',
+                        role: isAdminRole ? 'مدير' : 'سائق',
                         companyId: comp
                     });
                 }
             });
 
+            // 2. التحقق من رسائل الشات وربطها بجدول drivers لتحديد الرتبة الصحيحة (سائق / مدير)
             (allChatMessagesCache || []).forEach(m => {
                 let sender = String(m.sender || '').trim();
                 let comp = m.companyId || 'company_main';
                 if(sender && sender !== 'general' && (comp === currentCompanyId || isSuperAdmin()) && !accountsMap.has(sender)) {
-                    let isMgr = isUserAdmin('', sender);
+                    let foundDrv = allDrivers.find(d => String(d.name || '').trim() === sender);
+                    let realRole = foundDrv ? (foundDrv.role || foundDrv.rank) : (m.senderRole || '');
+                    let isMgr = isUserAdmin(realRole, sender);
                     accountsMap.set(sender, {
                         name: sender,
                         role: isMgr ? 'مدير' : 'سائق',
@@ -1110,7 +1089,7 @@
             accounts.forEach(acc => {
                 let div = document.createElement('div');
                 div.className = 'chat-account-item';
-                div.innerHTML = `<span>💬 ${acc.name}</span><small style="opacity:0.7">${acc.role || 'سائق'}</small>`;
+                div.innerHTML = `<span>💬 ${acc.name}</span><small style="opacity:0.7">${acc.role}</small>`;
                 div.onclick = function() { selectChatRoom(acc.name, this); };
                 listContainer.appendChild(div);
             });
