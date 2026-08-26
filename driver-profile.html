@@ -989,18 +989,25 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
-        // 🛡️ [حماية جلسة المستخدم ومنع الحسابات الوهمية]
+        // 🛡️ [حماية الجلسة وإزالة الحسابات الوهمية أو المؤقتة عند المغادرة]
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
 
-            if (externalId && externalId.trim() !== '' && externalId !== 'null' && externalId !== 'undefined') {
+            // تنقية وتجاهل الحسابات الوهمية أو الفارغة
+            const isInvalidName = (val) => {
+                if (!val) return true;
+                let s = String(val).trim().toLowerCase();
+                return s === '' || s === 'null' || s === 'undefined' || s === 'زائر' || s === 'guest' || s === 'admin' || s === 'مستخدم';
+            };
+
+            if (externalId && !isInvalidName(externalId)) {
                 localStorage.setItem('logged_in_driver_name', externalId.trim());
                 return externalId.trim();
             }
             
             let savedSession = localStorage.getItem('logged_in_driver_name');
-            if (savedSession && savedSession.trim() !== '' && savedSession !== 'null' && savedSession !== 'undefined' && savedSession !== 'admin' && savedSession !== 'زائر') {
+            if (savedSession && !isInvalidName(savedSession)) {
                 return savedSession.trim();
             }
 
@@ -1010,10 +1017,10 @@
         let activeExternalSessionName = getExternalLoginSession();
         
         if (!activeExternalSessionName) {
-            alert('⚠️ تنبيه أمني: يرجى تسجيل الدخول أولاً للوصول إلى لوحة وبروفايل السائق.');
+            alert('⚠️ تنبيه أمني: يرجى تسجيل الدخول بحساب حقيقي أو عبر حساب جوجل المعتمد للوصول إلى البروفايل.');
             let compIdParam = new URLSearchParams(window.location.search).get('companyId') || localStorage.getItem('current_company_id') || 'company_main';
             window.location.href = `index.html?companyId=${encodeURIComponent(compIdParam)}`;
-            throw new Error("Unauthorized Access - Please Login");
+            throw new Error("Unauthorized Access - Fake or Missing Login");
         }
 
         let loggedInDriverId = activeExternalSessionName;
@@ -1026,6 +1033,14 @@
         let currentCompanyId = (urlCompanyIdParam && urlCompanyIdParam.trim() !== '' && urlCompanyIdParam !== 'null') ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
         localStorage.setItem('current_company_id', currentCompanyId);
+
+        // عند مغادرة الصفحة أو إغلاقها، مسح أي جلسة مؤقتة وهمية لمنع تثبيتها
+        window.addEventListener('beforeunload', () => {
+            let currentSess = localStorage.getItem('logged_in_driver_name');
+            if (!currentSess || currentSess === 'زائر' || currentSess === 'مستخدم') {
+                localStorage.removeItem('logged_in_driver_name');
+            }
+        });
 
         function navigateToPage(pageName) {
             const queryParams = `?userId=${encodeURIComponent(activeExternalSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
@@ -1173,12 +1188,26 @@
             return getLoggedInUser();
         }
 
+        // تسجيل ومزامنة الحسابات الحقيقية تلقائياً في Firestore وتجاهل الوهمية
         function autoRegisterUserToFirestore() {
-            if (!activeExternalSessionName || activeExternalSessionName === 'زائر' || activeExternalSessionName === 'admin') return;
+            if (!activeExternalSessionName || ['زائر', 'مستخدم', 'admin', 'guest'].includes(activeExternalSessionName.toLowerCase())) return;
             const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
             driverRef.get().then(docSnap => {
                 if (docSnap.exists) {
                     driverRef.update({ companyId: currentCompanyId }).catch(() => {});
+                } else {
+                    let newUserObj = {
+                        id: String(activeExternalSessionName),
+                        name: String(activeExternalSessionName),
+                        role: 'driver',
+                        title: 'سائق معتمد',
+                        status: 'متاح 🟢',
+                        companyId: currentCompanyId,
+                        avatar: '',
+                        cover: '',
+                        advances: 0
+                    };
+                    driverRef.set(newUserObj, { merge: true }).catch(() => {});
                 }
             }).catch(() => {});
         }
@@ -1216,14 +1245,20 @@
         }
         renderInitialUIInstant();
 
-        // 🔄 مزامنة حية معزولة حصرياً بالشركة الحالية
+        // 🔄 مزامنة حية واستبعاد أي حسابات وهمية من قاعدة البيانات
         db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
-            appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
+                let name = String(d.name || d.id || '').trim().toLowerCase();
+                return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+            });
             renderMyAccount();
             renderChatAccountsList();
         }, err => {
             db.collection('drivers').onSnapshot(snap => {
-                appData.drivers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => !d.companyId || d.companyId === currentCompanyId);
+                appData.drivers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => {
+                    let name = String(d.name || d.id || '').trim().toLowerCase();
+                    return (!d.companyId || d.companyId === currentCompanyId) && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                });
                 renderMyAccount();
                 renderChatAccountsList();
             });
@@ -1704,7 +1739,7 @@
             
             (appData.drivers || []).forEach(d => {
                 let name = getCleanDriverName(d.name || d.id);
-                if(name && name !== 'مستخدم') {
+                if(name && name !== 'مستخدم' && name !== 'زائر') {
                     accountsMap.set(name, {
                         name: name,
                         phone: d.phone || '',
@@ -2020,11 +2055,15 @@
             renderMyAccount();
         }
 
-        // 🔄 [مزامنة فورية لصورة البروفايل الشخصية ورفعها لقاعدة البيانات]
+        // 🔄 [مزامنة وتثبيت صورة البروفايل (Avatar) فوراً على حساب جوجل/السائق المسجل في قاعدة البيانات]
         function updateProfileAvatar(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
+                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                        alert('⚠️ عذراً، لا يمكن حفظ الصورة لحساب غير مسجل.');
+                        return;
+                    }
                     loggedInUser.avatar = url;
                     db.collection('drivers').doc(String(loggedInUser.id)).set({
                         ...loggedInUser,
@@ -2032,19 +2071,23 @@
                         companyId: currentCompanyId
                     }, { merge: true }).then(() => {
                         renderMyAccount();
-                        alert('✅ تم تحديث وصورة البروفايل الشخصي ومزامنتها بنجاح!');
+                        alert('✅ تم تحديث وتثبيت الصورة الشخصية ومحفظتها بملفك بنجاح!');
                     }).catch(err => {
-                        alert('⚠️ حدث خطأ أثناء مزامنة الصورة الشخصية.');
+                        alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الصورة.');
                     });
                 });
             }
         }
 
-        // 🔄 [مزامنة فورية لصورة الغلاف ورفعها لقاعدة البيانات]
+        // 🔄 [مزامنة وتثبيت صورة الغلاف (Cover) فوراً على حساب جوجل/السائق المسجل في قاعدة البيانات]
         function updateProfileCover(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 800, 500, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
+                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                        alert('⚠️ عذراً، لا يمكن حفظ الغلاف لحساب غير مسجل.');
+                        return;
+                    }
                     loggedInUser.cover = url;
                     db.collection('drivers').doc(String(loggedInUser.id)).set({
                         ...loggedInUser,
@@ -2052,9 +2095,9 @@
                         companyId: currentCompanyId
                     }, { merge: true }).then(() => {
                         renderMyAccount();
-                        alert('✅ تم تحديث صورة الغلاف ومزامنتها بنجاح!');
+                        alert('✅ تم تحديث وتثبيت صورة الغلاف ومزامنتها بملفك بنجاح!');
                     }).catch(err => {
-                        alert('⚠️ حدث خطأ أثناء مزامنة صورة الغلاف.');
+                        alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الغلاف.');
                     });
                 });
             }
@@ -2127,7 +2170,7 @@
             let filtered = (appData.drivers || []).filter(d => {
                 let cleanN = getCleanDriverName(d.name);
                 let matchesQuery = (cleanN && cleanN.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
-                return matchesQuery && cleanN !== 'مستخدم';
+                return matchesQuery && cleanN !== 'مستخدم' && cleanN !== 'زائر';
             });
 
             filtered.forEach(d => {
