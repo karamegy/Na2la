@@ -298,7 +298,7 @@
         </div>
     </div>
 
-    <!-- الشريط العلوي المطور مرتبط تلقائياً برتبة المدير (admin) -->
+    <!-- الشريط العلوي المطور مرتبط بحساب المدير -->
     <header class="na2la-top-bar">
         <div class="na2la-brand-area">
             <div id="topBarUserAvatar" class="na2la-user-mini-avatar">👤</div>
@@ -513,37 +513,35 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // تحديد الشركة النشطة ديناميكياً
+        // ربط الحساب والشركة الحقيقية للمدير مباشرة وعدم إنشاء أي مستخدم وهمي
         let savedProfile = JSON.parse(localStorage.getItem('na2la_logged_user_profile')) || {};
-        window.companyId = savedProfile.companyId || localStorage.getItem('na2la_active_company') || 'company_main';
+        
+        if (!savedProfile.name || savedProfile.name === "مستخدم سحابي نشط") {
+            savedProfile = {
+                id: "admin_01114099799",
+                name: "المدير",
+                details: "أسطورة الطريق الرئيسية | الهاتف: 01114099799 | الرتبة: admin",
+                badge: "admin",
+                role: "admin",
+                status: "available",
+                companyId: "أسطورة الطريق الرئيسي",
+                avatar: ""
+            };
+            localStorage.setItem('na2la_logged_user_profile', JSON.stringify(savedProfile));
+        }
+
+        window.companyId = savedProfile.companyId || localStorage.getItem('na2la_active_company') || 'أسطورة الطريق الرئيسي';
+        window.currentAccount = savedProfile;
 
         document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${window.companyId}`;
         document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${window.companyId}`;
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات شركة ${window.companyId}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        let persistentUserId = localStorage.getItem('na2la_persistent_user_id') || savedProfile.id;
-        if (!persistentUserId) {
-            persistentUserId = "user_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-            localStorage.setItem('na2la_persistent_user_id', persistentUserId);
-        }
-
-        window.currentAccount = savedProfile.id && savedProfile.companyId === window.companyId ? savedProfile : {
-            id: persistentUserId,
-            name: "مستخدم سحابي نشط",
-            details: "جاري المزامنة مع سحابة " + window.companyId,
-            badge: "عضو معتمد",
-            role: "driver",
-            status: "available",
-            companyId: window.companyId,
-            avatar: ""
-        };
-
-        // التحقق التلقائي لصلاحيات المدير (admin) بناءً على الرتبة المسجلة في الحساب
+        // التحقق التلقائي لصلاحيات المدير
         function updateAdminPrivileges() {
             const role = (window.currentAccount.role || '').toLowerCase();
             const badge = (window.currentAccount.badge || '').toLowerCase();
-            // إذا كانت الرتبة admin أو تحتوي على مشرف/مدير
             window.isAdminMode = (role === 'admin' || badge === 'admin' || window.currentAccount.name === 'المدير');
         }
 
@@ -569,9 +567,9 @@
         window.updateAccountUI = async function() {
             updateAdminPrivileges();
 
-            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name || "مستخدم سحابي";
-            document.getElementById('topBarUserName').innerText = window.currentAccount.name || "مستخدم سحابي";
-            document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || window.currentAccount.role || 'عضو';
+            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name || "المدير";
+            document.getElementById('topBarUserName').innerText = window.currentAccount.name || "المدير";
+            document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || window.currentAccount.role || 'admin';
 
             const adminBadgeTag = document.getElementById('adminMasterBadgeTag');
             if(window.isAdminMode) {
@@ -686,7 +684,7 @@
                         </div>
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
-                            <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'عضو'}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'admin'}</span></p>
                             <p style="margin-bottom: 6px;"><strong>🏢 معرف الشركة:</strong> <span style="color: var(--primary-color);">${window.companyId}</span></p>
                         </div>
                     </div>
@@ -1194,7 +1192,6 @@
                     `;
                 }).join('');
 
-                // زر الحذف الإداري يظهر تلقائياً إذا كان المستخدم الحقيقي يحمل رتبة admin
                 let adminPostDeleteBtn = window.isAdminMode ? `
                     <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color);" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف إداري</button>
                 ` : '';
@@ -1208,7 +1205,7 @@
                                 <div class="status-dot ${statusClass}" title="الحالة التشغيلية"></div>
                             </div>
                             <div class="post-author-info" style="flex: 1;">
-                                <h4>${p.author} <span style="font-size:0.7rem; color: var(--primary-color);">(${p.badge || 'عضو'})</span></h4>
+                                <h4>${p.author} <span style="font-size:0.7rem; color: var(--primary-color);">(${p.badge || 'admin'})</span></h4>
                                 <span>${p.time || 'منذ قليل'}</span>
                             </div>
                             ${p.category ? `<span class="post-tag-badge">${p.category}</span>` : ''}
