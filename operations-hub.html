@@ -562,7 +562,7 @@
     let currentThemeIndex = 0;
     let globalDriversCache = []; 
     let globalFleetCache = [];
-    let currentCompanyId = 'أسطورة الطريق الرئيسية';
+    let currentCompanyId = 'company_main';
     let urlUserId = '';
     window.currentCompanyId = currentCompanyId;
 
@@ -572,7 +572,7 @@
         title: 'سائق معتمد',
         phone: '',
         role: 'driver',
-        companyId: 'أسطورة الطريق الرئيسية',
+        companyId: 'company_main',
         canAccessSocial: true,
         subPlan: 'أساسي',
         subExpiry: 'غير محدد'
@@ -580,18 +580,16 @@
 
     function goToPage(pageName) {
         let userId = urlUserId || currentDriverProfile.name || '';
-        let companyId = currentCompanyId || 'أسطورة الطريق الرئيسية';
+        let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
 
-    // 🧠 دالة ذكية للتحقق الموحد والشامل لكافة تخمينات ومسميات حسابات الأدمن والمدير
+    // 🧠 دالة ذكية للتحقق الموحد الشامل لكافة مسميات وتخمينات الأدمن والمدير والسائق والكابتن
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
         
-        // التخمينات والمسميات المعتمدة للأدمن والمدير
-        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام'];
-        
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
         return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
     }
 
@@ -605,13 +603,10 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, getDocs } = window.firebaseModules;
         
-        // جلب المعاملات من الرابط فقط (بدون تخزين محلي)
+        // التقاط بيانات الحساب المتصل من الرابط القادم من الاندكس
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || '').trim();
-        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || 'أسطورة الطريق الرئيسية').trim();
-
-        currentCompanyId = urlCompanyId;
-        let targetIdLower = urlUserId.toLowerCase();
+        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
 
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
@@ -626,13 +621,22 @@
                 let dName = String(d.name || '').trim().toLowerCase();
                 let dPhone = String(d.phone || '').trim();
 
-                if (targetIdLower && (docId === targetIdLower || dName === targetIdLower || dPhone === targetIdLower)) {
-                    found = { id: docSnap.id, ...d };
+                if (urlUserId) {
+                    let targetIdLower = urlUserId.toLowerCase();
+                    if (docId === targetIdLower || dName === targetIdLower || dPhone === targetIdLower) {
+                        found = { id: docSnap.id, ...d };
+                    }
                 }
             });
 
+            // 🌟 ميزة التزامن الذكي: إذا لم يوجد معرّف بالرابط، يتم أخذ أول حساب مدير أو أول حساب متاح تلقائياً من سحابة Firebase
+            if (!found && globalDriversCache.length > 0) {
+                found = globalDriversCache.find(d => isUserAdmin(d.role, d.name)) || globalDriversCache[0];
+            }
+
             if (found) {
-                currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : urlCompanyId;
+                currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
+                urlUserId = found.name || found.phone || found.id;
                 
                 let isDocAdmin = isUserAdmin(found.role, found.name);
 
@@ -649,6 +653,7 @@
                     subExpiry: found.subExpiry || 'دائم'
                 };
             } else {
+                currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
                     id: '',
                     name: urlUserId || 'زائر',
@@ -885,7 +890,6 @@
             let dPhone = d.phone || '-';
             let dAvatar = d.avatar && d.avatar.trim() !== '' ? d.avatar : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
             
-            // مطابقة ذكية لتحديد ما إذا كان أدمن أو سائق عبر التخمينات المختلفة
             let isAdm = isUserAdmin(d.role, dName);
             let roleText = isAdm ? "🛡️ admin" : "👤 driver";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
