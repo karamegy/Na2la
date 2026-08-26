@@ -312,7 +312,7 @@
         <div class="na2la-brand-area">
             <div id="topBarUserAvatar" class="na2la-user-mini-avatar">👤</div>
             <div class="user-meta-info">
-                <span class="na2la-brand-title" id="topBarUserName">جاري المزامنة...</span>
+                <span class="na2la-brand-title" id="topBarUserName">جاري المزامنة السحابية الفورية...</span>
                 <div class="user-badges-line">
                     <span id="companyIdDisplayBadge" class="company-id-badge">شركة: اسطورة الطريق الرئيسية</span>
                     <span id="topBarUserBadge" class="user-role-badge">admin</span>
@@ -321,7 +321,7 @@
             </div>
         </div>
         <div class="na2la-header-actions">
-            <button class="icon-action-btn" onclick="location.href='index.html'" title="الواجهة الرئيسية">🏠</button>
+            <button class="icon-action-btn" onclick="navigateToMain()" title="الواجهة الرئيسية">🏠</button>
             <button class="icon-action-btn" onclick="toggleThemeModal()" title="تغيير الثيم الثلاثي الأبعاد">🎨</button>
         </div>
     </header>
@@ -342,9 +342,9 @@
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي - تم توجيه زر الشحنات لقسم الشحنات في المنصة الأم -->
+    <!-- شريط التنقل السفلي - يحافظ على تمرير معاملات الرابط للسحابة -->
     <nav class="bottom-nav">
-        <button class="bottom-nav-item" onclick="location.href='index.html'">
+        <button class="bottom-nav-item" onclick="navigateToMain()">
             <span class="icon">🏠</span>
             <span>الرئيسية</span>
         </button>
@@ -356,7 +356,7 @@
             <span class="icon">💬</span>
             <span>الدردشة</span>
         </button>
-        <button class="bottom-nav-item" onclick="location.href='index.html?view=shipments'">
+        <button class="bottom-nav-item" onclick="navigateToShipments()">
             <span class="icon">📦</span>
             <span>الشحنات</span>
         </button>
@@ -369,7 +369,7 @@
     <div id="bottomSheetModal" class="bottom-sheet-overlay" onclick="closeBottomSheet(event)">
         <div class="bottom-sheet-content" id="bottomSheetBody">
             <div class="bottom-sheet-header">
-                <h3 id="bottomSheetTitle" style="font-size: 1rem; color: var(--primary-color);">حسابي والحالة السحابية</h3>
+                <h3 id="bottomSheetTitle" style="font-size: 1rem; color: var(--primary-color);">حسابي والحالة السحابية الفورية</h3>
                 <button class="bottom-sheet-close" onclick="document.getElementById('bottomSheetModal').style.display='none'">✕</button>
             </div>
             <div id="bottomSheetDynamicContent"></div>
@@ -435,7 +435,7 @@
         <div class="card">
             <div style="font-size: 0.8rem; color: var(--secondary-text); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
                 <div id="postingAvatarSmall" style="width: 25px; height: 25px; border-radius: 50%; background-size: cover; background-position: center; border: 1px solid var(--primary-color);"></div>
-                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">المدير</strong></span>
+                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">جاري المزامنة...</strong></span>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 8px;">
@@ -502,7 +502,7 @@
         </div>
     </div>
 
-    <!-- كود الجافاسكريبت المحدث -->
+    <!-- كود الجافاسكريبت المحدث - بدون أي تخزين محلي (LocalStorage) ومزامنة سحابية بـ URL لجميع الكواكب والأنظمة -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { 
@@ -524,13 +524,27 @@
         const db = getFirestore(app);
         window.db = db;
 
-        window.companyId = localStorage.getItem('current_company_id') || "company_main";
-        const savedDriverName = localStorage.getItem('logged_in_driver_name') || "المدير";
-        const companyDisplayName = "اسطورة الطريق الرئيسية";
+        // استخراج معرّف الشركة واسم المستخدم والمكان ديناميكياً من معاملات الرابط (URL Parameters) بشكل كامل وبدون استخدام التخزين المحلي
+        const urlParams = new URLSearchParams(window.location.search);
+        window.companyId = urlParams.get('company') || urlParams.get('companyId') || urlParams.get('c') || "company_main";
+        const targetDriverName = urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || "المدير";
+        const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || "اسطورة الطريق الرئيسية";
+
+        // دوال الملاحة الذكية لتمرير بيانات الرابط والحساب والسحابة بسلاسة تامة لأي صفحة أخرى
+        window.navigateToMain = function() {
+            const currentQuery = window.location.search;
+            window.location.href = `index.html${currentQuery}`;
+        };
+
+        window.navigateToShipments = function() {
+            const currentQuery = window.location.search;
+            const sep = currentQuery ? '&' : '?';
+            window.location.href = `index.html${currentQuery}${sep}view=shipments`;
+        };
 
         window.currentAccount = {
             id: "admin_default",
-            name: savedDriverName,
+            name: targetDriverName,
             details: `${companyDisplayName} | الرتبة: admin`,
             badge: "admin",
             role: "admin",
@@ -561,7 +575,7 @@
         async function initRealtimeUserSync() {
             try {
                 const driversRef = collection(db, 'drivers');
-                const q = query(driversRef, where("name", "==", savedDriverName));
+                const q = query(driversRef, where("name", "==", targetDriverName));
                 const querySnapshot = await getDocs(q);
 
                 if (!querySnapshot.empty) {
@@ -577,11 +591,27 @@
                         window.updateAccountUI();
                     });
                 } else {
-                    const defaultRef = doc(db, 'drivers', "1");
-                    const defSnap = await getDoc(defaultRef);
-                    if (defSnap.exists()) {
-                        window.currentAccount = { id: defSnap.id, ...defSnap.data() };
-                    }
+                    // إذا لم يوجد الحساب، يتم إنشاؤه ومزامنته سحابياً مباشرةً بالاسم القادم من الرابط
+                    const newDriverRef = doc(collection(db, 'drivers'));
+                    const newDriverData = {
+                        name: targetDriverName,
+                        details: `${companyDisplayName} | مستخدم سحابي`,
+                        badge: "admin",
+                        role: "admin",
+                        status: "available",
+                        companyId: window.companyId,
+                        avatar: ""
+                    };
+                    await setDoc(newDriverRef, newDriverData);
+                    window.currentAccount = { id: newDriverRef.id, ...newDriverData };
+
+                    onSnapshot(newDriverRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            window.currentAccount = { id: docSnap.id, ...docSnap.data() };
+                        }
+                        updateAdminPrivileges();
+                        window.updateAccountUI();
+                    });
                 }
                 updateAdminPrivileges();
                 window.updateAccountUI();
@@ -594,8 +624,8 @@
         window.updateAccountUI = async function() {
             updateAdminPrivileges();
 
-            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name || "المدير";
-            document.getElementById('topBarUserName').innerText = window.currentAccount.name || "المدير";
+            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name || targetDriverName;
+            document.getElementById('topBarUserName').innerText = window.currentAccount.name || targetDriverName;
             document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || window.currentAccount.role || 'admin';
 
             const adminBadgeTag = document.getElementById('adminMasterBadgeTag');
@@ -736,7 +766,7 @@
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
                             <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'admin'}</span></p>
-                            <p style="margin-bottom: 6px;"><strong>🏢 اسم الشركة:</strong> <span style="color: var(--primary-color);">${companyDisplayName}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏢 معرّف الشركة (السحابة):</strong> <span style="color: var(--primary-color);">${window.companyId}</span></p>
                         </div>
                     </div>
                 `;
