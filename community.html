@@ -305,8 +305,8 @@
             <div class="user-meta-info">
                 <span class="na2la-brand-title" id="topBarUserName">جاري المزامنة...</span>
                 <div class="user-badges-line">
-                    <span id="companyIdDisplayBadge" class="company-id-badge">شركة: جاري المزامنة...</span>
-                    <span id="topBarUserBadge" class="user-role-badge">عضو</span>
+                    <span id="companyIdDisplayBadge" class="company-id-badge">شركة: اسطورة الطريق الرئيسية</span>
+                    <span id="topBarUserBadge" class="user-role-badge">admin</span>
                     <span id="adminMasterBadgeTag" class="admin-master-badge">🛡️ مشرف (Admin)</span>
                 </div>
             </div>
@@ -415,7 +415,7 @@
             </div>
             <div class="community-cover-overlay">
                 <div>
-                    <h1 style="font-size: 1.15rem; margin-bottom: 3px;" id="companyCommunityTitle">مجتمع الشركة</h1>
+                    <h1 style="font-size: 1.15rem; margin-bottom: 3px;" id="companyCommunityTitle">مجتمع شركة اسطورة الطريق الرئيسية</h1>
                     <p style="font-size: 0.75rem; opacity: 0.9;">التجمع الرسمي لإدارة الشحن والعملاء والأسطول الخاص بك</p>
                 </div>
             </div>
@@ -425,7 +425,7 @@
         <div class="card">
             <div style="font-size: 0.8rem; color: var(--secondary-text); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
                 <div id="postingAvatarSmall" style="width: 25px; height: 25px; border-radius: 50%; background-size: cover; background-position: center; border: 1px solid var(--primary-color);"></div>
-                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">جاري المزامنة...</strong></span>
+                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">المدير</strong></span>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 8px;">
@@ -475,7 +475,7 @@
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <h2 class="section-title" style="margin: 0; border: none; padding: 0;" id="wallSectionTitle">📢 حائط المنشورات</h2>
+            <h2 class="section-title" style="margin: 0; border: none; padding: 0;" id="wallSectionTitle">📢 حائط منشورات اسطورة الطريق الرئيسية</h2>
             <input type="text" id="postSearchInput" placeholder="بحث في المنشورات..." style="width: 160px; padding: 5px 8px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.75rem; color: var(--text-color);" oninput="filterWallPosts()">
         </div>
 
@@ -513,42 +513,51 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // ربط الحساب والشركة الحقيقية للمدير مباشرة وعدم إنشاء أي مستخدم وهمي
+        // معرف النظام company_main واسم الشركة اسطورة الطريق الرئيسية
+        window.companyId = "company_main";
+        const companyDisplayName = "اسطورة الطريق الرئيسية";
+
+        // ربط الحساب الفعلي للمدير تماماً وعدم السماح بأي مستخدم وهمي
         let savedProfile = JSON.parse(localStorage.getItem('na2la_logged_user_profile')) || {};
         
         if (!savedProfile.name || savedProfile.name === "مستخدم سحابي نشط") {
             savedProfile = {
                 id: "admin_01114099799",
                 name: "المدير",
-                details: "أسطورة الطريق الرئيسية | الهاتف: 01114099799 | الرتبة: admin",
+                details: `${companyDisplayName} | الهاتف: 01114099799 | الرتبة: admin`,
                 badge: "admin",
                 role: "admin",
                 status: "available",
-                companyId: "أسطورة الطريق الرئيسي",
+                companyId: window.companyId,
                 avatar: ""
             };
             localStorage.setItem('na2la_logged_user_profile', JSON.stringify(savedProfile));
         }
 
-        window.companyId = savedProfile.companyId || localStorage.getItem('na2la_active_company') || 'أسطورة الطريق الرئيسي';
         window.currentAccount = savedProfile;
 
-        document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${window.companyId}`;
-        document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${window.companyId}`;
-        document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات شركة ${window.companyId}`;
+        document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${companyDisplayName}`;
+        document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${companyDisplayName}`;
+        document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        // التحقق التلقائي لصلاحيات المدير
+        // تحديد مسارات فايربيس باستخدام company_main واسم المجموعات الجذرية المتوافقة مع قاعدة البيانات
+        function getCol(name) { 
+            if(name === 'users') return collection(db, 'drivers');
+            if(name === 'posts') return collection(db, 'communityPosts');
+            if(name === 'public_chat') return collection(db, 'chat');
+            return collection(db, `companies_${window.companyId}_${name}`); 
+        }
+
+        // التحقق التلقائي لصلاحيات المدير المطلقة
         function updateAdminPrivileges() {
             const role = (window.currentAccount.role || '').toLowerCase();
             const badge = (window.currentAccount.badge || '').toLowerCase();
             window.isAdminMode = (role === 'admin' || badge === 'admin' || window.currentAccount.name === 'المدير');
         }
 
-        function getCol(name) { return collection(db, `companies_${window.companyId}_${name}`); }
-
         function initRealtimeUserSync() {
-            const userDocRef = doc(db, `companies_${window.companyId}_users`, window.currentAccount.id);
+            const userDocRef = doc(db, 'drivers', window.currentAccount.id || 'admin_01114099799');
             onSnapshot(userDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     window.currentAccount = docSnap.data();
@@ -602,7 +611,7 @@
             try {
                 updateAdminPrivileges();
                 localStorage.setItem('na2la_logged_user_profile', JSON.stringify(window.currentAccount));
-                await setDoc(doc(db, `companies_${window.companyId}_users`, window.currentAccount.id), window.currentAccount);
+                await setDoc(doc(db, 'drivers', window.currentAccount.id || 'admin_01114099799'), window.currentAccount);
             } catch(e) {}
         }
 
@@ -685,7 +694,7 @@
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
                             <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'admin'}</span></p>
-                            <p style="margin-bottom: 6px;"><strong>🏢 معرف الشركة:</strong> <span style="color: var(--primary-color);">${window.companyId}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏢 اسم الشركة:</strong> <span style="color: var(--primary-color);">${companyDisplayName} (${window.companyId})</span></p>
                         </div>
                     </div>
                 `;
@@ -697,7 +706,7 @@
         window.deletePostByAdmin = async function(postId) {
             if (confirm("🛡️ (صلاحيات المدير): هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
                 try {
-                    await deleteDoc(doc(db, `companies_${window.companyId}_posts`, postId));
+                    await deleteDoc(doc(getCol("posts"), postId));
                     alert("✔ تم حذف المنشور بنجاح.");
                 } catch(e) {
                     alert("خطأ في الحذف: " + e.message);
@@ -710,7 +719,7 @@
                 try {
                     let comments = [...existingComments];
                     comments.splice(commentIndex, 1);
-                    await updateDoc(doc(db, `companies_${window.companyId}_posts`, postId), { comments: comments });
+                    await updateDoc(doc(getCol("posts"), postId), { comments: comments });
                 } catch(e) {
                     alert("خطأ في حذف التعليق: " + e.message);
                 }
@@ -776,7 +785,7 @@
         window.deleteChatMessage = async function(msgId) {
             if(confirm("🛡️ حذف هذه الرسالة من الشات العام؟")) {
                 try {
-                    await deleteDoc(doc(db, `companies_${window.companyId}_public_chat`, msgId));
+                    await deleteDoc(doc(getCol("public_chat"), msgId));
                 } catch(e) {}
             }
         }
@@ -1044,7 +1053,7 @@
         }
 
         window.votePoll = async function(postId, optionIndex) {
-            const postRef = doc(db, `companies_${window.companyId}_posts`, postId);
+            const postRef = doc(getCol("posts"), postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
@@ -1063,7 +1072,7 @@
         }
 
         window.reactToPost = async function(postId, reactionType) {
-            const postRef = doc(db, `companies_${window.companyId}_posts`, postId);
+            const postRef = doc(getCol("posts"), postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
@@ -1096,7 +1105,7 @@
                 text: text,
                 time: "الآن"
             });
-            await updateDoc(doc(db, `companies_${window.companyId}_posts`, postId), { comments: comments });
+            await updateDoc(doc(getCol("posts"), postId), { comments: comments });
             input.value = "";
         }
 
