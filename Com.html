@@ -420,7 +420,7 @@
             <span>الخزنة</span>
         </button>
         <button class="bottom-nav-item active" onclick="switchSection('feed-sec', document.querySelectorAll('.sector-btn')[0])">
-            <span class="icon">🌐</span>
+            <span class="icon" id="nav-footer-avatar-icon">🌐</span>
             <span>الرادار</span>
         </button>
         <button class="bottom-nav-item" onclick="goToPage('cargo.html')">
@@ -465,7 +465,7 @@
         let driversUnsubscribe = null;
 
         function goToPage(pageName) {
-            let userId = currentDriverProfile.id || urlUserId || '';
+            let userId = currentDriverProfile.id || urlUserId || currentDriverProfile.name || '';
             let companyId = currentCompanyId || 'company_main';
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
@@ -495,12 +495,19 @@
             const urlParams = new URLSearchParams(window.location.search);
             urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
                         urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name') || '').trim();
-            let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
+            let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || '').trim();
+
+            if (!urlUserId) {
+                urlUserId = localStorage.getItem('logged_in_driver_name') || 'زائر';
+            } else {
+                localStorage.setItem('logged_in_driver_name', urlUserId);
+            }
 
             if (!urlCompanyId || urlCompanyId === 'null') {
                 urlCompanyId = 'company_main';
             }
             currentCompanyId = urlCompanyId;
+            localStorage.setItem('current_company_id', currentCompanyId);
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
@@ -526,8 +533,11 @@
 
                 if (found) {
                     currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
+                    localStorage.setItem('current_company_id', currentCompanyId);
                     let isAdm = isUserAdmin(found.role || found.rank, found.name);
+                    
                     let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || '';
+                    if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
                     currentDriverProfile = {
                         id: found.id,
@@ -539,19 +549,22 @@
                         avatar: userAvatar
                     };
                 } else {
-                    // إذا لم يتم العثور على المستخدم بالمعرّف، يُعامل كزائر آمن بدون أخذ حساب شخص آخر عشوائياً
+                    let isAdmCheck = isUserAdmin('', urlUserId);
+                    currentCompanyId = urlCompanyId || 'company_main';
+                    localStorage.setItem('current_company_id', currentCompanyId);
                     currentDriverProfile = {
                         id: '',
                         name: urlUserId || 'زائر / كابتن',
-                        rank: 'driver',
-                        title: 'سائق معتمد',
+                        rank: isAdmCheck ? 'admin' : 'driver',
+                        title: isAdmCheck ? 'مدير النظام' : 'سائق معتمد',
                         permissions: 'صلاحيات تشغيلية أساسية',
                         phone: '',
                         avatar: ''
                     };
                 }
             } catch (err) {
-                console.error("Session fetch error:", err);
+                currentCompanyId = urlCompanyId || 'company_main';
+                localStorage.setItem('current_company_id', currentCompanyId);
                 currentDriverProfile = {
                     id: urlUserId || '',
                     name: urlUserId || 'كابتن الأسطول',
@@ -574,7 +587,7 @@
             const avatarContainer = document.getElementById('headerAvatar');
             const modalAvatar = document.getElementById('modalAvatarPreview');
             
-            if (currentDriverProfile.avatar && currentDriverProfile.avatar.trim() !== '') {
+            if (currentDriverProfile.avatar && currentDriverProfile.avatar !== 'undefined' && currentDriverProfile.avatar !== 'null') {
                 avatarContainer.src = currentDriverProfile.avatar;
                 avatarContainer.style.display = 'block';
                 modalAvatar.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
@@ -721,7 +734,7 @@
                         });
                     }
 
-                    let avatarHtml = p.authorAvatar ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
+                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
 
                     let card = document.createElement('div');
                     card.className = 'card';
