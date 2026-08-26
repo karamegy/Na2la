@@ -989,26 +989,40 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
-        // قراءة الجلسة ومعرف الشركة حصرياً من معاملات الـ URL مع الحفظ التلقائي في الذاكرة المحلية
+        // 🛡️ [تعديل حصري وآمن]: التحقق من الجلسة ومنع إنشاء حسابات وهمية عند الخروج أو الدخول الخاطئ
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
 
-            if (externalId && externalId.trim() !== '' && externalId !== 'null') {
+            if (externalId && externalId.trim() !== '' && externalId !== 'null' && externalId !== 'undefined') {
                 localStorage.setItem('logged_in_driver_name', externalId.trim());
                 return externalId.trim();
             }
-            return localStorage.getItem('logged_in_driver_name') || 'admin';
+            
+            let savedSession = localStorage.getItem('logged_in_driver_name');
+            if (savedSession && savedSession.trim() !== '' && savedSession !== 'null' && savedSession !== 'undefined' && savedSession !== 'admin' && savedSession !== 'زائر') {
+                return savedSession.trim();
+            }
+
+            return null;
         }
 
         let activeExternalSessionName = getExternalLoginSession();
+        
+        // 🚨 إذا لم يتوفر مُعرف حقيقي مسجل، قم بالتحويل لصفحة تسجيل الدخول ومنع أي حساب وهمي
+        if (!activeExternalSessionName) {
+            alert('⚠️ تنبيه أمني: يرجى تسجيل الدخول أولاً للوصول إلى لوحة وبروفايل السائق.');
+            let compIdParam = new URLSearchParams(window.location.search).get('companyId') || localStorage.getItem('current_company_id') || 'company_main';
+            window.location.href = `index.html?companyId=${encodeURIComponent(compIdParam)}`;
+            throw new Error("Unauthorized Access - Please Login");
+        }
+
         let loggedInDriverId = activeExternalSessionName;
         
         const urlParamsCheck = new URLSearchParams(window.location.search);
-        let urlUserIdParam = urlParamsCheck.get('userId') || urlParamsCheck.get('id') || urlParamsCheck.get('phone') || urlParamsCheck.get('driver') || urlParamsCheck.get('name');
         let urlCompanyIdParam = urlParamsCheck.get('companyId') || urlParamsCheck.get('company') || localStorage.getItem('current_company_id');
         
-        let viewingProfileId = urlUserIdParam ? loggedInDriverId : loggedInDriverId;
+        let viewingProfileId = loggedInDriverId;
 
         let currentCompanyId = (urlCompanyIdParam && urlCompanyIdParam.trim() !== '' && urlCompanyIdParam !== 'null') ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
@@ -1161,20 +1175,10 @@
         }
 
         function autoRegisterUserToFirestore() {
-            if (!activeExternalSessionName || activeExternalSessionName === 'زائر') return;
+            if (!activeExternalSessionName || activeExternalSessionName === 'زائر' || activeExternalSessionName === 'admin') return;
             const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
             driverRef.get().then(docSnap => {
-                if (!docSnap.exists) {
-                    driverRef.set({
-                        id: activeExternalSessionName,
-                        name: getCleanDriverName(activeExternalSessionName),
-                        role: 'driver',
-                        companyId: currentCompanyId,
-                        status: 'متاح 🟢',
-                        phone: '',
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
-                } else {
+                if (docSnap.exists) {
                     driverRef.update({ companyId: currentCompanyId }).catch(() => {});
                 }
             }).catch(() => {});
@@ -2144,4 +2148,4 @@
         window.onload = renderMyAccount;
     </script>
 </body>
-    </html>
+</html>
