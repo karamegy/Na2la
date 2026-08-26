@@ -584,13 +584,11 @@
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
 
-    // 🌟 دالة التحقق الذكي من الصلاحيات بناءً على رتبة admin أو اسم "المدير" في قاعدة البيانات
+    // 🌟 التحقق القياسي المباشر من رتبة admin الإنجليزية
     function isSuperAdmin() {
         let user = currentDriverProfile || {};
         let role = String(user.role || '').toLowerCase().trim();
-        let name = String(user.name || '').toLowerCase().trim();
-        
-        return role === 'admin' || role === 'مدير' || name === 'المدير' || name === 'كارما' || name.includes('كرم');
+        return role === 'admin';
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -608,7 +606,7 @@
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
             let found = null;
-            let firstAdmin = null; // التقط أول حساب admin سحابياً تلقائياً لتسهيل الدخول المباشر
+            let firstAdmin = null; 
             globalDriversCache = [];
             
             snapshot.forEach(docSnap => {
@@ -620,7 +618,8 @@
                 let dPhone = String(d.phone || '').trim();
                 let roleStr = String(d.role || '').toLowerCase().trim();
 
-                if ((roleStr === 'admin' || roleStr === 'مدير' || dName === 'المدير') && !firstAdmin) {
+                // التقط أول حساب يمتلك رتبة admin سحابياً افتراضياً
+                if (roleStr === 'admin' && !firstAdmin) {
                     firstAdmin = { id: docSnap.id, ...d };
                 }
 
@@ -629,7 +628,7 @@
                 }
             });
 
-            // 🌟 إذا لم يتم كتابة اسم في الرابط، يتم تلقائياً اختيار أول مدير مسجل في قاعدة البيانات (مثل "المدير")
+            // إذا لم يتم تحديد مستخدم في الرابط، يتم اختيار أول مدير (admin) سحابياً
             if (!found && !targetIdLower && firstAdmin) {
                 found = firstAdmin;
             }
@@ -637,33 +636,32 @@
             if (found) {
                 currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
                 
-                let roleStr = String(found.role || '').toLowerCase();
-                let dNameLower = String(found.name || '').toLowerCase();
-                let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير' || dNameLower === 'المدير' || dNameLower === 'كارما';
+                let roleStr = String(found.role || '').toLowerCase().trim();
+                let isDocAdmin = (roleStr === 'admin');
 
                 currentDriverProfile = {
                     id: found.id,
-                    name: found.name || 'المدير',
+                    name: found.name || 'مستخدم',
                     avatar: found.avatar || '',
-                    title: found.title || (isDocAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
+                    title: isDocAdmin ? 'مدير النظام' : 'سائق معتمد',
                     phone: found.phone || '',
-                    role: isDocAdmin ? 'admin' : (found.role || 'driver'),
+                    role: isDocAdmin ? 'admin' : 'driver',
                     companyId: currentCompanyId,
                     canAccessSocial: found.canAccessSocial !== false,
-                    subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
-                    subExpiry: found.subExpiry || (isDocAdmin ? 'دائم' : 'غير محدد')
+                    subPlan: found.subPlan || (isDocAdmin ? 'مدير' : 'أساسي'),
+                    subExpiry: found.subExpiry || 'دائم'
                 };
             } else {
                 currentCompanyId = urlCompanyId || 'company_main';
                 currentDriverProfile = {
-                    id: urlUserId || 'المدير',
+                    id: urlUserId || 'admin',
                     name: urlUserId || 'المدير',
                     avatar: '',
-                    title: 'مدير عام النظام',
+                    title: 'مدير النظام',
                     role: 'admin',
                     companyId: currentCompanyId,
                     canAccessSocial: true,
-                    subPlan: 'مدير عام',
+                    subPlan: 'مدير',
                     subExpiry: 'دائم'
                 };
             }
@@ -672,14 +670,14 @@
             console.error(err);
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
-                id: 'المدير',
+                id: 'admin',
                 name: 'المدير',
                 avatar: '',
-                title: 'مدير عام النظام',
+                title: 'مدير النظام',
                 role: 'admin',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
-                subPlan: 'مدير عام',
+                subPlan: 'مدير',
                 subExpiry: 'دائم'
             };
             syncProfileAndLoadHub();
@@ -904,8 +902,8 @@
             let dPhone = d.phone || '-';
             let dAvatar = d.avatar && d.avatar.trim() !== '' ? d.avatar : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
             let roleStr = String(d.role || '').toLowerCase().trim();
-            let isAdm = (roleStr === 'admin' || roleStr === 'مدير' || dName === 'المدير');
-            let roleText = isAdm ? "🛡️ Admin" : "👤 سائق";
+            let isAdm = (roleStr === 'admin');
+            let roleText = isAdm ? "🛡️ admin" : "👤 driver";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
             
             let hasAccess = d.canAccessSocial !== false;
@@ -942,7 +940,7 @@
             if (!window.db || !window.firebaseModules) throw new Error("قاعدة البيانات غير جاهزة");
             let name = document.getElementById("newAdminUserName").value.trim();
             let phone = document.getElementById("newAdminUserPhone").value.trim();
-            let role = document.getElementById("newAdminUserRole").value;
+            let role = document.getElementById("newAdminUserRole").value; // 'admin' أو 'driver'
             let avatar = document.getElementById("newAdminUserAvatar").value.trim();
 
             const { collection, addDoc } = window.firebaseModules;
@@ -969,7 +967,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
             let roleStr = String(currentRole || '').toLowerCase().trim();
-            let newRole = (roleStr === 'admin' || roleStr === 'مدير') ? 'driver' : 'admin';
+            let newRole = (roleStr === 'admin') ? 'driver' : 'admin';
             await updateDoc(doc(window.db, "drivers", driverId), { role: newRole });
             fetchDriversManual();
         } catch (err) {
@@ -1014,7 +1012,7 @@
             ? currentDriverProfile.avatar 
             : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
         
-        let activeRoleText = isAdmin ? `🛡️ ${currentDriverProfile.title} (مدير النظام - صلاحيات كاملة)` : `👤 ${currentDriverProfile.title}`;
+        let activeRoleText = isAdmin ? `🛡️ admin (صلاحيات كاملة)` : `👤 driver (سائق معتمد)`;
 
         if (labelEl) labelEl.innerText = activeName;
         if (avatarEl) avatarEl.src = activeAvatar;
