@@ -7,10 +7,37 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
-    <!-- مكتبات Firebase الإصدار 8 المستقر لضمان التوافق التام -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <!-- مكتبات Firebase الإصدار 10 الحديث متوافقة مع باقي المنصة -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            authDomain: "n2la-642d3.firebaseapp.com",
+            projectId: "n2la-642d3",
+            storageBucket: "n2la-642d3.firebasestorage.app",
+            messagingSenderId: "1085749997466",
+            appId: "1:1085749997466:web:13e5535dc6d2312397d423",
+            measurementId: "G-KH4ZYFB8LC"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.db = db;
+        window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc };
+
+        signInAnonymously(auth).then(() => {
+            console.log("✅ تم المصادقة سحابياً بنجاح في Com.html");
+            window.dispatchEvent(new Event('firebase-ready'));
+        }).catch((error) => {
+            console.error("⚠️ خطأ في المصادقة السحابية:", error);
+            window.dispatchEvent(new Event('firebase-ready'));
+        });
+    </script>
     
     <!-- مكتبات التصدير والمساعدة -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -415,20 +442,6 @@
     </div>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
-            authDomain: "n2la-642d3.firebaseapp.com",
-            projectId: "n2la-642d3",
-            storageBucket: "n2la-642d3.firebasestorage.app",
-            messagingSenderId: "1085749997466",
-            appId: "1:1085749997466:web:13e5535dc6d2312397d423",
-            measurementId: "G-KH4ZYFB8LC"
-        };
-        
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const auth = firebase.auth();
-
         let currentCompanyId = 'company_main';
         let currentDriverProfile = {
             name: 'كابتن الأسطول',
@@ -457,29 +470,41 @@
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
 
+        // دالة ذكية للتحقق الموحد للرتبة والإدارة
+        function isUserAdmin(roleValue, nameValue) {
+            let role = String(roleValue || '').toLowerCase().trim();
+            let name = String(nameValue || '').toLowerCase().trim();
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
+        }
+
         async function initApp() {
-            try {
-                if (!auth.currentUser) {
-                    await auth.signInAnonymously();
-                }
-            } catch (err) {}
-            await fetchCloudSessionFromURL();
+            if (window.db && window.firebaseModules) {
+                await fetchCloudSessionFromURL();
+            } else {
+                window.addEventListener('firebase-ready', async () => {
+                    await fetchCloudSessionFromURL();
+                }, { once: true });
+            }
         }
 
         async function fetchCloudSessionFromURL() {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
-                        urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name');
-            let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, getDocs } = window.firebaseModules;
 
-            if (!urlCompanyId || urlCompanyId.trim() === '' || urlCompanyId === 'null') {
+            const urlParams = new URLSearchParams(window.location.search);
+            urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || 
+                        urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name') || '').trim();
+            let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
+
+            if (!urlCompanyId || urlCompanyId === 'null') {
                 urlCompanyId = 'company_main';
             }
-            currentCompanyId = urlCompanyId.trim();
+            currentCompanyId = urlCompanyId;
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
-                const snapshot = await db.collection('drivers').get();
+                const snapshot = await getDocs(collection(window.db, 'drivers'));
                 let found = null;
                 allDrivers = [];
                 
@@ -487,71 +512,48 @@
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
                     
-                    if (urlUserId) {
-                        let dName = String(d.name || '').trim().toLowerCase();
-                        let dPhone = String(d.phone || '').trim();
-                        let targetId = String(urlUserId).trim().toLowerCase();
+                    let docId = String(docSnap.id || '').trim().toLowerCase();
+                    let dName = String(d.name || '').trim().toLowerCase();
+                    let dPhone = String(d.phone || '').trim();
 
-                        if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
+                    if (urlUserId) {
+                        let targetId = urlUserId.toLowerCase();
+                        if (docId === targetId || dName === targetId || dPhone === targetId) {
                             found = { id: docSnap.id, ...d };
                         }
                     }
                 });
 
                 if (found) {
-                    currentCompanyId = found.companyId || urlCompanyId || 'company_main';
-                    let roleStr = String(found.role || found.rank || '').toLowerCase();
-                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
+                    currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
+                    let isAdm = isUserAdmin(found.role || found.rank, found.name);
                     let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || '';
 
                     currentDriverProfile = {
                         id: found.id,
                         name: found.name || found.driverName || 'سائق معتمد',
-                        phone: found.phone || 'غير متوفر',
-                        rank: isAdmin ? 'admin' : (found.role || 'driver'),
-                        title: found.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد'),
-                        permissions: isAdmin ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
+                        phone: found.phone || '',
+                        rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
+                        title: found.title || (isAdm ? 'مدير النظام' : 'سائق معتمد'),
+                        permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                         avatar: userAvatar
                     };
-                } else if (urlUserId) {
-                    let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(String(urlUserId).toLowerCase());
+                } else {
+                    // إذا لم يتم العثور على المستخدم بالمعرّف، يُعامل كزائر آمن بدون أخذ حساب شخص آخر عشوائياً
                     currentDriverProfile = {
-                        id: urlUserId,
-                        name: urlUserId,
-                        rank: isSuper ? 'admin' : 'driver',
-                        title: isSuper ? 'مدير النظام' : 'سائق معتمد',
-                        permissions: isSuper ? 'صلاحيات كاملة' : 'صلاحيات تشغيلية أساسية',
+                        id: '',
+                        name: urlUserId || 'زائر / كابتن',
+                        rank: 'driver',
+                        title: 'سائق معتمد',
+                        permissions: 'صلاحيات تشغيلية أساسية',
                         phone: '',
                         avatar: ''
                     };
-                } else {
-                    // إذا لم يتم تمرير أي مستخدم بالرابط، يتم أخذ أول سائق متاح أو حساب افتراضي لكي لا يظهر اسم "المدير" خطأً
-                    if (allDrivers.length > 0) {
-                        let firstDrv = allDrivers[0];
-                        currentDriverProfile = {
-                            id: firstDrv.id,
-                            name: firstDrv.name || 'سائق الأسطول',
-                            phone: firstDrv.phone || '',
-                            rank: firstDrv.role || 'driver',
-                            title: firstDrv.title || 'سائق معتمد',
-                            permissions: 'صلاحيات تشغيلية',
-                            avatar: firstDrv.avatar || firstDrv.photoUrl || ''
-                        };
-                    } else {
-                        currentDriverProfile = {
-                            id: 'guest',
-                            name: 'زائر / كابتن',
-                            rank: 'driver',
-                            title: 'سائق معتمد',
-                            permissions: 'صلاحيات تشغيلية',
-                            phone: '',
-                            avatar: ''
-                        };
-                    }
                 }
             } catch (err) {
+                console.error("Session fetch error:", err);
                 currentDriverProfile = {
-                    id: urlUserId || 'guest',
+                    id: urlUserId || '',
                     name: urlUserId || 'كابتن الأسطول',
                     rank: 'driver',
                     title: 'سائق معتمد',
@@ -565,6 +567,7 @@
         }
 
         function syncProfileAndLoad() {
+            window.currentCompanyId = currentCompanyId;
             document.getElementById('headerNameText').innerText = currentDriverProfile.name;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
@@ -646,7 +649,8 @@
             } else { info.innerText = ''; }
         }
 
-        function publishCommunityPost(isEmergency) {
+        async function publishCommunityPost(isEmergency) {
+            if (!window.db || !window.firebaseModules) return;
             const text = document.getElementById('community-post-text').value.trim();
             let category = document.getElementById('postCategory').value;
             if (isEmergency) category = 'طوارئ واستغاثة 🆘';
@@ -669,25 +673,31 @@
                 date: new Date().toLocaleString('ar-EG')
             };
 
-            db.collection('space_network_posts').doc(newId).set(newPost).then(() => {
-                document.getElementById('community-post-text').value = '';
-                communityFilesArr = [];
-                document.getElementById('community-files-preview-info').innerText = '';
-                addNotification("تم إرسال إشارة رادار جديدة بنجاح.");
-                alert('تم نشر الإشارة بنجاح في رادار الأسطول لشركتك 🚀');
-            });
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, 'space_network_posts', newId), newPost);
+            document.getElementById('community-post-text').value = '';
+            communityFilesArr = [];
+            document.getElementById('community-files-preview-info').innerText = '';
+            addNotification("تم إرسال إشارة رادار جديدة بنجاح.");
+            alert('تم نشر الإشارة بنجاح في رادار الأسطول لشركتك 🚀');
         }
 
         function loadCommunityPosts() {
+            if (!window.db || !window.firebaseModules) return;
             if (communityUnsubscribe) communityUnsubscribe();
             
-            communityUnsubscribe = db.collection('space_network_posts').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            const { collection, onSnapshot } = window.firebaseModules;
+            communityUnsubscribe = onSnapshot(collection(window.db, 'space_network_posts'), snapshot => {
                 const container = document.getElementById('community-posts-container');
                 if(!container) return;
                 container.innerHTML = '';
                 let posts = [];
                 snapshot.forEach(docSnap => {
-                    posts.push({ id: docSnap.id, ...docSnap.data() });
+                    let p = docSnap.data();
+                    let pComp = (p.companyId || "").trim();
+                    if (!pComp || pComp === currentCompanyId) {
+                        posts.push({ id: docSnap.id, ...p });
+                    }
                 });
                 posts.sort((a, b) => Number(b.id) - Number(a.id));
 
@@ -746,34 +756,17 @@
                     `;
                     container.appendChild(card);
                 });
-            }, err => {
-                db.collection('space_network_posts').onSnapshot(snap => {
-                    const container = document.getElementById('community-posts-container');
-                    if(!container) return;
-                    container.innerHTML = '';
-                    let posts = [];
-                    snap.forEach(docSnap => {
-                        let p = docSnap.data();
-                        if (!p.companyId || p.companyId === currentCompanyId) {
-                            posts.push({ id: docSnap.id, ...p });
-                        }
-                    });
-                    posts.sort((a, b) => Number(b.id) - Number(a.id));
-                    let html = '';
-                    posts.forEach(p => {
-                        html += `<div class="card"><strong>${p.author}</strong><p>${p.text}</p></div>`;
-                    });
-                    container.innerHTML = html || '<p style="text-align:center; opacity:0.7;">لا توجد منشورات.</p>';
-                });
             });
         }
 
-        function likePost(id) {
-            db.collection('space_network_posts').doc(String(id)).get().then(doc => {
-                if(doc.exists) {
-                    db.collection('space_network_posts').doc(String(id)).update({ likes: (doc.data().likes || 0) + 1 });
-                }
-            });
+        async function likePost(id) {
+            if (!window.db || !window.firebaseModules) return;
+            const { doc, getDoc, updateDoc } = window.firebaseModules;
+            let docRef = doc(window.db, 'space_network_posts', String(id));
+            let docSnap = await getDoc(docRef);
+            if(docSnap.exists()) {
+                await updateDoc(docRef, { likes: (docSnap.data().likes || 0) + 1 });
+            }
         }
 
         function toggleCommentsSection(id) {
@@ -781,21 +774,22 @@
             box.style.display = box.style.display === 'block' ? 'none' : 'block';
         }
 
-        function addComment(id) {
+        async function addComment(id) {
+            if (!window.db || !window.firebaseModules) return;
             let input = document.getElementById(`comment-input-${id}`);
             let text = input.value.trim();
             if(!text) return;
 
-            db.collection('space_network_posts').doc(String(id)).get().then(doc => {
-                if(doc.exists) {
-                    let data = doc.data();
-                    let comments = data.comments || [];
-                    comments.push({ author: currentDriverProfile.name, text: text, time: new Date().toLocaleTimeString('ar-EG') });
-                    db.collection('space_network_posts').doc(String(id)).update({ comments: comments }).then(() => {
-                        input.value = '';
-                    });
-                }
-            });
+            const { doc, getDoc, updateDoc } = window.firebaseModules;
+            let docRef = doc(window.db, 'space_network_posts', String(id));
+            let docSnap = await getDoc(docRef);
+            if(docSnap.exists()) {
+                let data = docSnap.data();
+                let comments = data.comments || [];
+                comments.push({ author: currentDriverProfile.name, text: text, time: new Date().toLocaleTimeString('ar-EG') });
+                await updateDoc(docRef, { comments: comments });
+                input.value = '';
+            }
         }
 
         function viewMedia(src) {
@@ -805,18 +799,23 @@
         function closeMediaViewer() { document.getElementById('mediaViewerModal').style.display = 'none'; }
 
         function loadMyCargoFromShipments() {
+            if (!window.db || !window.firebaseModules) return;
             if (shipmentsUnsubscribe) shipmentsUnsubscribe();
 
-            shipmentsUnsubscribe = db.collection('shipments').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            const { collection, onSnapshot } = window.firebaseModules;
+            shipmentsUnsubscribe = onSnapshot(collection(window.db, 'shipments'), snapshot => {
                 const container = document.getElementById('my-cargo-container');
                 if(!container) return;
                 container.innerHTML = '';
                 
                 let myCargos = [];
-                snapshot.forEach(doc => {
-                    let data = doc.data();
-                    if (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || currentDriverProfile.rank === 'admin') {
-                        myCargos.push({ id: doc.id, ...data });
+                snapshot.forEach(docSnap => {
+                    let data = docSnap.data();
+                    let dComp = (data.companyId || "").trim();
+                    if (!dComp || dComp === currentCompanyId) {
+                        if (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
+                            myCargos.push({ id: docSnap.id, ...data });
+                        }
                     }
                 });
 
@@ -843,32 +842,15 @@
                     `;
                     container.appendChild(card);
                 });
-            }, err => {
-                db.collection('shipments').onSnapshot(snap => {
-                    const container = document.getElementById('my-cargo-container');
-                    if(!container) return;
-                    container.innerHTML = '';
-                    let myCargos = [];
-                    snap.forEach(doc => {
-                        let data = doc.data();
-                        if (!data.companyId || data.companyId === currentCompanyId) {
-                            myCargos.push({ id: doc.id, ...data });
-                        }
-                    });
-                    document.getElementById('modalShipmentsCount').innerText = myCargos.length;
-                    let html = '';
-                    myCargos.forEach(c => {
-                        html += `<div class="card"><strong>📦 شحنة: #${c.id}</strong><p>${c.item || ''} - ${c.price || 0} ج.م</p></div>`;
-                    });
-                    container.innerHTML = html || '<p style="text-align:center; opacity:0.7;">لا توجد شحنات.</p>';
-                });
             });
         }
 
         function loadTreasuryData() {
+            if (!window.db || !window.firebaseModules) return;
             if (safeUnsubscribe) safeUnsubscribe();
 
-            safeUnsubscribe = db.collection('transactions').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            const { collection, onSnapshot } = window.firebaseModules;
+            safeUnsubscribe = onSnapshot(collection(window.db, 'transactions'), snapshot => {
                 const container = document.getElementById('my-treasury-container');
                 if(!container) return;
                 container.innerHTML = '';
@@ -876,15 +858,18 @@
                 let myTransactions = [];
                 let total = 0;
 
-                snapshot.forEach(doc => {
-                    let data = doc.data();
-                    if (data.driverName === currentDriverProfile.name || data.name === currentDriverProfile.name || currentDriverProfile.rank === 'admin') {
-                        myTransactions.push({ id: doc.id, ...data });
-                        let val = Number(data.amount || 0);
-                        if (data.type === 'out') {
-                            total -= val;
-                        } else {
-                            total += val;
+                snapshot.forEach(docSnap => {
+                    let data = docSnap.data();
+                    let dComp = (data.companyId || "").trim();
+                    if (!dComp || dComp === currentCompanyId) {
+                        if (data.driverName === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
+                            myTransactions.push({ id: docSnap.id, ...data });
+                            let val = Number(data.amount || 0);
+                            if (data.type === 'out') {
+                                total -= val;
+                            } else {
+                                total += val;
+                            }
                         }
                     }
                 });
@@ -911,51 +896,24 @@
                     `;
                 });
                 container.innerHTML = html;
-            }, err => {
-                db.collection('transactions').onSnapshot(snap => {
-                    const container = document.getElementById('my-treasury-container');
-                    if(!container) return;
-                    let myTransactions = [];
-                    let total = 0;
-                    snap.forEach(doc => {
-                        let data = doc.data();
-                        if (!data.companyId || data.companyId === currentCompanyId) {
-                            myTransactions.push({ id: doc.id, ...data });
-                            let val = Number(data.amount || 0);
-                            if (data.type === 'out') total -= val; else total += val;
-                        }
-                    });
-                    myTotalSafe = total;
-                    document.getElementById('modalSafeTotal').innerText = total;
-                    let html = `<div style="text-align:center; font-weight:bold; margin-bottom:10px;">الإجمالي: ${total} ج.م</div>`;
-                    myTransactions.forEach(t => {
-                        html += `<div class="card"><p>${t.desc || ''} - ${t.amount || 0} ج.م</p></div>`;
-                    });
-                    container.innerHTML = html;
-                });
             });
         }
 
         function loadDriversList() {
+            if (!window.db || !window.firebaseModules) return;
             if (driversUnsubscribe) driversUnsubscribe();
 
-            driversUnsubscribe = db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            const { collection, onSnapshot } = window.firebaseModules;
+            driversUnsubscribe = onSnapshot(collection(window.db, 'drivers'), snapshot => {
                 allDrivers = [];
                 snapshot.forEach(docSnap => {
-                    allDrivers.push({ id: docSnap.id, ...docSnap.data() });
+                    let d = docSnap.data();
+                    let dComp = (d.companyId || "").trim();
+                    if (!dComp || dComp === currentCompanyId) {
+                        allDrivers.push({ id: docSnap.id, ...d });
+                    }
                 });
                 renderChatUsersList();
-            }, err => {
-                db.collection('drivers').onSnapshot(snap => {
-                    allDrivers = [];
-                    snap.forEach(docSnap => {
-                        let d = docSnap.data();
-                        if (!d.companyId || d.companyId === currentCompanyId) {
-                            allDrivers.push({ id: docSnap.id, ...d });
-                        }
-                    });
-                    renderChatUsersList();
-                });
             });
         }
 
@@ -981,7 +939,8 @@
             loadChatMessages();
         }
 
-        function sendChatMessage() {
+        async function sendChatMessage() {
+            if (!window.db || !window.firebaseModules) return;
             const input = document.getElementById('chat-input-msg');
             const msg = input.value.trim();
             if (!msg) return;
@@ -995,19 +954,27 @@
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            db.collection('chat').doc(newMsg.id).set(newMsg).then(() => { input.value = ''; });
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, 'chat', newMsg.id), newMsg);
+            input.value = '';
         }
 
         function loadChatMessages() {
+            if (!window.db || !window.firebaseModules) return;
             if (chatUnsubscribe) chatUnsubscribe();
 
-            chatUnsubscribe = db.collection('chat').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            const { collection, onSnapshot } = window.firebaseModules;
+            chatUnsubscribe = onSnapshot(collection(window.db, 'chat'), snapshot => {
                 const box = document.getElementById('chat-messages-box');
                 if(!box) return;
                 box.innerHTML = '';
                 let msgs = [];
                 snapshot.forEach(docSnap => {
-                    msgs.push(docSnap.data());
+                    let m = docSnap.data();
+                    let mComp = (m.companyId || "").trim();
+                    if (!mComp || mComp === currentCompanyId) {
+                        msgs.push(m);
+                    }
                 });
                 msgs.sort((a, b) => Number(a.id) - Number(b.id));
 
@@ -1026,24 +993,6 @@
                     box.appendChild(bubble);
                 });
                 box.scrollTop = box.scrollHeight;
-            }, err => {
-                db.collection('chat').onSnapshot(snap => {
-                    const box = document.getElementById('chat-messages-box');
-                    if(!box) return;
-                    box.innerHTML = '';
-                    let msgs = [];
-                    snap.forEach(docSnap => {
-                        let m = docSnap.data();
-                        if (!m.companyId || m.companyId === currentCompanyId) msgs.push(m);
-                    });
-                    msgs.sort((a, b) => Number(a.id) - Number(b.id));
-                    let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
-                    let html = '';
-                    filtered.forEach(m => {
-                        html += `<div class="card"><p><strong>${m.sender}:</strong> ${m.text}</p></div>`;
-                    });
-                    box.innerHTML = html || '<div style="text-align:center; opacity:0.6;">لا توجد رسائل.</div>';
-                });
             });
         }
 
@@ -1068,46 +1017,32 @@
         }
 
         function loadAdminMembersUI() {
-            db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, onSnapshot } = window.firebaseModules;
+            onSnapshot(collection(window.db, 'drivers'), snapshot => {
                 const listElem = document.getElementById('adminMembersList');
                 if(!listElem) return;
                 listElem.innerHTML = '';
                 snapshot.forEach(docSnap => {
                     let member = docSnap.data();
-                    const card = document.createElement('div');
-                    card.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:11px;';
-                    card.innerHTML = `
-                        <div>
-                            <strong>${member.name}</strong> (${member.phone || 'بدون هاتف'})<br>
-                            <span style="font-size:9px; opacity:0.8;">الرتبة: ${member.role || 'سائق'} | PIN: <code>${member.pin || '****'}</code></span>
-                        </div>
-                    `;
-                    listElem.appendChild(card);
-                });
-            }, err => {
-                db.collection('drivers').onSnapshot(snap => {
-                    const listElem = document.getElementById('adminMembersList');
-                    if(!listElem) return;
-                    listElem.innerHTML = '';
-                    snap.forEach(docSnap => {
-                        let member = docSnap.data();
-                        if (!member.companyId || member.companyId === currentCompanyId) {
-                            const card = document.createElement('div');
-                            card.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:11px;';
-                            card.innerHTML = `
-                                <div>
-                                    <strong>${member.name}</strong> (${member.phone || 'بدون هاتف'})<br>
-                                    <span style="font-size:9px; opacity:0.8;">الرتبة: ${member.role || 'سائق'} | PIN: <code>${member.pin || '****'}</code></span>
-                                </div>
-                            `;
-                            listElem.appendChild(card);
-                        }
-                    });
+                    let mComp = (member.companyId || "").trim();
+                    if (!mComp || mComp === currentCompanyId) {
+                        const card = document.createElement('div');
+                        card.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:11px;';
+                        card.innerHTML = `
+                            <div>
+                                <strong>${member.name}</strong> (${member.phone || 'بدون هاتف'})<br>
+                                <span style="font-size:9px; opacity:0.8;">الرتبة: ${member.role || 'سائق'} | PIN: <code>${member.pin || '****'}</code></span>
+                            </div>
+                        `;
+                        listElem.appendChild(card);
+                    }
                 });
             });
         }
 
         async function addNewMember() {
+            if (!window.db || !window.firebaseModules) return;
             const name = document.getElementById('newMemberName').value.trim();
             const phone = document.getElementById('newMemberPhone').value.trim();
             const pin = document.getElementById('newMemberPin').value.trim();
@@ -1117,7 +1052,8 @@
 
             try {
                 let uid = String(Date.now());
-                await db.collection('drivers').doc(uid).set({
+                const { doc, setDoc } = window.firebaseModules;
+                await setDoc(doc(window.db, 'drivers', uid), {
                     id: uid, name, phone, pin, role: rank, title: rank, status: 'متاح 🟢', avatar: '', cover: '', coverHeight: 180,
                     companyId: currentCompanyId
                 });
@@ -1128,7 +1064,8 @@
             } catch(e) { alert('خطأ: ' + e.message); }
         }
 
-        function saveCashHandler(e) {
+        async function saveCashHandler(e) {
+            if (!window.db || !window.firebaseModules) return;
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
@@ -1145,11 +1082,11 @@
                 date: new Date().toLocaleString('ar-EG') 
             };
 
-            db.collection('transactions').doc(newId).set(newCash).then(() => {
-                document.getElementById('cash-amount').value = '';
-                document.getElementById('cash-desc').value = '';
-                alert('تم تسجيل الحركة في مجموعة transactions لشركتك بنجاح! 💵');
-            });
+            const { doc, setDoc } = window.firebaseModules;
+            await setDoc(doc(window.db, 'transactions', newId), newCash);
+            document.getElementById('cash-amount').value = '';
+            document.getElementById('cash-desc').value = '';
+            alert('تم تسجيل الحركة في مجموعة transactions لشركتك بنجاح! 💵');
         }
 
         let memoryNotifications = [{ id: 1, text: 'مرحباً بك في أسطورة الطريق (Space & Logistics Hub).', time: 'الآن', unread: true }];
@@ -1200,7 +1137,7 @@
             dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
         }
 
-        window.onload = initApp;
+        window.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
