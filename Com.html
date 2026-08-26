@@ -420,7 +420,7 @@
             <span>الخزنة</span>
         </button>
         <button class="bottom-nav-item active" onclick="switchSection('feed-sec', document.querySelectorAll('.sector-btn')[0])">
-            <span class="icon" id="nav-footer-avatar-icon">🌐</span>
+            <span class="icon">🌐</span>
             <span>الرادار</span>
         </button>
         <button class="bottom-nav-item" onclick="goToPage('cargo.html')">
@@ -465,7 +465,7 @@
         let driversUnsubscribe = null;
 
         function goToPage(pageName) {
-            let userId = currentDriverProfile.id || urlUserId || currentDriverProfile.name || '';
+            let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
@@ -498,7 +498,7 @@
             let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || '').trim();
 
             if (!urlUserId) {
-                urlUserId = localStorage.getItem('logged_in_driver_name') || 'زائر';
+                urlUserId = localStorage.getItem('logged_in_driver_name') || '';
             } else {
                 localStorage.setItem('logged_in_driver_name', urlUserId);
             }
@@ -515,17 +515,19 @@
                 let found = null;
                 allDrivers = [];
                 
+                let targetId = urlUserId.toLowerCase();
+
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
                     
                     let docId = String(docSnap.id || '').trim().toLowerCase();
-                    let dName = String(d.name || '').trim().toLowerCase();
+                    let dName = String(d.name || d.driverName || '').trim().toLowerCase();
                     let dPhone = String(d.phone || '').trim();
 
-                    if (urlUserId) {
-                        let targetId = urlUserId.toLowerCase();
-                        if (docId === targetId || dName === targetId || dPhone === targetId) {
+                    // مطابقة مرنة وشاملة للحساب المتصل
+                    if (targetId) {
+                        if (docId === targetId || dName === targetId || dPhone === targetId || dName.includes(targetId) || targetId.includes(dName)) {
                             found = { id: docSnap.id, ...d };
                         }
                     }
@@ -534,9 +536,10 @@
                 if (found) {
                     currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
                     localStorage.setItem('current_company_id', currentCompanyId);
-                    let isAdm = isUserAdmin(found.role || found.rank, found.name);
+                    let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
                     
-                    let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || '';
+                    // تغطية كافة مسميات حقل الصورة المحتملة في Firestore
+                    let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || '';
                     if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
                     currentDriverProfile = {
@@ -563,6 +566,7 @@
                     };
                 }
             } catch (err) {
+                console.error("Session fetch error:", err);
                 currentCompanyId = urlCompanyId || 'company_main';
                 localStorage.setItem('current_company_id', currentCompanyId);
                 currentDriverProfile = {
@@ -587,7 +591,7 @@
             const avatarContainer = document.getElementById('headerAvatar');
             const modalAvatar = document.getElementById('modalAvatarPreview');
             
-            if (currentDriverProfile.avatar && currentDriverProfile.avatar !== 'undefined' && currentDriverProfile.avatar !== 'null') {
+            if (currentDriverProfile.avatar && currentDriverProfile.avatar.trim() !== '' && currentDriverProfile.avatar !== 'undefined' && currentDriverProfile.avatar !== 'null') {
                 avatarContainer.src = currentDriverProfile.avatar;
                 avatarContainer.style.display = 'block';
                 modalAvatar.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
