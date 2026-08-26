@@ -307,15 +307,15 @@
         </div>
     </div>
 
-    <!-- الشريط العلوي المطور مرتبط بحساب المدير والمستخدم الحالي -->
+    <!-- الشريط العلوي المطور -->
     <header class="na2la-top-bar">
         <div class="na2la-brand-area">
             <div id="topBarUserAvatar" class="na2la-user-mini-avatar">👤</div>
             <div class="user-meta-info">
-                <span class="na2la-brand-title" id="topBarUserName">جاري المزامنة السحابية الفورية...</span>
+                <span class="na2la-brand-title" id="topBarUserName">جاري التعرف على الحساب...</span>
                 <div class="user-badges-line">
                     <span id="companyIdDisplayBadge" class="company-id-badge">شركة: اسطورة الطريق الرئيسية</span>
-                    <span id="topBarUserBadge" class="user-role-badge">admin</span>
+                    <span id="topBarUserBadge" class="user-role-badge">سائق</span>
                     <span id="adminMasterBadgeTag" class="admin-master-badge">🛡️ مشرف (Admin)</span>
                 </div>
             </div>
@@ -342,7 +342,7 @@
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي - يحافظ على تمرير معاملات الرابط للسحابة -->
+    <!-- شريط التنقل السفلي -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="navigateToMain()">
             <span class="icon">🏠</span>
@@ -435,7 +435,7 @@
         <div class="card">
             <div style="font-size: 0.8rem; color: var(--secondary-text); margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
                 <div id="postingAvatarSmall" style="width: 25px; height: 25px; border-radius: 50%; background-size: cover; background-position: center; border: 1px solid var(--primary-color);"></div>
-                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">جاري المزامنة...</strong></span>
+                <span>النشر باسم: <strong style="color: var(--primary-color);" id="postingAsAccountName">جاري التعرف...</strong></span>
             </div>
 
             <div style="display: flex; gap: 10px; margin-bottom: 8px;">
@@ -502,7 +502,6 @@
         </div>
     </div>
 
-    <!-- كود الجافاسكريبت المحدث والمصحح تماماً لمشكلة مزامنة الحساب والصورة -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { 
@@ -524,13 +523,20 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // استخراج معرّف الشركة واسم المستخدم والمكان ديناميكياً من معاملات الرابط (URL Parameters)
+        // استخراج معاملات الشركة والاسم المسجل ديناميكياً لكل مستخدم على حدة
         const urlParams = new URLSearchParams(window.location.search);
-        window.companyId = urlParams.get('company') || urlParams.get('companyId') || urlParams.get('c') || "company_main";
-        const targetDriverName = urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || "المدير";
-        const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || "اسطورة الطريق الرئيسية";
+        window.companyId = urlParams.get('company') || urlParams.get('companyId') || urlParams.get('c') || localStorage.getItem('na2la_company_id') || "company_main";
+        
+        // جلب اسم المستخدم من الرابط أو التخزين المحلي، وإن لم يوجد يتم طلب تسجيله كـ "سائق جديد" بدلاً من إعطائه حساب المدير تلقائياً
+        const activeUserFromStorage = localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username');
+        const targetDriverName = urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || "";
 
-        // دوال الملاحة الذكية لتمرير بيانات الرابط والحساب والسحابة بسلاسة
+        // التحقق مما إذا كان الحساب هو المدير حقاً (عبر الرابط أو صلاحيات صريحة)، وإلا يتم معاملته كسائق عادي
+        const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
+
+        const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || "اسطورة الطريق الرئيسية";
+
+        // دوال الملاحة الذكية
         window.navigateToMain = function() {
             const currentQuery = window.location.search;
             window.location.href = `index.html${currentQuery}`;
@@ -542,12 +548,13 @@
             window.location.href = `index.html${currentQuery}${sep}view=shipments`;
         };
 
+        // تهيئة حساب المستخدم بناءً على هويته الحقيقية (سائق أو مدير)
         window.currentAccount = {
-            id: "admin_default",
+            id: "temp_user_id",
             name: targetDriverName,
-            details: `${companyDisplayName} | الرتبة: admin`,
-            badge: "admin",
-            role: "admin",
+            details: `${companyDisplayName} | ${isUserExplicitlyAdmin ? 'مدير النظام' : 'سائق الأسطول'}`,
+            badge: isUserExplicitlyAdmin ? "admin" : "سائق",
+            role: isUserExplicitlyAdmin ? "admin" : "driver",
             status: "available",
             companyId: window.companyId,
             avatar: ""
@@ -569,27 +576,51 @@
         function updateAdminPrivileges() {
             const role = (window.currentAccount.role || '').toLowerCase();
             const badge = (window.currentAccount.badge || '').toLowerCase();
-            window.isAdminMode = (role === 'admin' || badge === 'admin' || window.currentAccount.name === 'المدير');
+            window.isAdminMode = (role === 'admin' || badge === 'admin' || isUserExplicitlyAdmin);
         }
 
         async function initRealtimeUserSync() {
             try {
+                // إذا لم يكن هناك اسم مستخدم محدد، نطلب منه إدخال اسمه لإنشاء حساب فريد له
+                if (!window.currentAccount.name || window.currentAccount.name.trim() === "") {
+                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
+                    if (enteredName && enteredName.trim() !== "") {
+                        window.currentAccount.name = enteredName.trim();
+                    } else {
+                        window.currentAccount.name = "سائق_" + Math.floor(Math.random() * 1000);
+                    }
+                    localStorage.setItem('na2la_current_user', window.currentAccount.name);
+                }
+
                 const driversRef = collection(db, 'drivers');
                 const q = query(
                     driversRef, 
-                    where("name", "==", targetDriverName),
+                    where("name", "==", window.currentAccount.name),
                     where("companyId", "==", window.companyId)
                 );
                 const querySnapshot = await getDocs(q);
 
                 if (!querySnapshot.empty) {
                     querySnapshot.forEach((documentSnapshot) => {
-                        window.currentAccount = { id: documentSnapshot.id, ...documentSnapshot.data() };
+                        let data = documentSnapshot.data();
+                        window.currentAccount = { 
+                            id: documentSnapshot.id, 
+                            ...data,
+                            // الحفاظ على الصلاحيات الحقيقية المسجلة في السحابة لهذا السائق تحديداً
+                            role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
+                            badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
+                        };
                     });
                     
                     onSnapshot(doc(db, 'drivers', window.currentAccount.id), (docSnap) => {
                         if (docSnap.exists()) {
-                            window.currentAccount = { id: docSnap.id, ...docSnap.data() };
+                            let data = docSnap.data();
+                            window.currentAccount = { 
+                                id: docSnap.id, 
+                                ...data,
+                                role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
+                                badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
+                            };
                         }
                         updateAdminPrivileges();
                         window.updateAccountUI();
@@ -597,10 +628,10 @@
                 } else {
                     const newDriverRef = doc(collection(db, 'drivers'));
                     const newDriverData = {
-                        name: targetDriverName,
-                        details: `${companyDisplayName} | مستخدم سحابي`,
-                        badge: "admin",
-                        role: "admin",
+                        name: window.currentAccount.name,
+                        details: `${companyDisplayName} | سائق معتمد`,
+                        badge: isUserExplicitlyAdmin ? "admin" : "سائق",
+                        role: isUserExplicitlyAdmin ? "admin" : "driver",
                         status: "available",
                         companyId: window.companyId,
                         avatar: ""
@@ -626,10 +657,11 @@
 
         window.updateAccountUI = async function() {
             updateAdminPrivileges();
+            localStorage.setItem('na2la_current_user', window.currentAccount.name);
 
-            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name || targetDriverName;
-            document.getElementById('topBarUserName').innerText = window.currentAccount.name || targetDriverName;
-            document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || window.currentAccount.role || 'admin';
+            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name;
+            document.getElementById('topBarUserName').innerText = window.currentAccount.name;
+            document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق');
 
             const adminBadgeTag = document.getElementById('adminMasterBadgeTag');
             if(window.isAdminMode) {
@@ -665,7 +697,7 @@
         async function syncUserProfileToCloud() {
             try {
                 updateAdminPrivileges();
-                if (!window.currentAccount.id || window.currentAccount.id === "admin_default") {
+                if (!window.currentAccount.id || window.currentAccount.id === "temp_user_id") {
                     const newDriverRef = doc(collection(db, 'drivers'));
                     window.currentAccount.id = newDriverRef.id;
                 }
@@ -776,7 +808,7 @@
                         </div>
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
-                            <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'admin'}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.badge || window.currentAccount.role || 'سائق'}</span></p>
                             <p style="margin-bottom: 6px;"><strong>🏢 معرّف الشركة (السحابة):</strong> <span style="color: var(--primary-color);">${window.companyId}</span></p>
                         </div>
                     </div>
@@ -1183,7 +1215,7 @@
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
             await addDoc(getCol("posts"), {
                 author: window.currentAccount.name,
-                badge: window.currentAccount.badge || window.currentAccount.role || 'admin',
+                badge: window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق'),
                 avatar: window.currentAccount.avatar || '',
                 status: window.currentAccount.status || 'available',
                 category: category,
@@ -1426,7 +1458,7 @@
                                 <div class="status-dot ${statusClass}" title="الحالة التشغيلية"></div>
                             </div>
                             <div class="post-author-info" style="flex: 1;">
-                                <h4>${p.author} <span style="font-size:0.7rem; color: var(--primary-color);">(${p.badge || 'admin'})</span></h4>
+                                <h4>${p.author} <span style="font-size:0.7rem; color: var(--primary-color);">(${p.badge || 'سائق'})</span></h4>
                                 <span>${p.time || 'منذ قليل'}</span>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
