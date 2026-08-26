@@ -523,20 +523,27 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // استخراج معاملات الشركة والاسم المسجل ديناميكياً لكل مستخدم على حدة
+        // استخراج معاملات الشركة والاسم المسجل ديناميكياً (متوافق تماماً مع driver-profile.html و index.html)
         const urlParams = new URLSearchParams(window.location.search);
-        window.companyId = urlParams.get('company') || urlParams.get('companyId') || urlParams.get('c') || localStorage.getItem('na2la_company_id') || "company_main";
+        window.companyId = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_company_id') || "company_main";
+        localStorage.setItem('current_company_id', window.companyId);
+        localStorage.setItem('na2la_company_id', window.companyId);
         
-        // جلب اسم المستخدم من الرابط أو التخزين المحلي، وإن لم يوجد يتم طلب تسجيله كـ "سائق جديد" بدلاً من إعطائه حساب المدير تلقائياً
-        const activeUserFromStorage = localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username');
-        const targetDriverName = urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || "";
+        // جلب اسم المستخدم من جميع المفاتيح المحتملة للجلسة لمنع أي فقدان للهوية
+        const activeUserFromStorage = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username');
+        const targetDriverName = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || "";
 
-        // التحقق مما إذا كان الحساب هو المدير حقاً (عبر الرابط أو صلاحيات صريحة)، وإلا يتم معاملته كسائق عادي
+        if (targetDriverName && targetDriverName.trim() !== '' && targetDriverName !== 'null') {
+            localStorage.setItem('logged_in_driver_name', targetDriverName.trim());
+            localStorage.setItem('na2la_current_user', targetDriverName.trim());
+        }
+
+        // التحقق مما إذا كان الحساب هو المدير حقاً (عبر الرابط أو صلاحيات صريحة)
         const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
 
         const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || "اسطورة الطريق الرئيسية";
 
-        // دوال الملاحة الذكية
+        // دوال الملاحة الذكية مع الحفاظ على تمرير الجلسة ومعرف الشركة تماماً
         window.navigateToMain = function() {
             const currentQuery = window.location.search;
             window.location.href = `index.html${currentQuery}`;
@@ -548,7 +555,7 @@
             window.location.href = `index.html${currentQuery}${sep}view=shipments`;
         };
 
-        // تهيئة حساب المستخدم بناءً على هويته الحقيقية (سائق أو مدير)
+        // تهيئة حساب المستخدم بناءً على هويته الحقيقية
         window.currentAccount = {
             id: "temp_user_id",
             name: targetDriverName,
@@ -581,14 +588,14 @@
 
         async function initRealtimeUserSync() {
             try {
-                // إذا لم يكن هناك اسم مستخدم محدد، نطلب منه إدخال اسمه لإنشاء حساب فريد له
-                if (!window.currentAccount.name || window.currentAccount.name.trim() === "") {
+                if (!window.currentAccount.name || window.currentAccount.name.trim() === "" || window.currentAccount.name === "null") {
                     let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
                     if (enteredName && enteredName.trim() !== "") {
                         window.currentAccount.name = enteredName.trim();
                     } else {
                         window.currentAccount.name = "سائق_" + Math.floor(Math.random() * 1000);
                     }
+                    localStorage.setItem('logged_in_driver_name', window.currentAccount.name);
                     localStorage.setItem('na2la_current_user', window.currentAccount.name);
                 }
 
@@ -606,7 +613,6 @@
                         window.currentAccount = { 
                             id: documentSnapshot.id, 
                             ...data,
-                            // الحفاظ على الصلاحيات الحقيقية المسجلة في السحابة لهذا السائق تحديداً
                             role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
                             badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
                         };
@@ -657,7 +663,9 @@
 
         window.updateAccountUI = async function() {
             updateAdminPrivileges();
+            localStorage.setItem('logged_in_driver_name', window.currentAccount.name);
             localStorage.setItem('na2la_current_user', window.currentAccount.name);
+            localStorage.setItem('current_company_id', window.companyId);
 
             document.getElementById('postingAsAccountName').innerText = window.currentAccount.name;
             document.getElementById('topBarUserName').innerText = window.currentAccount.name;
