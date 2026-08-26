@@ -359,6 +359,21 @@
     const db = firebase.firestore();
     window.db = db;
 
+    // 🧠 دالة التحقق الذكي الموحدة للصلاحيات (تدعم العربية والإنجليزية تماماً كالصور والبيانات)
+    function isUserAdmin(roleValue, nameValue) {
+        let role = String(roleValue || '').toLowerCase().trim();
+        let name = String(nameValue || '').toLowerCase().trim();
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم') || role.includes('admin') || role.includes('مدير');
+    }
+    window.isUserAdmin = isUserAdmin;
+
+    function isSuperAdmin() {
+        let user = window.currentLoggedInUser || {};
+        return isUserAdmin(user.role || user.rank, user.name);
+    }
+    window.isSuperAdmin = isSuperAdmin;
+
     function goToPage(pageName) {
         let userId = urlUserId || (window.currentLoggedInUser ? window.currentLoggedInUser.name : '') || '';
         let companyId = currentCompanyId || 'company_main';
@@ -480,7 +495,7 @@
         collections.forEach(colName => {
             let query = db.collection(colName);
 
-            if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && window.currentLoggedInUser.name !== 'المدير') {
+            if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && !isSuperAdmin()) {
                 query = query.where('companyId', '==', companyId);
             }
 
@@ -522,7 +537,7 @@
         }, 1000);
     };
 
-    // جلسة سحابية خالصة تعتمد حصرياً على معاملات الـ URL (userId و companyId) بدون استخدام التخزين المحلي
+    // جلسة سحابية خالصة تعتمد حصرياً على معاملات الـ URL (userId و companyId) وبدء لقط الحساب فور الضغط على زر باندا أو توجيهه
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -555,8 +570,7 @@
             if (!found) {
                 snap.forEach(doc => {
                     let d = doc.data();
-                    let rawRole = String(d.role || '').toLowerCase();
-                    if (!found && (d.name === 'المدير' || rawRole.includes('admin') || rawRole.includes('مدير'))) {
+                    if (!found && (d.name === 'المدير' || isUserAdmin(d.role || d.rank, d.name))) {
                         found = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
@@ -579,12 +593,8 @@
                 };
             }
 
-            let rawRole = String(found.role || '').toLowerCase();
-            if (found.name === 'المدير' || found.phone === '+201114099799' || rawRole.includes('admin') || rawRole.includes('مدير') || rawRole.includes('مشرف') || rawRole.includes('نظام')) {
-                found.role = rawRole.includes('مشرف') ? 'مشرف' : 'admin';
-            } else {
-                found.role = 'سائق';
-            }
+            let isAdmin = isUserAdmin(found.role || found.rank, found.name);
+            found.role = isAdmin ? 'admin' : (String(found.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'سائق');
 
             if (!found.avatar) found.avatar = found.photoUrl || '';
             if (!found.coverUrl) found.coverUrl = found.cover || '';
@@ -616,8 +626,9 @@
             
             snap.forEach(doc => {
                 let d = doc.data();
+                let storedPin = String(d.pin || d.password || d.pass || '').trim();
                 if ((String(d.phone) === phone || String(doc.id) === phone || String(d.name) === phone) && 
-                    (String(d.pin) === pin || String(d.password) === pin)) {
+                    (storedPin === pin)) {
                     matchedUser = { docId: doc.id, id: doc.id, ...d };
                 }
             });
@@ -625,7 +636,7 @@
             if (!matchedUser && (phone === '+201114099799' || phone === 'admin') && (pin === '799799' || pin === '1234')) {
                 snap.forEach(doc => {
                     let d = doc.data();
-                    if (d.name === 'المدير' || String(d.role || '').toLowerCase().includes('admin')) {
+                    if (d.name === 'المدير' || isUserAdmin(d.role || d.rank, d.name)) {
                         matchedUser = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
@@ -643,12 +654,8 @@
             }
 
             if (matchedUser) {
-                let rawRole = String(matchedUser.role || '').toLowerCase();
-                if (matchedUser.name === 'المدير' || rawRole.includes('admin') || rawRole.includes('مدير') || rawRole.includes('نظام')) {
-                    matchedUser.role = 'admin';
-                } else {
-                    matchedUser.role = 'سائق';
-                }
+                let isAdmin = isUserAdmin(matchedUser.role || matchedUser.rank, matchedUser.name);
+                matchedUser.role = isAdmin ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'سائق');
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
@@ -708,8 +715,8 @@
     function applyUserPermissionsUI() {
         let user = window.currentLoggedInUser;
         if (!user) return;
+        let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
         
         document.getElementById('header-username').innerText = user.name;
         document.getElementById('header-role-badge').innerText = isAdmin ? '👑 (admin) (مدير النظام)' : (role.includes('مشرف') ? '⭐ مشرف (صلاحيات محدودة)' : '👨‍✈️ سائق (متابعة فقط)');
@@ -726,7 +733,7 @@
         const adminStats = document.getElementById('admin-stats');
         const adminModulesGrid = document.getElementById('admin-modules-grid');
 
-        if(!isAdmin && role === 'سائق') {
+        if(!isAdmin && !role.includes('مشرف')) {
             if(adminStats) adminStats.style.display = 'none';
             if(adminModulesGrid) adminModulesGrid.style.display = 'none';
         } else {
@@ -745,12 +752,12 @@
         if (!sidebarList) return;
 
         let user = window.currentLoggedInUser || {};
+        let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
 
         if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (admin)' : (role.includes('مشرف') ? '⭐ لوحة المشرف (محدد)' : '👨‍✈️ قائمة السائق');
 
-        if (isAdmin) {
+        if (isAdmin || role.includes('مشرف')) {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي والحساب</button>
                 <button onclick="switchSection('shipments'); toggleSidebar();">📦 إدارة الشحنات وبوليصات النقل والفواتير</button>
@@ -809,9 +816,9 @@
 
     function renderStats() {
         let user = window.currentLoggedInUser || {};
+        let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
-        if (!isAdmin && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && role === 'سائق') return;
 
         let data = appStateData();
         let shipments = data.shipments || [];
@@ -837,10 +844,10 @@
 
     function switchSection(sectionId, el, isRefresh = false) {
         let user = window.currentLoggedInUser || {};
+        let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
 
-        if (!isAdmin && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
+        if (!isAdmin && !role.includes('مشرف') && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
             showToast('عذراً، حساب السائق لا يمتلك صلاحية الوصول لهذه الوحدة!', 'warning');
             return;
         }
@@ -1849,9 +1856,9 @@
         let data = appStateData();
         let shipmentsList = data.shipments || [];
         const tbody = document.getElementById('shipments-table-body');
+        let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
         
         const filtered = shipmentsList.filter(s => {
             const matchesQuery = s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query);
@@ -1879,9 +1886,7 @@
 
     function saveDeferredInvoice(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('إضافة الفواتير المؤجلة والآجلة مخصصة للمدير فقط!', 'warning');
             return;
@@ -1908,9 +1913,7 @@
     }
 
     function markDeferredPaid(docId) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('تحصيل الفواتير مخصص للمدير فقط!', 'warning');
             return;
@@ -1923,9 +1926,7 @@
 
     function saveCustomer(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('إضافة العملاء مخصصة للمدير فقط!', 'warning');
             return;
@@ -1945,9 +1946,7 @@
     }
 
     function payCustomerDebt(docId) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('هذه الصلاحية مخصصة للمدير فقط!', 'warning');
             return;
@@ -1967,10 +1966,10 @@
     }
 
     function openStatDetailModal(type) {
+        let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
-        if (!isAdmin && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && role === 'سائق') return;
 
         const modal = document.getElementById('statDetailModal');
         const title = document.getElementById('stat-modal-title');
@@ -2013,9 +2012,7 @@
     }
 
     function openEditModal(type, docId) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('حسابك غير مسموح له بالتعديل!', 'warning');
             return;
@@ -2049,9 +2046,7 @@
 
     function saveEditedItem(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) return;
 
         const type = document.getElementById('edit-type').value;
@@ -2095,9 +2090,7 @@
 
     function generateConsolidatedInvoice(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('هذه الصلاحية مخصصة للمدير فقط!', 'warning');
             return;
@@ -2151,9 +2144,7 @@
     }
 
     window.deleteItem = function(key, docId) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('عذراً، عمليات الحذف مخصصة للمدير فقط لحماية البيانات!', 'warning');
             return;
@@ -2302,9 +2293,7 @@
 
     function saveMaintenanceTask(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('غير مسموح إلا للمدير فقط!', 'warning');
             return;
@@ -2325,9 +2314,7 @@
 
     function sendCentralBroadcast(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('البث المركزي مخصص للمدير فقط!', 'warning');
             return;
@@ -2355,9 +2342,7 @@
     }
 
     function updateDriverField(docId, field, value) {
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('تعديل الحسابات مخصص للمدير فقط!', 'warning');
             return;
@@ -2369,9 +2354,7 @@
 
     function saveNewDriver(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('إضافة الحسابات مخصصة للمدير فقط!', 'warning');
             return;
@@ -2395,9 +2378,9 @@
 
     function saveNewShipment(e) {
         e.preventDefault();
+        let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
         if (!isAdmin && role === 'سائق') {
             showToast('عذراً، حساب السائق لا يمتلك صلاحية إضافة شحنات جديدة!', 'warning');
             return;
@@ -2443,9 +2426,7 @@
 
     function saveTreasury(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('الخزينة مخصصة للمدير فقط!', 'warning');
             return;
@@ -2467,9 +2448,7 @@
 
     function saveExpense(e) {
         e.preventDefault();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
-        let isAdmin = role === 'admin' || role.includes('مدير') || role.includes('نظام');
+        let isAdmin = isSuperAdmin();
         if (!isAdmin) {
             showToast('المصروفات مخصصة للمدير فقط!', 'warning');
             return;
