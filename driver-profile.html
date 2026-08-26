@@ -994,7 +994,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
 
-            // تنقية وتجاهل الحسابات الوهمية أو الفارغة
             const isInvalidName = (val) => {
                 if (!val) return true;
                 let s = String(val).trim().toLowerCase();
@@ -1034,7 +1033,6 @@
         window.currentCompanyId = currentCompanyId;
         localStorage.setItem('current_company_id', currentCompanyId);
 
-        // عند مغادرة الصفحة أو إغلاقها، مسح أي جلسة مؤقتة وهمية لمنع تثبيتها
         window.addEventListener('beforeunload', () => {
             let currentSess = localStorage.getItem('logged_in_driver_name');
             if (!currentSess || currentSess === 'زائر' || currentSess === 'مستخدم') {
@@ -1188,7 +1186,6 @@
             return getLoggedInUser();
         }
 
-        // تسجيل ومزامنة الحسابات الحقيقية تلقائياً في Firestore وتجاهل الوهمية
         function autoRegisterUserToFirestore() {
             if (!activeExternalSessionName || ['زائر', 'مستخدم', 'admin', 'guest'].includes(activeExternalSessionName.toLowerCase())) return;
             const driverRef = db.collection('drivers').doc(String(activeExternalSessionName));
@@ -1245,7 +1242,6 @@
         }
         renderInitialUIInstant();
 
-        // 🔄 مزامنة حية واستبعاد أي حسابات وهمية من قاعدة البيانات
         db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
@@ -1286,7 +1282,6 @@
             });
         });
 
-        // استقبال مكالمات WebRTC
         db.collection('webrtc_calls')
           .where('status', '==', 'calling')
           .onSnapshot(snapshot => {
@@ -1903,6 +1898,7 @@
             }
         }
 
+        // 🔄 دالة عرض المنشورات المحدثة لتعرض صورة البروفايل بجانب اسم الكاتب
         function renderWallPostsFromList(posts) {
             const container = document.getElementById('profile-wall-posts-container');
             if(!container) return;
@@ -1926,6 +1922,14 @@
 
                 let loggedInUser = getLoggedInUser();
                 let cleanAuthor = getCleanDriverName(p.author);
+                
+                // جلب صورة البروفايل إما من المنشور المخزن أو من قائمة السائقين بالشركة
+                let authorAvatar = p.authorAvatar || '';
+                if (!authorAvatar && appData.drivers) {
+                    let foundDrv = appData.drivers.find(d => getCleanDriverName(d.name) === cleanAuthor || String(d.id) === String(p.author));
+                    if (foundDrv) authorAvatar = foundDrv.avatar || '';
+                }
+
                 let likesArr = p.likes || [];
                 let isLiked = likesArr.includes(loggedInUser.name);
                 let commentsCount = (p.comments || []).length;
@@ -1950,12 +1954,17 @@
                 let div = document.createElement('div');
                 div.className = 'card';
                 div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <strong style="font-size:11px; color:var(--accent);">✍️ ${cleanAuthor}</strong>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <span style="font-size:9px; opacity:0.7;">${p.date}</span>
-                            ${deleteBtnHtml}
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div style="width:36px; height:36px; border-radius:50%; overflow:hidden; background:#cbd5e1; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px; border:2px solid var(--accent); flex-shrink:0;">
+                                ${authorAvatar ? `<img src="${authorAvatar}" style="width:100%; height:100%; object-fit:cover;">` : cleanAuthor.charAt(0)}
+                            </div>
+                            <div>
+                                <strong style="font-size:11px; color:var(--accent); display:block;">✍️ ${cleanAuthor}</strong>
+                                <span style="font-size:8px; opacity:0.7;">${p.date}</span>
+                            </div>
                         </div>
+                        <div>${deleteBtnHtml}</div>
                     </div>
                     <p style="font-size:11px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
                     ${mediaHtml}
@@ -2055,7 +2064,6 @@
             renderMyAccount();
         }
 
-        // 🔄 [مزامنة وتثبيت صورة البروفايل (Avatar) فوراً على حساب جوجل/السائق المسجل في قاعدة البيانات]
         function updateProfileAvatar(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
@@ -2079,7 +2087,6 @@
             }
         }
 
-        // 🔄 [مزامنة وتثبيت صورة الغلاف (Cover) فوراً على حساب جوجل/السائق المسجل في قاعدة البيانات]
         function updateProfileCover(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 800, 500, 0.7, (url) => {
@@ -2131,6 +2138,7 @@
             } else { info.innerText = ''; }
         }
 
+        // 🔄 دالة النشر المحدثة لحفظ صورة البروفايل (avatar) مع المنشور
         function publishProfileWallPost() {
             const text = document.getElementById('profile-wall-text').value.trim();
             if(!text && profileWallFilesArr.length === 0) { alert('أدخل نصاً أو صورة للنشر!'); return; }
@@ -2143,6 +2151,7 @@
                 profileId: String(targetDrv.id || targetDrv.name),
                 profileName: targetDrv.name,
                 author: loggedInUser.name,
+                authorAvatar: loggedInUser.avatar || '', // حفظ صورة البروفايل مع بيانات المنشور
                 companyId: currentCompanyId,
                 text: text,
                 files: [...profileWallFilesArr],
