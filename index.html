@@ -3920,7 +3920,7 @@
             tbody.appendChild(tr);
         });
     } else if (section === 'trucks') {
-        headersRow.innerHTML = `<th>#</th><th>المركبة</th><th>السائق</th><th>عداد KM</th><th>رخصة الانتهاء</th>`;
+        headersRow.innerHTML = `<th>#</th><th>المركبة</th><th>السائق</th><th>عداد KM</th><th>رخصة الانتهاء</th></tr>`;
         (appData.trucks || []).forEach((t, idx) => {
             let tr = document.createElement('tr');
             tr.innerHTML = `
@@ -3992,175 +3992,6 @@
             `;
             tbody.appendChild(tr);
         });
-    }
-}
-
-function render() {
-    try {
-        renderDriverDropdownOptions();
-        renderRSSTicker();
-        
-        const addCompBtnMain = document.getElementById('add-company-btn-main');
-        if (addCompBtnMain) {
-            addCompBtnMain.style.display = (loggedInDriverName === 'المدير') ? 'block' : 'none';
-        }
-
-        const masterCashCard = document.getElementById('master-cash-requests-card');
-        const masterSaasCard = document.getElementById('master-saas-hub-card');
-        if (masterCashCard && masterSaasCard) {
-            if (loggedInDriverName === 'المدير') {
-                masterCashCard.style.display = 'block';
-                masterSaasCard.style.display = 'block';
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-            } else {
-                masterCashCard.style.display = 'none';
-                masterSaasCard.style.display = 'none';
-                renderCompanyAdminSubscriptionView();
-            }
-        }
-        
-        let shipments = appData.shipments || [];
-        let totalShipments = shipments.length;
-        let totalRevenue = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
-        let totalExpenses = (appData.expenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-        let netProfit = totalRevenue - totalExpenses;
-        
-        let totalCash = (appData.treasury || []).reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount) : -Number(t.amount)), 0);
-        
-        let totalDeferredDebts = (appData.deferredInvoices || []).reduce((sum, inv) => {
-            if (inv.status !== 'paid') return sum + Number(inv.remainingAmount || 0);
-            return sum;
-        }, 0);
-        let customerDebts = (appData.customers || []).reduce((sum, c) => sum + Number(c.debt || 0), 0);
-        let totalDebts = customerDebts + totalDeferredDebts;
-
-        if(document.getElementById('stat-shipments')) document.getElementById('stat-shipments').innerText = totalShipments;
-        if(document.getElementById('stat-revenue')) document.getElementById('stat-revenue').innerText = `${totalRevenue} ج.م`;
-        if(document.getElementById('stat-net-profit')) document.getElementById('stat-net-profit').innerText = `${netProfit} ج.م`;
-        if(document.getElementById('stat-cash')) document.getElementById('stat-cash').innerText = `${totalCash} ج.م`;
-        if(document.getElementById('stat-debts')) document.getElementById('stat-debts').innerText = `${totalDebts} ج.م`;
-
-        const list = document.getElementById('shipments-list');
-        if (list) {
-            list.innerHTML = '';
-            const query = (document.getElementById('global-search')?.value || '').toLowerCase();
-            
-            let filtered = shipments.filter(s => {
-                const nameStr = s.name ? s.name.toLowerCase() : '';
-                const itemStr = s.item ? s.item.toLowerCase() : '';
-                const phoneStr = s.phone || '';
-                const matchesQuery = nameStr.includes(query) || itemStr.includes(query) || phoneStr.includes(query);
-                
-                if (currentUserRole === 'driver') {
-                    return matchesQuery && s.assignedDriver === loggedInDriverName;
-                }
-                return matchesQuery;
-            });
-
-            filtered.forEach(s => {
-                let net = Number(s.price || 0) - Number(s.fuelCost || 0) - Number(s.extraCost || 0);
-                let badgeClass = s.status === 'مكتملة' ? 'bg-delivered' : (s.status === 'في الطريق' ? 'bg-transit' : 'bg-pending');
-                let payBadge = s.paymentStatus === 'deferred' ? `<span class="badge" style="background:#f59e0b;">آجل ⏳</span>` : `<span class="badge" style="background:#10b981;">مسدد ✅</span>`;
-
-                let tr = document.createElement('tr');
-                let deferredBtn = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6;" onclick="convertToDeferred('${s.id}')" title="تحويل الفاتورة إلى قسم الأجل">⏳ أجل</button>` : '';
-
-                tr.innerHTML = `
-                    <td style="font-weight:bold;">${s.name || 'غير محدد'}</td>
-                    <td>${s.item || '-'}</td>
-                    <td>${s.assignedDriver || 'غير محدد'}</td>
-                    <td>${s.price || 0} ج.م<br>${payBadge}</td>
-                    <td style="color:var(--success); font-weight:bold;">${net} ج.م</td>
-                    <td>
-                        <select onchange="updateShipmentStatus('${s.id}', this.value)" class="badge ${badgeClass}" style="border:none;">
-                            <option value="في الانتظار" ${s.status === 'في الانتظار' ? 'selected' : ''}>في الانتظار</option>
-                            <option value="في الطريق" ${s.status === 'في الطريق' ? 'selected' : ''}>في الطريق</option>
-                            <option value="مكتملة" ${s.status === 'مكتملة' ? 'selected' : ''}>مكتملة</option>
-                        </select>
-                    </td>
-                    <td>
-                        <button type="button" class="btn-main btn-sm" onclick="showQR('${s.id}')">📱 QR</button>
-                        <button type="button" class="btn-warning btn-sm" onclick="editShipment('${s.id}')">✏️</button>
-                        ${deferredBtn}
-                        ${currentUserRole === 'admin' ? `<button type="button" class="btn-danger btn-sm" onclick="deleteShipment('${s.id}')">🗑️</button>` : ''}
-                    </td>
-                `;
-                list.appendChild(tr);
-            });
-        }
-
-        const treasuryList = document.getElementById('treasury-list');
-        if(treasuryList) {
-            treasuryList.innerHTML = '';
-            (appData.treasury || []).forEach(t => {
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="color:${t.type === 'in' ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td>
-                    <td>${t.amount} ج.م</td>
-                    <td>${t.desc}</td>
-                    <td>${t.date}</td>
-                    <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="editTreasury('${t.id}')">تعديل</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteTreasury('${t.id}')">حذف</button>
-                    </td>
-                `;
-                treasuryList.appendChild(tr);
-            });
-        }
-
-        const trucksList = document.getElementById('trucks-list');
-        if(trucksList) {
-            trucksList.innerHTML = '';
-            (appData.trucks || []).forEach(t => {
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight:bold;">${t.num}</td>
-                    <td>${t.driver}</td>
-                    <td>${t.km} KM</td>
-                    <td>${t.nextOil} KM</td>
-                    <td>${t.expiry}</td>
-                `;
-                trucksList.appendChild(tr);
-            });
-        }
-
-        const expList = document.getElementById('expenses-list');
-        if(expList) {
-            expList.innerHTML = '';
-            (appData.expenses || []).forEach(e => {
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${e.title}</td>
-                    <td>${e.amount} ج.م</td>
-                    <td>${e.date}</td>
-                    <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="editExpense('${e.id}')">تعديل</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteExpense('${e.id}')">حذف</button>
-                    </td>
-                `;
-                expList.appendChild(tr);
-            });
-        }
-
-        const custsList = document.getElementById('customers-list');
-        if(custsList) {
-            custsList.innerHTML = '';
-            (appData.customers || []).forEach((c, idx) => {
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight:bold;">${c.name}</td>
-                    <td>${c.phone || '-'}</td>
-                    <td style="color:var(--danger); font-weight:bold;">${c.debt} ج.م</td>
-                    <td><button type="button" class="btn-success btn-sm" onclick="payCustomerDebt(${idx})">تحصيل 💵</button></td>
-                `;
-                custsList.appendChild(tr);
-            });
-        }
-
-        renderDocsList();
-    } catch (err) {
-        console.error("خطأ أثناء تحديث الواجهة الرئيسية:", err);
     }
 }
 
@@ -4457,4 +4288,4 @@ function renderSelectedInvoice() {
         }
     </script>
 </body>
-</html>
+                        </html>
