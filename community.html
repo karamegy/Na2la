@@ -454,7 +454,7 @@
             let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || '').trim();
 
             if (!urlUserId) {
-                urlUserId = localStorage.getItem('logged_in_driver_name') || 'زائر';
+                urlUserId = localStorage.getItem('logged_in_driver_name') || '';
             } else {
                 localStorage.setItem('logged_in_driver_name', urlUserId);
             }
@@ -470,20 +470,29 @@
                 const snapshot = await getDocs(collection(window.db, 'drivers'));
                 let found = null;
                 allDrivers = [];
+                let targetId = urlUserId.toLowerCase();
+
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     allDrivers.push({ id: docSnap.id, ...d });
-                    if (docSnap.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(docSnap.id).toLowerCase() === urlUserId.toLowerCase() || String(d.name).toLowerCase() === urlUserId.toLowerCase()) {
-                        found = d;
+                    
+                    let docId = String(docSnap.id || '').trim().toLowerCase();
+                    let dName = String(d.name || d.driverName || '').trim().toLowerCase();
+                    let dPhone = String(d.phone || '').trim();
+
+                    if (targetId) {
+                        if (docId === targetId || dName === targetId || dPhone === targetId || dName.includes(targetId) || targetId.includes(dName)) {
+                            found = { id: docSnap.id, ...d };
+                        }
                     }
                 });
 
                 if (found) {
                     currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
                     localStorage.setItem('current_company_id', currentCompanyId);
-                    let isAdmin = isUserAdmin(found.role || found.rank, found.name);
+                    let isAdmin = isUserAdmin(found.role || found.rank, found.name || found.driverName);
 
-                    let rawAvatar = found.avatar || found.photoUrl || found.profilePic || found.image || '';
+                    let rawAvatar = found.avatar || found.photoUrl || found.profilePic || found.image || found.img || found.picture || found.profileImage || found.photo || '';
                     if (rawAvatar === 'undefined' || rawAvatar === 'null') rawAvatar = '';
 
                     currentDriverProfile = {
@@ -491,7 +500,7 @@
                         avatar: rawAvatar,
                         title: found.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد'),
                         phone: found.phone || '',
-                        role: isAdmin ? 'admin' : (found.role || 'driver'),
+                        role: isAdmin ? 'admin' : (found.role || found.rank || 'driver'),
                         companyId: currentCompanyId,
                         canAccessSocial: found.canAccessSocial !== false,
                         subPlan: found.subPlan || (isAdmin ? 'مدير عام' : 'أساسي'),
@@ -502,7 +511,7 @@
                     currentCompanyId = urlCompanyId || 'company_main';
                     localStorage.setItem('current_company_id', currentCompanyId);
                     currentDriverProfile = {
-                        name: urlUserId,
+                        name: urlUserId || 'زائر / كابتن',
                         avatar: '',
                         title: isAdmCheck ? 'مدير عام النظام' : 'سائق معتمد',
                         phone: '',
@@ -518,7 +527,7 @@
                 currentCompanyId = urlCompanyId || 'company_main';
                 localStorage.setItem('current_company_id', currentCompanyId);
                 currentDriverProfile = {
-                    name: urlUserId,
+                    name: urlUserId || 'كابتن الأسطول',
                     avatar: '',
                     title: 'حساب معزول',
                     role: 'driver',
@@ -545,7 +554,7 @@
             const avatarContainer = document.getElementById('header-avatar-container');
             const footerIcon = document.getElementById('nav-footer-avatar-icon');
 
-            if (currentDriverProfile.avatar && currentDriverProfile.avatar !== 'undefined' && currentDriverProfile.avatar !== 'null') {
+            if (currentDriverProfile.avatar && currentDriverProfile.avatar !== 'undefined' && currentDriverProfile.avatar !== 'null' && currentDriverProfile.avatar.trim() !== '') {
                 avatarContainer.innerHTML = `<img src="${currentDriverProfile.avatar}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
                 if (footerIcon) {
                     if (footerIcon.tagName === 'IMG') {
