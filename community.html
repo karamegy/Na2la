@@ -170,7 +170,7 @@
             font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: bold; display: flex; align-items: center; gap: 4px;
         }
 
-        .post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; position: relative; }
         .post-avatar {
             width: 45px; height: 45px; border-radius: 50%; background: var(--bg-color);
             color: var(--primary-color); display: flex; align-items: center; justify-content: center;
@@ -206,9 +206,22 @@
         .poll-option-text { position: relative; z-index: 2; }
         .poll-option-votes { position: relative; z-index: 2; font-size: 0.75rem; color: var(--secondary-text); }
 
-        .post-actions { display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; flex-wrap: wrap; }
-        .reaction-btn-group { display: flex; gap: 4px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px; }
-        .reaction-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: transform 0.2s; }
+        .post-actions { display: flex; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; flex-wrap: wrap; align-items: center; position: relative; }
+        
+        /* Reaction Picker Popup System */
+        .reaction-wrapper { position: relative; display: inline-block; }
+        .reaction-picker-popup {
+            position: absolute; bottom: 100%; right: 0; background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 20px; padding: 6px 10px; display: none; gap: 8px; box-shadow: var(--shadow-3d); z-index: 100;
+            animation: fadeInPopup 0.2s ease;
+        }
+        .reaction-picker-popup.active { display: flex; }
+        @keyframes fadeInPopup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .reaction-picker-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; transition: transform 0.2s; padding: 2px; }
+        .reaction-picker-btn:hover { transform: scale(1.3); }
+
+        .reaction-btn-group { display: flex; gap: 4px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 4px; align-items: center; }
+        .reaction-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 2px 6px; border-radius: 4px; transition: transform 0.2s; color: var(--text-color); }
         .reaction-btn:hover { transform: scale(1.2); background: rgba(255,255,255,0.1); }
         
         .post-action-btn {
@@ -219,7 +232,8 @@
         .post-action-btn:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
 
         .comments-section { margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 10px; }
-        .comment-item { background: var(--bg-color); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 0.8rem; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; }
+        .comment-item { background: var(--bg-color); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 0.8rem; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; }
+        .comment-media-thumb { max-width: 120px; max-height: 90px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border-color); margin-top: 4px; }
 
         #fullScreenChatPage {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -333,12 +347,13 @@
         </div>
     </div>
 
+    <!-- شريط التنقل السفلي - مخصص بالكامل للبقاء داخل صفحة المجتمع ومزامنة السحابة -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="location.href='index.html'">
             <span class="icon">🏠</span>
             <span>الرئيسية</span>
         </button>
-        <button class="bottom-nav-item" onclick="location.href='index.html'">
+        <button class="bottom-nav-item" onclick="openTreasuryModal()">
             <span class="icon">💰</span>
             <span>الخزنة</span>
         </button>
@@ -488,7 +503,7 @@
         </div>
 
         <div id="groupFeedStream">
-            <p style="text-align: center; color: var(--secondary-text); padding: 20px; font-size: 0.85rem;">جاري تحميل المنشورات فورياً...</p>
+            <p style="text-align: center; color: var(--secondary-text); padding: 20px; font-size: 0.85rem;">جاري تحميل المنشورات فورياً من سحابة فايربيس...</p>
         </div>
     </div>
 
@@ -513,55 +528,46 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // معرف النظام company_main واسم الشركة اسطورة الطريق الرئيسية
         window.companyId = "company_main";
         const companyDisplayName = "اسطورة الطريق الرئيسية";
 
-        // ربط الحساب الفعلي للمدير تماماً وعدم السماح بأي مستخدم وهمي
-        let savedProfile = JSON.parse(localStorage.getItem('na2la_logged_user_profile')) || {};
-        
-        if (!savedProfile.name || savedProfile.name === "مستخدم سحابي نشط") {
-            savedProfile = {
-                id: "admin_01114099799",
-                name: "المدير",
-                details: `${companyDisplayName} | الهاتف: 01114099799 | الرتبة: admin`,
-                badge: "admin",
-                role: "admin",
-                status: "available",
-                companyId: window.companyId,
-                avatar: ""
-            };
-            localStorage.setItem('na2la_logged_user_profile', JSON.stringify(savedProfile));
-        }
-
-        window.currentAccount = savedProfile;
+        // الحساب الافتراضي للمدير يتم جلبه مباشرة من مجموعة drivers في فايربيس (بدون تخزين محلي نهائياً)
+        window.currentAccount = {
+            id: "admin_01114099799",
+            name: "المدير",
+            details: `${companyDisplayName} | الهاتف: 01114099799 | الرتبة: admin`,
+            badge: "admin",
+            role: "admin",
+            status: "available",
+            companyId: window.companyId,
+            avatar: ""
+        };
 
         document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${companyDisplayName}`;
         document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${companyDisplayName}`;
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        // تحديد مسارات فايربيس باستخدام company_main واسم المجموعات الجذرية المتوافقة مع قاعدة البيانات
         function getCol(name) { 
             if(name === 'users') return collection(db, 'drivers');
             if(name === 'posts') return collection(db, 'communityPosts');
             if(name === 'public_chat') return collection(db, 'chat');
+            if(name === 'treasury') return collection(db, 'treasury');
             return collection(db, `companies_${window.companyId}_${name}`); 
         }
 
-        // التحقق التلقائي لصلاحيات المدير المطلقة
         function updateAdminPrivileges() {
             const role = (window.currentAccount.role || '').toLowerCase();
             const badge = (window.currentAccount.badge || '').toLowerCase();
             window.isAdminMode = (role === 'admin' || badge === 'admin' || window.currentAccount.name === 'المدير');
         }
 
+        // مزامنة فورية لحساب المدير من فايربيس مباشرة بدون localStorage
         function initRealtimeUserSync() {
-            const userDocRef = doc(db, 'drivers', window.currentAccount.id || 'admin_01114099799');
+            const userDocRef = doc(db, 'drivers', window.currentAccount.id);
             onSnapshot(userDocRef, (docSnap) => {
                 if (docSnap.exists()) {
                     window.currentAccount = docSnap.data();
-                    localStorage.setItem('na2la_logged_user_profile', JSON.stringify(window.currentAccount));
                 } else {
                     setDoc(userDocRef, window.currentAccount, { merge: true }).catch(() => {});
                 }
@@ -610,8 +616,7 @@
         async function syncUserProfileToCloud() {
             try {
                 updateAdminPrivileges();
-                localStorage.setItem('na2la_logged_user_profile', JSON.stringify(window.currentAccount));
-                await setDoc(doc(db, 'drivers', window.currentAccount.id || 'admin_01114099799'), window.currentAccount);
+                await setDoc(doc(db, 'drivers', window.currentAccount.id), window.currentAccount, { merge: true });
             } catch(e) {}
         }
 
@@ -645,17 +650,41 @@
             } catch(e) {}
         }
 
+        // ضغط الصورة الشخصية ورفعها إلى فايربيس (بدون تخزين محلي)
         window.handleProfileAvatarUpload = function(input) {
             if (input.files && input.files[0]) {
+                const file = input.files[0];
                 const reader = new FileReader();
-                reader.onload = async function(e) {
-                    window.currentAccount.avatar = e.target.result;
-                    await syncUserProfileToCloud();
-                    window.updateAccountUI();
-                    alert("✔ تم تحديث صورتك الشخصية سحابياً!");
-                    openBottomSheet('profile');
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 250;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+                        } else {
+                            if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                        
+                        window.currentAccount.avatar = compressedBase64;
+                        await syncUserProfileToCloud();
+                        window.updateAccountUI();
+                        alert("✔ تم ضغط وتحديث صورتك الشخصية سحابياً بنجاح!");
+                        openBottomSheet('profile');
+                    };
                 };
-                reader.readAsDataURL(input.files[0]);
+                reader.readAsDataURL(file);
             }
         }
 
@@ -694,7 +723,7 @@
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
                             <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.role || window.currentAccount.badge || 'admin'}</span></p>
-                            <p style="margin-bottom: 6px;"><strong>🏢 اسم الشركة:</strong> <span style="color: var(--primary-color);">${companyDisplayName} (${window.companyId})</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏢 اسم الشركة:</strong> <span style="color: var(--primary-color);">${companyDisplayName}</span></p>
                         </div>
                     </div>
                 `;
@@ -702,7 +731,81 @@
         }
         window.closeBottomSheet = function(e) { if(e.target.id === 'bottomSheetModal') document.getElementById('bottomSheetModal').style.display = 'none'; }
 
-        // الوظائف الإدارية للحذف بصلاحيات المدير (Admin) التلقائية
+        // مزامنة وعرض الخزينة من فايربيس مباشرة (بدون تخزين محلي)
+        window.openTreasuryModal = async function() {
+            const modal = document.getElementById('bottomSheetModal');
+            const contentEl = document.getElementById('bottomSheetDynamicContent');
+            modal.style.display = 'flex';
+            contentEl.innerHTML = `<p style="text-align: center; color: var(--secondary-text); padding: 20px;">جاري جلب بيانات الخزينة من السحابة...</p>`;
+
+            try {
+                const treasuryRef = doc(db, 'treasury', 'main_treasury');
+                const docSnap = await getDoc(treasuryRef);
+                let treasuryData = docSnap.exists() ? docSnap.data() : { balance: 0, transactions: [] };
+
+                contentEl.innerHTML = `
+                    <div style="padding: 10px; text-align: right;">
+                        <div style="background: var(--bg-color); border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; text-align: center; margin-bottom: 15px; box-shadow: var(--shadow-3d);">
+                            <span style="font-size: 0.8rem; color: var(--secondary-text);">إجمالي رصيد الخزينة السحابي</span>
+                            <h2 style="font-size: 1.8rem; color: var(--accent-color); margin-top: 5px;" id="treasuryBalanceDisplay">${treasuryData.balance || 0} ج.م</h2>
+                        </div>
+                        <h4 style="font-size: 0.9rem; margin-bottom: 8px; color: var(--primary-color);">💼 إضافة حركة نقدية جديدة للخزينة:</h4>
+                        <div class="input-group">
+                            <label>نوع الحركة:</label>
+                            <select id="treasuryType">
+                                <option value="in">إيراد / تحصيل (+)</option>
+                                <option value="out">مصروف / سحب (-)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>المبلغ (ج.م):</label>
+                            <input type="number" id="treasuryAmount" placeholder="أدخل المبلغ...">
+                        </div>
+                        <div class="input-group">
+                            <label>بيان الحركة:</label>
+                            <input type="text" id="treasuryNote" placeholder="سبب الإيداع أو الصرف...">
+                        </div>
+                        <button class="btn" style="margin-top: 10px;" onclick="addTreasuryTransactionCloud()">تسجيل الحركة سحابياً 💰</button>
+                    </div>
+                `;
+            } catch(e) {
+                contentEl.innerHTML = `<p style="text-align: center; color: var(--danger-color);">تعذر جلب الخزينة: ${e.message}</p>`;
+            }
+        }
+
+        window.addTreasuryTransactionCloud = async function() {
+            const type = document.getElementById('treasuryType').value;
+            const amount = parseFloat(document.getElementById('treasuryAmount').value) || 0;
+            const note = document.getElementById('treasuryNote').value.trim() || 'حركة نقدية';
+            if(amount <= 0) return alert("يرجى إدخال مبلغ صحيح.");
+
+            try {
+                const treasuryRef = doc(db, 'treasury', 'main_treasury');
+                const docSnap = await getDoc(treasuryRef);
+                let treasuryData = docSnap.exists() ? docSnap.data() : { balance: 0, transactions: [] };
+
+                if(type === 'in') {
+                    treasuryData.balance += amount;
+                } else {
+                    treasuryData.balance -= amount;
+                }
+
+                if(!treasuryData.transactions) treasuryData.transactions = [];
+                treasuryData.transactions.unshift({
+                    type: type,
+                    amount: amount,
+                    note: note,
+                    date: new Date().toLocaleString('ar-EG')
+                });
+
+                await setDoc(treasuryRef, treasuryData);
+                alert("✔ تم تحديث الخزينة سحابياً بنجاح!");
+                document.getElementById('bottomSheetModal').style.display = 'none';
+            } catch(e) {
+                alert("خطأ في حفظ الخزينة: " + e.message);
+            }
+        }
+
         window.deletePostByAdmin = async function(postId) {
             if (confirm("🛡️ (صلاحيات المدير): هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
                 try {
@@ -1071,7 +1174,19 @@
             await updateDoc(postRef, { poll: poll });
         }
 
+        // إظهار وإخفاء قائمة الأيقونات التفاعلية عند الضغط على زر الإعجاب (Like)
+        window.toggleReactionPicker = function(postId) {
+            const popup = document.getElementById(`reactionPicker_${postId}`);
+            if(popup) {
+                popup.classList.toggle('active');
+            }
+        }
+
         window.reactToPost = async function(postId, reactionType) {
+            // إخفاء القائمة المنسدلة عند الاختيار
+            const popup = document.getElementById(`reactionPicker_${postId}`);
+            if(popup) popup.classList.remove('active');
+
             const postRef = doc(getCol("posts"), postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
@@ -1094,19 +1209,54 @@
             await updateDoc(postRef, { reactions: reactions, reactedUsers: reactedUsers });
         }
 
+        // إضافة تعليق مدمج بصورة أو فيديو
+        window.handleCommentMediaPreview = function(input, postId) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    window[`commentMedia_${postId}`] = { data: e.target.result, type: file.type.startsWith('video/') ? 'video' : 'image' };
+                    const previewBox = document.getElementById(`commentMediaPreview_${postId}`);
+                    if(previewBox) {
+                        previewBox.style.display = 'block';
+                        previewBox.innerHTML = `<span>تم إرفاق ملف 📎</span> <button onclick="clearCommentMedia('${postId}')" style="background:var(--danger-color); color:white; border:none; border-radius:50%; width:16px; height:16px; font-size:0.6rem; cursor:pointer;">✕</button>`;
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        window.clearCommentMedia = function(postId) {
+            window[`commentMedia_${postId}`] = null;
+            const previewBox = document.getElementById(`commentMediaPreview_${postId}`);
+            if(previewBox) {
+                previewBox.style.display = 'none';
+                previewBox.innerHTML = '';
+            }
+            const fileInput = document.getElementById(`commentMediaInput_${postId}`);
+            if(fileInput) fileInput.value = '';
+        }
+
         window.addComment = async function(postId, existingComments) {
             const input = document.getElementById(`commentInput_${postId}`);
             const text = input.value.trim();
-            if(!text) return;
+            const mediaObj = window[`commentMedia_${postId}`] || null;
+
+            if(!text && !mediaObj) return;
+            
             let comments = existingComments || [];
             comments.push({
                 author: window.currentAccount.name,
                 avatar: window.currentAccount.avatar || "",
                 text: text,
+                media: mediaObj ? mediaObj.data : "",
+                mediaType: mediaObj ? mediaObj.type : "",
                 time: "الآن"
             });
+
             await updateDoc(doc(getCol("posts"), postId), { comments: comments });
             input.value = "";
+            clearCommentMedia(postId);
         }
 
         window.sharePost = function(text) {
@@ -1192,17 +1342,29 @@
 
                 let commentsHtml = (p.comments || []).map((c, cIdx) => {
                     let canDeleteComment = (c.author === window.currentAccount.name || window.isAdminMode);
+                    let commentMediaHtml = '';
+                    if(c.media) {
+                        if(c.mediaType === 'video') {
+                            commentMediaHtml = `<video src="${c.media}" class="comment-media-thumb" controls playsinline></video>`;
+                        } else {
+                            commentMediaHtml = `<img src="${c.media}" class="comment-media-thumb">`;
+                        }
+                    }
                     return `
                         <div class="comment-item">
-                            <div style="width:24px; height:24px; border-radius:50%; background-size:cover; background-position:center; background-color:var(--bg-color); border:1px solid var(--border-color); ${c.avatar ? 'background-image:url(\''+c.avatar+'\');' : ''}">${c.avatar ? '' : '👤'}</div>
-                            <div style="flex:1;"><strong>${c.author}:</strong> ${c.text}</div>
-                            ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}', ${cIdx}, ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <div style="width:24px; height:24px; border-radius:50%; background-size:cover; background-position:center; background-color:var(--bg-color); border:1px solid var(--border-color); ${c.avatar ? 'background-image:url(\''+c.avatar+'\');' : ''}">${c.avatar ? '' : '👤'}</div>
+                                <div style="flex:1;"><strong>${c.author}:</strong> ${c.text}</div>
+                                ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}', ${cIdx}, ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
+                            </div>
+                            ${commentMediaHtml}
                         </div>
                     `;
                 }).join('');
 
+                // نقل زر الإدارة ليصبح بجانب وفوق أيقونة التصنيف (مثل نقاشات عامة / الفئة) في أعلى المنشور
                 let adminPostDeleteBtn = window.isAdminMode ? `
-                    <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color);" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف إداري</button>
+                    <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color); padding: 3px 8px; font-size: 0.65rem;" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف إداري</button>
                 ` : '';
 
                 return `
@@ -1217,29 +1379,42 @@
                                 <h4>${p.author} <span style="font-size:0.7rem; color: var(--primary-color);">(${p.badge || 'admin'})</span></h4>
                                 <span>${p.time || 'منذ قليل'}</span>
                             </div>
-                            ${p.category ? `<span class="post-tag-badge">${p.category}</span>` : ''}
+                            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                                ${adminPostDeleteBtn}
+                                ${p.category ? `<span class="post-tag-badge">${p.category}</span>` : ''}
+                            </div>
                         </div>
                         <div class="post-body">${p.text}</div>
                         ${mediaHtml}
                         ${pollHtml}
                         
                         <div class="post-actions">
-                            <div class="reaction-btn-group">
-                                <button class="reaction-btn" onclick="reactToPost('${p.id}', 'like')" title="أعجبني">👍 ${reactions.like || 0}</button>
-                                <button class="reaction-btn" onclick="reactToPost('${p.id}', 'love')" title="أحببته">❤️ ${reactions.love || 0}</button>
-                                <button class="reaction-btn" onclick="reactToPost('${p.id}', 'fire')" title="رائع">🔥 ${reactions.fire || 0}</button>
-                                <button class="reaction-btn" onclick="reactToPost('${p.id}', 'clap')" title="ممتاز">👏 ${reactions.clap || 0}</button>
+                            <div class="reaction-wrapper">
+                                <div class="reaction-picker-popup" id="reactionPicker_${p.id}">
+                                    <button class="reaction-picker-btn" onclick="reactToPost('${p.id}', 'like')" title="أعجبني">👍</button>
+                                    <button class="reaction-picker-btn" onclick="reactToPost('${p.id}', 'love')" title="أحببته">❤️</button>
+                                    <button class="reaction-picker-btn" onclick="reactToPost('${p.id}', 'fire')" title="رائع">🔥</button>
+                                    <button class="reaction-picker-btn" onclick="reactToPost('${p.id}', 'clap')" title="ممتاز">👏</button>
+                                </div>
+                                <div class="reaction-btn-group">
+                                    <button class="reaction-btn" onclick="toggleReactionPicker('${p.id}')" title="اضغط للإعجاب واختيار التفاعل">👍 ${reactions.like || 0}</button>
+                                    <button class="reaction-btn" onclick="reactToPost('${p.id}', 'love')" title="أحببته">❤️ ${reactions.love || 0}</button>
+                                    <button class="reaction-btn" onclick="reactToPost('${p.id}', 'fire')" title="رائع">🔥 ${reactions.fire || 0}</button>
+                                    <button class="reaction-btn" onclick="reactToPost('${p.id}', 'clap')" title="ممتاز">👏 ${reactions.clap || 0}</button>
+                                </div>
                             </div>
                             <button class="post-action-btn" onclick="sharePost('${encodeURIComponent(p.text)}')">🔗 مشاركة</button>
-                            ${adminPostDeleteBtn}
                         </div>
 
                         <div class="comments-section">
                             <div>${commentsHtml}</div>
-                            <div style="display:flex; gap:6px; margin-top:8px;">
+                            <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+                                <input type="file" id="commentMediaInput_${p.id}" accept="image/*,video/*" style="display:none;" onchange="handleCommentMediaPreview(this, '${p.id}')">
+                                <button type="button" class="post-action-btn" style="padding: 7px 10px;" onclick="document.getElementById('commentMediaInput_${p.id}').click()" title="إرفاق صورة أو فيديو بالتعليق">📷</button>
                                 <input type="text" id="commentInput_${p.id}" placeholder="اكتب تعليقاً..." style="flex:1; padding:7px; background:var(--bg-color); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-color);" onkeypress="if(event.key==='Enter') addComment('${p.id}', ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})">
                                 <button class="btn" style="width: auto; padding: 6px 14px; font-size:0.8rem;" onclick="addComment('${p.id}', ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})">تعليق</button>
                             </div>
+                            <div id="commentMediaPreview_${p.id}" style="display:none; margin-top:6px; font-size:0.75rem; color:var(--accent-color);"></div>
                         </div>
                     </div>
                 `;
