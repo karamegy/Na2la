@@ -632,36 +632,47 @@
         }
 
         async function publishCommunityPost(isEmergency) {
-            if (!window.db || !window.firebaseModules) return;
+            if (!window.db || !window.firebaseModules) {
+                alert('⚠️ قاعدة البيانات لم تكتمل بعد، يرجى الانتظار ثوانٍ.');
+                return;
+            }
             const text = document.getElementById('community-post-text').value.trim();
             let category = document.getElementById('postCategory').value;
             if (isEmergency) category = 'طوارئ واستغاثة 🆘';
 
-            if (!text && communityFilesArr.length === 0) { alert('الرجاء كتابة نص الإشارة أو إرفاق صورة!'); return; }
+            if (!text && communityFilesArr.length === 0) { 
+                alert('الرجاء كتابة نص الإشارة أو إرفاق صورة!'); 
+                return; 
+            }
 
-            let newId = String(Date.now());
-            let newPost = {
-                id: newId,
-                author: currentDriverProfile.name,
-                authorAvatar: currentDriverProfile.avatar,
-                authorTitle: currentDriverProfile.title,
-                category: category,
-                text: text,
-                files: [...communityFilesArr],
-                likes: 0,
-                comments: [],
-                isEmergency: isEmergency,
-                companyId: currentCompanyId,
-                date: new Date().toLocaleString('ar-EG')
-            };
+            try {
+                let newId = String(Date.now());
+                let newPost = {
+                    id: newId,
+                    author: currentDriverProfile.name,
+                    authorAvatar: currentDriverProfile.avatar,
+                    authorTitle: currentDriverProfile.title,
+                    category: category,
+                    text: text,
+                    files: [...communityFilesArr],
+                    likes: 0,
+                    comments: [],
+                    isEmergency: isEmergency,
+                    companyId: currentCompanyId || 'company_main',
+                    date: new Date().toLocaleString('ar-EG')
+                };
 
-            const { doc, setDoc } = window.firebaseModules;
-            await setDoc(doc(window.db, 'space_network_posts', newId), newPost);
-            document.getElementById('community-post-text').value = '';
-            communityFilesArr = [];
-            document.getElementById('community-files-preview-info').innerText = '';
-            addNotification("تم إرسال إشارة رادار جديدة بنجاح.");
-            alert('تم نشر الإشارة بنجاح في رادار الأسطول لشركتك 🚀');
+                const { doc, setDoc } = window.firebaseModules;
+                await setDoc(doc(window.db, 'space_network_posts', newId), newPost);
+                document.getElementById('community-post-text').value = '';
+                communityFilesArr = [];
+                document.getElementById('community-files-preview-info').innerText = '';
+                addNotification("تم إرسال إشارة رادار جديدة بنجاح.");
+                alert('تم نشر الإشارة بنجاح في رادار الأسطول لشركتك 🚀');
+            } catch (error) {
+                console.error("خطأ أثناء النشر سحابياً:", error);
+                alert('فشل النشر سحابياً: ' + error.message);
+            }
         }
 
         function loadCommunityPosts() {
@@ -677,14 +688,15 @@
                 snapshot.forEach(docSnap => {
                     let p = docSnap.data();
                     let pComp = (p.companyId || "").trim();
-                    if (!pComp || pComp === currentCompanyId) {
+                    // عرض المنشورات التي تخص الشركة النشطة أو التي ليس لها شركة محددة
+                    if (!pComp || pComp === currentCompanyId || pComp === 'company_main') {
                         posts.push({ id: docSnap.id, ...p });
                     }
                 });
                 posts.sort((a, b) => Number(b.id) - Number(a.id));
 
                 if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:11px; text-align:center; opacity:0.7;">لا توجد منشورات رادار لشركتك حالياً.</p>`;
+                    container.innerHTML = `<p style="font-size:11px; text-align:center; opacity:0.7; padding:15px;">لا توجد منشورات رادار لشركتك حالياً.</p>`;
                     return;
                 }
 
@@ -738,6 +750,10 @@
                     `;
                     container.appendChild(card);
                 });
+            }, error => {
+                console.error("Firestore error in community posts:", error);
+                const container = document.getElementById('community-posts-container');
+                if(container) container.innerHTML = `<p style="font-size:11px; text-align:center; color:var(--danger);">⚠️ خطأ في الاتصال بقاعدة البيانات أو صلاحيات القراءة.</p>`;
             });
         }
 
@@ -794,7 +810,7 @@
                 snapshot.forEach(docSnap => {
                     let data = docSnap.data();
                     let dComp = (data.companyId || "").trim();
-                    if (!dComp || dComp === currentCompanyId) {
+                    if (!dComp || dComp === currentCompanyId || dComp === 'company_main') {
                         if (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
                             myCargos.push({ id: docSnap.id, ...data });
                         }
@@ -824,6 +840,8 @@
                     `;
                     container.appendChild(card);
                 });
+            }, error => {
+                console.error("Error loading shipments:", error);
             });
         }
 
@@ -843,7 +861,7 @@
                 snapshot.forEach(docSnap => {
                     let data = docSnap.data();
                     let dComp = (data.companyId || "").trim();
-                    if (!dComp || dComp === currentCompanyId) {
+                    if (!dComp || dComp === currentCompanyId || dComp === 'company_main') {
                         if (data.driverName === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
                             myTransactions.push({ id: docSnap.id, ...data });
                             let val = Number(data.amount || 0);
@@ -878,6 +896,8 @@
                     `;
                 });
                 container.innerHTML = html;
+            }, error => {
+                console.error("Error loading transactions:", error);
             });
         }
 
@@ -891,11 +911,13 @@
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     let dComp = (d.companyId || "").trim();
-                    if (!dComp || dComp === currentCompanyId) {
+                    if (!dComp || dComp === currentCompanyId || dComp === 'company_main') {
                         allDrivers.push({ id: docSnap.id, ...d });
                     }
                 });
                 renderChatUsersList();
+            }, error => {
+                console.error("Error loading drivers:", error);
             });
         }
 
@@ -954,7 +976,7 @@
                 snapshot.forEach(docSnap => {
                     let m = docSnap.data();
                     let mComp = (m.companyId || "").trim();
-                    if (!mComp || mComp === currentCompanyId) {
+                    if (!mComp || mComp === currentCompanyId || mComp === 'company_main') {
                         msgs.push(m);
                     }
                 });
@@ -975,6 +997,8 @@
                     box.appendChild(bubble);
                 });
                 box.scrollTop = box.scrollHeight;
+            }, error => {
+                console.error("Error loading chat:", error);
             });
         }
 
