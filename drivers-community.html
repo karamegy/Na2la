@@ -100,7 +100,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, deleteDoc, updateDoc, increment, getDocs, getDoc, setDoc, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc, increment, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -129,6 +129,13 @@
         window.location.href = pageName + queryParams;
     };
 
+    function isUserAdmin(roleValue, nameValue) {
+        let role = String(roleValue || '').toLowerCase().trim();
+        let name = String(nameValue || '').toLowerCase().trim();
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
+    }
+
     async function logAuditAction(actionDesc) {
         try {
             const mainStateRef = doc(db, "appStore", "mainState");
@@ -150,12 +157,9 @@
             if (auditLogs.length > 100) auditLogs = auditLogs.slice(0, 100);
 
             await setDoc(mainStateRef, { auditLogs: auditLogs }, { merge: true });
-        } catch (err) {
-            console.error("Audit log error:", err);
-        }
+        } catch (err) {}
     }
 
-    // استخراج الجلسة ومعرف الشركة حصرياً من الـ URL مع الحفظ التلقائي في الذاكرة المحلية
     function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -181,9 +185,7 @@
             if (!auth.currentUser) {
                 await signInAnonymously(auth);
             }
-        } catch (e) {
-            console.warn("Auth warning:", e);
-        }
+        } catch (e) {}
     }
 
     initAuth().then(() => {
@@ -207,16 +209,15 @@
                 }
             });
 
-            let roleStr = String(foundDriver?.role || foundDriver?.rank || '').toLowerCase();
-            let isAdm = roleStr === 'admin' || roleStr === 'مدير' || ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(activeSessionName.toLowerCase());
+            let isAdm = isUserAdmin(foundDriver?.role || foundDriver?.rank, activeSessionName);
 
             if (foundDriver) {
                 activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
                 currentUserRole = isAdm ? 'admin' : 'driver';
                 currentUserPermissions = isAdm ? 'صلاحيات كاملة لإدارة النظام والأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات وشحنات';
                 currentUserAvatar = foundDriver.avatar || '';
-                if (foundDriver.companyId) {
-                    currentCompanyId = foundDriver.companyId;
+                if (foundDriver.companyId && foundDriver.companyId.trim() !== '') {
+                    currentCompanyId = foundDriver.companyId.trim();
                     localStorage.setItem('current_company_id', currentCompanyId);
                 }
             } else {
@@ -270,30 +271,21 @@
     }
 
     let allPostsData = [];
-    const postsRef = collection(db, "driver_community_posts");
+    const postsRef = collection(db, "communityPosts");
 
     function loadPosts() {
         let superAdmin = isSuperAdmin();
-        const q = superAdmin ? query(postsRef, orderBy("timestamp", "desc")) : query(postsRef, where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"));
         
-        onSnapshot(q, async (snapshot) => {
+        onSnapshot(postsRef, (snapshot) => {
             allPostsData = [];
-
-            for (const docSnap of snapshot.docs) {
-                const post = docSnap.data();
-                const id = docSnap.id;
+            snapshot.forEach(docSnap => {
+                let post = docSnap.data();
+                let pComp = (post.companyId || "").trim();
                 
-                const commentsSnap = await getDocs(collection(db, "driver_community_posts", id, "comments"));
-                let comments = [];
-                commentsSnap.forEach(c => {
-                    let cData = c.data();
-                    if (superAdmin || !cData.companyId || cData.companyId === currentCompanyId) {
-                        comments.push({ id: c.id, ...cData });
-                    }
-                });
-
-                allPostsData.push({ id, ...post, comments });
-            }
+                if (superAdmin || !pComp || pComp === currentCompanyId) {
+                    allPostsData.push({ id: docSnap.id, ...post });
+                }
+            });
             renderPosts(allPostsData);
         });
     }
@@ -302,6 +294,8 @@
         const container = document.getElementById("postsContainer");
         container.innerHTML = "";
         
+        posts.sort((a, b) => Number(b.id) - Number(a.id));
+
         if (posts.length === 0) {
             container.innerHTML = "<p style='text-align:center; color:#777;'>لا توجد منشورات متاحة لشراكتك حالياً.</p>";
             return;
@@ -317,9 +311,11 @@
             else if (post.category === "حالة الطرق") badgeClass += " badge-route";
 
             let commentsHtml = "";
-            post.comments.forEach(comm => {
-                commentsHtml += `<div class="comment-item"><strong>${comm.author}:</strong> ${comm.text}</div>`;
-            });
+            if (post.comments && post.comments.length > 0) {
+                post.comments.forEach(comm => {
+                    commentsHtml += `<div class="comment-item"><strong>${comm.author}:</strong> ${comm.text}</div>`;
+                });
+            }
 
             container.innerHTML += `
                 <div class="post-card">
@@ -331,11 +327,11 @@
                         </div>
                         <span style="font-size: 11px; color: #888;">${post.date || ''}</span>
                     </div>
-                    <div class="post-text">${post.content}</div>
+                    <div class="post-text">${post.text || post.content || ''}</div>
                     ${embed ? `<div class="video-wrapper"><iframe src="${embed}"></iframe></div>` : ""}
                     
                     <div class="post-actions">
-                        <button class="btn btn-success" onclick="likePost('${post.id}')">👍 أعجبني (${post.likes || 0})</button>
+                        <button class="btn btn-success" onclick="likePost('${post.id}')">👍 أعجبني (${Object.keys(post.reactions || {}).length || post.likes || 0})</button>
                         ${superAdmin || post.author === activeSessionName ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور 🗑️</button>` : ""}
                     </div>
 
@@ -355,15 +351,20 @@
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
         const category = document.getElementById("postCategory").value;
-        await addDoc(postsRef, {
+        let newId = String(Date.now());
+        
+        await setDoc(doc(db, "communityPosts", newId), {
+            id: newId,
             author: activeSessionName,
+            authorTitle: currentUserRole === 'admin' ? 'مدير عام النظام' : 'سائق معتمد',
             category: category,
-            content: document.getElementById("postContent").value,
+            text: document.getElementById("postContent").value,
             videoUrl: document.getElementById("videoUrl").value,
             companyId: currentCompanyId,
-            likes: 0,
+            reactions: {},
+            comments: [],
             date: new Date().toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }),
-            timestamp: new Date()
+            timestamp: Date.now()
         });
         document.getElementById("postContent").value = "";
         document.getElementById("videoUrl").value = "";
@@ -371,26 +372,43 @@
     };
 
     window.likePost = async (id) => {
-        const postRef = doc(db, "driver_community_posts", id);
-        await updateDoc(postRef, { likes: increment(1) });
+        const postRef = doc(db, "communityPosts", id);
+        let docSnap = await getDoc(postRef);
+        if(docSnap.exists()) {
+            let data = docSnap.data();
+            let reactions = data.reactions || {};
+            if (reactions[activeSessionName]) {
+                delete reactions[activeSessionName];
+            } else {
+                reactions[activeSessionName] = '❤️';
+            }
+            await updateDoc(postRef, { reactions: reactions });
+        }
     };
 
     window.addComment = async (e, postId) => {
         e.preventDefault();
         const text = document.getElementById(`commText-${postId}`).value;
+        const postRef = doc(db, "communityPosts", postId);
+        let docSnap = await getDoc(postRef);
         
-        await addDoc(collection(db, "driver_community_posts", postId, "comments"), {
-            author: activeSessionName, 
-            text, 
-            companyId: currentCompanyId, 
-            timestamp: new Date()
-        });
-        document.getElementById(`commText-${postId}`).value = "";
+        if (docSnap.exists()) {
+            let data = docSnap.data();
+            let comments = data.comments || [];
+            comments.push({
+                author: activeSessionName,
+                text: text,
+                companyId: currentCompanyId,
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            });
+            await updateDoc(postRef, { comments: comments });
+            document.getElementById(`commText-${postId}`).value = "";
+        }
     };
 
     window.deletePost = async (id) => {
         if (confirm("هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
-            await deleteDoc(doc(db, "driver_community_posts", id));
+            await deleteDoc(doc(db, "communityPosts", id));
             logAuditAction(`حذف منشور برقم المعرف ${id} بواسطة ${activeSessionName}`);
         }
     };
@@ -416,7 +434,8 @@
     window.filterPosts = function() {
         const keyword = document.getElementById("searchInput").value.toLowerCase();
         const filtered = allPostsData.filter(p => 
-            (p.content && p.content.toLowerCase().includes(keyword)) || 
+            (p.text && p.text.toLowerCase().includes(keyword)) || 
+            (p.content && p.content.toLowerCase().includes(keyword)) ||
             (p.author && p.author.toLowerCase().includes(keyword)) ||
             (p.category && p.category.toLowerCase().includes(keyword))
         );
