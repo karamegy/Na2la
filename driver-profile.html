@@ -989,7 +989,7 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
-        // 🛡️ [تعديل حصري وآمن]: التحقق من الجلسة ومنع إنشاء حسابات وهمية عند الخروج أو الدخول الخاطئ
+        // 🛡️ [حماية جلسة المستخدم ومنع الحسابات الوهمية]
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -1009,7 +1009,6 @@
 
         let activeExternalSessionName = getExternalLoginSession();
         
-        // 🚨 إذا لم يتوفر مُعرف حقيقي مسجل، قم بالتحويل لصفحة تسجيل الدخول ومنع أي حساب وهمي
         if (!activeExternalSessionName) {
             alert('⚠️ تنبيه أمني: يرجى تسجيل الدخول أولاً للوصول إلى لوحة وبروفايل السائق.');
             let compIdParam = new URLSearchParams(window.location.search).get('companyId') || localStorage.getItem('current_company_id') || 'company_main';
@@ -1429,6 +1428,7 @@
             let currentH = targetDrv.coverHeight || 180;
             coverBanner.style.height = currentH + 'px';
             if (targetDrv.cover) coverBanner.style.backgroundImage = `url('${targetDrv.cover}')`;
+            else coverBanner.style.backgroundImage = '';
             document.getElementById('cover-height-label').innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
@@ -2020,22 +2020,42 @@
             renderMyAccount();
         }
 
+        // 🔄 [مزامنة فورية لصورة البروفايل الشخصية ورفعها لقاعدة البيانات]
         function updateProfileAvatar(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
                     loggedInUser.avatar = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount());
+                    db.collection('drivers').doc(String(loggedInUser.id)).set({
+                        ...loggedInUser,
+                        avatar: url,
+                        companyId: currentCompanyId
+                    }, { merge: true }).then(() => {
+                        renderMyAccount();
+                        alert('✅ تم تحديث وصورة البروفايل الشخصي ومزامنتها بنجاح!');
+                    }).catch(err => {
+                        alert('⚠️ حدث خطأ أثناء مزامنة الصورة الشخصية.');
+                    });
                 });
             }
         }
 
+        // 🔄 [مزامنة فورية لصورة الغلاف ورفعها لقاعدة البيانات]
         function updateProfileCover(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 800, 500, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
                     loggedInUser.cover = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => renderMyAccount());
+                    db.collection('drivers').doc(String(loggedInUser.id)).set({
+                        ...loggedInUser,
+                        cover: url,
+                        companyId: currentCompanyId
+                    }, { merge: true }).then(() => {
+                        renderMyAccount();
+                        alert('✅ تم تحديث صورة الغلاف ومزامنتها بنجاح!');
+                    }).catch(err => {
+                        alert('⚠️ حدث خطأ أثناء مزامنة صورة الغلاف.');
+                    });
                 });
             }
         }
