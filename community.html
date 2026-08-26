@@ -398,14 +398,17 @@
         </div>
     </div>
 
-    <!-- شاشة الشات المحدثة التي تتضمن قائمة الزملاء المتصلين المتجاوبة للشاشات والموبايل -->
+    <!-- شاشة الشات المحدثة التي تتضمن قائمة الزملاء المتصلين ومتجاوبة مع المحادثات الخاصة -->
     <div id="fullScreenChatPage">
         <div class="chat-page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="btn" style="width: auto; padding: 6px 12px; font-size: 0.8rem;" onclick="closeFullScreenChat()">⬅ عودة للمجتمع</button>
                 <div>
-                    <h3 style="font-size: 1rem; color: var(--text-color);">💬 غرفة الأسطول والشات المباشر</h3>
-                    <span style="font-size: 0.7rem; color: var(--accent-color);" id="chatActiveCompanyLabel">متصل بالسحابة الآمنة</span>
+                    <h3 style="font-size: 1rem; color: var(--text-color);" id="chatActiveTitle">💬 غرفة الأسطول والشات المباشر</h3>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.7rem; color: var(--accent-color);" id="chatActiveCompanyLabel">متصل بالسحابة الآمنة</span>
+                        <button id="backToPublicChatBtn" class="btn" style="display: none; width: auto; padding: 2px 8px; font-size: 0.65rem; background: var(--danger-color);" onclick="backToPublicChat()">العودة للشات العام ↩</button>
+                    </div>
                 </div>
             </div>
             <div style="display: flex; gap: 8px;">
@@ -417,7 +420,7 @@
         <div class="chat-layout-container">
             <!-- قائمة السائقين والزملاء المتصلين المعزولة لكل شركة -->
             <div class="chat-sidebar-drivers">
-                <h4 style="font-size: 0.85rem; color: var(--primary-color); margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; white-space: nowrap;">👥 الزملاء المتصلون</h4>
+                <h4 style="font-size: 0.85rem; color: var(--primary-color); margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; white-space: nowrap;">👥 الزملاء (اضغط للمراسلة 💬)</h4>
                 <div id="fleetDriversListContainer" style="display: flex; flex-direction: row; gap: 6px; overflow-x: auto; width: 100%;">
                     <p style="font-size: 0.75rem; color: var(--secondary-text); text-align: center; width: 100%;">جاري جلب السائقين...</p>
                 </div>
@@ -561,7 +564,6 @@
         const db = getFirestore(app);
         window.db = db;
 
-        // المصادقة المجهولة لتجنب مشاكل الصلاحيات
         signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -603,11 +605,19 @@
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        // عزل المجموعات والبيانات لكل شركة بشكل تام
+        // متغير لتحديد ما إذا كان الشات عاماً أم خاصاً مع زميل معين
+        window.activeChatTarget = 'public';
+
         function getCol(name) { 
             if(name === 'users') return collection(db, 'drivers');
             if(name === 'posts') return collection(db, `companies_${window.companyId}_posts`);
-            if(name === 'public_chat') return collection(db, `companies_${window.companyId}_chat`);
+            if(name === 'public_chat') {
+                if (window.activeChatTarget && window.activeChatTarget !== 'public') {
+                    let chatId = [window.currentAccount.name, window.activeChatTarget].sort().join('_');
+                    return collection(db, `companies_${window.companyId}_private_${chatId}`);
+                }
+                return collection(db, `companies_${window.companyId}_chat`);
+            }
             return collection(db, `companies_${window.companyId}_${name}`); 
         }
 
@@ -617,6 +627,7 @@
             window.isAdminMode = (role === 'admin' || badge === 'admin' || isUserExplicitlyAdmin);
         }
 
+        // تم تعديل الاستعلام لتجنب مشاكل المؤشرات المركبة (Composite Index)
         async function initRealtimeUserSync() {
             try {
                 if (!window.currentAccount.name || window.currentAccount.name.trim() === "" || window.currentAccount.name === "null") {
@@ -631,24 +642,24 @@
                 }
 
                 const driversRef = collection(db, 'drivers');
-                const q = query(
-                    driversRef, 
-                    where("name", "==", window.currentAccount.name),
-                    where("companyId", "==", window.companyId)
-                );
+                const q = query(driversRef, where("companyId", "==", window.companyId));
                 const querySnapshot = await getDocs(q);
 
-                if (!querySnapshot.empty) {
-                    querySnapshot.forEach((documentSnapshot) => {
-                        let data = documentSnapshot.data();
-                        window.currentAccount = { 
-                            id: documentSnapshot.id, 
-                            ...data,
-                            avatar: urlAvatar || data.avatar || "",
-                            role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
-                            badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
-                        };
-                    });
+                let matchedDoc = null;
+                querySnapshot.forEach((documentSnapshot) => {
+                    let data = documentSnapshot.data();
+                    if (data.name === window.currentAccount.name) {
+                        matchedDoc = { id: documentSnapshot.id, ...data };
+                    }
+                });
+
+                if (matchedDoc) {
+                    window.currentAccount = { 
+                        ...matchedDoc,
+                        avatar: urlAvatar || matchedDoc.avatar || "",
+                        role: isUserExplicitlyAdmin ? 'admin' : (matchedDoc.role || 'driver'),
+                        badge: isUserExplicitlyAdmin ? 'admin' : (matchedDoc.badge || 'سائق')
+                    };
                     
                     onSnapshot(doc(db, 'drivers', window.currentAccount.id), (docSnap) => {
                         if (docSnap.exists()) {
@@ -913,7 +924,26 @@
             document.getElementById('fullScreenChatPage').style.display = 'none';
         }
 
-        // جلب قائمة الزملاء المتصلين للشركة الحالية فقط وتحديثها تلقائياً
+        // فتح محادثة خاصة عند النقر على أي زميل في القائمة الجانبية
+        window.openPrivateChat = function(driverName) {
+            if (driverName === window.currentAccount.name) {
+                alert("لا يمكنك مراسلة نفسك!");
+                return;
+            }
+            window.activeChatTarget = driverName;
+            document.getElementById('chatActiveTitle').innerText = `💬 محادثة خاصة مع: ${driverName}`;
+            document.getElementById('backToPublicChatBtn').style.display = 'inline-block';
+            initRealtimeFullScreenChat();
+        }
+
+        window.backToPublicChat = function() {
+            window.activeChatTarget = 'public';
+            document.getElementById('chatActiveTitle').innerText = `💬 غرفة الأسطول والشات المباشر`;
+            document.getElementById('backToPublicChatBtn').style.display = 'none';
+            initRealtimeFullScreenChat();
+        }
+
+        // جلب قائمة الزملاء المتصلين للشركة الحالية وإضافة حدث النقر للمراسلة الخاصة
         function initFleetDriversSidebar() {
             const container = document.getElementById('fleetDriversListContainer');
             const driversRef = collection(db, 'drivers');
@@ -934,7 +964,7 @@
                     let avatarBg = d.avatar ? `background-image:url('${d.avatar}'); background-size: cover; background-position: center;` : '';
                     
                     return `
-                        <div class="fleet-driver-item" title="زميل في الأسطول">
+                        <div class="fleet-driver-item" onclick="openPrivateChat('${d.name}')" title="اضغط لمراسلة الزميل مباشرة 💬">
                             <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--bg-color); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0; ${avatarBg}">
                                 ${d.avatar ? '' : '👤'}
                                 <div class="status-dot ${stClass}" style="width: 9px; height: 9px;"></div>
@@ -969,11 +999,13 @@
 
         function initRealtimeFullScreenChat() {
             const stream = document.getElementById('fullScreenChatMessages');
+            stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); margin: auto;">جاري مزامنة المحادثات...</p>`;
+            
             onSnapshot(query(getCol("public_chat"), orderBy("timestamp", "asc")), (snapshot) => {
                 let msgs = [];
                 snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
                 if(msgs.length === 0) {
-                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة في شات هذه الشركة.</p>`;
+                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة. ابدأ المحادثة الآن!</p>`;
                     return;
                 }
                 stream.innerHTML = msgs.map(m => {
@@ -998,7 +1030,7 @@
         }
 
         window.deleteChatMessage = async function(msgId) {
-            if(confirm("🛡️ حذف هذه الرسالة من الشات العام؟")) {
+            if(confirm("🛡️ حذف هذه الرسالة من الشات؟")) {
                 try {
                     await deleteDoc(doc(getCol("public_chat"), msgId));
                 } catch(e) {}
