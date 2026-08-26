@@ -587,7 +587,8 @@
     function isSuperAdmin() {
         let user = currentDriverProfile || {};
         let role = String(user.role || '').toLowerCase().trim();
-        return role === 'admin' || role === 'مدير';
+        let name = String(user.name || '').toLowerCase().trim();
+        return role === 'admin' || role === 'مدير' || role === 'admin1' || name === 'كارما' || name.includes('عماد');
     }
     window.isUserAdmin = isSuperAdmin;
 
@@ -597,7 +598,7 @@
         
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || localStorage.getItem('logged_in_driver_name') || '';
-        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || '';
+        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || 'company_main';
 
         urlUserId = urlUserId.trim();
         let targetIdLower = urlUserId.toLowerCase();
@@ -621,11 +622,11 @@
             });
 
             if (found) {
-                // استخدام companyId الموجود بالمستند أو الاعتماد على الرابط أو الافتراضي بشكل مرن
                 currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
                 
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
-                let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
+                let dNameLower = String(found.name || '').toLowerCase();
+                let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة' || dNameLower === 'كارما';
 
                 currentDriverProfile = {
                     id: found.id,
@@ -641,12 +642,12 @@
                 };
             } else {
                 currentCompanyId = urlCompanyId || 'company_main';
-                let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(targetIdLower);
+                let isSuper = ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا', 'كارما'].includes(targetIdLower) || targetIdLower.includes('كارما');
                 currentDriverProfile = {
                     id: urlUserId || 'guest',
-                    name: urlUserId || 'كابتن الأسطول',
+                    name: urlUserId || 'كارما',
                     avatar: '',
-                    title: isSuper ? 'مدير النظام' : 'سائق معتمد',
+                    title: isSuper ? 'مدير عام النظام' : 'سائق معتمد',
                     phone: '',
                     role: isSuper ? 'admin' : 'driver',
                     companyId: currentCompanyId,
@@ -661,10 +662,10 @@
             currentCompanyId = urlCompanyId || 'company_main';
             currentDriverProfile = {
                 id: urlUserId || 'guest',
-                name: urlUserId || 'كابتن الأسطول',
+                name: urlUserId || 'كارما',
                 avatar: '',
-                title: 'سائق معتمد',
-                role: 'driver',
+                title: 'مدير عام النظام',
+                role: 'admin',
                 companyId: currentCompanyId,
                 canAccessSocial: true,
                 subPlan: 'أساسي',
@@ -720,14 +721,12 @@
 
         try {
             const { collection, getDocs } = window.firebaseModules;
-            // لجلب كافة السائقين وتلافي مشاكل الفلترة في حال عدم توفر حقل الشراكة لدى البعض
             const querySnapshot = await getDocs(collection(window.db, "drivers"));
             
             globalDriversCache = [];
             querySnapshot.forEach((docSnap) => {
                 let d = docSnap.data();
                 let dComp = (d.companyId || "").trim();
-                // فلترة مرنة تقبل المطابقة أو السجلات العامة إن وجدت
                 if (!dComp || dComp === currentCompanyId) {
                     globalDriversCache.push({ id: docSnap.id, ...d });
                 }
