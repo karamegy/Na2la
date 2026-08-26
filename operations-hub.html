@@ -597,9 +597,8 @@
         
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || localStorage.getItem('logged_in_driver_name') || '';
-        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || 'company_main';
+        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id') || '';
 
-        currentCompanyId = urlCompanyId.trim();
         urlUserId = urlUserId.trim();
         let targetIdLower = urlUserId.toLowerCase();
 
@@ -622,7 +621,9 @@
             });
 
             if (found) {
-                currentCompanyId = found.companyId || urlCompanyId || 'company_main';
+                // استخدام companyId الموجود بالمستند أو الاعتماد على الرابط أو الافتراضي بشكل مرن
+                currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
+                
                 let roleStr = String(found.role || found.rank || '').toLowerCase();
                 let isDocAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
 
@@ -639,7 +640,7 @@
                     subExpiry: found.subExpiry || (isDocAdmin ? 'دائم' : 'غير محدد')
                 };
             } else {
-                // لن يتم اختيار المدير عشوائياً، سيتم استخدام اسمك من الرابط أو الكابتن بشكل نظيف ومستقل
+                currentCompanyId = urlCompanyId || 'company_main';
                 let isSuper = ['1', 'Admin1', 'المدير', 'مدير', 'عماد', 'Emad', 'باندا'].includes(targetIdLower);
                 currentDriverProfile = {
                     id: urlUserId || 'guest',
@@ -718,13 +719,18 @@
         if(container) container.innerHTML = "<div style='text-align:center; color:var(--warning-color); padding: 12px;'>جاري جلب السائقين وصلاحياتهم المعزولة لشراكة الشركة...</div>";
 
         try {
-            const { collection, getDocs, query, where } = window.firebaseModules;
-            let q = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
-            const querySnapshot = await getDocs(q);
+            const { collection, getDocs } = window.firebaseModules;
+            // لجلب كافة السائقين وتلافي مشاكل الفلترة في حال عدم توفر حقل الشراكة لدى البعض
+            const querySnapshot = await getDocs(collection(window.db, "drivers"));
             
             globalDriversCache = [];
             querySnapshot.forEach((docSnap) => {
-                globalDriversCache.push({ id: docSnap.id, ...docSnap.data() });
+                let d = docSnap.data();
+                let dComp = (d.companyId || "").trim();
+                // فلترة مرنة تقبل المطابقة أو السجلات العامة إن وجدت
+                if (!dComp || dComp === currentCompanyId) {
+                    globalDriversCache.push({ id: docSnap.id, ...d });
+                }
             });
 
             renderDriversTable(globalDriversCache);
@@ -736,45 +742,52 @@
 
     function initCloudSync() {
         if (!window.db || !window.firebaseModules) return;
-        const { collection, onSnapshot, query, where } = window.firebaseModules;
+        const { collection, onSnapshot } = window.firebaseModules;
 
-        let qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
-        onSnapshot(qDrivers, (snapshot) => {
+        onSnapshot(collection(window.db, "drivers"), (snapshot) => {
             globalDriversCache = [];
             snapshot.forEach((docSnap) => {
-                globalDriversCache.push({ id: docSnap.id, ...docSnap.data() });
+                let d = docSnap.data();
+                let dComp = (d.companyId || "").trim();
+                if (!dComp || dComp === currentCompanyId) {
+                    globalDriversCache.push({ id: docSnap.id, ...d });
+                }
             });
             renderDriversTable(globalDriversCache);
             updateCurrentInterfacePermissions();
         });
 
-        let qFleet = query(collection(window.db, "viper_fleet_ops"), where("companyId", "==", currentCompanyId));
-        onSnapshot(qFleet, (snapshot) => {
+        onSnapshot(collection(window.db, "viper_fleet_ops"), (snapshot) => {
             globalFleetCache = [];
             snapshot.forEach((docSnap) => {
-                globalFleetCache.push({ id: docSnap.id, ...docSnap.data() });
+                let d = docSnap.data();
+                let dComp = (d.companyId || "").trim();
+                if (!dComp || dComp === currentCompanyId) {
+                    globalFleetCache.push({ id: docSnap.id, ...d });
+                }
             });
             renderFleetTableAndStats();
         });
 
-        let qLogistics = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
-        onSnapshot(qLogistics, (snapshot) => {
+        onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
             let container = document.getElementById("logisticsContainer");
             if (!container) return;
             container.innerHTML = "";
             let count = 0;
             snapshot.forEach((docSnap) => {
                 let m = docSnap.data();
-                count++;
-                container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${m.client || ''}</b> (${m.cargo || ''})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button></div>`;
+                let mComp = (m.companyId || "").trim();
+                if (!mComp || mComp === currentCompanyId) {
+                    count++;
+                    container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${m.client || ''}</b> (${m.cargo || ''})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button></div>`;
+                }
             });
             if (count === 0) {
                 container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد شحنات مسجلة لشراكتك.</div>";
             }
         });
 
-        let qFinance = query(collection(window.db, "viper_finance"), where("companyId", "==", currentCompanyId));
-        onSnapshot(qFinance, (snapshot) => {
+        onSnapshot(collection(window.db, "viper_finance"), (snapshot) => {
             let container = document.getElementById("financeContainer");
             if (!container) return;
             container.innerHTML = "";
@@ -782,9 +795,12 @@
             let count = 0;
             snapshot.forEach((docSnap) => {
                 let ex = docSnap.data();
-                count++;
-                total += Number(ex.cost) || 0;
-                container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item || ''}: <span style="color:var(--warning-color);">${ex.cost || 0} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
+                let exComp = (ex.companyId || "").trim();
+                if (!exComp || exComp === currentCompanyId) {
+                    count++;
+                    total += Number(ex.cost) || 0;
+                    container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item || ''}: <span style="color:var(--warning-color);">${ex.cost || 0} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
+                }
             });
             if (count === 0) {
                 container.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد تقارير مالية مسجلة لشراكتك.</div>";
@@ -878,7 +894,7 @@
             let dPhone = d.phone || '-';
             let dAvatar = d.avatar && d.avatar.trim() !== '' ? d.avatar : 'https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png';
             let roleStr = String(d.role || '').toLowerCase().trim();
-            let isAdm = (roleStr === 'admin' || roleStr === 'مدير');
+            let isAdm = (roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'admin1');
             let roleText = isAdm ? "🛡️ Admin" : "👤 سائق";
             let roleBtnBg = isAdm ? "background: var(--primary-color); color: #fff;" : "background: var(--border-color); color: #fff;";
             
