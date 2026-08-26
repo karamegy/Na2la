@@ -149,13 +149,16 @@
 
     <div class="company-badge-box">
         <span>🏢 الشراكة / الشركة المعزولة حالياً: <strong id="headerCompanyIdDisplay" style="color: var(--primary-color);">جاري المزامنة...</strong></span>
-        <span style="font-size: 11px; opacity: 0.8;" id="syncStatusBadge">مزامنة سحابية لحظية 🔄</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span style="font-size: 11px; opacity: 0.8;" id="syncStatusBadge">مزامنة سحابية لحظية 🔄</span>
+            <button onclick="openLoginModal()" style="background: var(--primary-color); color: #fff; border: none; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: bold;">🔑 تبديل الحساب</button>
+        </div>
     </div>
 
     <div id="authBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-3d);">
         <img id="currentUserAvatar" src="https://www.gstatic.com/images/branding/product/2x/avatar_square_grey_48dp.png" style="width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color);" alt="صورة المستخدم">
         <div>
-            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري المزامنة اللحظية من السحابة...</b>
+            <b id="currentActiveUserLabel" style="color: var(--primary-color); font-size: 15px;">جاري التحقق من الهوية...</b>
             <div id="currentActiveUserRoleLabel" style="font-size: 11px; color: var(--secondary-text);">مطابقة الهوية الحية</div>
         </div>
     </div>
@@ -191,6 +194,25 @@
             <h3>الثيمات والشكل</h3>
             <p>مظهر المنصة (<span id="themeCounterDisplayGrid">1</span>/3)</p>
         </div>
+    </div>
+</div>
+
+<!-- نافذة تسجيل الدخول / تبديل الحساب الآمنة -->
+<div class="page-modal-overlay" id="modalLogin">
+    <div class="page-modal-content" style="max-width: 450px; text-align: center;">
+        <div style="font-size: 28px; margin-bottom: 5px;">🔐</div>
+        <div style="font-weight: bold; font-size: 18px; color: var(--primary-color); margin-bottom: 5px;">تسجيل الدخول لمنصة نقلة Na2la</div>
+        <div style="font-size: 12px; color: var(--secondary-text); margin-bottom: 18px;">الرجاء إدخال رقم الهاتف أو اسم المستخدم للوصول لغرفة العمليات:</div>
+        
+        <form onsubmit="handleUserLogin(event)">
+            <input type="text" id="loginInputQuery" placeholder="رقم الهاتف أو اسم المستخدم..." required style="margin-bottom: 12px; text-align: center; font-size: 14px;">
+            <button type="submit" class="btn-submit">تسجيل الدخول سحابياً 🚀</button>
+        </form>
+
+        <div style="margin: 15px 0 10px 0; font-size: 11px; color: var(--secondary-text); border-top: 1px solid var(--border-color); padding-top: 12px;">
+            أو اختر حسابك مباشرة من قائمة المسجلين بالسحابة:
+        </div>
+        <div id="quickLoginList" style="max-height: 160px; overflow-y: auto; text-align: right;">جاري التحميل...</div>
     </div>
 </div>
 
@@ -392,12 +414,12 @@
     };
 
     function goToPage(pageName) {
-        let userId = urlUserId || currentDriverProfile.name || '';
+        let userId = urlUserId || (currentDriverProfile ? currentDriverProfile.name : '') || '';
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
 
-    // 🧠 دالة ذكية وموحدة لفحص دور المستخدم (عربي/إنجليزي) تدعم المديرين والسائقين بدقة
+    // 🧠 دالة ذكية وموحدة لفحص دور المستخدم (عربي/إنجليزي)
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
@@ -416,37 +438,46 @@
         if (!window.db || !window.firebaseModules) return;
         const { collection, getDocs } = window.firebaseModules;
         
-        const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || '').trim();
-        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
-
         try {
             const snapshot = await getDocs(collection(window.db, 'drivers'));
-            let found = null;
             globalDriversCache = [];
-            
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
                 globalDriversCache.push({ id: docSnap.id, ...d });
-                
-                let docId = String(docSnap.id || '').trim().toLowerCase();
-                let dName = String(d.name || '').trim().toLowerCase();
-                let dPhone = String(d.phone || '').trim();
+            });
+
+            // 1. تحقق من الـ localStorage أولاً
+            let savedUserJson = localStorage.getItem('na2la_current_user');
+            let found = null;
+
+            if (savedUserJson) {
+                let savedUser = JSON.parse(savedUserJson);
+                found = globalDriversCache.find(d => d.id === savedUser.id || String(d.phone).trim() === String(savedUser.phone).trim() || String(d.name).toLowerCase() === String(savedUser.name).toLowerCase());
+            }
+
+            // 2. إذا لم يوجد في التخزين، تحقق من معاملات الـ URL
+            if (!found) {
+                const urlParams = new URLSearchParams(window.location.search);
+                urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || '').trim();
+                let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
 
                 if (urlUserId) {
                     let targetIdLower = urlUserId.toLowerCase();
-                    if (docId === targetIdLower || dName === targetIdLower || dPhone === targetIdLower) {
-                        found = { id: docSnap.id, ...d };
-                    }
+                    found = globalDriversCache.find(d => 
+                        String(d.id || '').toLowerCase() === targetIdLower || 
+                        String(d.name || '').toLowerCase() === targetIdLower || 
+                        String(d.phone || '').trim() === targetIdLower
+                    );
                 }
-            });
+            }
 
+            // 3. إذا لم يوجد أي مستخدم، اختر المدير الافتراضي أو افتح نافذة تسجيل الدخول
             if (!found && globalDriversCache.length > 0) {
                 found = globalDriversCache.find(d => isUserAdmin(d.role, d.name)) || globalDriversCache[0];
             }
 
             if (found) {
-                currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
+                currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : 'company_main';
                 urlUserId = found.name || found.phone || found.id;
                 
                 let isDocAdmin = isUserAdmin(found.role, found.name);
@@ -463,26 +494,88 @@
                     subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
                     subExpiry: found.subExpiry || 'دائم'
                 };
+
+                // حفظ الجلسة دائماً
+                localStorage.setItem('na2la_current_user', JSON.stringify(currentDriverProfile));
+                syncProfileAndLoadHub();
             } else {
-                currentCompanyId = urlCompanyId || 'company_main';
-                currentDriverProfile = {
-                    id: '',
-                    name: urlUserId || 'زائر',
-                    avatar: '',
-                    title: 'حساب غير مسجل بالسحابة',
-                    phone: '',
-                    role: 'driver',
-                    companyId: currentCompanyId,
-                    canAccessSocial: false,
-                    subPlan: 'غير متاح',
-                    subExpiry: '-'
-                };
+                openLoginModal();
             }
-            syncProfileAndLoadHub();
         } catch (err) {
             console.error(err);
-            syncProfileAndLoadHub();
+            openLoginModal();
         }
+    }
+
+    function openLoginModal() {
+        let modal = document.getElementById('modalLogin');
+        if (modal) modal.classList.add('active');
+        
+        let listContainer = document.getElementById('quickLoginList');
+        if (listContainer && globalDriversCache.length > 0) {
+            let html = '';
+            globalDriversCache.forEach(d => {
+                let isAdm = isUserAdmin(d.role, d.name);
+                html += `
+                    <div style="padding: 9px 12px; margin: 6px 0; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;" onclick="selectQuickLogin('${d.id}')">
+                        <div><b>${d.name || 'بدون اسم'}</b> <span style="font-size: 11px; opacity: 0.7;">(${d.phone || '-'})</span></div>
+                        <span style="font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 6px; background: ${isAdm ? 'rgba(217, 119, 6, 0.2); color: var(--primary-color);' : 'rgba(148, 163, 184, 0.2); color: var(--secondary-text);'}">${isAdm ? '🛡️ admin' : '👤 driver'}</span>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+        } else if (listContainer) {
+            listContainer.innerHTML = "<div style='text-align:center; color:var(--secondary-text); padding: 10px;'>جاري تحميل السائقين من السحابة...</div>";
+        }
+    }
+
+    function selectQuickLogin(driverId) {
+        let selected = globalDriversCache.find(d => d.id === driverId);
+        if (selected) {
+            completeLogin(selected);
+        }
+    }
+
+    function handleUserLogin(e) {
+        e.preventDefault();
+        let query = document.getElementById('loginInputQuery').value.trim().toLowerCase();
+        let found = globalDriversCache.find(d => 
+            String(d.name || '').toLowerCase() === query || 
+            String(d.phone || '').trim() === query ||
+            String(d.id || '').toLowerCase() === query
+        );
+        if (found) {
+            completeLogin(found);
+        } else {
+            alert("❌ لم يتم العثور على هذا المستخدم في السحابة. تحقق من الاسم أو رقم الهاتف المدخل.");
+        }
+    }
+
+    function completeLogin(found) {
+        currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : 'company_main';
+        urlUserId = found.name || found.phone || found.id;
+        let isDocAdmin = isUserAdmin(found.role, found.name);
+
+        currentDriverProfile = {
+            id: found.id,
+            name: found.name || 'مستخدم',
+            avatar: found.avatar || '',
+            title: isDocAdmin ? 'مدير النظام' : 'سائق معتمد',
+            phone: found.phone || '',
+            role: found.role || (isDocAdmin ? 'admin' : 'driver'),
+            companyId: currentCompanyId,
+            canAccessSocial: found.canAccessSocial !== false,
+            subPlan: found.subPlan || (isDocAdmin ? 'مدير عام' : 'أساسي'),
+            subExpiry: found.subExpiry || 'دائم'
+        };
+
+        localStorage.setItem('na2la_current_user', JSON.stringify(currentDriverProfile));
+        
+        let modal = document.getElementById('modalLogin');
+        if (modal) modal.classList.remove('active');
+
+        syncProfileAndLoadHub();
+        alert(`✅ أهلاً بك يا ${currentDriverProfile.name}، تم تسجيل الدخول بنجاح!`);
     }
 
     function syncProfileAndLoadHub() {
@@ -766,9 +859,7 @@
             if (!window.db || !window.firebaseModules) return;
             const { doc, updateDoc } = window.firebaseModules;
             let roleStr = String(currentRole || '').toLowerCase().trim();
-            let isCurrentlyAdmin = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام'].includes(roleStr);
-            let newRole = isCurrentlyAdmin ? 'driver' : 'admin';
-            
+            let newRole = (roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير نظام') ? 'driver' : 'admin';
             await updateDoc(doc(window.db, "drivers", driverId), { role: newRole });
             fetchDriversManual();
         } catch (err) {
