@@ -511,6 +511,9 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
+        // تنظيف شامل للذاكرة المحلية لمنع أي حسابات وهمية أو افتراضية سابقة
+        localStorage.removeItem('logged_in_driver_name');
+
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -518,17 +521,12 @@
             const isInvalidName = (val) => {
                 if (!val) return true;
                 let s = String(val).trim().toLowerCase();
-                return s === '' || s === 'null' || s === 'undefined' || s === 'زائر' || s === 'guest' || s === 'admin' || s === 'مستخدم';
+                return s === '' || s === 'null' || s === 'undefined' || s === '1' || s === 'أ' || s === 'زائر' || s === 'guest' || s === 'مستخدم' || s === 'المدير' || s === 'admin' || s === 'مدير';
             };
 
+            // الاعتماد الحصري والفوري على رابط الـ URL وصلاحية المعرف حصراً
             if (externalId && !isInvalidName(externalId)) {
-                localStorage.setItem('logged_in_driver_name', externalId.trim());
                 return externalId.trim();
-            }
-            
-            let savedSession = localStorage.getItem('logged_in_driver_name');
-            if (savedSession && !isInvalidName(savedSession)) {
-                return savedSession.trim();
             }
 
             return null;
@@ -537,7 +535,6 @@
         let activeExternalSessionName = getExternalLoginSession();
         
         if (!activeExternalSessionName) {
-            alert('⚠️ تنبيه أمني: يرجى تسجيل الدخول بحساب حقيقي أو عبر حساب جوجل المعتمد للوصول إلى البروفايل.');
             let compIdParam = new URLSearchParams(window.location.search).get('companyId') || localStorage.getItem('current_company_id') || 'company_main';
             window.location.href = `index.html?companyId=${encodeURIComponent(compIdParam)}`;
             throw new Error("Unauthorized Access - Fake or Missing Login");
@@ -553,13 +550,6 @@
         let currentCompanyId = (urlCompanyIdParam && urlCompanyIdParam.trim() !== '' && urlCompanyIdParam !== 'null') ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
         localStorage.setItem('current_company_id', currentCompanyId);
-
-        window.addEventListener('beforeunload', () => {
-            let currentSess = localStorage.getItem('logged_in_driver_name');
-            if (!currentSess || currentSess === 'زائر' || currentSess === 'مستخدم') {
-                localStorage.removeItem('logged_in_driver_name');
-            }
-        });
 
         function updateNavigationLinks() {
             let userId = activeExternalSessionName || '';
@@ -666,25 +656,24 @@
             
             if (appData.drivers && appData.drivers.length > 0) {
                 let drv = appData.drivers.find(d => 
-                    String(d.id) === sessionName || 
-                    String(d.name).trim() === sessionName || 
-                    String(d.phone).trim() === sessionName
+                    String(d.id).trim().toLowerCase() === sessionName.toLowerCase() || 
+                    String(d.name || '').trim().toLowerCase() === sessionName.toLowerCase() || 
+                    String(d.phone || '').trim().toLowerCase() === sessionName.toLowerCase()
                 );
                 if (drv) {
-                    let cleanN = getCleanDriverName(drv.name);
+                    let cleanN = getCleanDriverName(drv.name || drv.id);
                     let roleStr = String(drv.role || '').toLowerCase();
-                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مشرف';
                     return { ...drv, name: cleanN, role: isAdmin ? 'admin' : 'driver' };
                 }
             }
 
-            let roleStr = ['1', 'admin1', 'المدير', 'مدير', 'عماد', 'emad', 'باندا'].includes(sessionName.toLowerCase()) ? 'admin' : 'driver';
-
+            // منع إنشاء حساب وهمي وإرجاع مؤشر تحميل لحين مطابقة السجل الفعلي من قاعدة البيانات
             return {
                 id: sessionName,
-                name: getCleanDriverName(sessionName),
-                role: roleStr,
-                title: roleStr === 'admin' ? 'مدير عام النظام' : 'سائق معتمد',
+                name: "جاري المزامنة مع السحاب...",
+                role: 'driver',
+                title: 'سائق معتمد',
                 status: 'متاح 🟢',
                 advances: 0,
                 companyId: currentCompanyId
@@ -701,8 +690,6 @@
             }
             return getLoggedInUser();
         }
-
-        // تم إزالة دالة التسجيل التلقائي (autoRegisterUserType) لمنع إنشاء حسابات وهمية تلقائياً في قاعدة البيانات.
 
         function toggleChatAccountsListCollapse() {
             const content = document.getElementById('chat-accounts-collapsible-content');
@@ -741,10 +728,11 @@
         }
         renderInitialUIInstant();
 
+        // مزامنة فورية وحصرية مع قاعدة بيانات فايربيس (مع استبعاد أي حسابات وهمية نهائياً)
         db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
-                return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest' && name !== '1' && name !== 'أ' && name !== 'المدير' && name !== 'admin' && name !== 'مدير';
             });
             renderMyAccount();
             renderChatAccountsList();
@@ -752,7 +740,7 @@
             db.collection('drivers').onSnapshot(snap => {
                 appData.drivers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => {
                     let name = String(d.name || d.id || '').trim().toLowerCase();
-                    return (!d.companyId || d.companyId === currentCompanyId) && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                    return (!d.companyId || d.companyId === currentCompanyId) && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest' && name !== '1' && name !== 'أ' && name !== 'المدير' && name !== 'admin' && name !== 'مدير';
                 });
                 renderMyAccount();
                 renderChatAccountsList();
@@ -1221,7 +1209,7 @@
             
             (appData.drivers || []).forEach(d => {
                 let name = getCleanDriverName(d.name || d.id);
-                if(name && name !== 'مستخدم' && name !== 'زائر') {
+                if(name && name !== 'مستخدم' && name !== 'زائر' && name !== '1' && name !== 'أ' && name !== 'المدير') {
                     accountsMap.set(name, {
                         name: name,
                         phone: d.phone || '',
@@ -1541,7 +1529,7 @@
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
-                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest', '1', 'أ', 'المدير'].includes(String(loggedInUser.id).toLowerCase())) {
                         alert('⚠️ عذراً، لا يمكن حفظ الصورة لحساب غير مسجل.');
                         return;
                     }
@@ -1564,7 +1552,7 @@
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 800, 500, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
-                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest', '1', 'أ', 'المدير'].includes(String(loggedInUser.id).toLowerCase())) {
                         alert('⚠️ عذراً، لا يمكن حفظ الغلاف لحساب غير مسجل.');
                         return;
                     }
@@ -1650,7 +1638,7 @@
             let filtered = (appData.drivers || []).filter(d => {
                 let cleanN = getCleanDriverName(d.name);
                 let matchesQuery = (cleanN && cleanN.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
-                return matchesQuery && cleanN !== 'مستخدم' && cleanN !== 'زائر';
+                return matchesQuery && cleanN !== 'مستخدم' && cleanN !== 'زائر' && cleanN !== '1' && cleanN !== 'أ' && cleanN !== 'المدير';
             });
 
             filtered.forEach(d => {
@@ -1691,4 +1679,4 @@
         window.onload = renderMyAccount;
     </script>
 </body>
-    </html>
+</html>
