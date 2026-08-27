@@ -549,9 +549,18 @@
         window.db = db;
 
         const urlParams = new URLSearchParams(window.location.search);
-        // قراءة مبدئية لمعرف الشركة من الرابط أو التخزين
-        window.companyId = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_company_id') || "company_main";
         
+        // الاعتماد حصرياً على الرابط لمعرف الشركة لمنع جلب بيانات الشركات الأخرى من الذاكرة المحلية المخزنة
+        window.companyId = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c');
+        
+        if (!window.companyId) {
+            window.companyId = "company_main";
+        }
+        
+        // تحديث التخزين المحلي بقيم هذه الشركة فقط
+        localStorage.setItem('current_company_id', window.companyId);
+        localStorage.setItem('na2la_company_id', window.companyId);
+
         const activeUserFromStorage = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username');
         const targetDriverName = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || "";
         const urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || localStorage.getItem('google_avatar') || localStorage.getItem('user_avatar') || "";
@@ -611,20 +620,17 @@
                 }
 
                 const driversRef = collection(db, 'drivers');
-                // البحث عن السائق بالاسم ومعرف الشركة الحالي إن وجد
-                const q = query(driversRef, where("name", "==", window.currentAccount.name));
+                // استعلام حصري داخل الشركة الحالية فقط لضمان عدم تداخل حسابات الخلفية
+                const q = query(
+                    driversRef, 
+                    where("name", "==", window.currentAccount.name),
+                    where("companyId", "==", window.companyId)
+                );
                 const querySnapshot = await getDocs(q);
 
                 let foundDriver = false;
                 querySnapshot.forEach((documentSnapshot) => {
                     let data = documentSnapshot.data();
-                    // إذا كان السائق ينتمي لشركة معينة مسجلة في قاعدة البيانات، نقوم باعتمادها فوراً
-                    if (data.companyId) {
-                        window.companyId = data.companyId;
-                        localStorage.setItem('current_company_id', window.companyId);
-                        localStorage.setItem('na2la_company_id', window.companyId);
-                        companyDisplayName = data.companyName || (window.companyId === 'company_main' ? "اسطورة الطريق الرئيسية" : window.companyId);
-                    }
                     window.currentAccount = { 
                         id: documentSnapshot.id, 
                         ...data,
@@ -641,12 +647,6 @@
                     onSnapshot(doc(db, 'drivers', window.currentAccount.id), (docSnap) => {
                         if (docSnap.exists()) {
                             let data = docSnap.data();
-                            if (data.companyId && data.companyId !== window.companyId) {
-                                window.companyId = data.companyId;
-                                localStorage.setItem('current_company_id', window.companyId);
-                                updateUIHeaders();
-                                initRealtimeFeed();
-                            }
                             window.currentAccount = { 
                                 id: docSnap.id, 
                                 ...data,
