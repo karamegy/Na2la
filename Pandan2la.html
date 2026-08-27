@@ -359,18 +359,28 @@
     const db = firebase.firestore();
     window.db = db;
 
-    // 🧠 دالة التحقق الذكي الموحدة للصلاحيات (تم إزالة فحص الاسم لتجنب منح صلاحيات الإدارة بالخطأ)
+    // 🧠 دالة دقيقة للتحقق حصرياً من المدير الأساسي (المدير المؤسس للمنصة)
+    function isMasterAdminUser(user) {
+        if (!user) return false;
+        let phone = String(user.phone || '').trim();
+        let id = String(user.id || user.docId || '').trim();
+        let name = String(user.name || '').trim();
+        return phone === '+201114099799' || id === 'admin' || name === 'المدير' || user.isMasterAdmin === true;
+    }
+    window.isMasterAdminUser = isMasterAdminUser;
+
+    // دالة للتحقق إذا كان المستخدم مديراً (سواء المدير العام أو مدير شركة فرعية خاصة به)
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
-        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
         return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('admin') || role.includes('مدير');
     }
     window.isUserAdmin = isUserAdmin;
 
     function isSuperAdmin() {
         let user = window.currentLoggedInUser || {};
-        return isUserAdmin(user.role || user.rank, user.name);
+        return isMasterAdminUser(user) || isUserAdmin(user.role || user.rank, user.name);
     }
     window.isSuperAdmin = isSuperAdmin;
 
@@ -485,7 +495,7 @@
 
     let unsubscribers = [];
 
-    // تهيئة مستمعي السحابة مع فصل الشركات الدقيق
+    // 🔒 تهيئة مستمعي السحابة مع فصل تام وحصري للشركات (Multi-Tenant Company Isolation)
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -494,9 +504,14 @@
 
         collections.forEach(colName => {
             let query = db.collection(colName);
+            let user = window.currentLoggedInUser;
+            let isMaster = isMasterAdminUser(user);
 
-            if (companyId && companyId !== 'company_main' && window.currentLoggedInUser && !isSuperAdmin()) {
-                query = query.where('companyId', '==', companyId);
+            // قاعدة الفصل التام: فقط المدير المؤسس العام للمنصة (+201114099799) يمكنه رؤية كل الشركات.
+            // أما أي صاحب شركة أخرى أو مدير شركة فرعية فيرى حصرياً بيانات شركته فقط بناءً على companyId الخاص به.
+            if (!isMaster) {
+                let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
+                query = query.where('companyId', '==', targetCompany);
             }
 
             const unsub = query.onSnapshot(snapshot => {
@@ -537,7 +552,7 @@
         }, 1000);
     };
 
-    // جلسة سحابية خالصة تعتمد حصرياً على معاملات الـ URL (userId و companyId) بدون ترقية عشوائية للسائقين
+    // جلسة سحابية تعتمد على معاملات الـ URL وتحديد companyId بدقة تامة لكل شركة
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -546,13 +561,6 @@
         if (!urlUserId || urlUserId === 'null') {
             urlUserId = 'سائق';
         }
-
-        if (!urlCompanyId || urlCompanyId === 'null') {
-            urlCompanyId = 'company_main';
-        }
-
-        currentCompanyId = urlCompanyId.trim();
-        urlUserId = urlUserId.trim();
 
         try {
             let found = null;
@@ -567,27 +575,26 @@
                 });
             }
 
-            // إذا لم يتم العثور على الحساب، يتم إنشاؤه كـ "سائق" افتراضياً وليس مدير
             if (!found) {
                 found = {
                     name: urlUserId,
                     phone: '',
                     role: 'driver',
-                    companyName: currentCompanyId,
+                    companyId: urlCompanyId || 'company_main',
                     title: 'سائق معتمد',
                     avatar: '',
                     coverUrl: ''
                 };
             }
 
-            let isAdmin = isUserAdmin(found.role || found.rank, found.name);
-            found.role = isAdmin ? 'admin' : (String(found.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'سائق');
+            currentCompanyId = found.companyId || urlCompanyId || 'company_main';
+            let isMaster = isMasterAdminUser(found);
+            found.role = isMaster ? 'admin' : (String(found.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : (String(found.role || '').toLowerCase().includes('مدير') ? 'مدير شركة' : 'سائق'));
 
             if (!found.avatar) found.avatar = found.photoUrl || '';
             if (!found.coverUrl) found.coverUrl = found.cover || '';
 
             window.currentLoggedInUser = found;
-            currentCompanyId = urlCompanyId || found.companyId || 'company_main';
             applyUserPermissionsUI();
             initFirebaseListeners(currentCompanyId);
             switchSection('profile');
@@ -623,7 +630,7 @@
             if (!matchedUser && (phone === '+201114099799' || phone === 'admin') && (pin === '799799' || pin === '1234')) {
                 snap.forEach(doc => {
                     let d = doc.data();
-                    if (d.name === 'المدير' || isUserAdmin(d.role || d.rank, d.name)) {
+                    if (d.name === 'المدير' || isMasterAdminUser(d)) {
                         matchedUser = { docId: doc.id, id: doc.id, ...d };
                     }
                 });
@@ -631,22 +638,23 @@
                     matchedUser = {
                         name: 'المدير',
                         role: 'admin',
-                        companyName: currentCompanyId,
-                        title: 'مدير عام المنصة',
+                        companyId: 'company_main',
+                        title: 'مدير عام المنصة المؤسس',
                         phone: '+201114099799',
                         avatar: '',
-                        coverUrl: ''
+                        coverUrl: '',
+                        isMasterAdmin: true
                     };
                 }
             }
 
             if (matchedUser) {
-                let isAdmin = isUserAdmin(matchedUser.role || matchedUser.rank, matchedUser.name);
-                matchedUser.role = isAdmin ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'سائق');
+                let isMaster = isMasterAdminUser(matchedUser);
+                matchedUser.role = isMaster ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'مدير شركة');
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
-                currentCompanyId = matchedUser.companyId || currentCompanyId;
+                currentCompanyId = matchedUser.companyId || 'company_main';
                 
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية بنجاح! ✅');
@@ -702,11 +710,12 @@
     function applyUserPermissionsUI() {
         let user = window.currentLoggedInUser;
         if (!user) return;
+        let isMaster = isMasterAdminUser(user);
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
         
         document.getElementById('header-username').innerText = user.name;
-        document.getElementById('header-role-badge').innerText = isAdmin ? '👑 (admin) (مدير النظام)' : (role.includes('مشرف') ? '⭐ مشرف (صلاحيات محدودة)' : '👨‍✈️ سائق (متابعة فقط)');
+        document.getElementById('header-role-badge').innerText = isMaster ? '👑 المدير المؤسس (Master Admin)' : (isAdmin ? '⭐ مدير شركة / مشرف' : '👨‍✈️ سائق (متابعة فقط)');
 
         const avatarEl = document.getElementById('header-avatar-btn');
         if (avatarEl) {
@@ -720,7 +729,7 @@
         const adminStats = document.getElementById('admin-stats');
         const adminModulesGrid = document.getElementById('admin-modules-grid');
 
-        if(!isAdmin && !role.includes('مشرف')) {
+        if(!isAdmin && !role.includes('مشرف') && !role.includes('مدير')) {
             if(adminStats) adminStats.style.display = 'none';
             if(adminModulesGrid) adminModulesGrid.style.display = 'none';
         } else {
@@ -739,12 +748,13 @@
         if (!sidebarList) return;
 
         let user = window.currentLoggedInUser || {};
+        let isMaster = isMasterAdminUser(user);
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
 
-        if(sidebarTitle) sidebarTitle.innerText = isAdmin ? '👑 لوحة المدير (admin)' : (role.includes('مشرف') ? '⭐ لوحة المشرف (محدد)' : '👨‍✈️ قائمة السائق');
+        if(sidebarTitle) sidebarTitle.innerText = isMaster ? '👑 لوحة المدير العام المؤسس' : (isAdmin ? '⭐ لوحة إدارة الشركة' : '👨‍✈️ قائمة السائق');
 
-        if (isAdmin || role.includes('مشرف')) {
+        if (isAdmin || role.includes('مشرف') || role.includes('مدير')) {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي والحساب</button>
                 <button onclick="switchSection('shipments'); toggleSidebar();">📦 إدارة الشحنات وبوليصات النقل والفواتير</button>
@@ -805,7 +815,7 @@
         let user = window.currentLoggedInUser || {};
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && !role.includes('مشرف') && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
 
         let data = appStateData();
         let shipments = data.shipments || [];
@@ -834,7 +844,7 @@
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
 
-        if (!isAdmin && !role.includes('مشرف') && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
             showToast('عذراً، حساب السائق لا يمتلك صلاحية الوصول لهذه الوحدة!', 'warning');
             return;
         }
@@ -851,7 +861,7 @@
         
         if (sectionId === 'profile') {
             let userPhone = user.phone || '+201114099799';
-            let userCompanyName = user.companyName === 'company_main' ? 'أسطورة الطريق الرئيسية' : (user.companyName || currentCompanyId);
+            let userCompanyName = user.companyName || user.companyId || currentCompanyId;
             
             let coverBgStyle = user.coverUrl || user.cover ? `url('${user.coverUrl || user.cover}') center/cover` : 'linear-gradient(135deg, var(--accent-main), var(--purple-color))';
             let avatarContent = user.avatar ? `<img src="${user.avatar}" style="width: 100%; height: 100%; object-fit: cover;">` : `<div style="width:100%; height:100%; background:var(--accent-main); display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff;">🐼</div>`;
@@ -874,7 +884,7 @@
                     <div style="padding: 38px 14px 14px 14px;">
                         <h3 style="font-size: 15px; color: var(--accent-main); margin-bottom: 2px; border: none; padding: 0;">${user.name || 'مستخدم النظام'}</h3>
                         <p style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px;">
-                            الشركة: ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? 'admin' : (user.role || 'سائق')}
+                            معرف الشركة (Company ID): ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? (user.role || 'مدير شركة') : 'سائق'}
                         </p>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--bg-dark); padding: 8px; border-radius: 8px; text-align: center; margin-bottom: 12px; border: 1px solid var(--border-color);">
@@ -884,7 +894,7 @@
                             </div>
                             <div>
                                 <span style="font-size: 8px; color: var(--text-muted);">الرتبة</span>
-                                <p style="font-size: 11px; font-weight: bold; color: var(--accent-main);">${isAdmin ? 'admin' : (user.role || 'سائق')}</p>
+                                <p style="font-size: 11px; font-weight: bold; color: var(--accent-main);">${isAdmin ? (user.role || 'مدير شركة') : 'سائق'}</p>
                             </div>
                             <div>
                                 <span style="font-size: 8px; color: var(--text-muted);">الحالة</span>
@@ -914,7 +924,7 @@
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا والتحكم الشامل اللحظي V90</h3>
-                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو سائق أو فاتورة مؤجلة أو ديون تظهر هنا فوراً عبر السحابة:</p>
+                    <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">كل شحنة أو سائق أو فاتورة مؤجلة أو ديون خاصة بشركتك تظهر هنا فوراً عبر السحابة:</p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ الفواتير المؤجلة والآجلة</button>
@@ -926,11 +936,11 @@
                 <div class="card">
                     <h3><span>📊 ملخص غرفة باندا للبيانات الحية</span></h3>
                     <div style="font-size: 10px; line-height: 1.6;">
-                        <p>👥 إجمالي الحسابات والسائقين: <strong>${(data.drivers || []).length} حساب</strong></p>
+                        <p>👥 إجمالي الحسابات والسائقين لشركتك: <strong>${(data.drivers || []).length} حساب</strong></p>
                         <p>📦 إجمالي الشحنات المسجلة: <strong>${shipmentsList.length} شحنة</strong></p>
                         <p>📑 إجمالي الفواتير المجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
                         <p>⏳ إجمالي الفواتير المؤجلة والآجلة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>🟢 حالة المزامنة مع السحابة: <strong style="color:var(--green-success);">متصل سحابياً بالكامل (Pure Cloud)</strong></p>
+                        <p>🟢 حالة المزامنة مع السحابة: <strong style="color:var(--green-success);">معزول سحابياً بالكامل (Strict Company Isolation)</strong></p>
                     </div>
                 </div>
             `;
@@ -951,7 +961,7 @@
                         </div>
                         <input type="number" id="ci-discount" placeholder="خصم إضافي (ج.م) اختيارى" style="margin-bottom:5px;">
                         <button type="submit" class="btn-success">إنشاء الفاتورة المجمعة وحفظها سحابياً 🚀</button>
-                    </form>` : '<p style="font-size:9px; color:var(--text-muted);">عروض وإصدار الفواتير المجمعة مخصصة للمدير فقط.</p>'}
+                    </form>` : '<p style="font-size:9px; color:var(--text-muted);">عروض وإصدار الفواتير المجمعة مخصصة لمدير الشركة فقط.</p>'}
                 </div>
                 <div class="card">
                     <h3><span>📂 سجل الفواتير المجمعة المصدرة</span></h3>
@@ -1014,7 +1024,7 @@
         } else if (sectionId === 'centralChat') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--green-success);">
-                    <h3 style="color:var(--green-success);">📢 الشات المركزي وبث الإدارية العليا</h3>
+                    <h3 style="color:var(--green-success);">📢 الشات المركزي وبث الإدارية للشركة</h3>
                     ${isAdmin ? `
                     <form onsubmit="sendCentralBroadcast(event)">
                         <select id="broadcast-priority" style="margin-bottom:5px;">
@@ -1022,9 +1032,9 @@
                             <option value="إعلان رسمي 🔵">إعلان رسمي 🔵</option>
                             <option value="توجيه تشغيلي 🟢">توجيه تشغيلي 🟢</option>
                         </select>
-                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات المنصة وغرفة باندا..." required style="height: 60px;"></textarea>
+                        <textarea id="broadcast-text" placeholder="اكتب رسالة البث المركزي لكافة حسابات شركتك..." required style="height: 60px;"></textarea>
                         <button type="submit" class="btn-success">إرسال وبث سحابي فوري لكافة الحسابات 📡</button>
-                    </form>` : '<p style="font-size:9px; color:var(--text-muted);">بث الرسائل مخصص للمدير فقط.</p>'}
+                    </form>` : '<p style="font-size:9px; color:var(--text-muted);">بث الرسائل مخصص لمدير الشركة فقط.</p>'}
                 </div>
                 <div class="card">
                     <h3><span>📜 سجل رسائل البث المركزي</span></h3>
@@ -1084,7 +1094,7 @@
         } else if (sectionId === 'driversControl') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 إدارة الألقاب والحسابات المتصلة بغرفة باندا</h3>
+                    <h3 style="color:var(--yellow-warning);">👑 إدارة الألقاب والحسابات لشركتك</h3>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب الاحترافي</th><th>إجراء</th></tr></thead>
@@ -1097,7 +1107,7 @@
                                             <select onchange="updateDriverField('${d.docId || d.id}', 'role', this.value)" style="font-size:9px; padding:2px;">
                                                 <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق</option>
                                                 <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
-                                                <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>(admin)</option>
+                                                <option value="مدير شركة" ${d.role === 'مدير شركة' ? 'selected' : ''}>مدير شركة</option>
                                             </select>
                                         </td>
                                         <td>
@@ -1115,7 +1125,7 @@
                     </div>
                 </div>
                 <div class="card">
-                    <h3>➕ إضافة حساب جديد للمنصة وغرفة باندا</h3>
+                    <h3>➕ إضافة حساب جديد لشركتك</h3>
                     <form onsubmit="saveNewDriver(event)">
                         <input type="text" id="new-d-name" placeholder="الاسم الرباعي" required>
                         <input type="text" id="new-d-phone" placeholder="رقم الهاتف" required>
@@ -1123,7 +1133,7 @@
                         <select id="new-d-role">
                             <option value="سائق">سائق</option>
                             <option value="مشرف">مشرف</option>
-                            <option value="admin">(admin) مدير أساسي</option>
+                            <option value="مدير شركة">مدير شركة</option>
                         </select>
                         <button type="submit" class="btn-success">إضافة الحساب سحابياً 🚀</button>
                     </form>
@@ -1217,7 +1227,7 @@
         } else if (sectionId === 'treasury') {
             content.innerHTML = `
                 <div class="card">
-                    <h3><span>💵 الخزينة والمقبوضات المركزية</span></h3>
+                    <h3><span>💵 الخزينة والمقبوضات الخاصة بالشركة</span></h3>
                     <form onsubmit="saveTreasury(event)">
                         <select id="t-type"><option value="in">إيداع (+)</option><option value="out">سحب (-)</option></select>
                         <input type="number" id="t-amount" placeholder="المبلغ (ج.م)" required>
@@ -1844,8 +1854,6 @@
         let shipmentsList = data.shipments || [];
         const tbody = document.getElementById('shipments-table-body');
         let isAdmin = isSuperAdmin();
-        let user = window.currentLoggedInUser || {};
-        let role = String(user.role || '').toLowerCase();
         
         const filtered = shipmentsList.filter(s => {
             const matchesQuery = s.name.toLowerCase().includes(query) || s.item.toLowerCase().includes(query);
@@ -1875,7 +1883,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('إضافة الفواتير المؤجلة والآجلة مخصصة للمدير فقط!', 'warning');
+            showToast('إضافة الفواتير المؤجلة والآجلة مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let defId = String(Date.now());
@@ -1902,7 +1910,7 @@
     function markDeferredPaid(docId) {
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('تحصيل الفواتير مخصص للمدير فقط!', 'warning');
+            showToast('تحصيل الفواتير مخصص لمدير الشركة فقط!', 'warning');
             return;
         }
         db.collection('deferredInvoices').doc(String(docId)).set({ status: 'paid', paidAmount: 0, remainingAmount: 0, companyId: currentCompanyId }, { merge: true }).then(() => {
@@ -1915,7 +1923,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('إضافة العملاء مخصصة للمدير فقط!', 'warning');
+            showToast('إضافة العملاء مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let custId = String(Date.now());
@@ -1935,7 +1943,7 @@
     function payCustomerDebt(docId) {
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('هذه الصلاحية مخصصة للمدير فقط!', 'warning');
+            showToast('هذه الصلاحية مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let data = appStateData();
@@ -1956,7 +1964,7 @@
         let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && !role.includes('مشرف') && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
 
         const modal = document.getElementById('statDetailModal');
         const title = document.getElementById('stat-modal-title');
@@ -2079,7 +2087,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('هذه الصلاحية مخصصة للمدير فقط!', 'warning');
+            showToast('هذه الصلاحية مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         const clientName = document.getElementById('ci-client').value;
@@ -2133,7 +2141,7 @@
     window.deleteItem = function(key, docId) {
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('عذراً، عمليات الحذف مخصصة للمدير فقط لحماية البيانات!', 'warning');
+            showToast('عذراً، عمليات الحذف مخصصة لمدير الشركة فقط لحماية البيانات!', 'warning');
             return;
         }
         if(confirm('هل أنت متأكد من الحذف النهائي من السحابة؟')) {
@@ -2282,7 +2290,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('غير مسموح إلا للمدير فقط!', 'warning');
+            showToast('غير مسموح إلا لمدير الشركة فقط!', 'warning');
             return;
         }
         let maintId = String(Date.now());
@@ -2303,7 +2311,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('البث المركزي مخصص للمدير فقط!', 'warning');
+            showToast('البث المركزي مخصص لمدير الشركة فقط!', 'warning');
             return;
         }
         const text = document.getElementById('broadcast-text').value;
@@ -2314,7 +2322,7 @@
         const newMsg = {
             id: bId,
             companyId: currentCompanyId,
-            sender: 'الإدارة العليا',
+            sender: 'إدارة الشركة',
             text: text,
             priority: priority,
             time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
@@ -2331,7 +2339,7 @@
     function updateDriverField(docId, field, value) {
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('تعديل الحسابات مخصص للمدير فقط!', 'warning');
+            showToast('تعديل الحسابات مخصص لمدير الشركة فقط!', 'warning');
             return;
         }
         db.collection('drivers').doc(String(docId)).set({ [field]: value, companyId: currentCompanyId }, { merge: true }).then(() => {
@@ -2343,7 +2351,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('إضافة الحسابات مخصصة للمدير فقط!', 'warning');
+            showToast('إضافة الحسابات مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let drvId = String(Date.now());
@@ -2415,7 +2423,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('الخزينة مخصصة للمدير فقط!', 'warning');
+            showToast('الخزينة مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let tId = String(Date.now());
@@ -2437,7 +2445,7 @@
         e.preventDefault();
         let isAdmin = isSuperAdmin();
         if (!isAdmin) {
-            showToast('المصروفات مخصصة للمدير فقط!', 'warning');
+            showToast('المصروفات مخصصة لمدير الشركة فقط!', 'warning');
             return;
         }
         let exId = String(Date.now());
