@@ -535,7 +535,7 @@
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -566,7 +566,7 @@
         const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
         const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || "اسطورة الطريق الرئيسية";
 
-        // دالة التنقل للرئيسية مع تمرير المعرفات بدقة ومتزامنة تماماً
+        // دالة التنقل للرئيسية مع تمرير المعرفات بدقة متزامنة تامة
         window.navigateToMain = function() {
             let userId = window.currentAccount ? window.currentAccount.name : (targetDriverName || '');
             let companyId = window.companyId || 'company_main';
@@ -589,11 +589,11 @@
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        // دالة جلب المجموعات المعزولة كلياً لكل شركة على حدة لضمان عدم تداخل البيانات
+        // استخدام المجموعات الأصلية المستقرة لضمان عدم حدوث أخطاء أمنية في فايربيس
         function getCol(name) { 
             if(name === 'users') return collection(db, 'drivers');
-            if(name === 'posts') return collection(db, `companies_${window.companyId}_posts`);
-            if(name === 'public_chat') return collection(db, `companies_${window.companyId}_chat`);
+            if(name === 'posts') return collection(db, 'communityPosts');
+            if(name === 'public_chat') return collection(db, 'chat');
             return collection(db, `companies_${window.companyId}_${name}`); 
         }
 
@@ -953,11 +953,23 @@
 
         function initRealtimeFullScreenChat() {
             const stream = document.getElementById('fullScreenChatMessages');
-            onSnapshot(query(getCol("public_chat"), orderBy("timestamp", "asc")), (snapshot) => {
+            onSnapshot(getCol("public_chat"), (snapshot) => {
                 let msgs = [];
-                snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+                snapshot.forEach(d => {
+                    let data = { id: d.id, ...d.data() };
+                    let msgCompany = data.companyId || 'company_main';
+                    if (msgCompany === window.companyId) {
+                        msgs.push(data);
+                    }
+                });
+                msgs.sort((a, b) => {
+                    let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+                    let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+                    return timeA - timeB;
+                });
+
                 if(msgs.length === 0) {
-                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة.</p>`;
+                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة في هذه الشركة.</p>`;
                     return;
                 }
                 stream.innerHTML = msgs.map(m => {
@@ -1235,7 +1247,7 @@
                 mediaType: mediaType || "",
                 poll: pollData || null,
                 isPinned: isPinned || false,
-                companyId: window.companyId,
+                companyId: window.companyId, // عزل المنشور للشركة الحالية فقط
                 timestamp: new Date(),
                 reactions: { like: 0, love: 0, fire: 0, clap: 0 },
                 reactedUsers: {},
@@ -1367,7 +1379,7 @@
         }
 
         let cachedPosts = [];
-        let currentFilterCategory = 'الكل';
+        let currentFilterCategory = 'للكل';
 
         window.setCategoryFilter = function(category, element) {
             currentFilterCategory = category;
@@ -1380,7 +1392,7 @@
             const queryText = document.getElementById('postSearchInput').value.toLowerCase();
             let filtered = cachedPosts;
 
-            if (currentFilterCategory !== 'الكل') {
+            if (currentFilterCategory && currentFilterCategory !== 'الكل') {
                 filtered = filtered.filter(p => p.category === currentFilterCategory);
             }
 
@@ -1394,7 +1406,7 @@
         function renderPostsStream(posts) {
             const container = document.getElementById('groupFeedStream');
             if(posts.length === 0) {
-                container.innerHTML = `<p style="text-align: center; color: var(--secondary-text); padding: 20px;">لا توجد منشورات تطابق بحثك.</p>`;
+                container.innerHTML = `<p style="text-align: center; color: var(--secondary-text); padding: 20px;">لا توجد منشورات مطابقة في هذه الشركة حتى الآن.</p>`;
                 return;
             }
             container.innerHTML = posts.map(p => {
@@ -1512,10 +1524,24 @@
             }).join('');
         }
 
+        // جلب المنشورات بفلترة تامة حسب الشركة الحالية وفحص التوقيت بأمان
         function initRealtimeFeed() {
-            onSnapshot(query(getCol("posts"), orderBy("timestamp", "desc")), (snapshot) => {
+            onSnapshot(getCol("posts"), (snapshot) => {
                 cachedPosts = [];
-                snapshot.forEach(d => cachedPosts.push({ id: d.id, ...d.data() }));
+                snapshot.forEach(d => {
+                    let data = { id: d.id, ...d.data() };
+                    let postCompany = data.companyId || 'company_main';
+                    if (postCompany === window.companyId) {
+                        cachedPosts.push(data);
+                    }
+                });
+                
+                cachedPosts.sort((a, b) => {
+                    let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+                    let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+                    return timeB - timeA;
+                });
+
                 cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
                 filterWallPosts();
             });
