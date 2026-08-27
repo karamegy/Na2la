@@ -250,7 +250,7 @@
             display: flex; flex-direction: column; padding: 12px; overflow-y: auto;
         }
         @media(max-width: 768px) {
-            .chat-sidebar-drivers { display: none; } /* إخفاء الجانب على الموبايل لتوفير المساحة */
+            .chat-sidebar-drivers { display: none; }
         }
         .chat-main-area {
             flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.15); overflow: hidden;
@@ -363,7 +363,7 @@
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي (الرئيسية، الدردشة، البروفايل فقط) -->
+    <!-- شريط التنقل السفلي -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="navigateToMain()">
             <span class="icon">🏠</span>
@@ -389,7 +389,7 @@
         </div>
     </div>
 
-    <!-- شاشة الشات المحدثة التي تتضمن قائمة الزملاء المتصلين في الأسطول -->
+    <!-- شاشة الشات المحدثة -->
     <div id="fullScreenChatPage">
         <div class="chat-page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -406,7 +406,6 @@
         </div>
         
         <div class="chat-layout-container">
-            <!-- قائمة السائقين والزملاء المتصلين في الشركة -->
             <div class="chat-sidebar-drivers">
                 <h4 style="font-size: 0.85rem; color: var(--primary-color); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">👥 زملاء الأسطول المتصلون</h4>
                 <div id="fleetDriversListContainer">
@@ -414,7 +413,6 @@
                 </div>
             </div>
 
-            <!-- منطقة الشات الرئيسية -->
             <div class="chat-main-area">
                 <div id="fullScreenChatMessages" class="chat-page-body">
                     <p style="text-align: center; color: var(--secondary-text); margin: auto;">جاري مزامنة محادثات الشات الفوري...</p>
@@ -537,7 +535,7 @@
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -568,9 +566,11 @@
         const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
         const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || "اسطورة الطريق الرئيسية";
 
+        // دالة التنقل للرئيسية مع تمرير المعرفات بدقة ومتزامنة تماماً
         window.navigateToMain = function() {
-            const currentQuery = window.location.search;
-            window.location.href = `index.html${currentQuery}`;
+            let userId = window.currentAccount ? window.currentAccount.name : (targetDriverName || '');
+            let companyId = window.companyId || 'company_main';
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         };
 
         window.currentAccount = {
@@ -589,10 +589,11 @@
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
+        // دالة جلب المجموعات المعزولة كلياً لكل شركة على حدة لضمان عدم تداخل البيانات
         function getCol(name) { 
             if(name === 'users') return collection(db, 'drivers');
-            if(name === 'posts') return collection(db, 'communityPosts');
-            if(name === 'public_chat') return collection(db, 'chat');
+            if(name === 'posts') return collection(db, `companies_${window.companyId}_posts`);
+            if(name === 'public_chat') return collection(db, `companies_${window.companyId}_chat`);
             return collection(db, `companies_${window.companyId}_${name}`); 
         }
 
@@ -896,7 +897,6 @@
             document.getElementById('fullScreenChatPage').style.display = 'none';
         }
 
-        // جلب وعرض قائمة الزملاء والسائقين المتصلين في الجانب
         function initFleetDriversSidebar() {
             const container = document.getElementById('fleetDriversListContainer');
             const driversRef = collection(db, 'drivers');
@@ -941,6 +941,7 @@
                     sender: window.currentAccount.name,
                     avatar: window.currentAccount.avatar || "",
                     text: text,
+                    companyId: window.companyId,
                     timestamp: new Date(),
                     time: "الآن"
                 });
@@ -1047,7 +1048,7 @@
                 });
 
             } catch(err) {
-                alert("⚠️ تعذر الوصول للكاميرا أو الميكروفون.\nتأكد من السماح للمتصفح بالوصول إليها من إعدادات الموقع أو شريط العنوان (رمز القفل).");
+                alert("⚠️ تعذر الوصول للكاميرا أو الميكروفون.");
                 modal.style.display = 'none';
             }
         }
@@ -1234,6 +1235,7 @@
                 mediaType: mediaType || "",
                 poll: pollData || null,
                 isPinned: isPinned || false,
+                companyId: window.companyId,
                 timestamp: new Date(),
                 reactions: { like: 0, love: 0, fire: 0, clap: 0 },
                 reactedUsers: {},
@@ -1247,7 +1249,7 @@
             document.getElementById('pinPostCheckbox').checked = false;
             document.getElementById('pollCreatorBox').style.display = 'none';
             clearAttachedMedia();
-            alert("🚀 تم النشر بنجاح في السحابة!");
+            alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
         }
 
         window.votePoll = async function(postId, optionIndex) {
@@ -1528,4 +1530,4 @@
         };
     </script>
 </body>
-    </html>
+</html>
