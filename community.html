@@ -250,7 +250,7 @@
             display: flex; flex-direction: column; padding: 12px; overflow-y: auto;
         }
         @media(max-width: 768px) {
-            .chat-sidebar-drivers { display: none; }
+            .chat-sidebar-drivers { display: none; } /* إخفاء الجانب على الموبايل لتوفير المساحة */
         }
         .chat-main-area {
             flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.15); overflow: hidden;
@@ -363,7 +363,7 @@
         </div>
     </div>
 
-    <!-- شريط التنقل السفلي -->
+    <!-- شريط التنقل السفلي (الرئيسية، الدردشة، البروفايل فقط) -->
     <nav class="bottom-nav">
         <button class="bottom-nav-item" onclick="navigateToMain()">
             <span class="icon">🏠</span>
@@ -389,7 +389,7 @@
         </div>
     </div>
 
-    <!-- شاشة الشات المحدثة -->
+    <!-- شاشة الشات المحدثة التي تتضمن قائمة الزملاء المتصلين في الأسطول -->
     <div id="fullScreenChatPage">
         <div class="chat-page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -406,6 +406,7 @@
         </div>
         
         <div class="chat-layout-container">
+            <!-- قائمة السائقين والزملاء المتصلين في الشركة -->
             <div class="chat-sidebar-drivers">
                 <h4 style="font-size: 0.85rem; color: var(--primary-color); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">👥 زملاء الأسطول المتصلون</h4>
                 <div id="fleetDriversListContainer">
@@ -413,6 +414,7 @@
                 </div>
             </div>
 
+            <!-- منطقة الشات الرئيسية -->
             <div class="chat-main-area">
                 <div id="fullScreenChatMessages" class="chat-page-body">
                     <p style="text-align: center; color: var(--secondary-text); margin: auto;">جاري مزامنة محادثات الشات الفوري...</p>
@@ -566,11 +568,9 @@
         const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
         const companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || "اسطورة الطريق الرئيسية";
 
-        // دالة التنقل للرئيسية مع تمرير المعرفات بدقة متزامنة تامة
         window.navigateToMain = function() {
-            let userId = window.currentAccount ? window.currentAccount.name : (targetDriverName || '');
-            let companyId = window.companyId || 'company_main';
-            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
+            const currentQuery = window.location.search;
+            window.location.href = `index.html${currentQuery}`;
         };
 
         window.currentAccount = {
@@ -589,7 +589,6 @@
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
-        // استخدام المجموعات الأصلية المستقرة لضمان عدم حدوث أخطاء أمنية في فايربيس
         function getCol(name) { 
             if(name === 'users') return collection(db, 'drivers');
             if(name === 'posts') return collection(db, 'communityPosts');
@@ -897,6 +896,7 @@
             document.getElementById('fullScreenChatPage').style.display = 'none';
         }
 
+        // جلب وعرض قائمة الزملاء والسائقين المتصلين في الجانب
         function initFleetDriversSidebar() {
             const container = document.getElementById('fleetDriversListContainer');
             const driversRef = collection(db, 'drivers');
@@ -941,7 +941,6 @@
                     sender: window.currentAccount.name,
                     avatar: window.currentAccount.avatar || "",
                     text: text,
-                    companyId: window.companyId,
                     timestamp: new Date(),
                     time: "الآن"
                 });
@@ -953,23 +952,11 @@
 
         function initRealtimeFullScreenChat() {
             const stream = document.getElementById('fullScreenChatMessages');
-            onSnapshot(getCol("public_chat"), (snapshot) => {
+            onSnapshot(query(getCol("public_chat"), orderBy("timestamp", "asc")), (snapshot) => {
                 let msgs = [];
-                snapshot.forEach(d => {
-                    let data = { id: d.id, ...d.data() };
-                    let msgCompany = data.companyId || 'company_main';
-                    if (msgCompany === window.companyId) {
-                        msgs.push(data);
-                    }
-                });
-                msgs.sort((a, b) => {
-                    let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-                    let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-                    return timeA - timeB;
-                });
-
+                snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
                 if(msgs.length === 0) {
-                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة في هذه الشركة.</p>`;
+                    stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة.</p>`;
                     return;
                 }
                 stream.innerHTML = msgs.map(m => {
@@ -1060,7 +1047,7 @@
                 });
 
             } catch(err) {
-                alert("⚠️ تعذر الوصول للكاميرا أو الميكروفون.");
+                alert("⚠️ تعذر الوصول للكاميرا أو الميكروفون.\nتأكد من السماح للمتصفح بالوصول إليها من إعدادات الموقع أو شريط العنوان (رمز القفل).");
                 modal.style.display = 'none';
             }
         }
@@ -1247,7 +1234,6 @@
                 mediaType: mediaType || "",
                 poll: pollData || null,
                 isPinned: isPinned || false,
-                companyId: window.companyId, // عزل المنشور للشركة الحالية فقط
                 timestamp: new Date(),
                 reactions: { like: 0, love: 0, fire: 0, clap: 0 },
                 reactedUsers: {},
@@ -1261,7 +1247,7 @@
             document.getElementById('pinPostCheckbox').checked = false;
             document.getElementById('pollCreatorBox').style.display = 'none';
             clearAttachedMedia();
-            alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
+            alert("🚀 تم النشر بنجاح في السحابة!");
         }
 
         window.votePoll = async function(postId, optionIndex) {
@@ -1379,7 +1365,7 @@
         }
 
         let cachedPosts = [];
-        let currentFilterCategory = 'للكل';
+        let currentFilterCategory = 'الكل';
 
         window.setCategoryFilter = function(category, element) {
             currentFilterCategory = category;
@@ -1392,7 +1378,7 @@
             const queryText = document.getElementById('postSearchInput').value.toLowerCase();
             let filtered = cachedPosts;
 
-            if (currentFilterCategory && currentFilterCategory !== 'الكل') {
+            if (currentFilterCategory !== 'الكل') {
                 filtered = filtered.filter(p => p.category === currentFilterCategory);
             }
 
@@ -1406,7 +1392,7 @@
         function renderPostsStream(posts) {
             const container = document.getElementById('groupFeedStream');
             if(posts.length === 0) {
-                container.innerHTML = `<p style="text-align: center; color: var(--secondary-text); padding: 20px;">لا توجد منشورات مطابقة في هذه الشركة حتى الآن.</p>`;
+                container.innerHTML = `<p style="text-align: center; color: var(--secondary-text); padding: 20px;">لا توجد منشورات تطابق بحثك.</p>`;
                 return;
             }
             container.innerHTML = posts.map(p => {
@@ -1524,24 +1510,10 @@
             }).join('');
         }
 
-        // جلب المنشورات بفلترة تامة حسب الشركة الحالية وفحص التوقيت بأمان
         function initRealtimeFeed() {
-            onSnapshot(getCol("posts"), (snapshot) => {
+            onSnapshot(query(getCol("posts"), orderBy("timestamp", "desc")), (snapshot) => {
                 cachedPosts = [];
-                snapshot.forEach(d => {
-                    let data = { id: d.id, ...d.data() };
-                    let postCompany = data.companyId || 'company_main';
-                    if (postCompany === window.companyId) {
-                        cachedPosts.push(data);
-                    }
-                });
-                
-                cachedPosts.sort((a, b) => {
-                    let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-                    let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-                    return timeB - timeA;
-                });
-
+                snapshot.forEach(d => cachedPosts.push({ id: d.id, ...d.data() }));
                 cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
                 filterWallPosts();
             });
@@ -1556,4 +1528,4 @@
         };
     </script>
 </body>
-</html>
+    </html>
