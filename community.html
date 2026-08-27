@@ -550,14 +550,11 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         
-        // الاعتماد حصرياً على الرابط لمعرف الشركة لمنع جلب بيانات الشركات الأخرى من الذاكرة المحلية المخزنة
         window.companyId = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c');
-        
         if (!window.companyId) {
             window.companyId = "company_main";
         }
         
-        // تحديث التخزين المحلي بقيم هذه الشركة فقط
         localStorage.setItem('current_company_id', window.companyId);
         localStorage.setItem('na2la_company_id', window.companyId);
 
@@ -620,14 +617,13 @@
                 }
 
                 const driversRef = collection(db, 'drivers');
-                // البحث بالاسم لتجنب أخطاء حقل companyId المفقود في الحسابات والمدير المؤسس القديم
                 const q = query(driversRef, where("name", "==", window.currentAccount.name));
                 const querySnapshot = await getDocs(q);
 
                 let foundDriver = false;
                 querySnapshot.forEach((documentSnapshot) => {
                     let data = documentSnapshot.data();
-                    let docCompany = data.companyId || "company_main"; // افتراض الرئيسية للحسابات القديمة
+                    let docCompany = data.companyId || "company_main";
                     
                     if (docCompany === window.companyId) {
                         window.currentAccount = { 
@@ -887,10 +883,12 @@
             }
         }
 
-        window.deleteCommentByAdmin = async function(postId, commentIndex, existingComments) {
+        window.deleteCommentByAdmin = async function(postId, commentIndex) {
             if (confirm("🛡️ (صلاحيات المدير): هل تريد حذف هذا التعليق؟")) {
                 try {
-                    let comments = [...existingComments];
+                    let post = cachedPosts.find(p => p.id === postId);
+                    if (!post) return;
+                    let comments = [...(post.comments || [])];
                     comments.splice(commentIndex, 1);
                     await updateDoc(doc(getCol("posts"), postId), { comments: comments });
                 } catch(e) {
@@ -916,7 +914,7 @@
                 let driversList = [];
                 snapshot.forEach(docSnap => {
                     let d = { id: docSnap.id, ...docSnap.data() };
-                    let dCompany = d.companyId || "company_main"; // التعامل بسلاسة مع الحسابات القديمة
+                    let dCompany = d.companyId || "company_main";
                     if (dCompany === window.companyId) {
                         driversList.push(d);
                     }
@@ -1252,32 +1250,36 @@
         }
 
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
-            await addDoc(getCol("posts"), {
-                author: window.currentAccount.name,
-                badge: window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق'),
-                avatar: window.currentAccount.avatar || '',
-                status: window.currentAccount.status || 'available',
-                category: category,
-                text: text,
-                media: mediaData,
-                mediaType: mediaType || "",
-                poll: pollData || null,
-                isPinned: isPinned || false,
-                companyId: window.companyId, // ربط المنشور بمعرف الشركة النشط تماماً
-                timestamp: new Date(),
-                reactions: { like: 0, love: 0, fire: 0, clap: 0 },
-                reactedUsers: {},
-                comments: []
-            });
-            document.getElementById('groupPostText').value = "";
-            document.getElementById('groupPostMedia').value = "";
-            document.getElementById('pollQuestionInput').value = "";
-            document.getElementById('pollOpt1').value = "";
-            document.getElementById('pollOpt2').value = "";
-            document.getElementById('pinPostCheckbox').checked = false;
-            document.getElementById('pollCreatorBox').style.display = 'none';
-            clearAttachedMedia();
-            alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
+            try {
+                await addDoc(getCol("posts"), {
+                    author: window.currentAccount.name,
+                    badge: window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق'),
+                    avatar: window.currentAccount.avatar || '',
+                    status: window.currentAccount.status || 'available',
+                    category: category,
+                    text: text,
+                    media: mediaData,
+                    mediaType: mediaType || "",
+                    poll: pollData || null,
+                    isPinned: isPinned || false,
+                    companyId: window.companyId,
+                    timestamp: new Date(),
+                    reactions: { like: 0, love: 0, fire: 0, clap: 0 },
+                    reactedUsers: {},
+                    comments: []
+                });
+                document.getElementById('groupPostText').value = "";
+                document.getElementById('groupPostMedia').value = "";
+                document.getElementById('pollQuestionInput').value = "";
+                document.getElementById('pollOpt1').value = "";
+                document.getElementById('pollOpt2').value = "";
+                document.getElementById('pinPostCheckbox').checked = false;
+                document.getElementById('pollCreatorBox').style.display = 'none';
+                clearAttachedMedia();
+                alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
+            } catch(e) {
+                alert("خطأ أثناء النشر: " + e.message);
+            }
         }
 
         window.votePoll = async function(postId, optionIndex) {
@@ -1359,14 +1361,16 @@
             if(fileInput) fileInput.value = '';
         }
 
-        window.addComment = async function(postId, existingComments) {
+        window.addComment = async function(postId) {
             const input = document.getElementById(`commentInput_${postId}`);
             const text = input.value.trim();
             const mediaObj = window[`commentMedia_${postId}`] || null;
 
             if(!text && !mediaObj) return;
             
-            let comments = existingComments || [];
+            let post = cachedPosts.find(p => p.id === postId);
+            let comments = post ? [...(post.comments || [])] : [];
+            
             comments.push({
                 author: window.currentAccount.name,
                 avatar: window.currentAccount.avatar || "",
@@ -1376,9 +1380,13 @@
                 time: "الآن"
             });
 
-            await updateDoc(doc(getCol("posts"), postId), { comments: comments });
-            input.value = "";
-            clearCommentMedia(postId);
+            try {
+                await updateDoc(doc(getCol("posts"), postId), { comments: comments });
+                input.value = "";
+                clearCommentMedia(postId);
+            } catch(e) {
+                alert("خطأ في إضافة التعليق: " + e.message);
+            }
         }
 
         window.sharePost = function(text) {
@@ -1478,7 +1486,7 @@
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <div style="width:24px; height:24px; border-radius:50%; background-size:cover; background-position:center; background-color:var(--bg-color); border:1px solid var(--border-color); ${c.avatar ? 'background-image:url(\''+c.avatar+'\'); background-size: cover; background-position: center;' : ''}">${c.avatar ? '' : '👤'}</div>
                                 <div style="flex:1;"><strong>${c.author}:</strong> ${c.text}</div>
-                                ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}', ${cIdx}, ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
+                                ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}', ${cIdx})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
                             </div>
                             ${commentMediaHtml}
                         </div>
@@ -1530,8 +1538,8 @@
                             <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
                                 <input type="file" id="commentMediaInput_${p.id}" accept="image/*,video/*" style="display:none;" onchange="handleCommentMediaPreview(this, '${p.id}')">
                                 <button type="button" class="post-action-btn" style="padding: 7px 10px;" onclick="document.getElementById('commentMediaInput_${p.id}').click()" title="إرفاق صورة أو فيديو بالتعليق">📷</button>
-                                <input type="text" id="commentInput_${p.id}" placeholder="اكتب تعليقاً..." style="flex:1; padding:7px; background:var(--bg-color); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-color);" onkeypress="if(event.key==='Enter') addComment('${p.id}', ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})">
-                                <button class="btn" style="width: auto; padding: 6px 14px; font-size:0.8rem;" onclick="addComment('${p.id}', ${JSON.stringify(p.comments).replace(/"/g, '&quot;')})">تعليق</button>
+                                <input type="text" id="commentInput_${p.id}" placeholder="اكتب تعليقاً..." style="flex:1; padding:7px; background:var(--bg-color); border:1px solid var(--border-color); border-radius:6px; font-size:0.8rem; color:var(--text-color);" onkeypress="if(event.key==='Enter') addComment('${p.id}')">
+                                <button class="btn" style="width: auto; padding: 6px 14px; font-size:0.8rem;" onclick="addComment('${p.id}')">تعليق</button>
                             </div>
                             <div id="commentMediaPreview_${p.id}" style="display:none; margin-top:6px; font-size:0.75rem; color:var(--accent-color);"></div>
                         </div>
@@ -1542,23 +1550,30 @@
 
         function initRealtimeFeed() {
             onSnapshot(getCol("posts"), (snapshot) => {
-                cachedPosts = [];
-                snapshot.forEach(d => {
-                    let data = { id: d.id, ...d.data() };
-                    let postCompany = data.companyId || 'company_main';
-                    if (postCompany === window.companyId) {
-                        cachedPosts.push(data);
-                    }
-                });
-                
-                cachedPosts.sort((a, b) => {
-                    let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-                    let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-                    return timeB - timeA;
-                });
+                try {
+                    cachedPosts = [];
+                    snapshot.forEach(d => {
+                        let data = { id: d.id, ...d.data() };
+                        let postCompany = data.companyId || 'company_main';
+                        if (postCompany === window.companyId) {
+                            cachedPosts.push(data);
+                        }
+                    });
+                    
+                    cachedPosts.sort((a, b) => {
+                        let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+                        let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+                        return timeB - timeA;
+                    });
 
-                cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
-                filterWallPosts();
+                    cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
+                    filterWallPosts();
+                } catch(err) {
+                    console.error("خطأ أثناء معالجة المنشورات:", err);
+                }
+            }, (error) => {
+                console.error("خطأ في الاتصال بقاعدة البيانات لجلب المنشورات:", error);
+                document.getElementById('groupFeedStream').innerHTML = `<p style="text-align: center; color: var(--danger-color); padding: 20px;">تعذر تحميل المنشورات، يرجى التحقق من الاتصال.</p>`;
             });
         }
 
