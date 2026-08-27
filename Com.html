@@ -658,6 +658,20 @@
         let watchPositionId = null;
         let isFirstMapCenter = true;
 
+        // متغير سياق الصوت الموحد لتجاوز قيود المتصفح
+        let globalAudioCtx = null;
+
+        // تفعيل سياق الصوت عند أول نقرة أو تفاعل للمستخدم على الصفحة
+        document.addEventListener('click', () => {
+            if (!globalAudioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                globalAudioCtx = new AudioContext();
+            }
+            if (globalAudioCtx.state === 'suspended') {
+                globalAudioCtx.resume();
+            }
+        }, { once: true });
+
         function goToPage(pageName) {
             let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
@@ -1525,30 +1539,38 @@
             return deg * (Math.PI/180);
         }
 
+        // نقيض السارين المزعج والقوي المدمج مع الاهتزاز
         function playSirenSound() {
             try {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                const audioCtx = new AudioContext();
+                if (!globalAudioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    globalAudioCtx = new AudioContext();
+                }
+                if (globalAudioCtx.state === 'suspended') {
+                    globalAudioCtx.resume();
+                }
                 
-                for (let i = 0; i < 3; i++) {
+                // تكرار متسارع لـ 4 نبضات سارين حادة
+                for (let i = 0; i < 4; i++) {
                     setTimeout(() => {
-                        if (audioCtx.state === 'suspended') audioCtx.resume();
-                        let osc = audioCtx.createOscillator();
-                        let gainNode = audioCtx.createGain();
+                        let osc = globalAudioCtx.createOscillator();
+                        let gainNode = globalAudioCtx.createGain();
                         
                         osc.type = 'sawtooth';
-                        osc.frequency.setValueAtTime(900, audioCtx.currentTime);
-                        osc.frequency.exponentialRampToValueAtTime(1600, audioCtx.currentTime + 0.15);
+                        // موجة تردد متصاعدة وهابطة لتعطي صوت سارين شرطة مزعج
+                        osc.frequency.setValueAtTime(800, globalAudioCtx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(1800, globalAudioCtx.currentTime + 0.15);
+                        osc.frequency.linearRampToValueAtTime(800, globalAudioCtx.currentTime + 0.3);
                         
-                        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
-                        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                        gainNode.gain.setValueAtTime(1, globalAudioCtx.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, globalAudioCtx.currentTime + 0.3);
                         
                         osc.connect(gainNode);
-                        gainNode.connect(audioCtx.destination);
+                        gainNode.connect(globalAudioCtx.destination);
                         
                         osc.start();
-                        osc.stop(audioCtx.currentTime + 0.3);
-                    }, i * 350);
+                        osc.stop(globalAudioCtx.currentTime + 0.3);
+                    }, i * 320);
                 }
             } catch(e) {
                 console.log("Audio warning error:", e);
@@ -1556,15 +1578,18 @@
         }
 
         function triggerRadarWarning(radarName) {
+            // اهتزاز قوي ومتسارع للجهاز
             if ('vibrate' in navigator) {
-                navigator.vibrate([400, 100, 400, 100, 400, 100, 500]);
+                navigator.vibrate([500, 150, 500, 150, 500, 150, 600]);
             }
             
+            // تشغيل صوت السارين المزعج
             playSirenSound();
+            
             addNotification(`🚨 تنبيه رادار عاجل: أنت تقترب من (${radarName})، خفف السرعة فوراً!`);
             
             const alertBox = document.createElement('div');
-            alertBox.style.cssText = 'position:fixed; top:15px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:16px 26px; border-radius:18px; font-weight:bold; font-size:13px; z-index:999999; box-shadow:0 15px 35px rgba(220,38,38,0.9); text-align:center; border:2px solid #fff;';
+            alertBox.style.cssText = 'position:fixed; top:15px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:16px 26px; border-radius:18px; font-weight:bold; font-size:13px; z-index:999999; box-shadow:0 15px 35px rgba(220,38,38,0.9); text-align:center; border:2px solid #fff; animation: pulseRadar 0.5s infinite;';
             alertBox.innerHTML = `🚨 تحذير رادار خطير! 🚨<br>📍 ${radarName} أمامك مباشرة! 🛑`;
             document.body.appendChild(alertBox);
             
