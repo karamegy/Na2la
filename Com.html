@@ -537,6 +537,7 @@
             }
         }
 
+        // التعرف اللحظي والحي حصرياً من رابط المنصة الرئيسية بدون أي تخزين محلي (localStorage)
         async function fetchCloudSessionFromURL() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs } = window.firebaseModules;
@@ -546,17 +547,7 @@
                         urlParams.get('driverId') || urlParams.get('driver') || urlParams.get('name') || '').trim();
             let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
 
-            if (urlUserId) {
-                localStorage.setItem('logged_in_driver_name', urlUserId);
-            } else {
-                urlUserId = localStorage.getItem('logged_in_driver_name') || '';
-            }
-
-            if (!urlCompanyId || urlCompanyId === 'null') {
-                urlCompanyId = localStorage.getItem('current_company_id') || 'company_main';
-            }
-            currentCompanyId = urlCompanyId;
-            localStorage.setItem('current_company_id', currentCompanyId);
+            currentCompanyId = (urlCompanyId && urlCompanyId !== 'null' && urlCompanyId !== '') ? urlCompanyId : 'company_main';
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
@@ -582,8 +573,9 @@
                 });
 
                 if (found) {
-                    currentCompanyId = (found.companyId && found.companyId.trim() !== '') ? found.companyId.trim() : (urlCompanyId || 'company_main');
-                    localStorage.setItem('current_company_id', currentCompanyId);
+                    if (found.companyId && found.companyId.trim() !== '') {
+                        currentCompanyId = found.companyId.trim();
+                    }
                     let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
                     
                     let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || '';
@@ -609,6 +601,16 @@
                         phone: '',
                         avatar: ''
                     };
+                } else {
+                    currentDriverProfile = {
+                        id: 'guest',
+                        name: 'زائر / كابتن غير مسجل',
+                        rank: 'guest',
+                        title: 'زائر',
+                        permissions: 'صلاحيات محدودة',
+                        phone: '',
+                        avatar: ''
+                    };
                 }
             } catch (err) {
                 console.error("Session fetch error:", err);
@@ -628,6 +630,7 @@
 
         function syncProfileAndLoad() {
             window.currentCompanyId = currentCompanyId;
+            document.getElementById('companyIdLabel').innerText = currentCompanyId;
             document.getElementById('headerNameText').innerText = currentDriverProfile.name;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
@@ -1098,7 +1101,6 @@
             return deg * (Math.PI/180);
         }
 
-        // دالة تشغيل صوت الإنذار الصاخب والمزعج
         function playSirenSound() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -1110,7 +1112,7 @@
                         let osc = audioCtx.createOscillator();
                         let gainNode = audioCtx.createGain();
                         
-                        osc.type = 'sawtooth'; // صوت حاد ومزعج
+                        osc.type = 'sawtooth';
                         osc.frequency.setValueAtTime(900, audioCtx.currentTime);
                         osc.frequency.exponentialRampToValueAtTime(1600, audioCtx.currentTime + 0.15);
                         
@@ -1130,18 +1132,14 @@
         }
 
         function triggerRadarWarning(radarName) {
-            // اهتزاز قوي ومتكرر للهاتف
             if ('vibrate' in navigator) {
                 navigator.vibrate([400, 100, 400, 100, 400, 100, 500]);
             }
             
-            // تشغيل صوت الإنذار الصاخب
             playSirenSound();
             
-            // إضافة إشعار داخل التطبيق
             addNotification(`🚨 تنبيه رادار عاجل: أنت تقترب من (${radarName})، خفف السرعة فوراً!`);
             
-            // إظهار رسالة تحذيرية حمراء ضخمة وبارزة على الشاشة
             const alertBox = document.createElement('div');
             alertBox.style.cssText = 'position:fixed; top:15px; left:50%; transform:translateX(-50%); background:#dc2626; color:#fff; padding:16px 26px; border-radius:18px; font-weight:bold; font-size:13px; z-index:99999; box-shadow:0 15px 35px rgba(220,38,38,0.9); text-align:center; border:2px solid #fff;';
             alertBox.innerHTML = `🚨 تحذير رادار خطير! 🚨<br>📍 ${radarName} أمامك مباشرة! 🛑`;
