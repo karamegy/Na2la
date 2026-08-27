@@ -1822,46 +1822,47 @@
         }
 
         function initRealtimeListeners() {
-            if (isListenersInitialized) return;
-            isListenersInitialized = true;
+    if (isListenersInitialized) return;
+    isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+    
+    collections.forEach(colName => {
+        db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            collections.forEach(colName => {
-                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
-                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    if (currentCompanyId && currentCompanyId !== 'company_main' && loggedInDriverName !== 'المدير') {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
-                    } else {
-                        appData[colName] = rawData;
-                    }
-                    
-                    scheduleSmartRender();
+            // التعديل هنا: تطبيق الفلترة حسب companyId على الجميع لضمان عدم اختلاط بيانات الشركات
+            if (currentCompanyId) {
+                appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
+            } else {
+                appData[colName] = rawData;
+            }
+            
+            scheduleSmartRender();
 
-                    if (typeof renderChatMessages === 'function') renderChatMessages();
-                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-                    if (document.getElementById('reports-tab').classList.contains('active')) {
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
-                        renderCompanyAdminSubscriptionView();
-                    }
-                    if (document.getElementById('companies-tab').classList.contains('active')) {
-                        renderCompaniesManagementTable();
-                    }
-                }, error => {
-                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-                });
-            });
+            if (typeof renderChatMessages === 'function') renderChatMessages();
+            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+            if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+            if (document.getElementById('reports-tab').classList.contains('active')) {
+                renderMemberSubscriptionsList();
+                renderAdminPendingCashRequests();
+                renderCompanyAdminSubscriptionView();
+            }
+            if (document.getElementById('companies-tab').classList.contains('active')) {
+                renderCompaniesManagementTable();
+            }
+        }, error => {
+            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+        });
+    });
 
-            db.collection('systemSettings').doc('config').onSnapshot(doc => {
-                if (doc.exists && doc.data().newsText) {
-                    appData.newsText = doc.data().newsText;
-                    renderRSSTicker();
-                }
-            });
+    db.collection('systemSettings').doc('config').onSnapshot(doc => {
+        if (doc.exists && doc.data().newsText) {
+            appData.newsText = doc.data().newsText;
+            renderRSSTicker();
         }
+    });
+}
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
