@@ -128,10 +128,11 @@
             position: absolute; top: -3px; right: -3px; background: var(--danger); color: white;
             font-size: 9px; font-weight: bold; padding: 2px 5px; border-radius: 10px; border: 2px solid var(--card-bg);
         }
+        
         .notifications-dropdown {
-            position: absolute; top: 45px; left: 0; width: 280px; max-width: 90vw; background-color: var(--card-bg);
-            border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: none; z-index: 9999; overflow: hidden;
+            position: absolute; top: 45px; right: 0; width: 260px; max-width: 85vw; background-color: var(--card-bg);
+            border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            display: none; z-index: 99999; overflow: hidden;
         }
 
         .space-sectors { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 6px; margin-bottom: 14px; }
@@ -540,7 +541,9 @@
         let chatUnsubscribe = null;
         let driversUnsubscribe = null;
         let radarsUnsubscribe = null;
-        let alertedRadarsCache = new Set();
+        
+        // تتبع النطاقات النشطة للرادارات (Zone Tracking) لمنع التكرار المستمر داخل نفس الرادار، مع السماح بالتعامل الطبيعي مع الرادارات المتقاربة
+        let activeRadarZones = new Set();
 
         function goToPage(pageName) {
             let userId = currentDriverProfile.id || urlUserId || '';
@@ -661,7 +664,6 @@
             document.getElementById('headerNameText').innerText = currentDriverProfile.name;
             document.getElementById('cargoAccountIndicator').innerText = currentDriverProfile.name;
             
-            // التحقق من صلاحيات المدير المؤسس لعرض لوحة إضافة الرادارات
             let isAdmin = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name);
             const radarAddBox = document.getElementById('radarAddFormBox');
             const radarNotice = document.getElementById('radarNonAdminNotice');
@@ -1062,7 +1064,6 @@
             }
         }
 
-        // دالة حذف رادار (للمدير المؤسس فقط)
         async function deleteRadarCheckpoint(radarId) {
             if (!window.db || !window.firebaseModules) return;
             let isAdmin = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name);
@@ -1082,7 +1083,6 @@
             }
         }
 
-        // فتح نافذة تعديل الرادار (للمدير المؤسس فقط)
         function openEditRadarModal(id, nameEnc, lat, lng) {
             let isAdmin = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name);
             if (!isAdmin) {
@@ -1101,7 +1101,6 @@
             document.getElementById('editRadarModal').style.display = 'none';
         }
 
-        // حفظ تعديلات الرادار في قاعدة البيانات
         async function saveRadarChanges() {
             if (!window.db || !window.firebaseModules) return;
             let isAdmin = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name);
@@ -1189,6 +1188,7 @@
             });
         }
 
+        // نظام رصد مسافة الرادارات (تنبيه دقيق عند 500 متر ومعالجة طبيعية للرادارات المتقاربة)
         function initRadarProximityAlerts() {
             if (!navigator.geolocation) return;
 
@@ -1205,10 +1205,15 @@
                             const radar = docSnap.data();
                             const distance = calculateDistance(userLat, userLng, radar.lat, radar.lng);
                             
-                            if (distance <= 0.5 && !alertedRadarsCache.has(radar.id)) {
-                                triggerRadarWarning(radar.name || 'رادار ثابت على الطريق');
-                                alertedRadarsCache.add(radar.id);
-                                setTimeout(() => alertedRadarsCache.delete(radar.id), 10 * 60 * 1000);
+                            // إذا أصبحت المسافة 500 متر (0.5 كم) أو أقل
+                            if (distance <= 0.5) {
+                                if (!activeRadarZones.has(radar.id)) {
+                                    activeRadarZones.add(radar.id);
+                                    triggerRadarWarning(radar.name || 'رادار ثابت على الطريق');
+                                }
+                            } else if (distance > 0.6) {
+                                // عند الابتعاد عن الرادار لأكثر من 600 متر، يتم إزالته من النطاق لكي يتم التنبيه مجدداً عند العودة له أو لأي رادار قريب تالٍ
+                                activeRadarZones.delete(radar.id);
                             }
                         });
                     } catch (err) {
