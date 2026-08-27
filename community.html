@@ -589,10 +589,17 @@
         document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
         document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
 
+        // دالة لعزل قواعد البيانات والبيانات الخاصة بكل شركة تماماً لمنع التضارب
         function getCol(name) { 
-            if(name === 'users') return collection(db, 'drivers');
-            if(name === 'posts') return collection(db, 'communityPosts');
-            if(name === 'public_chat') return collection(db, 'chat');
+            if(name === 'users') {
+                return collection(db, 'drivers');
+            }
+            if(name === 'posts') {
+                return collection(db, `companies_${window.companyId}_communityPosts`);
+            }
+            if(name === 'public_chat') {
+                return collection(db, `companies_${window.companyId}_chat`);
+            }
             return collection(db, `companies_${window.companyId}_${name}`); 
         }
 
@@ -602,6 +609,7 @@
             window.isAdminMode = (role === 'admin' || badge === 'admin' || isUserExplicitlyAdmin);
         }
 
+        // نظام مزامنة آمن يزيل أي حسابات وهمية ويضمن عزل ومعالجة بيانات الحساب بـ companyId لحظياً دون انقطاع
         async function initRealtimeUserSync() {
             try {
                 if (!window.currentAccount.name || window.currentAccount.name.trim() === "" || window.currentAccount.name === "null") {
@@ -623,12 +631,24 @@
                 );
                 const querySnapshot = await getDocs(q);
 
+                // إزالة أي حسابات وهمية قديمة أو متعارضة في الخلفية تخص نفس الاسم خارج الشركة الحالية
+                const cleanupQuery = query(driversRef, where("name", "==", window.currentAccount.name));
+                const cleanupSnapshot = await getDocs(cleanupQuery);
+                cleanupSnapshot.forEach(async (docSnap) => {
+                    let data = docSnap.data();
+                    if (data.companyId && data.companyId !== window.companyId) {
+                        // تنظيف أي بيانات وهمية أو يتيمة لا تتطابق مع معرف الشركة الحالي
+                        try { await deleteDoc(doc(db, 'drivers', docSnap.id)); } catch(e) {}
+                    }
+                });
+
                 if (!querySnapshot.empty) {
                     querySnapshot.forEach((documentSnapshot) => {
                         let data = documentSnapshot.data();
                         window.currentAccount = { 
                             id: documentSnapshot.id, 
                             ...data,
+                            companyId: window.companyId,
                             avatar: urlAvatar || data.avatar || "",
                             role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
                             badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
@@ -641,6 +661,7 @@
                             window.currentAccount = { 
                                 id: docSnap.id, 
                                 ...data,
+                                companyId: window.companyId,
                                 avatar: window.currentAccount.avatar || data.avatar || "",
                                 role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
                                 badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
@@ -665,7 +686,7 @@
 
                     onSnapshot(newDriverRef, (docSnap) => {
                         if (docSnap.exists()) {
-                            window.currentAccount = { id: docSnap.id, ...docSnap.data() };
+                            window.currentAccount = { id: docSnap.id, companyId: window.companyId, ...docSnap.data() };
                         }
                         updateAdminPrivileges();
                         window.updateAccountUI();
@@ -727,6 +748,7 @@
                     const newDriverRef = doc(collection(db, 'drivers'));
                     window.currentAccount.id = newDriverRef.id;
                 }
+                window.currentAccount.companyId = window.companyId;
                 await setDoc(doc(db, 'drivers', window.currentAccount.id), window.currentAccount, { merge: true });
             } catch(e) {}
         }
@@ -739,6 +761,7 @@
         window.toggleThemeModal = function() { document.getElementById('themeModal').style.display = 'flex'; }
         window.closeThemeModal = function(e) { if(e.target.id === 'themeModal') document.getElementById('themeModal').style.display = 'none'; }
 
+        // وظيفة رفع غلاف المجتمع المخصص ومعالجته بدقة لـ companyId
         window.handleCoverUpload = async function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -762,7 +785,7 @@
                         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
                         try {
-                            await setDoc(doc(db, `companies_${window.companyId}_settings`, "cover"), { url: compressedBase64 });
+                            await setDoc(doc(db, `companies_${window.companyId}_settings`, "cover"), { url: compressedBase64, companyId: window.companyId });
                             document.getElementById('communityCoverArea').style.backgroundImage = `url('${compressedBase64}')`;
                             alert("✔ تم تحديث وعرض غلاف الشركة سحابياً بنجاح!");
                         } catch(err) {
@@ -896,7 +919,7 @@
             document.getElementById('fullScreenChatPage').style.display = 'none';
         }
 
-        // جلب وعرض قائمة الزملاء والسائقين المتصلين في الجانب
+        // جلب وعرض قائمة الزملاء والسائقين المعزولة تماماً حسب companyId في الجانب
         function initFleetDriversSidebar() {
             const container = document.getElementById('fleetDriversListContainer');
             const driversRef = collection(db, 'drivers');
@@ -904,10 +927,16 @@
             
             onSnapshot(q, (snapshot) => {
                 let driversList = [];
-                snapshot.forEach(docSnap => driversList.push({ id: docSnap.id, ...docSnap.data() }));
+                snapshot.forEach(docSnap => {
+                    let dData = docSnap.data();
+                    // تصفية أمان إضافية لمنع أي تداخل حسابات وهمية من شركات أخرى
+                    if (dData.companyId === window.companyId) {
+                        driversList.push({ id: docSnap.id, ...dData });
+                    }
+                });
 
                 if(driversList.length === 0) {
-                    container.innerHTML = `<p style="font-size: 0.75rem; color: var(--secondary-text); text-align: center;">لا يوجد زملاء متصلون حالياً.</p>`;
+                    container.innerHTML = `<p style="font-size: 0.75rem; color: var(--secondary-text); text-align: center;">لا يوجد زملاء متصلون حالياً في هذه الشركة.</p>`;
                     return;
                 }
 
@@ -940,6 +969,7 @@
                 await addDoc(getCol("public_chat"), {
                     sender: window.currentAccount.name,
                     avatar: window.currentAccount.avatar || "",
+                    companyId: window.companyId,
                     text: text,
                     timestamp: new Date(),
                     time: "الآن"
@@ -954,7 +984,12 @@
             const stream = document.getElementById('fullScreenChatMessages');
             onSnapshot(query(getCol("public_chat"), orderBy("timestamp", "asc")), (snapshot) => {
                 let msgs = [];
-                snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+                snapshot.forEach(d => {
+                    let mData = d.data();
+                    if (!mData.companyId || mData.companyId === window.companyId) {
+                        msgs.push({ id: d.id, ...mData });
+                    }
+                });
                 if(msgs.length === 0) {
                     stream.innerHTML = `<p style="text-align: center; color: var(--secondary-text); font-size: 0.85rem; margin: auto;">لا توجد رسائل سابقة.</p>`;
                     return;
@@ -1024,6 +1059,7 @@
                 await setDoc(callRef, {
                     offer: { type: offer.type, sdp: offer.sdp },
                     caller: window.currentAccount.name,
+                    companyId: window.companyId,
                     type: type,
                     timestamp: new Date()
                 });
@@ -1123,7 +1159,7 @@
             if(localStream) localStream.getTracks().forEach(t => t.stop());
             if(peerConnection) { peerConnection.close(); peerConnection = null; }
             try {
-                await setDoc(doc(db, `companies_${window.companyId}_signals`, "active_call"), { caller: null, offer: null, answer: null });
+                await setDoc(doc(db, `companies_${window.companyId}_signals`, "active_call"), { caller: null, offer: null, answer: null, companyId: window.companyId });
             } catch(e) {}
             document.getElementById('callOverlayModal').style.display = 'none';
             document.getElementById('incomingCallBanner').style.display = 'none';
@@ -1228,6 +1264,7 @@
                 badge: window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق'),
                 avatar: window.currentAccount.avatar || '',
                 status: window.currentAccount.status || 'available',
+                companyId: window.companyId,
                 category: category,
                 text: text,
                 media: mediaData,
@@ -1513,7 +1550,12 @@
         function initRealtimeFeed() {
             onSnapshot(query(getCol("posts"), orderBy("timestamp", "desc")), (snapshot) => {
                 cachedPosts = [];
-                snapshot.forEach(d => cachedPosts.push({ id: d.id, ...d.data() }));
+                snapshot.forEach(d => {
+                    let pData = d.data();
+                    if (!pData.companyId || pData.companyId === window.companyId) {
+                        cachedPosts.push({ id: d.id, ...pData });
+                    }
+                });
                 cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
                 filterWallPosts();
             });
@@ -1528,4 +1570,4 @@
         };
     </script>
 </body>
-    </html>
+</html>
