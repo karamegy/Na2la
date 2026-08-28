@@ -364,7 +364,8 @@
         let phone = String(user.phone || '').trim();
         let id = String(user.id || user.docId || '').trim();
         let name = String(user.name || '').trim();
-        return phone === '+201114099799' || id === 'admin' || name === 'المدير' || user.isMasterAdmin === true;
+        let role = String(user.role || '').toLowerCase().trim();
+        return phone === '+201114099799' || id === 'admin' || name === 'المدير' || role === 'admin' || user.companyId === 'company_main' || user.isMasterAdmin === true;
     }
     window.isMasterAdminUser = isMasterAdminUser;
 
@@ -493,7 +494,7 @@
 
     let unsubscribers = [];
 
-    // التعديل الذكي لعزل الشركات ودعم المستندات القديمة بدون companyId لتجنب ظهور أرقام صفرية
+    // التعديل الذكي لعزل الشركات ودعم المستندات القديمة وبدون فقدان بيانات للمدير المؤسس والشركات الفرعية
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -513,6 +514,7 @@
                 let user = window.currentLoggedInUser;
                 let isMaster = isMasterAdminUser(user);
 
+                // المدير المؤسس يرى كل شيء عبر المنصة، أما مدير الشركة الفرعية فيرى بيانات شركته فقط
                 if (!isMaster) {
                     let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
                     rawData = rawData.filter(item => String(item.companyId || 'company_main') === String(targetCompany));
@@ -585,9 +587,14 @@
                 };
             }
 
-            currentCompanyId = found.companyId || urlCompanyId || 'company_main';
             let isMaster = isMasterAdminUser(found);
-            found.role = isMaster ? 'admin' : (String(found.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : (String(found.role || '').toLowerCase().includes('مدير') ? 'مدير شركة' : 'سائق'));
+            if (isMaster) {
+                currentCompanyId = 'company_main';
+                found.companyId = 'company_main';
+                found.role = 'admin';
+            } else {
+                currentCompanyId = found.companyId || urlCompanyId || 'company_main';
+            }
 
             if (!found.avatar) found.avatar = found.photoUrl || '';
             if (!found.coverUrl) found.coverUrl = found.cover || '';
@@ -648,8 +655,13 @@
 
             if (matchedUser) {
                 let isMaster = isMasterAdminUser(matchedUser);
-                matchedUser.role = isMaster ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'مدير شركة');
-                matchedUser.companyId = matchedUser.companyId || 'company_main';
+                if (isMaster) {
+                    matchedUser.role = 'admin';
+                    matchedUser.companyId = 'company_main';
+                } else {
+                    matchedUser.companyId = matchedUser.companyId || 'company_main';
+                    matchedUser.role = String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'مدير شركة';
+                }
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
