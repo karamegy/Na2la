@@ -508,9 +508,14 @@
     collections.forEach(colName => {
         let query = db.collection(colName);
         
-        // للشركات الفرعية نقيد الاستعلام بالسيرفر، أما المستر أدمن فنقراً الكل لمنع ضياع البيانات القديمة التي لا تحتوي على حقل companyId
+        // الحفاظ على التوافق مع قواعد أمان فايربيس لمنع خطأ الرفض (Permission Denied)
         if (!isMasterAdmin) {
             query = query.where('companyId', '==', activeCompId);
+        } else {
+            // للماستر أدمن، نجعل الاستعلام مطابقاً لقواعد السيرفر للمجموعات التي تتطلب فلترة
+            if (colName !== 'drivers' && colName !== 'subscriptionRequests') {
+                query = query.where('companyId', '==', 'company_main');
+            }
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
@@ -518,20 +523,17 @@
             
             if (isMasterAdmin) {
                 if (colName === 'drivers') {
-                    // المستر أدمن يرى: مديري الشركات الفرعية + سائقي المنصة الأم (أو من ليس له شركة أو شركته company_main)
                     rawData = rawData.filter(item => {
                         let isCompanyAdmin = (item.role === 'admin' || item.companyName || (item.companyId && item.companyId !== 'company_main'));
                         let isMyCompanyDriver = (!item.companyId || item.companyId === 'company_main');
                         return isCompanyAdmin || isMyCompanyDriver;
                     });
                 } else {
-                    // باقي المجموعات (الشحنات، العملاء، الخ) للماستر أدمن: تشمل شركته الأم والبيانات القديمة غير المحددة
                     rawData = rawData.filter(item => {
                         return !item.companyId || item.companyId === 'company_main';
                     });
                 }
             } else {
-                // الشركات الفرعية ترى بياناتها الخاصة فقط
                 rawData = rawData.filter(item => {
                     return item.companyId === activeCompId || item.id === activeCompId || item.companyName === activeCompId;
                 });
@@ -544,10 +546,11 @@
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
         }, error => {
-            console.error(`خطأ في مزامنة فايربيس للمجموعة (${colName}):`, error);
+            console.error(`خطأ اتصال السحابة (${colName}):`, error.message);
         });
     });
 }
+
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || '';
