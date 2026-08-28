@@ -479,62 +479,56 @@
     window.appData = appData;
 
     let unsubscribers = [];
+function initFirebaseListeners(companyId) {
+    unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+    unsubscribers = [];
 
-    // استماع سحابي مع العزل التام للشركات (Strict Company ID Isolation)
-    function initFirebaseListeners(companyId) {
-        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
-        unsubscribers = [];
+    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'wallPosts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
 
-        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'wallPosts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
+    collections.forEach(colName => {
+        let query = db.collection(colName);
 
-        collections.forEach(colName => {
-            let query = db.collection(colName);
-
-            const unsub = query.onSnapshot(snapshot => {
-                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
-                
-                let targetCompany = companyId || currentCompanyId || 'company_main';
-                
-                // عزل الشركات بدقة تامة (إظهار بيانات الشركة المحددة فقط للمدير)
-                rawData = rawData.filter(d => {
-                    let itemCompany = d.companyId || 'company_main';
-                    return itemCompany === targetCompany;
-                });
-                
-                appData[colName] = rawData;
-
-                if (colName === 'posts') {
-                    appData.wallPosts = appData.posts;
+        const unsub = query.onSnapshot(snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+            
+            let targetCompany = companyId || currentCompanyId || 'company_main';
+            
+            // تعديل الفلترة لتقبل المستندات التي ليس لها companyId أو تطابق الشركة النشطة
+            rawData = rawData.filter(d => {
+                let itemCompany = d.companyId;
+                // إذا لم يكن المستند يمتلك companyId، اعتبره يتبع company_main أو اظهره إذا كانت الشركة النشطة هي company_main
+                if (!itemCompany) {
+                    return targetCompany === 'company_main' || targetCompany === '11'; // أو السماح بعرضها للمدير العام
                 }
-
-                window.appData = appData;
-
-                if(typeof renderStats === 'function') renderStats();
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
-                if(typeof updateRSSTicker === 'function') updateRSSTicker();
-            }, err => {
-                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
+                return itemCompany === targetCompany;
             });
-            unsubscribers.push(unsub);
-        });
+            
+            appData[colName] = rawData;
 
-        db.collection('systemSettings').doc('config').onSnapshot(doc => {
-            if(doc.exists && doc.data().newsText) {
-                appData.newsText = doc.data().newsText;
-                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            if (colName === 'posts') {
+                appData.wallPosts = appData.posts;
             }
+
+            window.appData = appData;
+
+            if(typeof renderStats === 'function') renderStats();
+            if(typeof refreshActiveSection === 'function') refreshActiveSection();
+            if(typeof updateRSSTicker === 'function') updateRSSTicker();
+        }, err => {
+            console.error(`خطأ في استماع المجموعة ${colName}:`, err);
         });
+        unsubscribers.push(unsub);
+    });
 
-        listenForIncomingCalls();
-    }
+    db.collection('systemSettings').doc('config').onSnapshot(doc => {
+        if(doc.exists && doc.data().newsText) {
+            appData.newsText = doc.data().newsText;
+            if(typeof updateRSSTicker === 'function') updateRSSTicker();
+        }
+    });
 
-    window.manualRefreshData = function() {
-        showToast('جاري تحديث ومزامنة بيانات الشركة حصرياً من السحابة... 🔄');
-        initFirebaseListeners(currentCompanyId);
-        setTimeout(() => {
-            showToast('تمت المزامنة بنجاح لشركة: ' + currentCompanyId + ' ✅');
-        }, 1000);
-    };
+    listenForIncomingCalls();
+}
 
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
