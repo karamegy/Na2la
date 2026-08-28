@@ -493,7 +493,6 @@
     window.appData = appData;
 
     let unsubscribers = [];
-
 function initFirebaseListeners(companyId) {
     unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
     unsubscribers = [];
@@ -504,13 +503,21 @@ function initFirebaseListeners(companyId) {
         let query = db.collection(colName);
         let user = window.currentLoggedInUser;
 
-        // عزل قطعي ونهائي لكل الحسابات والمديرين (حتى المدير المؤسس يرى شرعته فقط)
         let targetCompany = companyId || (user ? user.companyId : null) || 'BLOCKED_COMPANY_ID';
-        query = query.where('companyId', '==', targetCompany);
+        
+        // استثناء مجموعة السائقين والحسابات لتجنب إخفاء الحسابات القديمة غير الحاملة حقل companyId
+        if (colName !== 'drivers') {
+            query = query.where('companyId', '==', targetCompany);
+        }
 
         const unsub = query.onSnapshot(snapshot => {
             let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
             
+            // فلترة برمجية لحسابات الشركة والحسابات القديمة
+            if (colName === 'drivers') {
+                rawData = rawData.filter(d => !d.companyId || d.companyId === targetCompany);
+            }
+
             // فلترة إضافية للسائقين العاديين داخل نفس الشركة
             if (colName === 'shipments' && user && user.role === 'driver') {
                 rawData = rawData.filter(s => s.assignedDriver === user.name || !s.assignedDriver);
@@ -537,8 +544,6 @@ function initFirebaseListeners(companyId) {
 
     listenForIncomingCalls();
 }
-
-
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || '';
