@@ -1818,34 +1818,41 @@
             }, 300);
         }
 function initRealtimeListeners() {
-    const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
-    
-    collections.forEach(colName => {
-        let query = db.collection(colName);
-        let isMaster = (loggedInDriverName === 'المدير' || currentUserRole === 'admin');
+    // 🔒 استماع سحابي مع عزل تام لشحنات وبيانات كل شركة على حدة
+    function initRealtimeListeners() {
+        const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
+        
+        collections.forEach(colName => {
+            let query = db.collection(colName);
+            let isMaster = (loggedInDriverName === 'المدير' || currentUserRole === 'admin');
 
-        // جلب كافة المستندات سحابياً لتجنب اختفاء السجلات القديمة التي لم يتم تحديث حقل companyId لها
-        query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // فلترة ذكية وآمنة لضمان ظهور بيانات شركتك والحسابات العامة القديمة وعدم اختفائها
-            if (currentCompanyId && !isMaster) {
-                rawData = rawData.filter(d => {
-                    return d.companyId === currentCompanyId || !d.companyId || d.companyId === 'company_main';
-                });
-            }
+            query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // عزل كامل للشركات على مستوى التطبيق
+                if (currentCompanyId && !isMaster) {
+                    rawData = rawData.filter(d => {
+                        // إذا كان المستند يحمل معرف شركة محدد، يجب أن يتطابق مع شركتك الحالية
+                        if (d.companyId) {
+                            return d.companyId === currentCompanyId;
+                        }
+                        // السجلات القديمة التي لا تحتوي على companyId تظهر فقط في الشركة الرئيسية (company_main) ولا تظهر للشركات الأخرى
+                        return currentCompanyId === 'company_main';
+                    });
+                }
 
-            appData[colName] = rawData;
-            
-            scheduleSmartRender();
+                appData[colName] = rawData;
+                
+                scheduleSmartRender();
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-        }, error => {
-            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                if (typeof renderChatMessages === 'function') renderChatMessages();
+                if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+            }, error => {
+                console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+            });
         });
-    });
-}
+    }
+
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
