@@ -1817,64 +1817,30 @@
                 }
             }, 300);
         }
-let unsubscribers = [];
-let unsubscribers = [];
-
 function initRealtimeListeners() {
-    // إلغاء الاتصالات السابقة لمنع تراكب الأخطاء والذاكرة
-    if (typeof unsubscribers !== 'undefined' && Array.isArray(unsubscribers)) {
-        unsubscribers.forEach(unsub => { if (typeof unsub === 'function') unsub(); });
-    }
-    unsubscribers = [];
-
     const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
     
-    const activeCompanyId = (typeof currentCompanyId !== 'undefined' && currentCompanyId) ? currentCompanyId : 'company_main';
-    const activeDriverName = typeof loggedInDriverName !== 'undefined' ? loggedInDriverName : '';
-    
-    // الرؤية الشاملة لجميع الشركات مقتصرة حصرياً على الماستر أدمن الرئيسي "المدير" فقط
-    const isSuperMaster = (activeDriverName === 'المدير');
-
     collections.forEach(colName => {
-        try {
-            let query = db.collection(colName);
+        let query = db.collection(colName);
 
-            const unsub = query.onSnapshot(snapshot => {
-                if (!snapshot || !snapshot.docs) return;
-                
-                let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // عزل وفلترة صارمة: إذا لم يكن المستخدم هو "المدير" الأساسي، يتم عرض بيانات شركته فقط
-                if (!isSuperMaster) {
-                    rawData = rawData.filter(d => {
-                        if (d && d.companyId) {
-                            return d.companyId === activeCompanyId;
-                        }
-                        return activeCompanyId === 'company_main';
-                    });
-                }
-
-                appData[colName] = rawData;
-                
-                if (typeof scheduleSmartRender === 'function') {
-                    scheduleSmartRender();
-                } else if (typeof render === 'function') {
-                    render();
-                }
-
-                if (typeof renderChatMessages === 'function') renderChatMessages();
-                if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            }, error => {
-                console.warn(`تنبيه مزامنة ${colName}:`, error);
-            });
-
-            unsubscribers.push(unsub);
-        } catch (err) {
-            console.error(`خطأ في مجموعة ${colName}:`, err);
+        // تطبيق الفلترة بالشركة الحالية على الجميع (بما فيهم المدير)
+        if (currentCompanyId) {
+            query = query.where('companyId', '==', currentCompanyId);
         }
-    });
-}
 
+        query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            appData[colName] = rawData;
+            
+            scheduleSmartRender();
+
+            if (typeof renderChatMessages === 'function') renderChatMessages();
+            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+        }, error => {
+            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+        });
+    });
+}         
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -4371,4 +4337,4 @@ function renderSelectedInvoice() {
         }
     </script>
 </body>
-    </html>
+                </html>
