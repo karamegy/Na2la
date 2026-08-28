@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - لوحة التحكم المركزية للسيادة الإدارية والمالية مع العزل السحابي وإدارة الاشتراكات (V91)</title>
+    <title>أسطورة الطريق & باندا - لوحة التحكم المركزية للسيادة الإدارية والمالية مع العزل السحابي وإدارة الاشتراكات (V92)</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -140,7 +140,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢🐼👑 لوحة التحكم المركزية مع العزل السحابي الكامل وإدارة الاشتراكات (V91)...</span>
+                    <span>📢🐼👑 لوحة التحكم المركزية مع العزل السحابي الكامل وإدارة الاشتراكات (V92)...</span>
                 </div>
             </div>
         </div>
@@ -302,7 +302,7 @@
             <div id="invoice-preview-card">
                 <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
                     <h2 style="font-size: 14px; color: #2563eb;">إدارة أسطورة الطريق & باندا (الأدمين)</h2>
-                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة مركزياً (V91)</p>
+                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة مركزياً (V92)</p>
                 </div>
                 <div style="font-size: 10px; line-height: 1.6;">
                     <p><strong>رقم البوليصة:</strong> <span id="inv-id"></span></p>
@@ -372,14 +372,14 @@
     window.db = db;
 
     function isMasterAdminUser(user) {
-        return true; // صلاحية مطلقة لإدارة الأدمين
+        return true; 
     }
     window.isMasterAdminUser = isMasterAdminUser;
     window.isUserAdmin = () => true;
     window.isSuperAdmin = () => true;
 
     function goToPage(pageName) {
-        let userId = urlUserId || 'المدير';
+        let userId = urlUserId || (currentLoggedInUser ? currentLoggedInUser.name : 'المدير');
         let companyId = currentCompanyId || 'company_main';
         window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
     }
@@ -462,7 +462,7 @@
     window.professionalTitles = professionalTitles;
 
     let currentLoggedInUser = {
-        name: 'المدير العام',
+        name: 'المدير',
         phone: '+201114099799',
         role: 'admin',
         companyId: 'company_main',
@@ -491,20 +491,18 @@
         auditLogs: [],
         subscriptions: [],
         files: [],
-        newsText: '🌟 لوحة التحكم المركزية مع العزل السحابي الكامل وإدارة الاشتراكات (V91)...'
+        newsText: '🌟 لوحة التحكم المركزية مع العزل السحابي الكامل وإدارة الاشتراكات (V92)...'
     };
     window.appData = appData;
 
     let unsubscribers = [];
 
-    // عزل سحابي تام للشحنات والحسابات المالية والخصوصية لكل شركة بناءً على currentCompanyId
+    // مزامنة وعزل سحابي تام للشحنات والحسابات المالية لكل شركة بناءً على currentCompanyId
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
 
-        // المجموعات المعزولة كلياً لكل شركة على حدة (لا مزامنة بين الشركات)
         const isolatedCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'trucks', 'maintenanceLogs'];
-        // المجموعات العامة المشتركة (مثل الإعلانات والدردشة العامة واشتراكات النظام)
         const globalCollections = ['drivers', 'communityPosts', 'posts', 'chat', 'centralBroadcasts', 'auditLogs', 'subscriptions'];
 
         isolatedCollections.forEach(colName => {
@@ -538,6 +536,16 @@
                 appData[colName] = rawData;
                 if (colName === 'posts') appData.wallPosts = appData.posts;
                 window.appData = appData;
+                
+                // مزامنة وتحديث بيانات المستخدم النشط من مجموعة السائقين الحقيقية
+                if (colName === 'drivers' && urlUserId) {
+                    let foundUser = rawData.find(d => String(d.name) === String(urlUserId) || String(d.phone) === String(urlUserId) || d.docId === urlUserId);
+                    if (foundUser) {
+                        window.currentLoggedInUser = { ...window.currentLoggedInUser, ...foundUser, isMasterAdmin: true };
+                        applyUserPermissionsUI();
+                    }
+                }
+
                 if(typeof refreshActiveSection === 'function') refreshActiveSection();
             });
             unsubscribers.push(unsub);
@@ -555,12 +563,15 @@
 
     window.changeActiveCompany = function(newCompanyId) {
         currentCompanyId = newCompanyId;
+        if(window.currentLoggedInUser) {
+            window.currentLoggedInUser.companyId = newCompanyId;
+        }
         showToast(`تم التبديل إلى نطاق الشركة: ${newCompanyId} وعزل البيانات بنجاح 🏢`);
         initFirebaseListeners(currentCompanyId);
     };
 
     window.manualRefreshData = function() {
-        showToast('جاري تحديث ومزامنة بيانات النطاق المعزول للأدمين... 🔄');
+        showToast('جاري تحديث ومزامنة بيانات النطاق المعزول والأدمين... 🔄');
         initFirebaseListeners(currentCompanyId);
         setTimeout(() => {
             showToast('تمت المزامنة والتحديث بنجاح! ✅');
@@ -576,14 +587,35 @@
         const selector = document.getElementById('active-company-select');
         if(selector) selector.value = currentCompanyId;
 
-        window.currentLoggedInUser = {
-            name: 'المدير العام',
-            phone: '+201114099799',
-            role: 'admin',
-            companyId: currentCompanyId,
-            title: 'المدير المؤسس العام',
-            isMasterAdmin: true
-        };
+        // محاولة جلب حساب المدير أو المستخدم الصحيح من فايربيس
+        try {
+            const driversSnap = await db.collection('drivers').get();
+            let allDrivers = driversSnap.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+            appData.drivers = allDrivers;
+
+            let matchedDriver = allDrivers.find(d => String(d.name) === String(urlUserId) || String(d.phone) === String(urlUserId) || d.docId === urlUserId);
+            if (matchedDriver) {
+                window.currentLoggedInUser = { ...matchedDriver, isMasterAdmin: true };
+            } else {
+                window.currentLoggedInUser = {
+                    name: urlUserId || 'المدير',
+                    phone: '+201114099799',
+                    role: 'admin',
+                    companyId: currentCompanyId,
+                    title: 'المدير المؤسس العام',
+                    isMasterAdmin: true
+                };
+            }
+        } catch(e) {
+            window.currentLoggedInUser = {
+                name: 'المدير',
+                phone: '+201114099799',
+                role: 'admin',
+                companyId: currentCompanyId,
+                title: 'المدير المؤسس العام',
+                isMasterAdmin: true
+            };
+        }
 
         applyUserPermissionsUI();
         initFirebaseListeners(currentCompanyId);
@@ -600,7 +632,7 @@
         }
 
         window.currentLoggedInUser = {
-            name: 'المدير العام',
+            name: 'المدير',
             phone: phone,
             role: 'admin',
             companyId: currentCompanyId,
@@ -633,7 +665,7 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let messages = [`<span><i class="fa-solid fa-crown" style="color:#fde047;"></i> لوحة التحكم المركزية مع العزل السحابي (V91) - شحنات الشركة: ${(data.shipments || []).length}</span>`];
+        let messages = [`<span><i class="fa-solid fa-crown" style="color:#fde047;"></i> لوحة التحكم المركزية مع العزل السحابي (V92) - شحنات الشركة: ${(data.shipments || []).length}</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -657,7 +689,7 @@
         let user = window.currentLoggedInUser;
         if (!user) return;
         
-        document.getElementById('header-username').innerText = user.name || 'المدير العام';
+        document.getElementById('header-username').innerText = user.name || 'المدير';
         document.getElementById('header-role-badge').innerText = '👑 المدير العام والأدمين (Master Admin)';
 
         const avatarEl = document.getElementById('header-avatar-btn');
@@ -786,7 +818,7 @@
                     </div>
 
                     <div style="padding: 38px 14px 14px 14px;">
-                        <h3 style="font-size: 15px; color: var(--accent-main); margin-bottom: 2px; border: none; padding: 0;">${user.name || 'المدير العام'}</h3>
+                        <h3 style="font-size: 15px; color: var(--accent-main); margin-bottom: 2px; border: none; padding: 0;">${user.name || 'المدير'}</h3>
                         <p style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px;">
                             النطاق الحالي: ${userCompanyName} | الهاتف: ${userPhone} | صلاحية مطلقة: 👑 مدير النظام والأدمين
                         </p>
@@ -869,7 +901,7 @@
         } else if (sectionId === 'pandaAdmin') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا وإدارة النطاق المعزول (V91)</h3>
+                    <h3 style="color:var(--yellow-warning);">👑 غرفة باندا العليا وإدارة النطاق المعزول (V92)</h3>
                     <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">
                         مرحباً بك يا فخامة المدير. أنت تعمل حالياً داخل نطاق معزول تماماً للشركة: <strong style="color:var(--green-success);">${currentCompanyId}</strong>. بيانات الشحنات، المصروفات، والخزينة هنا خاصة فقط بهذا النطاق ولا تتداخل مع الشركات الأخرى.
                     </p>
@@ -1727,8 +1759,8 @@
         let pId = String(Date.now());
         const newPost = {
             id: pId,
-            author: user.name || 'المدير العام',
-            user: user.name || 'المدير العام',
+            author: user.name || 'المدير',
+            user: user.name || 'المدير',
             avatar: user.avatar || '',
             text: text,
             time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
@@ -1848,7 +1880,7 @@
         e.preventDefault();
         const text = document.getElementById('chat-input').value;
         const fileInput = document.getElementById('chat-file');
-        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير العام';
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير';
 
         if(!text && (!fileInput.files || fileInput.files.length === 0)) return;
 
@@ -2301,7 +2333,7 @@
         let bId = String(Date.now());
         const newMsg = {
             id: bId,
-            sender: 'المدير العام (الأدمين)',
+            sender: 'المدير (الأدمين)',
             text: text,
             priority: priority,
             time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
@@ -2355,7 +2387,7 @@
         const shipmentId = String(Date.now());
         const newShipment = {
             id: shipmentId,
-            companyId: currentCompanyId, // ربط صريح بالنطاق المعزول الحالي
+            companyId: currentCompanyId,
             name: document.getElementById('s-name').value,
             phone: document.getElementById('s-phone').value,
             address: document.getElementById('s-address').value,
@@ -2432,7 +2464,7 @@
         const text = document.getElementById('feed-text').value;
         if (!text) return;
         let pId = String(Date.now());
-        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير العام';
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير';
         const newPost = {
             id: pId,
             author: userName,
@@ -2451,7 +2483,7 @@
     function publishCommunityPost() {
         const text = document.getElementById('community-post-text').value;
         if(!text) return;
-        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير العام';
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير';
         let pId = String(Date.now());
         const newPost = {
             id: pId,
