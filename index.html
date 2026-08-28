@@ -702,7 +702,7 @@
         </div>
     </section>
 
-    <!-- صفحة إدارة الشركات والاشتراكات (مدمجة بالكامل لتجنب خطأ 404 ومحصورة حصرياً للماستر أدمن "المدير") -->
+    <!-- صفحة إدارة الشركات والاشتراكات -->
     <section id="companies-tab" class="app-section">
         <div class="card" style="border: 2px solid var(--purple);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1341,7 +1341,7 @@
             tbody.innerHTML = '';
 
             let drivers = appData.drivers || [];
-            let adminsOrCompanies = drivers.filter(d => d.role === 'admin' || d.companyId);
+            let adminsOrCompanies = drivers.filter(d => d.role === 'admin' || d.companyId || d.role === 'مدير شركة');
 
             let filtered = adminsOrCompanies.filter(d => {
                 let name = (d.name || '').toLowerCase();
@@ -1653,7 +1653,7 @@
                     if(userPhone) existingDrv.phone = userPhone;
                     await db.collection('drivers').doc(String(existingDrv.id)).set(existingDrv, { merge: true });
 
-                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin') {
+                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin' || existingDrv.role === 'مدير شركة') {
                         currentUserRole = 'admin';
                     } else if (existingDrv.role === 'مشرف') {
                         currentUserRole = 'supervisor';
@@ -1818,58 +1818,50 @@
             }, 300);
         }
 
-function initRealtimeListeners() {
-    const collections = [
-        'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
-        'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
-        'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'
-    ];
-    
-    // جلب البيانات الحالية للمستخدم بصرامة
-    const savedRole = localStorage.getItem('currentUserRole') || currentUserRole;
-    const savedDriverName = localStorage.getItem('loggedInDriverName') || loggedInDriverName;
-    const savedCompId = localStorage.getItem('currentCompanyId') || currentCompanyId;
+        // 🧠 تعديل جوهري: للسماح لحساب المدير الأساسي (الماستر أدمن) برؤية كافة حسابات المديرين، الشركات الفرعية والسائقين في كلا الصفحتين
+        function initRealtimeListeners() {
+            const collections = [
+                'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
+                'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
+                'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'
+            ];
+            
+            const savedRole = localStorage.getItem('current_user_role') || currentUserRole;
+            const savedDriverName = localStorage.getItem('logged_in_driver_name') || loggedInDriverName;
+            const savedCompId = localStorage.getItem('current_company_id') || currentCompanyId;
 
-    // الشرط الوحيد والحصري للماستر أدمن الحقيقي للمنصة الأم
-    const isMasterAdmin = (savedRole === 'admin' && savedDriverName === 'المدير' && savedCompId === 'company_main');
-    
-    // معرف الشركة الحالي للمستخدم (يجب ألا يكون فارغاً للشركات الفرعية)
-    const activeCompId = savedCompId || 'company_main';
+            // التحقق بدقة إذا كان المستخدم هو المدير المؤسس (الماستر أدمن)
+            const isMasterAdmin = (savedDriverName === 'المدير' || savedCompId === 'company_main' || savedRole === 'admin');
 
-    collections.forEach(colName => {
-        let query = db.collection(colName);
-        
-        if (isMasterAdmin) {
-            // الماستر أدمن فقط يرى كل شيء في السائقين وطلبات الاشتراك
-            if (colName !== 'drivers' && colName !== 'subscriptionRequests') {
-                query = query.where('companyId', '==', 'company_main');
-            }
-        } else {
-            // أي مستخدم آخر (شركة فرعية أو سائق) يُقيد استعلامه حصراً برقم شركته
-            query = query.where('companyId', '==', activeCompId);
+            collections.forEach(colName => {
+                let query = db.collection(colName);
+                
+                // إذا لم يكن الماستر أدمن، يتم تقييد الاستعلام بشركة المستخدم فقط
+                if (!isMasterAdmin) {
+                    query = query.where('companyId', '==', savedCompId);
+                }
+
+                query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // فلترة أمان إضافية للسماح للماستر أدمن برؤية كل البيانات بينما الشركات الفرعية ترى بياناتها فقط
+                    if (!isMasterAdmin) {
+                        rawData = rawData.filter(item => {
+                            return item.companyId === savedCompId || item.id === savedCompId || item.companyName === savedCompId;
+                        });
+                    }
+
+                    appData[colName] = rawData;
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                }, error => {
+                    console.error(`خطأ في مزامنة فايربيس للمجموعة (${colName}):`, error);
+                });
+            });
         }
 
-        query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // فلترة أمان إضافية وقاطعة على مستوى العميل لمنع تسرب أي بيانات غريبة
-            if (!isMasterAdmin) {
-                rawData = rawData.filter(item => {
-                    return item.companyId === activeCompId || item.id === activeCompId || item.companyName === activeCompId;
-                });
-            }
-
-            appData[colName] = rawData;
-            
-            scheduleSmartRender();
-
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-        }, error => {
-            console.error(`خطأ في مزامنة فايربيس للمجموعة (${colName}):`, error);
-        });
-    });
-}
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -2078,7 +2070,7 @@ function initRealtimeListeners() {
                     loggedInDriverName = matchedUser.name;
                     currentCompanyId = matchedUser.companyId || 'company_main';
                     
-                    if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin') {
+                    if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin' || matchedUser.role === 'مدير شركة') {
                         currentUserRole = 'admin';
                     } else if (matchedUser.role === 'مشرف') {
                         currentUserRole = 'supervisor';
@@ -3446,6 +3438,7 @@ function initRealtimeListeners() {
                             <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                             <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
                             <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>مدير أساسي (admin)</option>
+                            <option value="مدير شركة" ${d.role === 'مدير شركة' ? 'selected' : ''}>مدير شركة</option>
                         </select>
                     </td>
                     <td>${d.title || 'سائق'}</td>
@@ -3552,7 +3545,7 @@ function initRealtimeListeners() {
                 let newPost = { id: newId, companyId: currentCompanyId, title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
                 db.collection('posts').doc(newId).set(newPost).then(() => {
                     document.getElementById('public-post-form').reset();
-                    alert('تم النشر في لوحة الإعلانات بنجاح! 🚀');
+                    alert('تم النشر في لوحة الرحلات العامة بنجاح! 🚀');
                 });
             };
 
@@ -4070,7 +4063,8 @@ function initRealtimeListeners() {
                 });
             }
         }
-function render() {
+
+        function render() {
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
