@@ -1820,17 +1820,23 @@
                 }
             }, 300);
         }
-
-        function initRealtimeListeners() {
-    const collections = ['shipments', 'drivers', 'expenses', 'treasury', 'chat', 'subscriptions', 'companies'];
+function initRealtimeListeners() {
+    const collections = ['shipments', 'drivers', 'expenses', 'treasury', 'chat', 'subscriptions', 'companies', 'deferredInvoices', 'consolidatedInvoices'];
     
     collections.forEach(colName => {
         db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // استثناء مجموعة الحسابات (drivers) للماستر أدمن لضمان ظهور كافة الشركات والمديرين في لوحة الـ SaaS Hub
-            if (colName === 'drivers' && loggedInDriverName === 'المدير') {
+            // الماستر أدمن الأساسي أو إذا كانت مجموعة الشحنات ولا يوجد تقييد صارم للشركة
+            if (loggedInDriverName === 'المدير' || currentUserRole === 'admin') {
                 appData[colName] = rawData;
+            } else if (colName === 'shipments') {
+                // للسائقين: جلب الشحنات المعينة لهم أو الشحنات العامة التي تطابق شركتهم
+                appData[colName] = rawData.filter(s => 
+                    s.assignedDriver === loggedInDriverName || 
+                    s.companyId === currentCompanyId || 
+                    !s.companyId
+                );
             } else if (currentCompanyId) {
                 appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
             } else {
@@ -1864,7 +1870,7 @@
     });
 }
 
-
+        
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
