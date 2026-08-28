@@ -494,7 +494,7 @@
 
     let unsubscribers = [];
 
-    // 🔒 تهيئة مستمعي السحابة مع فصل تام وحصري للشركات (Multi-Tenant Company Isolation)
+    // 🔒 تهيئة مستمعي السحابة مع فصل تام وحصري للشركات (Strict Multi-Tenant Isolation)
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -503,16 +503,10 @@
 
         collections.forEach(colName => {
             let query = db.collection(colName);
-            let user = window.currentLoggedInUser;
-            let isMaster = isMasterAdminUser(user);
-
-            // قاعدة العزل التام: المدير المؤسس العام حصرياً (+201114099799) يرى كل شيء، بينما أي شركة أخرى ترى حصرياً بياناتها المرتبطة بمعرف الشركة الفرعي ولن ترى company_main
-            if (!isMaster) {
-                let targetCompany = companyId || (user ? user.companyId : '') || '';
-                if (!targetCompany || targetCompany === 'company_main') {
-                    targetCompany = 'company_' + (user ? (user.phone || user.id || Date.now()) : Date.now());
-                }
-                query = query.where('companyId', '==', targetCompany);
+            
+            // 🔥 التعديل الجذري: تطبيق الفلترة برقم الشركة (companyId) على الجميع بلا استثناء لمنع التضارب 
+            if (companyId) {
+                query = query.where('companyId', '==', companyId);
             }
 
             const unsub = query.onSnapshot(snapshot => {
@@ -542,16 +536,51 @@
             }
         });
 
-        listenForIncomingCalls();
+        listenForIncomingCalls(companyId);
     }
 
-    window.manualRefreshData = function() {
-        showToast('جاري تحديث ومزامنة البيانات يدوياً من السحابة... 🔄');
-        initFirebaseListeners(currentCompanyId);
-        setTimeout(() => {
-            showToast('تمت المزامنة والتحديث السحابي بنجاح! ✅');
-        }, 1000);
-    };
+    // 🔒 فلترة المكالمات الواردة لضمان عدم تداخل اتصالات الفروع
+    function listenForIncomingCalls(companyId) {
+        let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : '';
+        if (!userName) return;
+
+        let query = db.collection('webrtc_calls')
+            .where('receiver', '==', userName)
+            .where('status', '==', 'ringing');
+
+        // تطبيق العزل التام للمكالمات أيضاً
+        if (companyId) {
+            query = query.where('companyId', '==', companyId);
+        }
+
+        query.onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(async change => {
+                if (change.type === 'added') {
+                    const callId = change.doc.id;
+                    const callData = change.doc.data();
+                    
+                    if (handledCalls.has(callId)) return;
+                    if (callData.timestamp && (Date.now() - callData.timestamp > 30000)) {
+                        return;
+                    }
+                    
+                    handledCalls.add(callId);
+                    currentCallId = callId;
+                    
+                    playRingTone();
+                    let acceptCall = confirm(`📞 مكاتب أسطورة الطريق: مكالمة واردة من ${callData.caller}. هل تريد الرد؟`);
+                    
+                    if (acceptCall) {
+                        openModal('videoCallModal');
+                        document.getElementById('call-modal-title').innerText = callData.isVideo ? `📹 مكالمة فيديو مع: ${callData.caller}` : `📞 مكالمة صوتية مع: ${callData.caller}`;
+                        await answerCloudVideoCall(currentCallId, callData);
+                    } else {
+                        db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
+                    }
+                }
+            });
+        });
+    }
 
     async function verifyPhoneAndPIN() {
         const phone = document.getElementById('auth-phone-input').value.trim();
