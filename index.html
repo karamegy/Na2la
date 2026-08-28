@@ -1330,7 +1330,6 @@
                 alert('عذراً، لوحة تحكم وإدارة الشركات مخصصة للماستر أدمن (المدير) الأساسي فقط! 🔒');
                 return;
             }
-            // التبديل إلى قسم الشركات المدمج داخل index.html وتحديث الجدول
             switchTab('companies-tab');
             renderCompaniesManagementTable();
         }
@@ -1807,8 +1806,6 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
-        let isListenersInitialized = false;
-        
         let _renderTimer = null;
         function scheduleSmartRender() {
             if (_renderTimer) return;
@@ -1820,56 +1817,54 @@
                 }
             }, 300);
         }
-function initRealtimeListeners() {
-    const collections = ['shipments', 'drivers', 'expenses', 'treasury', 'chat', 'subscriptions', 'companies', 'deferredInvoices', 'consolidatedInvoices'];
-    
-    collections.forEach(colName => {
-        db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // الماستر أدمن الأساسي أو إذا كانت مجموعة الشحنات ولا يوجد تقييد صارم للشركة
-            if (loggedInDriverName === 'المدير' || currentUserRole === 'admin') {
-                appData[colName] = rawData;
-            } else if (colName === 'shipments') {
-                // للسائقين: جلب الشحنات المعينة لهم أو الشحنات العامة التي تطابق شركتهم
-                appData[colName] = rawData.filter(s => 
-                    s.assignedDriver === loggedInDriverName || 
-                    s.companyId === currentCompanyId || 
-                    !s.companyId
-                );
-            } else if (currentCompanyId) {
-                appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
-            } else {
-                appData[colName] = rawData;
-            }
-            
-            scheduleSmartRender();
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+        function initRealtimeListeners() {
+            const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
             
-            const deferredTab = document.getElementById('deferred-invoices-tab');
-            if (deferredTab && deferredTab.classList.contains('active')) {
-                loadDeferredInvoicesTable();
-            }
-            
-            const reportsTab = document.getElementById('reports-tab');
-            if (reportsTab && reportsTab.classList.contains('active')) {
-                if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
-                if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
-                if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
-            }
-            
-            const companiesTab = document.getElementById('companies-tab');
-            if (companiesTab && companiesTab.classList.contains('active')) {
-                if (typeof renderCompaniesManagementTable === 'function') renderCompaniesManagementTable();
-            }
-        }, error => {
-            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-        });
-    });
-}
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (loggedInDriverName === 'المدير' || currentUserRole === 'admin') {
+                        appData[colName] = rawData;
+                    } else if (colName === 'shipments') {
+                        appData[colName] = rawData.filter(s => 
+                            s.assignedDriver === loggedInDriverName || 
+                            s.companyId === currentCompanyId || 
+                            !s.companyId
+                        );
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
 
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    
+                    const deferredTab = document.getElementById('deferred-invoices-tab');
+                    if (deferredTab && deferredTab.classList.contains('active')) {
+                        loadDeferredInvoicesTable();
+                    }
+                    
+                    const reportsTab = document.getElementById('reports-tab');
+                    if (reportsTab && reportsTab.classList.contains('active')) {
+                        if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
+                        if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
+                        if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
+                    }
+                    
+                    const companiesTab = document.getElementById('companies-tab');
+                    if (companiesTab && companiesTab.classList.contains('active')) {
+                        if (typeof renderCompaniesManagementTable === 'function') renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
+        }
         
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
@@ -1923,30 +1918,29 @@ function initRealtimeListeners() {
         }
 
         function renderCompanyAdminSubscriptionView() {
-    const card = document.getElementById('company-admin-sub-card');
-    const infoBox = document.getElementById('company-sub-info-box');
-    if (!card || !infoBox) return;
+            const card = document.getElementById('company-admin-sub-card');
+            const infoBox = document.getElementById('company-sub-info-box');
+            if (!card || !infoBox) return;
 
-    // التعديل الصحيح: السماح لأدمين الشركات الفرعية (الذين ليسوا الماستر الأساسي "المدير") برؤية بطاقة الاشتراك والتجديد
-    if (loggedInDriverName !== 'المدير') {
-        card.style.display = 'block';
-        let currentDrv = getCurrentDriver();
-        let plan = currentDrv.subPlan || 'monthly';
-        let expiry = currentDrv.subExpiry || 'لم يُحدد';
-        let status = currentDrv.subStatus || 'active';
-        let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
+            if (loggedInDriverName !== 'المدير') {
+                card.style.display = 'block';
+                let currentDrv = getCurrentDriver();
+                let plan = currentDrv.subPlan || 'monthly';
+                let expiry = currentDrv.subExpiry || 'لم يُحدد';
+                let status = currentDrv.subStatus || 'active';
+                let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
 
-        infoBox.innerHTML = `
-            <p><strong>اسم الحساب/الشركة:</strong> ${currentDrv.name || loggedInDriverName} (${currentDrv.companyName || 'شركة جديدة'})</p>
-            <p><strong>الهاتف:</strong> ${currentDrv.phone || 'غير مسجل'}</p>
-            <p><strong>الباقة الحالية:</strong> ${plan} | <strong>الحالة:</strong> ${statusBadge}</p>
-            <p><strong>تاريخ انتهاء الصلاحية:</strong> <span style="color:var(--danger); font-weight:bold;">${expiry}</span></p>
-            <p style="margin-top:6px; font-size:10px; opacity:0.85;">⚠️ ملاحظة: لتجديد اشتراك شركتك، يرجى تحويل الرسوم وإرسال كود العملية للإدارة.</p>
-        `;
-    } else {
-        card.style.display = 'none';
-    }
-}
+                infoBox.innerHTML = `
+                    <p><strong>اسم الحساب/الشركة:</strong> ${currentDrv.name || loggedInDriverName} (${currentDrv.companyName || 'شركة جديدة'})</p>
+                    <p><strong>الهاتف:</strong> ${currentDrv.phone || 'غير مسجل'}</p>
+                    <p><strong>الباقة الحالية:</strong> ${plan} | <strong>الحالة:</strong> ${statusBadge}</p>
+                    <p><strong>تاريخ انتهاء الصلاحية:</strong> <span style="color:var(--danger); font-weight:bold;">${expiry}</span></p>
+                    <p style="margin-top:6px; font-size:10px; opacity:0.85;">⚠️ ملاحظة: لتجديد اشتراك شركتك، يرجى تحويل الرسوم وإرسال كود العملية للإدارة.</p>
+                `;
+            } else {
+                card.style.display = 'none';
+            }
+        }
 
         function updateMemberSub(driverId) {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
@@ -2403,7 +2397,6 @@ function initRealtimeListeners() {
         function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
         function switchTab(tabId, btn) {
-            // حصار قسم الشركات حصرياً لـ "المدير" / الأدمن فقط
             if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
                 alert('عذراً، لوحة إدارة الشركات مخصصة للماستر أدمن الأساسي (المدير) فقط.');
                 return;
@@ -4073,7 +4066,7 @@ function initRealtimeListeners() {
                 });
             }
         }
-        function render() {
+function render() {
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
@@ -4369,4 +4362,4 @@ function renderSelectedInvoice() {
         }
     </script>
 </body>
-                    </html>
+    </html>
