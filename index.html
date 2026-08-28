@@ -1818,17 +1818,20 @@
             }, 300);
         }
 function initRealtimeListeners() {
+function initRealtimeListeners() {
     const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
     
     collections.forEach(colName => {
         let query = db.collection(colName);
 
-        // عزل الشركات بشكل قطعي وكامل: أي حساب غير الماستر أدمن مقيد حصرياً برقم شركته
-        if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
-            query = query.where('companyId', '==', currentCompanyId);
-        } else if (loggedInDriverName === 'المدير' && currentCompanyId && currentCompanyId !== 'company_main' && colName !== 'drivers' && colName !== 'subscription_requests') {
-            // الماستر أدمن عند معاينة بيانات شركة محددة يتم فلترة الشحنات والخزينة الخاصة بها
-            query = query.where('companyId', '==', currentCompanyId);
+        // عزل تام وصارم لجميع الحسابات والمديرين (لا يوجد استثناء لأحد، الجميع مقيد بشرعته فقط)
+        let targetComp = currentCompanyId || 'BLOCKED_COMPANY_ID';
+        
+        // استثناء لوحة طلبات الاشتراك المركزية للماستر أدمن العام فقط إذا لزم الأمر، أو عزل الكل
+        if (colName === 'subscriptionRequests' && (loggedInDriverName === 'المدير' || currentUserRole === 'admin')) {
+            // طلبات الاشتراك العامة تبقى للماستر العام فقط إن وجد نظام مركزي
+        } else {
+            query = query.where('companyId', '==', targetComp);
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
@@ -1844,6 +1847,7 @@ function initRealtimeListeners() {
         });
     });
 }
+
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
