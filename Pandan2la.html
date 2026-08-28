@@ -492,8 +492,8 @@
     };
     window.appData = appData;
 
-    let unsubscribers = [];
-function initRealtimeListeners() {
+    
+    function initRealtimeListeners() {
     const collections = [
         'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
         'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
@@ -504,35 +504,29 @@ function initRealtimeListeners() {
     const savedDriverName = localStorage.getItem('loggedInDriverName') || loggedInDriverName;
     const savedCompId = localStorage.getItem('currentCompanyId') || currentCompanyId;
 
-    const isMasterAdmin = (savedRole === 'admin' && savedDriverName === 'المدير' && savedCompId === 'company_main');
-    const activeCompId = savedCompId || 'company_main';
+    // التحقق المرن: يعتبر ماستر أدمن إذا كان دوره أدمن واسمه "المدير" أو إذا لم يكن هناك معرف شركة فرعية مخصص
+    const isMasterAdmin = (savedRole === 'admin' && (savedDriverName === 'المدير' || !savedCompId || savedCompId === 'company_main'));
 
     collections.forEach(colName => {
         let query = db.collection(colName);
         
         if (isMasterAdmin) {
+            // الماستر أدمن يستعرض كافة السائقين وطلبات الاشتراك دون قيود
             if (colName !== 'drivers' && colName !== 'subscriptionRequests') {
                 query = query.where('companyId', '==', 'company_main');
             }
         } else {
+            // الشركات الفرعية مقيدة حصراً برقم شركتها
+            let activeCompId = savedCompId || 'company_main';
             query = query.where('companyId', '==', activeCompId);
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // تخصيص الفلترة الذكية للماستر أدمن وباقي الشركات
-            if (isMasterAdmin) {
-                if (colName === 'drivers') {
-                    // الماستر أدمن يرى: (مديري الشركات أو الحسابات الإدارية) + (سائقي شركته الأم فقط)
-                    rawData = rawData.filter(item => {
-                        let isCompanyAdmin = (item.role === 'admin' || item.companyId || item.companyName);
-                        let belongsToMain = (item.companyId === 'company_main' || !item.companyId);
-                        return isCompanyAdmin || belongsToMain;
-                    });
-                }
-            } else {
-                // الشركة الفرعية ترى بياناتها فقط
+            // تطبيق الفلترة للشركات الفرعية فقط، بينما يرى الماستر أدمن كل شيء بلا قيود
+            if (!isMasterAdmin) {
+                let activeCompId = savedCompId || 'company_main';
                 rawData = rawData.filter(item => {
                     return item.companyId === activeCompId || item.id === activeCompId || item.companyName === activeCompId;
                 });
@@ -549,6 +543,7 @@ function initRealtimeListeners() {
         });
     });
 }
+
 
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
