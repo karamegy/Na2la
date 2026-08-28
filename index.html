@@ -702,7 +702,7 @@
         </div>
     </section>
 
-    <!-- صفحة إدارة الشركات والاشتراكات -->
+    <!-- صفحة إدارة الشركات والاشتراكات (مدمجة بالكامل لتجنب خطأ 404 ومحصورة حصرياً للماستر أدمن "المدير") -->
     <section id="companies-tab" class="app-section">
         <div class="card" style="border: 2px solid var(--purple);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -1326,13 +1326,15 @@
         }
 
         function openCompaniesManagement() {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
+            if (loggedInDriverName !== 'المدير') {
                 alert('عذراً، لوحة تحكم وإدارة الشركات مخصصة للماستر أدمن (المدير) الأساسي فقط! 🔒');
                 return;
             }
+            // التبديل إلى قسم الشركات المدمج داخل index.html لتجنب خطأ 404
             switchTab('companies-tab');
             renderCompaniesManagementTable();
         }
+
 
         function renderCompaniesManagementTable() {
             const query = (document.getElementById('companies-section-search')?.value || '').toLowerCase();
@@ -1341,7 +1343,7 @@
             tbody.innerHTML = '';
 
             let drivers = appData.drivers || [];
-            let adminsOrCompanies = drivers.filter(d => d.role === 'admin' || d.companyId || d.role === 'مدير شركة');
+            let adminsOrCompanies = drivers.filter(d => d.role === 'admin' || d.companyId);
 
             let filtered = adminsOrCompanies.filter(d => {
                 let name = (d.name || '').toLowerCase();
@@ -1383,7 +1385,7 @@
         function openMasterEnquiryModal() { document.getElementById('masterEnquiryModal').style.display = 'flex'; }
 
         function openAddCompanyModal() {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
+            if (loggedInDriverName !== 'المدير') {
                 alert('عذراً، إضافة الشركات الجديدة وتفعيلها مقتصرة على الماستر أدمن الأساسي (المدير) فقط!');
                 return;
             }
@@ -1391,7 +1393,7 @@
         }
 
         async function handleCreateCompanySubmit() {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
+            if (loggedInDriverName !== 'المدير') {
                 alert('عذراً، غير مسموح لك بإجراء هذه العملية!');
                 return;
             }
@@ -1521,7 +1523,7 @@
         }
 
         async function approveSubscriptionRequest(reqId, driverId, months) {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') { 
+            if (loggedInDriverName !== 'المدير') { 
                 alert('عذراً، تفعيل الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط!'); 
                 return; 
             }
@@ -1573,7 +1575,7 @@
         }
 
         function renderAdminPendingCashRequests() {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
+            if (loggedInDriverName !== 'المدير') return;
             const container = document.getElementById('admin-pending-cash-requests');
             if (!container) return;
 
@@ -1653,7 +1655,7 @@
                     if(userPhone) existingDrv.phone = userPhone;
                     await db.collection('drivers').doc(String(existingDrv.id)).set(existingDrv, { merge: true });
 
-                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin' || existingDrv.role === 'مدير شركة') {
+                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin') {
                         currentUserRole = 'admin';
                     } else if (existingDrv.role === 'مشرف') {
                         currentUserRole = 'supervisor';
@@ -1806,6 +1808,8 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
+        let isListenersInitialized = false;
+        
         let _renderTimer = null;
         function scheduleSmartRender() {
             if (_renderTimer) return;
@@ -1818,52 +1822,69 @@
             }, 300);
         }
 
-        // 🧠 تعديل جوهري: للسماح لحساب المدير الأساسي (الماستر أدمن) برؤية كافة حسابات المديرين، الشركات الفرعية والسائقين في كلا الصفحتين
         function initRealtimeListeners() {
-            const collections = [
-                'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
-                'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
-                'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'
-            ];
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
+
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
             
-            const savedRole = localStorage.getItem('current_user_role') || currentUserRole;
-            const savedDriverName = localStorage.getItem('logged_in_driver_name') || loggedInDriverName;
-            const savedCompId = localStorage.getItem('current_company_id') || currentCompanyId;
-
-            // التحقق بدقة إذا كان المستخدم هو المدير المؤسس (الماستر أدمن)
-            const isMasterAdmin = (savedDriverName === 'المدير' || savedCompId === 'company_main' || savedRole === 'admin');
-
             collections.forEach(colName => {
-                let query = db.collection(colName);
-                
-                // إذا لم يكن الماستر أدمن، يتم تقييد الاستعلام بشركة المستخدم فقط
-                if (!isMasterAdmin) {
-                    query = query.where('companyId', '==', savedCompId);
-                }
-
-                query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // فلترة أمان إضافية للسماح للماستر أدمن برؤية كل البيانات بينما الشركات الفرعية ترى بياناتها فقط
-                    if (!isMasterAdmin) {
-                        rawData = rawData.filter(item => {
-                            return item.companyId === savedCompId || item.id === savedCompId || item.companyName === savedCompId;
-                        });
+                    if (currentCompanyId && currentCompanyId !== 'company_main' && loggedInDriverName !== 'المدير') {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
+                    } else {
+                        appData[colName] = rawData;
                     }
-
-                    appData[colName] = rawData;
+                    
+                    if (colName === 'drivers' && appData.drivers.length === 0) {
+                        const defaultAdmin = {
+                            id: "1",
+                            companyId: 'company_main',
+                            companyName: 'أسطورة الطريق الرئيسية',
+                            name: 'المدير',
+                            phone: '+201114099799',
+                            pin: storedPin || '01036',
+                            status: 'متاح 🟢',
+                            role: 'admin',
+                            title: 'أسطورة الطريق',
+                            coverHeight: 180,
+                            subPlan: 'monthly',
+                            subStatus: 'active',
+                            subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
+                        };
+                        db.collection('drivers').doc("1").set(defaultAdmin, { merge: true });
+                    }
+                    
                     scheduleSmartRender();
 
                     if (typeof renderChatMessages === 'function') renderChatMessages();
                     if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
                 }, error => {
-                    console.error(`خطأ في مزامنة فايربيس للمجموعة (${colName}):`, error);
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
                 });
+            });
+
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
             });
         }
 
         function renderMemberSubscriptionsList() {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
+            if (loggedInDriverName !== 'المدير') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
             const container = document.getElementById('members-subscriptions-container');
             if (!container) return;
@@ -1939,7 +1960,7 @@
         }
 
         function updateMemberSub(driverId) {
-            if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
+            if (loggedInDriverName !== 'المدير') {
                 alert('عذراً، التحكم في الاشتراكات مخصص للماستر أدمن الأساسي (المدير) فقط.');
                 return;
             }
@@ -2070,7 +2091,7 @@
                     loggedInDriverName = matchedUser.name;
                     currentCompanyId = matchedUser.companyId || 'company_main';
                     
-                    if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin' || matchedUser.role === 'مدير شركة') {
+                    if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin') {
                         currentUserRole = 'admin';
                     } else if (matchedUser.role === 'مشرف') {
                         currentUserRole = 'supervisor';
@@ -2108,7 +2129,8 @@
             const nav = document.getElementById('main-nav');
             if (currentUserRole === 'admin') {
                 nav.innerHTML = `
-                    <button type="button" class="active" onclick="switchTab('crud-tab', this); toggleSidebar();" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>                    
+                    <button type="button" class="active" onclick="switchTab('crud-tab', this); toggleSidebar();" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>
+                    <button type="button" onclick="switchTab('companies-tab', this); toggleSidebar();" style="background:var(--purple); color:white;">🏢 إدارة الشركات</button>
                     <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
                     <button type="button" onclick="switchTab('consolidated-invoices-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">📑 الفواتير المجمعة</button>
@@ -2393,7 +2415,8 @@
         function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
         function switchTab(tabId, btn) {
-            if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') {
+            // حصار قسم الشركات حصرياً لـ "المدير" فقط
+            if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير') {
                 alert('عذراً، لوحة إدارة الشركات مخصصة للماستر أدمن الأساسي (المدير) فقط.');
                 return;
             }
@@ -3438,7 +3461,6 @@
                             <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                             <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
                             <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>مدير أساسي (admin)</option>
-                            <option value="مدير شركة" ${d.role === 'مدير شركة' ? 'selected' : ''}>مدير شركة</option>
                         </select>
                     </td>
                     <td>${d.title || 'سائق'}</td>
@@ -3545,7 +3567,7 @@
                 let newPost = { id: newId, companyId: currentCompanyId, title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
                 db.collection('posts').doc(newId).set(newPost).then(() => {
                     document.getElementById('public-post-form').reset();
-                    alert('تم النشر في لوحة الرحلات العامة بنجاح! 🚀');
+                    alert('تم النشر في لوحة الإعلانات بنجاح! 🚀');
                 });
             };
 
@@ -4360,4 +4382,4 @@ function renderSelectedInvoice() {
         }
     </script>
 </body>
-                </html>
+                        </html>
