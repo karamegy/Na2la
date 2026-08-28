@@ -373,12 +373,15 @@
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
         const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مدير عام', 'المدير', 'مدير شركة'];
-        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('admin') || role.includes('مدير');
+        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('admin') || role.includes('مدير شركة');
     }
     window.isUserAdmin = isUserAdmin;
 
     function isSuperAdmin() {
         let user = window.currentLoggedInUser || {};
+        if (!user) return false;
+        let role = String(user.role || '').toLowerCase().trim();
+        if (role === 'سائق') return false; // السائق ليس مديراً بأي حال من الأحوال
         return isMasterAdminUser(user) || isUserAdmin(user.role || user.rank, user.name);
     }
     window.isSuperAdmin = isSuperAdmin;
@@ -506,8 +509,6 @@
             let user = window.currentLoggedInUser;
             let isMaster = isMasterAdminUser(user);
 
-            // قاعدة الفصل التام: فقط المدير المؤسس العام للمنصة (+201114099799) يمكنه رؤية كل الشركات.
-            // أما أي صاحب شركة أخرى أو مدير شركة فرعية فيرى حصرياً بيانات شركته فقط بناءً على companyId الخاص به.
             if (!isMaster) {
                 let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
                 query = query.where('companyId', '==', targetCompany);
@@ -551,7 +552,7 @@
         }, 1000);
     };
 
-    // 🔒 جلسة سحابية مع توليد معرف شركة مستقل تلقائياً إذا لم يكن موجوداً
+    // 🔒 جلسة سحابية مع الحفاظ بدقة على الرتبة المخزنة (سائق/مشرف/مدير) دون ترقية تلقائية خاطئة
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -579,7 +580,7 @@
                     name: urlUserId,
                     phone: '',
                     role: 'سائق',
-                    companyId: urlCompanyId || ('company_' + Date.now()),
+                    companyId: urlCompanyId || 'company_main',
                     title: 'سائق معتمد',
                     avatar: '',
                     coverUrl: ''
@@ -588,14 +589,9 @@
 
             let isMaster = isMasterAdminUser(found);
             
-            // إذا لم يكن المدير المؤسس، ولم تكن الشركة تمتلك companyId فريد (أو يساوى company_main)، ننشئ لها معرف فريد ونحفظه
-            if (!isMaster && (!found.companyId || found.companyId === 'company_main')) {
-                found.companyId = 'company_' + (found.phone || found.id || Math.random().toString(36).substring(2, 7));
-                db.collection('drivers').doc(found.docId || found.id).set({ companyId: found.companyId }, { merge: true }).catch(()=>{});
-            }
-
-            currentCompanyId = isMaster ? (urlCompanyId || 'company_main') : found.companyId;
+            // عدم ترقية السائق أو المشرف لمدير، والالتزام بدورهم وصلاحياتهم الفعلية المخزنة
             found.role = isMaster ? 'admin' : (found.role || 'سائق');
+            currentCompanyId = isMaster ? (urlCompanyId || 'company_main') : (found.companyId || urlCompanyId || 'company_main');
 
             if (!found.avatar) found.avatar = found.photoUrl || '';
             if (!found.coverUrl) found.coverUrl = found.cover || '';
@@ -657,18 +653,12 @@
             if (matchedUser) {
                 let isMaster = isMasterAdminUser(matchedUser);
                 
-                // عزل الشركات الجديدة التي ليس لها معرف فريد
-                if (!isMaster && (!matchedUser.companyId || matchedUser.companyId === 'company_main')) {
-                    matchedUser.companyId = 'company_' + (matchedUser.phone || matchedUser.id || Date.now());
-                    db.collection('drivers').doc(matchedUser.docId || matchedUser.id).set({ companyId: matchedUser.companyId }, { merge: true }).catch(()=>{});
-                }
-
-                // التصحيح الصحيح: الاعتماد على الرتبة المخزنة في قاعدة البيانات بدلاً من فرض "مدير شركة"
+                // الحفاظ الدقيق على دور المستخدم المسجل (سائق، مشرف، مدير شركة) وعدم تجاوزه
                 matchedUser.role = isMaster ? 'admin' : (matchedUser.role || 'سائق');
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
-                currentCompanyId = isMaster ? 'company_main' : matchedUser.companyId;
+                currentCompanyId = isMaster ? 'company_main' : (matchedUser.companyId || 'company_main');
                 
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية بنجاح! ✅');
@@ -743,7 +733,11 @@
         const adminStats = document.getElementById('admin-stats');
         const adminModulesGrid = document.getElementById('admin-modules-grid');
 
-        if(!isAdmin && !role.includes('مشرف') && !role.includes('مدير')) {
+        // تطبيق تقييد الصلاحيات بحسب الدور بدقة تامة (السائق لا يمتلك لوحة التحكم الإدارية)
+        if(role === 'سائق' && !isAdmin) {
+            if(adminStats) adminStats.style.display = 'none';
+            if(adminModulesGrid) adminModulesGrid.style.display = 'none';
+        } else if(!isAdmin && !role.includes('مشرف') && !role.includes('مدير')) {
             if(adminStats) adminStats.style.display = 'none';
             if(adminModulesGrid) adminModulesGrid.style.display = 'none';
         } else {
@@ -768,7 +762,16 @@
 
         if(sidebarTitle) sidebarTitle.innerText = isMaster ? '👑 لوحة المدير العام المؤسس' : (isAdmin ? '⭐ لوحة إدارة الشركة' : '👨‍✈️ قائمة السائق');
 
-        if (isAdmin || role.includes('مشرف') || role.includes('مدير')) {
+        if (role === 'سائق' && !isAdmin) {
+            sidebarList.innerHTML = `
+                <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي</button>
+                <button onclick="switchSection('shipments'); toggleSidebar();">📦 عرض الشحنات والفواتير</button>
+                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة الخطي</button>
+                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
+                <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
+                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية ومقرات التوصيل</button>
+            `;
+        } else if (isAdmin || role.includes('مشرف') || role.includes('مدير')) {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي والحساب</button>
                 <button onclick="switchSection('shipments'); toggleSidebar();">📦 إدارة الشحنات وبوليصات النقل والفواتير</button>
@@ -829,7 +832,7 @@
         let user = window.currentLoggedInUser || {};
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
+        if (!isAdmin && role === 'سائق') return;
 
         let data = appStateData();
         let shipments = data.shipments || [];
@@ -858,7 +861,7 @@
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
 
-        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
+        if (role === 'سائق' && !isAdmin && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
             showToast('عذراً، حساب السائق لا يمتلك صلاحية الوصول لهذه الوحدة!', 'warning');
             return;
         }
@@ -1978,7 +1981,7 @@
         let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
+        if (!isAdmin && role === 'سائق') return;
 
         const modal = document.getElementById('statDetailModal');
         const title = document.getElementById('stat-modal-title');
@@ -2369,14 +2372,15 @@
             return;
         }
         let drvId = String(Date.now());
+        const selectedRole = document.getElementById('new-d-role').value;
         const newDrv = {
             id: drvId,
             companyId: currentCompanyId,
             name: document.getElementById('new-d-name').value,
             phone: document.getElementById('new-d-phone').value,
             pin: document.getElementById('new-d-pin').value,
-            role: document.getElementById('new-d-role').value,
-            title: 'سائق معتمد',
+            role: selectedRole, // حفظ الدور بدقة (سائق، مشرف، مدير شركة)
+            title: selectedRole === 'سائق' ? 'سائق معتمد' : (selectedRole === 'مشرف' ? 'مشرف أسطول' : 'مدير فرعي'),
             status: 'متاح 🟢'
         };
         db.collection('drivers').doc(drvId).set(newDrv).then(() => {
