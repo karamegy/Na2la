@@ -508,11 +508,8 @@
     collections.forEach(colName => {
         let query = db.collection(colName);
         
-        if (isMasterAdmin) {
-            if (colName !== 'drivers' && colName !== 'subscriptionRequests') {
-                query = query.where('companyId', '==', 'company_main');
-            }
-        } else {
+        // للشركات الفرعية نقيد الاستعلام بالسيرفر، أما المستر أدمن فنقراً الكل لمنع ضياع البيانات القديمة التي لا تحتوي على حقل companyId
+        if (!isMasterAdmin) {
             query = query.where('companyId', '==', activeCompId);
         }
 
@@ -521,12 +518,16 @@
             
             if (isMasterAdmin) {
                 if (colName === 'drivers') {
-                    // إظهار حسابات المديرين/الأدمين للشركات الفرعية + سائقي المنصة الأم (شركتي) فقط
+                    // المستر أدمن يرى: مديري الشركات الفرعية + سائقي المنصة الأم (أو من ليس له شركة أو شركته company_main)
                     rawData = rawData.filter(item => {
                         let isCompanyAdmin = (item.role === 'admin' || item.companyName || (item.companyId && item.companyId !== 'company_main'));
-                        let isMyCompanyDriver = (item.companyId === 'company_main' || !item.companyId);
-                        
+                        let isMyCompanyDriver = (!item.companyId || item.companyId === 'company_main');
                         return isCompanyAdmin || isMyCompanyDriver;
+                    });
+                } else {
+                    // باقي المجموعات (الشحنات، العملاء، الخ) للماستر أدمن: تشمل شركته الأم والبيانات القديمة غير المحددة
+                    rawData = rawData.filter(item => {
+                        return !item.companyId || item.companyId === 'company_main';
                     });
                 }
             } else {
@@ -547,8 +548,6 @@
         });
     });
 }
-
-
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || '';
