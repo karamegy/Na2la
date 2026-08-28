@@ -369,19 +369,17 @@
     }
     window.isMasterAdminUser = isMasterAdminUser;
 
+    // دالة للتحقق إذا كان المستخدم مديراً (سواء المدير العام أو مدير شركة فرعية خاصة به)
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
-        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مدير عام', 'المدير', 'مدير شركة'];
-        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('admin') || role.includes('مدير شركة');
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
+        return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('admin') || role.includes('مدير');
     }
     window.isUserAdmin = isUserAdmin;
 
     function isSuperAdmin() {
         let user = window.currentLoggedInUser || {};
-        if (!user) return false;
-        let role = String(user.role || '').toLowerCase().trim();
-        if (role === 'سائق') return false; // السائق ليس مديراً بأي حال من الأحوال
         return isMasterAdminUser(user) || isUserAdmin(user.role || user.rank, user.name);
     }
     window.isSuperAdmin = isSuperAdmin;
@@ -509,6 +507,8 @@
             let user = window.currentLoggedInUser;
             let isMaster = isMasterAdminUser(user);
 
+            // قاعدة الفصل التام: فقط المدير المؤسس العام للمنصة (+201114099799) يمكنه رؤية كل الشركات.
+            // أما أي صاحب شركة أخرى أو مدير شركة فرعية فيرى حصرياً بيانات شركته فقط بناءً على companyId الخاص به.
             if (!isMaster) {
                 let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
                 query = query.where('companyId', '==', targetCompany);
@@ -552,7 +552,7 @@
         }, 1000);
     };
 
-    // 🔒 جلسة سحابية مع الحفاظ بدقة على الرتبة المخزنة (سائق/مشرف/مدير) دون ترقية تلقائية خاطئة
+    // جلسة سحابية تعتمد على معاملات الـ URL وتحديد companyId بدقة تامة لكل شركة
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -579,7 +579,7 @@
                 found = {
                     name: urlUserId,
                     phone: '',
-                    role: 'سائق',
+                    role: 'driver',
                     companyId: urlCompanyId || 'company_main',
                     title: 'سائق معتمد',
                     avatar: '',
@@ -587,11 +587,9 @@
                 };
             }
 
+            currentCompanyId = found.companyId || urlCompanyId || 'company_main';
             let isMaster = isMasterAdminUser(found);
-            
-            // عدم ترقية السائق أو المشرف لمدير، والالتزام بدورهم وصلاحياتهم الفعلية المخزنة
-            found.role = isMaster ? 'admin' : (found.role || 'سائق');
-            currentCompanyId = isMaster ? (urlCompanyId || 'company_main') : (found.companyId || urlCompanyId || 'company_main');
+            found.role = isMaster ? 'admin' : (String(found.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : (String(found.role || '').toLowerCase().includes('مدير') ? 'مدير شركة' : 'سائق'));
 
             if (!found.avatar) found.avatar = found.photoUrl || '';
             if (!found.coverUrl) found.coverUrl = found.cover || '';
@@ -652,13 +650,11 @@
 
             if (matchedUser) {
                 let isMaster = isMasterAdminUser(matchedUser);
-                
-                // الحفاظ الدقيق على دور المستخدم المسجل (سائق، مشرف، مدير شركة) وعدم تجاوزه
-                matchedUser.role = isMaster ? 'admin' : (matchedUser.role || 'سائق');
+                matchedUser.role = isMaster ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'مدير شركة');
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
-                currentCompanyId = isMaster ? 'company_main' : (matchedUser.companyId || 'company_main');
+                currentCompanyId = matchedUser.companyId || 'company_main';
                 
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية بنجاح! ✅');
@@ -733,11 +729,7 @@
         const adminStats = document.getElementById('admin-stats');
         const adminModulesGrid = document.getElementById('admin-modules-grid');
 
-        // تطبيق تقييد الصلاحيات بحسب الدور بدقة تامة (السائق لا يمتلك لوحة التحكم الإدارية)
-        if(role === 'سائق' && !isAdmin) {
-            if(adminStats) adminStats.style.display = 'none';
-            if(adminModulesGrid) adminModulesGrid.style.display = 'none';
-        } else if(!isAdmin && !role.includes('مشرف') && !role.includes('مدير')) {
+        if(!isAdmin && !role.includes('مشرف') && !role.includes('مدير')) {
             if(adminStats) adminStats.style.display = 'none';
             if(adminModulesGrid) adminModulesGrid.style.display = 'none';
         } else {
@@ -762,16 +754,7 @@
 
         if(sidebarTitle) sidebarTitle.innerText = isMaster ? '👑 لوحة المدير العام المؤسس' : (isAdmin ? '⭐ لوحة إدارة الشركة' : '👨‍✈️ قائمة السائق');
 
-        if (role === 'سائق' && !isAdmin) {
-            sidebarList.innerHTML = `
-                <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي</button>
-                <button onclick="switchSection('shipments'); toggleSidebar();">📦 عرض الشحنات والفواتير</button>
-                <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة الخطي</button>
-                <button onclick="switchSection('publicFeed'); toggleSidebar();">📢 لوحة الإعلانات العامة</button>
-                <button onclick="switchSection('chat'); toggleSidebar();">💬 المحادثات الفورية للأسطول</button>
-                <button onclick="switchSection('map'); toggleSidebar();">🗺️ الخريطة الحية ومقرات التوصيل</button>
-            `;
-        } else if (isAdmin || role.includes('مشرف') || role.includes('مدير')) {
+        if (isAdmin || role.includes('مشرف') || role.includes('مدير')) {
             sidebarList.innerHTML = `
                 <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي والحساب</button>
                 <button onclick="switchSection('shipments'); toggleSidebar();">📦 إدارة الشحنات وبوليصات النقل والفواتير</button>
@@ -832,7 +815,7 @@
         let user = window.currentLoggedInUser || {};
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
 
         let data = appStateData();
         let shipments = data.shipments || [];
@@ -861,7 +844,7 @@
         let isAdmin = isSuperAdmin();
         let role = String(user.role || '').toLowerCase();
 
-        if (role === 'سائق' && !isAdmin && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق' && ['pandaAdmin', 'consolidatedInvoices', 'deferredInvoices', 'centralChat', 'driversControl', 'treasury', 'expenses', 'reports', 'auditLogs', 'customers'].includes(sectionId)) {
             showToast('عذراً، حساب السائق لا يمتلك صلاحية الوصول لهذه الوحدة!', 'warning');
             return;
         }
@@ -901,7 +884,7 @@
                     <div style="padding: 38px 14px 14px 14px;">
                         <h3 style="font-size: 15px; color: var(--accent-main); margin-bottom: 2px; border: none; padding: 0;">${user.name || 'مستخدم النظام'}</h3>
                         <p style="font-size: 9px; color: var(--text-muted); margin-bottom: 8px;">
-                            معرف الشركة (Company ID): ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? (user.role || 'مدير شركة') : (user.role || 'سائق')}
+                            معرف الشركة (Company ID): ${userCompanyName} | الهاتف: ${userPhone} | الرتبة: ${isAdmin ? (user.role || 'مدير شركة') : 'سائق'}
                         </p>
 
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--bg-dark); padding: 8px; border-radius: 8px; text-align: center; margin-bottom: 12px; border: 1px solid var(--border-color);">
@@ -911,7 +894,7 @@
                             </div>
                             <div>
                                 <span style="font-size: 8px; color: var(--text-muted);">الرتبة</span>
-                                <p style="font-size: 11px; font-weight: bold; color: var(--accent-main);">${user.role || 'سائق'}</p>
+                                <p style="font-size: 11px; font-weight: bold; color: var(--accent-main);">${isAdmin ? (user.role || 'مدير شركة') : 'سائق'}</p>
                             </div>
                             <div>
                                 <span style="font-size: 8px; color: var(--text-muted);">الحالة</span>
@@ -1981,7 +1964,7 @@
         let isAdmin = isSuperAdmin();
         let user = window.currentLoggedInUser || {};
         let role = String(user.role || '').toLowerCase();
-        if (!isAdmin && role === 'سائق') return;
+        if (!isAdmin && !role.includes('مشرف') && !role.includes('مدير') && role === 'سائق') return;
 
         const modal = document.getElementById('statDetailModal');
         const title = document.getElementById('stat-modal-title');
@@ -2372,15 +2355,14 @@
             return;
         }
         let drvId = String(Date.now());
-        const selectedRole = document.getElementById('new-d-role').value;
         const newDrv = {
             id: drvId,
             companyId: currentCompanyId,
             name: document.getElementById('new-d-name').value,
             phone: document.getElementById('new-d-phone').value,
             pin: document.getElementById('new-d-pin').value,
-            role: selectedRole, // حفظ الدور بدقة (سائق، مشرف، مدير شركة)
-            title: selectedRole === 'سائق' ? 'سائق معتمد' : (selectedRole === 'مشرف' ? 'مشرف أسطول' : 'مدير فرعي'),
+            role: document.getElementById('new-d-role').value,
+            title: 'سائق معتمد',
             status: 'متاح 🟢'
         };
         db.collection('drivers').doc(drvId).set(newDrv).then(() => {
