@@ -491,8 +491,9 @@
         newsText: '🌟 نظام أسطورة الطريق & باندا متدفق لحظياً مع العزل السحابي التام للشركات (V91)...'
     };
     window.appData = appData;
-
+    }
       function initRealtimeListeners() {
+    cofunction initRealtimeListeners() {
     const collections = [
         'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
         'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
@@ -508,14 +509,10 @@
     collections.forEach(colName => {
         let query = db.collection(colName);
         
-        // الحفاظ على التوافق مع قواعد أمان فايربيس لمنع خطأ الرفض (Permission Denied)
+        // الشركات الفرعية فقط هي من تقيد استعلام السيرفر بمعرف شركتها
+        // أما الماستر أدمن فيجلب الكل لتجنب ضياع البيانات القديمة التي لا تحتوي على companyId
         if (!isMasterAdmin) {
             query = query.where('companyId', '==', activeCompId);
-        } else {
-            // للماستر أدمن، نجعل الاستعلام مطابقاً لقواعد السيرفر للمجموعات التي تتطلب فلترة
-            if (colName !== 'drivers' && colName !== 'subscriptionRequests') {
-                query = query.where('companyId', '==', 'company_main');
-            }
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
@@ -523,17 +520,20 @@
             
             if (isMasterAdmin) {
                 if (colName === 'drivers') {
+                    // الماستر أدمن يرى: مديري الشركات الفرعية + سائقي المنصة الأم (شركته الأم أو من ليس له شركة)
                     rawData = rawData.filter(item => {
                         let isCompanyAdmin = (item.role === 'admin' || item.companyName || (item.companyId && item.companyId !== 'company_main'));
                         let isMyCompanyDriver = (!item.companyId || item.companyId === 'company_main');
                         return isCompanyAdmin || isMyCompanyDriver;
                     });
                 } else {
+                    // باقي الجداول للماستر أدمن: تشمل البيانات الحديثة للشركة الأم والبيانات القديمة غير المحددة
                     rawData = rawData.filter(item => {
                         return !item.companyId || item.companyId === 'company_main';
                     });
                 }
             } else {
+                // الشركات الفرعية ترى بياناتها الخاصة فقط
                 rawData = rawData.filter(item => {
                     return item.companyId === activeCompId || item.id === activeCompId || item.companyName === activeCompId;
                 });
@@ -546,7 +546,7 @@
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
         }, error => {
-            console.error(`خطأ اتصال السحابة (${colName}):`, error.message);
+            console.error(`خطأ مزامنة السحابة (${colName}):`, error.message);
         });
     });
 }
