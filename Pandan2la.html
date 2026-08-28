@@ -554,32 +554,63 @@
 
         query.onSnapshot(snapshot => {
             snapshot.docChanges().forEach(async change => {
-                if (change.type === 'added') {
-                    const callId = change.doc.id;
-                    const callData = change.doc.data();
-                    
-                    if (handledCalls.has(callId)) return;
-                    if (callData.timestamp && (Date.now() - callData.timestamp > 30000)) {
-                        return;
-                    }
-                    
-                    handledCalls.add(callId);
-                    currentCallId = callId;
-                    
-                    playRingTone();
-                    let acceptCall = confirm(`📞 مكاتب أسطورة الطريق: مكالمة واردة من ${callData.caller}. هل تريد الرد؟`);
-                    
-                    if (acceptCall) {
-                        openModal('videoCallModal');
-                        document.getElementById('call-modal-title').innerText = callData.isVideo ? `📹 مكالمة فيديو مع: ${callData.caller}` : `📞 مكالمة صوتية مع: ${callData.caller}`;
-                        await answerCloudVideoCall(currentCallId, callData);
-                    } else {
-                        db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
+    // 🔒 تهيئة مستمعي السحابة مع عزل الشحنات وفواتير والفلترة الذكية للسائقين لمنع اختفائهم
+    function initFirebaseListeners(companyId) {
+        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+        unsubscribers = [];
+
+        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
+
+        collections.forEach(colName => {
+            let query = db.collection(colName);
+            let user = window.currentLoggedInUser;
+            let isMaster = isMasterAdminUser(user);
+
+            // تطبيق الفلترة السحابية على كافة الجداول عدا drivers لتجنب اختفاء الحسابات القديمة التي لم يتم تحديث حقل companyId لها بعد
+            if (companyId && colName !== 'drivers' && !isMaster) {
+                query = query.where('companyId', '==', companyId);
+            }
+
+            const unsub = query.onSnapshot(snapshot => {
+                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+                
+                // فلترة ذكية وآمنة للسائقين على مستوى التطبيق (Client-side)
+                // لضمان ظهور سائقي شركتك والحسابات العامة وإخفاء سائقي ومسؤولي الشركات الأخرى تماماً
+                if (colName === 'drivers') {
+                    if (!isMaster && companyId) {
+                        rawData = rawData.filter(d => {
+                            return d.companyId === companyId || !d.companyId || d.companyId === 'company_main';
+                        });
                     }
                 }
+
+                appData[colName] = rawData;
+
+                if (colName === 'posts') {
+                    appData.wallPosts = appData.posts;
+                }
+
+                window.appData = appData;
+
+                if(typeof renderStats === 'function') renderStats();
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }, err => {
+                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
             });
+            unsubscribers.push(unsub);
         });
-    }    
+
+        db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if(doc.exists && doc.data().newsText) {
+                appData.newsText = doc.data().newsText;
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }
+        });
+
+        listenForIncomingCalls(companyId);
+    }
+
     async function verifyPhoneAndPIN() {
         const phone = document.getElementById('auth-phone-input').value.trim();
         const pin = document.getElementById('auth-phone-pin').value.trim();
