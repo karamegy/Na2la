@@ -1817,55 +1817,32 @@
                 }
             }, 300);
         }
+function initRealtimeListeners() {
+    const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
+    
+    collections.forEach(colName => {
+        let query = db.collection(colName);
 
-        function initRealtimeListeners() {
-            const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
-            
-            collections.forEach(colName => {
-                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
-                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    if (loggedInDriverName === 'المدير' || currentUserRole === 'admin') {
-                        appData[colName] = rawData;
-                    } else if (colName === 'shipments') {
-                        appData[colName] = rawData.filter(s => 
-                            s.assignedDriver === loggedInDriverName || 
-                            s.companyId === currentCompanyId || 
-                            !s.companyId
-                        );
-                    } else if (currentCompanyId) {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
-                    } else {
-                        appData[colName] = rawData;
-                    }
-                    
-                    scheduleSmartRender();
-
-                    if (typeof renderChatMessages === 'function') renderChatMessages();
-                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                    
-                    const deferredTab = document.getElementById('deferred-invoices-tab');
-                    if (deferredTab && deferredTab.classList.contains('active')) {
-                        loadDeferredInvoicesTable();
-                    }
-                    
-                    const reportsTab = document.getElementById('reports-tab');
-                    if (reportsTab && reportsTab.classList.contains('active')) {
-                        if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
-                        if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
-                        if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
-                    }
-                    
-                    const companiesTab = document.getElementById('companies-tab');
-                    if (companiesTab && companiesTab.classList.contains('active')) {
-                        if (typeof renderCompaniesManagementTable === 'function') renderCompaniesManagementTable();
-                    }
-                }, error => {
-                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-                });
-            });
+        // إذا لم يكن المستخدم هو الماستر أدمن العام، قم بفلترة البيانات حسب الشركة حصرياً
+        if (loggedInDriverName !== 'المدير' && currentCompanyId) {
+            query = query.where('companyId', '==', currentCompanyId);
         }
-        
+
+        query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            appData[colName] = rawData;
+            
+            scheduleSmartRender();
+
+            if (typeof renderChatMessages === 'function') renderChatMessages();
+            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+        }, error => {
+            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+        });
+    });
+}
+
+         
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
