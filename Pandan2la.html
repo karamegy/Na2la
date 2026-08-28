@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+⁷<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
@@ -550,64 +550,51 @@
         }, 1000);
     };
 
-    // 🔒 جلسة سحابية مع عزل دقيق ومعرف شركة فريد
-    async function initCloudSessionFromURL() {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-        let urlCompanyId = urlParams.get('companyId') || urlParams.get('company');
+    // 🔒 تهيئة مستمعي السحابة مع فرض الفصل التام والصارم لكافة الحسابات بلا استثناء
+    function initFirebaseListeners(companyId) {
+        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+        unsubscribers = [];
 
-        if (!urlUserId || urlUserId === 'null') {
-            urlUserId = 'سائق';
-        }
+        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
 
-        try {
-            let found = null;
-            let snap = await db.collection("drivers").get();
+        collections.forEach(colName => {
+            let query = db.collection(colName);
+            let user = window.currentLoggedInUser;
 
-            if (urlUserId) {
-                snap.forEach(doc => {
-                    let d = doc.data();
-                    if (doc.id === urlUserId || d.name === urlUserId || d.phone === urlUserId || String(doc.id) === String(urlUserId)) {
-                        found = { docId: doc.id, id: doc.id, ...d };
-                    }
-                });
+            // فرض العزل التام لجميع الحسابات والشركات بناءً على معرف الشركة النشط الحالي
+            let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
+            query = query.where('companyId', '==', targetCompany);
+
+            const unsub = query.onSnapshot(snapshot => {
+                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+                
+                appData[colName] = rawData;
+
+                if (colName === 'posts') {
+                    appData.wallPosts = appData.posts;
+                }
+
+                window.appData = appData;
+
+                if(typeof renderStats === 'function') renderStats();
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }, err => {
+                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
+            });
+            unsubscribers.push(unsub);
+        });
+
+        db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if(doc.exists && doc.data().newsText) {
+                appData.newsText = doc.data().newsText;
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
             }
+        });
 
-            if (!found) {
-                found = {
-                    name: urlUserId,
-                    phone: '',
-                    role: 'سائق عادي',
-                    companyId: urlCompanyId || ('company_' + Date.now()),
-                    title: 'سائق معتمد',
-                    avatar: '',
-                    coverUrl: ''
-                };
-            }
-
-            let isMaster = isMasterAdminUser(found);
-            
-            if (!isMaster && (!found.companyId || found.companyId === 'company_main')) {
-                found.companyId = 'company_' + (found.phone || found.id || Math.random().toString(36).substring(2, 7));
-                db.collection('drivers').doc(found.docId || found.id).set({ companyId: found.companyId }, { merge: true }).catch(()=>{});
-            }
-
-            currentCompanyId = isMaster ? (urlCompanyId || 'company_main') : found.companyId;
-            found.role = isMaster ? 'مدير أساسي (admin)' : (found.role || 'سائق عادي');
-
-            if (!found.avatar) found.avatar = found.photoUrl || '';
-            if (!found.coverUrl) found.coverUrl = found.cover || '';
-
-            window.currentLoggedInUser = found;
-            applyUserPermissionsUI();
-            initFirebaseListeners(currentCompanyId);
-            switchSection('profile');
-
-        } catch(e) {
-            console.error(e);
-            openModal('authModal');
-        }
+        listenForIncomingCalls();
     }
+
 
     async function verifyPhoneAndPIN() {
         const phone = document.getElementById('auth-phone-input').value.trim();
