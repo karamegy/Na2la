@@ -494,65 +494,52 @@
 
     let unsubscribers = [];
 
-    // 🔒 تهيئة مستمعي السحابة مع فصل تام وحصري للشركات (Multi-Tenant Company Isolation)
-    function initFirebaseListeners(companyId) {
-        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
-        unsubscribers = [];
+function initFirebaseListeners(companyId) {
+    unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+    unsubscribers = [];
 
-        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
+    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
 
-        collections.forEach(colName => {
-            let query = db.collection(colName);
-            let user = window.currentLoggedInUser;
-            let isMaster = isMasterAdminUser(user);
-            let isAdmin = isSuperAdmin();
+    collections.forEach(colName => {
+        let query = db.collection(colName);
+        let user = window.currentLoggedInUser;
+        let isMaster = isMasterAdminUser(user);
 
-            if (!isMaster) {
-                let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
-                query = query.where('companyId', '==', targetCompany);
+        // تطبيق العزل القطعي للشركات لغير الماستر أدمن
+        if (!isMaster) {
+            let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
+            query = query.where('companyId', '==', targetCompany);
+        }
+
+        const unsub = query.onSnapshot(snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+            
+            if (colName === 'shipments' && !isMaster && !isSuperAdmin() && user) {
+                rawData = rawData.filter(s => s.assignedDriver === user.name || !s.assignedDriver);
             }
 
-            const unsub = query.onSnapshot(snapshot => {
-                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
-                
-                if (colName === 'shipments' && !isAdmin && user) {
-                    rawData = rawData.filter(s => s.assignedDriver === user.name || !s.assignedDriver);
-                }
+            appData[colName] = rawData;
+            window.appData = appData;
 
-                appData[colName] = rawData;
-
-                if (colName === 'posts') {
-                    appData.wallPosts = appData.posts;
-                }
-
-                window.appData = appData;
-
-                if(typeof renderStats === 'function') renderStats();
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
-                if(typeof updateRSSTicker === 'function') updateRSSTicker();
-            }, err => {
-                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
-            });
-            unsubscribers.push(unsub);
+            if(typeof renderStats === 'function') renderStats();
+            if(typeof refreshActiveSection === 'function') refreshActiveSection();
+            if(typeof updateRSSTicker === 'function') updateRSSTicker();
+        }, err => {
+            console.error(`خطأ في استماع المجموعة ${colName}:`, err);
         });
+        unsubscribers.push(unsub);
+    });
 
-        db.collection('systemSettings').doc('config').onSnapshot(doc => {
-            if(doc.exists && doc.data().newsText) {
-                appData.newsText = doc.data().newsText;
-                if(typeof updateRSSTicker === 'function') updateRSSTicker();
-            }
-        });
+    db.collection('systemSettings').doc('config').onSnapshot(doc => {
+        if(doc.exists && doc.data().newsText) {
+            appData.newsText = doc.data().newsText;
+            if(typeof updateRSSTicker === 'function') updateRSSTicker();
+        }
+    });
 
-        listenForIncomingCalls();
-    }
+    listenForIncomingCalls();
+}
 
-    window.manualRefreshData = function() {
-        showToast('جاري تحديث ومزامنة البيانات يدوياً من السحابة... 🔄');
-        initFirebaseListeners(currentCompanyId);
-        setTimeout(() => {
-            showToast('تمت المزامنة والتحديث السحابي بنجاح! ✅');
-        }, 1000);
-    };
 
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
