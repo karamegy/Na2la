@@ -1818,19 +1818,29 @@
             }, 300);
         }
 function initRealtimeListeners() {
-    const collections = ['shipments', 'trucks', 'customers', 'expenses', 'treasury', 'docs', 'drivers', 'chat', 'posts', 'communityPosts', 'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'];
+    const collections = [
+        'shipments', 'trucks', 'customers', 'expenses', 'treasury', 
+        'docs', 'drivers', 'chat', 'posts', 'communityPosts', 
+        'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'
+    ];
     
+    // التحقق الدقيق هل المستخدم هو الماستر أدمن الحقيقي للمنصة الأم أم لا
+    const isMasterAdmin = (currentUserRole === 'admin' && (loggedInDriverName === 'المدير' || currentCompanyId === 'company_main'));
+    const activeCompId = currentCompanyId || 'company_main';
+
     collections.forEach(colName => {
         let query = db.collection(colName);
-        let targetComp = currentCompanyId || 'company_main';
         
-        // استثناء مجموعة الشركات والسائقين للماستر أدمن لجلب كافة الشركات عبر المنصة الأم
-        if (colName === 'drivers' && (loggedInDriverName === 'المدير' || currentUserRole === 'admin')) {
-            // لا تقم بتقييد الـ companyId للماستر أدمن لكي يرى جميع الشركات والمديرين
-        } else if (colName === 'subscriptionRequests' && (loggedInDriverName === 'المدير' || currentUserRole === 'admin')) {
-            // طلبات الاشتراك العامة للماستر
+        if (isMasterAdmin) {
+            // الماستر أدمن يستعرض كافة السائقين وطلبات الاشتراك، وباقي المجموعات تخص شركته الأم
+            if (colName === 'drivers' || colName === 'subscriptionRequests') {
+                // بدون تقييد (جلب كافة الشركات والمديرين والسائقين عبر المنصة)
+            } else {
+                query = query.where('companyId', '==', activeCompId);
+            }
         } else {
-            query = query.where('companyId', '==', targetComp);
+            // الشركة الفرعية: تقييد صارم جداً لا يقبل الاستثناء على مستوى قاعدة البيانات
+            query = query.where('companyId', '==', activeCompId);
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
@@ -1842,7 +1852,7 @@ function initRealtimeListeners() {
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
         }, error => {
-            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+            console.error(`خطأ في مزامنة فايربيس للمجموعة (${colName}):`, error);
         });
     });
 }
