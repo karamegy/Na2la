@@ -1824,27 +1824,48 @@ function initRealtimeListeners() {
         'consolidatedInvoices', 'deferredInvoices', 'subscriptionRequests'
     ];
     
-    // التحقق الدقيق هل المستخدم هو الماستر أدمن الحقيقي للمنصة الأم أم لا
-    const isMasterAdmin = (currentUserRole === 'admin' && (loggedInDriverName === 'المدير' || currentCompanyId === 'company_main'));
-    const activeCompId = currentCompanyId || 'company_main';
+    // قراءة البيانات بدقة من الذاكرة المحلية للتأكد من هوية المستخدم الحالي
+    const savedRole = localStorage.getItem('currentUserRole') || currentUserRole;
+    const savedDriverName = localStorage.getItem('loggedInDriverName') || loggedInDriverName;
+    const savedCompId = localStorage.getItem('currentCompanyId') || currentCompanyId;
+
+    // هل المستخدم هو الماستر أدمن الحقيقي للمنصة الأم فقط؟
+    const isMasterAdmin = (savedRole === 'admin' && (savedDriverName === 'المدير' && (!savedCompId || savedCompId === 'company_main')));
+    
+    // معرف الشركة الفعلي والحقيقي للمستخدم الحالي
+    const activeCompId = savedCompId || (isMasterAdmin ? 'company_main' : null);
 
     collections.forEach(colName => {
         let query = db.collection(colName);
         
         if (isMasterAdmin) {
-            // الماستر أدمن يستعرض كافة السائقين وطلبات الاشتراك، وباقي المجموعات تخص شركته الأم
+            // الماستر أدمن الحقيقي يرى كل السائقين وطلبات الاشتراك
             if (colName === 'drivers' || colName === 'subscriptionRequests') {
-                // بدون تقييد (جلب كافة الشركات والمديرين والسائقين عبر المنصة)
+                // بدون تقييد على مستوى الاستعلام لجلب كل الشركات
             } else {
-                query = query.where('companyId', '==', activeCompId);
+                query = query.where('companyId', '==', 'company_main');
             }
         } else {
-            // الشركة الفرعية: تقييد صارم جداً لا يقبل الاستثناء على مستوى قاعدة البيانات
+            // الشركة الفرعية: يجب ألا تطلب إلا بياناتها الخاصة حصراً
+            if (!activeCompId || activeCompId === 'company_main') {
+                console.error("خطأ: محاولة وصول شركة فرعية بدون معرف شركة صحيح!");
+                return;
+            }
             query = query.where('companyId', '==', activeCompId);
         }
 
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // حماية إضافية صارمة جداً على مستوى العميل (Client-side Safeguard)
+            // تضمن عدم عرض أي بيانات تخص شركة أخرى حتى لو جاءت بالخطأ من الاستعلام
+            if (!isMasterAdmin) {
+                rawData = rawData.filter(item => {
+                    // السائق أو العنصر يتبع هذه الشركة إذا كان الـ companyId يطابق معرف الشركة
+                    return item.companyId === activeCompId || item.id === activeCompId;
+                });
+            }
+
             appData[colName] = rawData;
             
             scheduleSmartRender();
