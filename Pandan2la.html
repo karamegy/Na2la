@@ -503,18 +503,16 @@ function initFirebaseListeners(companyId) {
     collections.forEach(colName => {
         let query = db.collection(colName);
         let user = window.currentLoggedInUser;
-        let isMaster = isMasterAdminUser(user);
 
-        // تطبيق العزل القطعي للشركات لغير الماستر أدمن
-        if (!isMaster) {
-            let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
-            query = query.where('companyId', '==', targetCompany);
-        }
+        // عزل قطعي ونهائي لكل الحسابات والمديرين (حتى المدير المؤسس يرى شرعته فقط)
+        let targetCompany = companyId || (user ? user.companyId : null) || 'BLOCKED_COMPANY_ID';
+        query = query.where('companyId', '==', targetCompany);
 
         const unsub = query.onSnapshot(snapshot => {
             let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
             
-            if (colName === 'shipments' && !isMaster && !isSuperAdmin() && user) {
+            // فلترة إضافية للسائقين العاديين داخل نفس الشركة
+            if (colName === 'shipments' && user && user.role === 'driver') {
                 rawData = rawData.filter(s => s.assignedDriver === user.name || !s.assignedDriver);
             }
 
@@ -539,6 +537,7 @@ function initFirebaseListeners(companyId) {
 
     listenForIncomingCalls();
 }
+
 
     function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
