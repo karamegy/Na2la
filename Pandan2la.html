@@ -344,7 +344,7 @@
 
 <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
         authDomain: "n2la-642d3.firebaseapp.com",
         projectId: "n2la-642d3",
         storageBucket: "n2la-642d3.firebasestorage.app",
@@ -505,8 +505,8 @@
             let query = db.collection(colName);
             let user = window.currentLoggedInUser;
             let isMaster = isMasterAdminUser(user);
-            let isAdmin = isSuperAdmin();
 
+            // قاعدة العزل التام: المدير المؤسس العام (+201114099799) يرى كل شيء، بينما أي شركة أخرى ترى حصرياً بياناتها المرتبطة بـ companyId
             if (!isMaster) {
                 let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
                 query = query.where('companyId', '==', targetCompany);
@@ -515,10 +515,6 @@
             const unsub = query.onSnapshot(snapshot => {
                 let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
                 
-                if (colName === 'shipments' && !isAdmin && user) {
-                    rawData = rawData.filter(s => s.assignedDriver === user.name || !s.assignedDriver);
-                }
-
                 appData[colName] = rawData;
 
                 if (colName === 'posts') {
@@ -554,47 +550,51 @@
         }, 1000);
     };
 
-    function initCloudSessionFromURL() {
-        const urlParams = new URLSearchParams(window.location.search);
-        urlUserId = urlParams.get('userId') || '';
-        let targetCompany = urlParams.get('companyId') || 'company_main';
-        currentCompanyId = targetCompany;
+    // 🔒 تهيئة مستمعي السحابة مع فرض الفصل التام والصارم لكافة الحسابات بلا استثناء
+    function initFirebaseListeners(companyId) {
+        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
+        unsubscribers = [];
 
-        if (urlUserId) {
-            db.collection("drivers").get().then(snap => {
-                let found = null;
-                snap.forEach(doc => {
-                    let d = doc.data();
-                    if (d.name === urlUserId || doc.id === urlUserId) {
-                        found = { docId: doc.id, id: doc.id, ...d };
-                    }
-                });
-                if (found) {
-                    let isMaster = isMasterAdminUser(found);
-                    if (!isMaster && !found.companyId) {
-                        found.companyId = 'company_main';
-                    }
-                    found.role = isMaster ? 'مدير أساسي (admin)' : (found.role || 'سائق عادي');
-                    window.currentLoggedInUser = found;
-                    currentCompanyId = isMaster ? 'company_main' : (found.companyId || 'company_main');
-                    applyUserPermissionsUI();
-                    initFirebaseListeners(currentCompanyId);
-                } else {
-                    window.currentLoggedInUser = { name: urlUserId, role: 'سائق عادي', companyId: currentCompanyId };
-                    applyUserPermissionsUI();
-                    initFirebaseListeners(currentCompanyId);
+        const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'drivers', 'communityPosts', 'posts', 'trucks', 'maintenanceLogs', 'chat', 'centralBroadcasts', 'auditLogs', 'docs'];
+
+        collections.forEach(colName => {
+            let query = db.collection(colName);
+            let user = window.currentLoggedInUser;
+
+            // فرض العزل التام لجميع الحسابات والشركات بناءً على معرف الشركة النشط الحالي
+            let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
+            query = query.where('companyId', '==', targetCompany);
+
+            const unsub = query.onSnapshot(snapshot => {
+                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+                
+                appData[colName] = rawData;
+
+                if (colName === 'posts') {
+                    appData.wallPosts = appData.posts;
                 }
-            }).catch(() => {
-                window.currentLoggedInUser = { name: urlUserId || 'زائر', role: 'سائق عادي', companyId: currentCompanyId };
-                applyUserPermissionsUI();
-                initFirebaseListeners(currentCompanyId);
+
+                window.appData = appData;
+
+                if(typeof renderStats === 'function') renderStats();
+                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }, err => {
+                console.error(`خطأ في استماع المجموعة ${colName}:`, err);
             });
-        } else {
-            window.currentLoggedInUser = { name: 'المدير', role: 'مدير أساسي (admin)', companyId: 'company_main', isMasterAdmin: true };
-            applyUserPermissionsUI();
-            initFirebaseListeners('company_main');
-        }
+            unsubscribers.push(unsub);
+        });
+
+        db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if(doc.exists && doc.data().newsText) {
+                appData.newsText = doc.data().newsText;
+                if(typeof updateRSSTicker === 'function') updateRSSTicker();
+            }
+        });
+
+        listenForIncomingCalls();
     }
+
 
     async function verifyPhoneAndPIN() {
         const phone = document.getElementById('auth-phone-input').value.trim();
@@ -643,15 +643,15 @@
                 let isMaster = isMasterAdminUser(matchedUser);
                 
                 if (!isMaster && (!matchedUser.companyId || matchedUser.companyId === 'company_main')) {
-                    matchedUser.companyId = 'company_main';
-                    db.collection('drivers').doc(matchedUser.docId || matchedUser.id).set({ companyId: 'company_main' }, { merge: true }).catch(()=>{});
+                    matchedUser.companyId = 'company_' + (matchedUser.phone || matchedUser.id || Date.now());
+                    db.collection('drivers').doc(matchedUser.docId || matchedUser.id).set({ companyId: matchedUser.companyId }, { merge: true }).catch(()=>{});
                 }
 
                 matchedUser.role = isMaster ? 'مدير أساسي (admin)' : (matchedUser.role || 'سائق عادي');
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
-                currentCompanyId = isMaster ? 'company_main' : (matchedUser.companyId || 'company_main');
+                currentCompanyId = isMaster ? 'company_main' : matchedUser.companyId;
                 
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية بنجاح! ✅');
@@ -1139,11 +1139,6 @@
                 </div>
             `;
         } else if (sectionId === 'shipments') {
-            let displayShipments = shipmentsList;
-            if (!isAdmin) {
-                displayShipments = shipmentsList.filter(s => s.assignedDriver === user.name);
-            }
-
             const uniqueDrivers = [...new Set(shipmentsList.map(s => s.assignedDriver).filter(Boolean))];
             content.innerHTML = `
                 ${isAdmin ? `
@@ -1172,18 +1167,21 @@
                         </select>
                         <button type="submit" class="btn-main">حفظ وتوليد بوليصة QR سحابياً 💾</button>
                     </form>
-                </div>` : '<div class="card"><p style="font-size:10px; color:var(--yellow-warning); text-align:center;">📋 الشحنات والمهام المخصصة لك شخصياً:</p></div>'}
+                </div>` : ''}
                 <div class="card">
                     <h3><span>📋 قائمة الشحنات وفواتير النقل</span></h3>
                     <div style="display:flex; gap:5px; margin-bottom:6px;">
                         <input type="text" id="shipment-search-input" placeholder="بحث سريع عن شحنة (اسم العميل أو الحمولة)..." oninput="filterShipmentsTable()" style="flex:2; margin:0;">
-                        ${isAdmin ? `<select id="shipment-driver-filter" onchange="filterShipmentsTable()" style="flex:1; margin:0; font-size:9px;"><option value="">كل السائقين</option>${uniqueDrivers.map(d => `<option value="${d}">${d}</option>`).join('')}</select>` : ''}
+                        <select id="shipment-driver-filter" onchange="filterShipmentsTable()" style="flex:1; margin:0; font-size:9px;">
+                            <option value="">كل السائقين</option>
+                            ${uniqueDrivers.map(d => `<option value="${d}">${d}</option>`).join('')}
+                        </select>
                     </div>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>السائق</th><th>إجراءات الفاتورة</th></tr></thead>
                             <tbody id="shipments-table-body">
-                                ${displayShipments.map((s) => `
+                                ${shipmentsList.map((s) => `
                                     <tr>
                                         <td>${s.name}</td>
                                         <td>${s.item}</td>
@@ -1198,7 +1196,7 @@
                                             ` : ''}
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات مخصصة لك حالياً</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد شحنات</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -2632,4 +2630,4 @@
     }
 </script>
 </body>
-</html>
+    </html>
