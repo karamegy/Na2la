@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق & باندا - Master Unified Hub V90 PURE CLOUD SYNCED</title>
+    <title>أسطورة الطريق & باندا - Master Unified Hub V90 PURE CLOUD SYNCED (محدث WebRTC)</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -202,7 +202,7 @@
 
     <main class="content-area" id="main-content"></main>
 
-    <!-- نافذة مكالمات الفيديو والصوت -->
+    <!-- نافذة مكالمات الفيديو والصوت (المحدثة بخصائص autoplay و playsinline ودعم الكاميرا) -->
     <div id="videoCallModal" class="custom-modal" style="flex-direction:column; background:rgba(0,0,0,0.9);">
         <div class="card" style="width:100%; max-width:400px; text-align:center; position:relative;">
             <h3 style="color:var(--accent-main); margin-bottom:10px; border:none;" id="call-modal-title">📹 مكالمة فيديو للأسطول عالية الجودة</h3>
@@ -344,7 +344,7 @@
 
 <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
+        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
         authDomain: "n2la-642d3.firebaseapp.com",
         projectId: "n2la-642d3",
         storageBucket: "n2la-642d3.firebasestorage.app",
@@ -359,7 +359,6 @@
     const db = firebase.firestore();
     window.db = db;
 
-    // 🧠 دالة دقيقة للتحقق حصرياً من المدير الأساسي (المدير المؤسس للمنصة)
     function isMasterAdminUser(user) {
         if (!user) return false;
         let phone = String(user.phone || '').trim();
@@ -369,7 +368,6 @@
     }
     window.isMasterAdminUser = isMasterAdminUser;
 
-    // دالة للتحقق إذا كان المستخدم مديراً (سواء المدير العام أو مدير شركة فرعية خاصة به)
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
@@ -495,7 +493,6 @@
 
     let unsubscribers = [];
 
-    // 🔒 تهيئة مستمعي السحابة مع فصل تام وحصري للشركات (Multi-Tenant Company Isolation)
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -507,8 +504,6 @@
             let user = window.currentLoggedInUser;
             let isMaster = isMasterAdminUser(user);
 
-            // قاعدة الفصل التام: فقط المدير المؤسس العام للمنصة (+201114099799) يمكنه رؤية كل الشركات.
-            // أما أي صاحب شركة أخرى أو مدير شركة فرعية فيرى حصرياً بيانات شركته فقط بناءً على companyId الخاص به.
             if (!isMaster) {
                 let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
                 query = query.where('companyId', '==', targetCompany);
@@ -552,7 +547,6 @@
         }, 1000);
     };
 
-    // جلسة سحابية تعتمد على معاملات الـ URL وتحديد companyId بدقة تامة لكل شركة
     async function initCloudSessionFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
         urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -1457,6 +1451,7 @@
     let callSnapshotUnsub = null;
     let offerCandidatesUnsub = null;
     let answerCandidatesUnsub = null;
+    let remoteCandidatesQueue = [];
 
     const servers = {
         iceServers: [
@@ -1487,6 +1482,7 @@
         }
     }
 
+    // 🎥 دالة مكالمات الفيديو والصوت المحدثة (مع إصلاح ontrack وترتيب صفوف ICE Candidates)
     async function startCloudVideoCall(receiverName, isVideo = true) {
         openModal('videoCallModal');
         playRingTone();
@@ -1497,13 +1493,10 @@
         const callDoc = db.collection('webrtc_calls').doc(currentCallId);
         
         pc = new RTCPeerConnection(servers);
-        remoteStream = new MediaStream();
-        
-        const remoteVideo = document.getElementById('remoteVideo');
-        if (remoteVideo) {
-            remoteVideo.srcObject = remoteStream;
-        }
+        remoteCandidatesQueue = [];
 
+        const remoteVideo = document.getElementById('remoteVideo');
+        
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ 
                 video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: currentFacingMode } : false, 
@@ -1517,12 +1510,10 @@
             return;
         }
 
+        // التصحيح الجذري لعرض الفيديو البعيد
         pc.ontrack = event => {
-            event.streams[0].getTracks().forEach(track => {
-                remoteStream.addTrack(track);
-            });
-            if (remoteVideo) {
-                remoteVideo.play().catch(err => console.log("Remote video play error:", err));
+            if (event.streams && event.streams[0]) {
+                remoteVideo.srcObject = event.streams[0];
             }
         };
 
@@ -1554,6 +1545,13 @@
             if (!pc.currentRemoteDescription && data && data.answer) {
                 const answerDescriptor = new RTCSessionDescription(data.answer);
                 await pc.setRemoteDescription(answerDescriptor);
+                
+                // تفريغ طابور المرشحين المؤجلين بعد ضبط الـ RemoteDescription
+                while(remoteCandidatesQueue.length > 0) {
+                    let c = remoteCandidatesQueue.shift();
+                    await pc.addIceCandidate(new RTCIceCandidate(c)).catch(err => console.log(err));
+                }
+
                 if (!isConnectedShown) {
                     isConnectedShown = true;
                     showToast('تم اتصال المكالمة بجودة عالية بنجاح! 🟢');
@@ -1565,8 +1563,12 @@
         answerCandidatesUnsub = callDoc.collection('answerCandidates').onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
                 if (change.type === 'added') {
-                    const candidate = new RTCIceCandidate(change.doc.data());
-                    pc.addIceCandidate(candidate);
+                    const candidateData = change.doc.data();
+                    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                        pc.addIceCandidate(new RTCIceCandidate(candidateData)).catch(err => console.log(err));
+                    } else {
+                        remoteCandidatesQueue.push(candidateData);
+                    }
                 }
             });
         });
@@ -1611,12 +1613,9 @@
     async function answerCloudVideoCall(callId, callData) {
         const callDoc = db.collection('webrtc_calls').doc(callId);
         pc = new RTCPeerConnection(servers);
-        remoteStream = new MediaStream();
+        remoteCandidatesQueue = [];
 
         const remoteVideo = document.getElementById('remoteVideo');
-        if (remoteVideo) {
-            remoteVideo.srcObject = remoteStream;
-        }
 
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ 
@@ -1631,12 +1630,10 @@
             return;
         }
 
+        // التصحيح الجذري لعرض الفيديو البعيد للطرف المستقبل
         pc.ontrack = event => {
-            event.streams[0].getTracks().forEach(track => {
-                remoteStream.addTrack(track);
-            });
-            if (remoteVideo) {
-                remoteVideo.play().catch(err => console.log("Remote video play error:", err));
+            if (event.streams && event.streams[0]) {
+                remoteVideo.srcObject = event.streams[0];
             }
         };
 
@@ -1648,6 +1645,13 @@
         };
 
         await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+        
+        // تفريغ الطابور المؤجل لـ ICE Candidates
+        while(remoteCandidatesQueue.length > 0) {
+            let c = remoteCandidatesQueue.shift();
+            await pc.addIceCandidate(new RTCIceCandidate(c)).catch(err => console.log(err));
+        }
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
@@ -1660,8 +1664,12 @@
         offerCandidatesUnsub = callDoc.collection('offerCandidates').onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
                 if (change.type === 'added') {
-                    const candidate = new RTCIceCandidate(change.doc.data());
-                    pc.addIceCandidate(candidate);
+                    const candidateData = change.doc.data();
+                    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                        pc.addIceCandidate(new RTCIceCandidate(candidateData)).catch(err => console.log(err));
+                    } else {
+                        remoteCandidatesQueue.push(candidateData);
+                    }
                 }
             });
         });
@@ -2626,4 +2634,4 @@
     }
 </script>
 </body>
-    </html>
+</html>
