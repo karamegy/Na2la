@@ -1822,14 +1822,19 @@ function initRealtimeListeners() {
     
     collections.forEach(colName => {
         let query = db.collection(colName);
+        let isMaster = (loggedInDriverName === 'المدير' || currentUserRole === 'admin');
 
-        // تطبيق الفلترة بالشركة الحالية على الجميع (بما فيهم المدير)
-        if (currentCompanyId) {
-            query = query.where('companyId', '==', currentCompanyId);
-        }
-
+        // جلب كافة المستندات سحابياً لتجنب اختفاء السجلات القديمة التي لم يتم تحديث حقل companyId لها
         query.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // فلترة ذكية وآمنة لضمان ظهور بيانات شركتك والحسابات العامة القديمة وعدم اختفائها
+            if (currentCompanyId && !isMaster) {
+                rawData = rawData.filter(d => {
+                    return d.companyId === currentCompanyId || !d.companyId || d.companyId === 'company_main';
+                });
+            }
+
             appData[colName] = rawData;
             
             scheduleSmartRender();
@@ -1840,7 +1845,8 @@ function initRealtimeListeners() {
             console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
         });
     });
-}         
+}
+
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
