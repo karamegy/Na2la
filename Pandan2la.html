@@ -493,6 +493,7 @@
 
     let unsubscribers = [];
 
+    // التعديل الذكي لعزل الشركات ودعم المستندات القديمة بدون companyId لتجنب ظهور أرقام صفرية
     function initFirebaseListeners(companyId) {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
@@ -501,17 +502,22 @@
 
         collections.forEach(colName => {
             let query = db.collection(colName);
-            let user = window.currentLoggedInUser;
-            let isMaster = isMasterAdminUser(user);
-
-            if (!isMaster) {
-                let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
-                query = query.where('companyId', '==', targetCompany);
-            }
 
             const unsub = query.onSnapshot(snapshot => {
-                let rawData = snapshot.docs.map(doc => ({ docId: doc.id, id: doc.id, ...doc.data() }));
+                let rawData = snapshot.docs.map(doc => {
+                    let d = doc.data();
+                    if (!d.companyId) d.companyId = 'company_main'; // معالجة البيانات القديمة
+                    return { docId: doc.id, id: doc.id, ...d };
+                });
                 
+                let user = window.currentLoggedInUser;
+                let isMaster = isMasterAdminUser(user);
+
+                if (!isMaster) {
+                    let targetCompany = companyId || (user ? user.companyId : 'company_main') || 'company_main';
+                    rawData = rawData.filter(item => String(item.companyId || 'company_main') === String(targetCompany));
+                }
+
                 appData[colName] = rawData;
 
                 if (colName === 'posts') {
@@ -643,10 +649,11 @@
             if (matchedUser) {
                 let isMaster = isMasterAdminUser(matchedUser);
                 matchedUser.role = isMaster ? 'admin' : (String(matchedUser.role || '').toLowerCase().includes('مشرف') ? 'مشرف' : 'مدير شركة');
+                matchedUser.companyId = matchedUser.companyId || 'company_main';
 
                 window.currentLoggedInUser = matchedUser;
                 urlUserId = matchedUser.name || matchedUser.id;
-                currentCompanyId = matchedUser.companyId || 'company_main';
+                currentCompanyId = matchedUser.companyId;
                 
                 closeModal('authModal');
                 showToast('تم التحقق وتأكيد المزامنة السحابية وعزل الشركات بنجاح! ✅');
