@@ -1822,17 +1822,16 @@
         }
 
         function initRealtimeListeners() {
-    if (isListenersInitialized) return;
-    isListenersInitialized = true;
-
-    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+    const collections = ['shipments', 'drivers', 'expenses', 'treasury', 'chat', 'subscriptions', 'companies'];
     
     collections.forEach(colName => {
         db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // التعديل هنا: تطبيق الفلترة حسب companyId على الجميع لضمان عدم اختلاط بيانات الشركات
-            if (currentCompanyId) {
+            // استثناء مجموعة الحسابات (drivers) للماستر أدمن لضمان ظهور كافة الشركات والمديرين في لوحة الـ SaaS Hub
+            if (colName === 'drivers' && loggedInDriverName === 'المدير') {
+                appData[colName] = rawData;
+            } else if (currentCompanyId) {
                 appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (!d.companyId && currentCompanyId === 'company_main'));
             } else {
                 appData[colName] = rawData;
@@ -1842,27 +1841,29 @@
 
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-            if (document.getElementById('reports-tab').classList.contains('active')) {
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-                renderCompanyAdminSubscriptionView();
+            
+            const deferredTab = document.getElementById('deferred-invoices-tab');
+            if (deferredTab && deferredTab.classList.contains('active')) {
+                loadDeferredInvoicesTable();
             }
-            if (document.getElementById('companies-tab').classList.contains('active')) {
-                renderCompaniesManagementTable();
+            
+            const reportsTab = document.getElementById('reports-tab');
+            if (reportsTab && reportsTab.classList.contains('active')) {
+                if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
+                if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
+                if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
+            }
+            
+            const companiesTab = document.getElementById('companies-tab');
+            if (companiesTab && companiesTab.classList.contains('active')) {
+                if (typeof renderCompaniesManagementTable === 'function') renderCompaniesManagementTable();
             }
         }, error => {
             console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
         });
     });
-
-    db.collection('systemSettings').doc('config').onSnapshot(doc => {
-        if (doc.exists && doc.data().newsText) {
-            appData.newsText = doc.data().newsText;
-            renderRSSTicker();
-        }
-    });
 }
+
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير' && currentUserRole !== 'admin') return;
