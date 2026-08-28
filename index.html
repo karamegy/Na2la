@@ -78,7 +78,7 @@
             font-size: 12px; margin-bottom: 12px; border-right: 5px solid var(--accent); overflow: hidden; white-space: nowrap;
             box-shadow: var(--shadow-3d); border: 1px solid var(--border-color);
         }
-        .news-ticker marquee { font-weight: bold; }
+        .news-ticker marquee { font-weight: bold; width: 100%; display: block; }
 
         #lock-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -1824,11 +1824,10 @@
                 db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // منع تداخل بيانات الشركات الفرعية تماماً لغير الماستر أدمن
                     if (loggedInDriverName === 'المدير') {
                         appData[colName] = rawData;
                     } else {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId);
                     }
                     
                     scheduleSmartRender();
@@ -2229,11 +2228,13 @@
             } else if (type === 'net_profit') {
                 titleEl.innerText = '📈 تحليل صافي الأرباح والأداء المالي';
                 let totalRev = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
+                let totalShipCosts = shipments.reduce((sum, s) => sum + Number(s.fuelCost || 0) + Number(s.extraCost || 0), 0);
                 let totalExp = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-                let netProf = totalRev - totalExp;
+                let netProf = totalRev - totalShipCosts - totalExp;
                 bodyEl.innerHTML = `
                     <div style="background:var(--bg); padding:12px; border-radius:8px; margin-bottom:10px; border:1px solid var(--border-color);">
                         <p><strong>إجمالي الإيرادات:</strong> ${totalRev} ج.م</p>
+                        <p><strong>إجمالي تكاليف الشحنات (وقود ومصاريف):</strong> ${totalShipCosts} ج.م</p>
                         <p><strong>إجمالي المصروفات التشغيلية:</strong> ${totalExp} ج.م</p>
                         <hr style="margin:8px 0; border:0; border-top:1px solid var(--border-color);">
                         <p style="font-size:13px; font-weight:bold; color:var(--purple);">صافي الأرباح: ${netProf} ج.م 🚀</p>
@@ -4075,7 +4076,8 @@
                 });
             }
         }
-function render() {
+
+        function render() {
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
