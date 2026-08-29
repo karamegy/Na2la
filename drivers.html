@@ -94,7 +94,7 @@
         <div class="nav-links">
             <a href="#" onclick="navigateToPage('index.html')">🏠 الرئيسية</a>
             <a href="#" onclick="navigateToPage('operations-hub.html')">🚀 العمليات</a>
-            <a href="#" onclick="navigateToPage('driver-community.html')">💬 المجتمع</a>
+            <a href="#" onclick="navigateToPage('drivers-community.html')">💬 المجتمع</a>
             <button onclick="toggleTheme()">🌓</button>
         </div>
     </header>
@@ -174,7 +174,7 @@
         import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -197,14 +197,14 @@
         function isUserAdmin(roleValue, nameValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
             return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
         }
 
         async function parseURLSessionAndSync() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-            let urlComp = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id');
+            let urlComp = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || localStorage.getItem('current_company_id');
 
             if (externalId && externalId.trim() !== '' && externalId !== 'null') {
                 activeSessionName = externalId.trim();
@@ -231,7 +231,7 @@
                             currentCompanyId = d.companyId.trim();
                             localStorage.setItem('current_company_id', currentCompanyId);
                         }
-                        if (isUserAdmin(d.role, d.name)) {
+                        if (isUserAdmin(d.role || d.rank, d.name)) {
                             currentUserIsAdmin = true;
                         }
                     }
@@ -292,36 +292,34 @@
         };
 
         function initRealtimeListeners() {
-            let shipmentsQuery = currentUserIsAdmin ? collection(db, "shipments") : query(collection(db, "shipments"), where("companyId", "==", currentCompanyId));
-            onSnapshot(shipmentsQuery, (shipSnapshot) => {
+            onSnapshot(collection(db, "shipments"), (shipSnapshot) => {
                 globalShipmentsData = [];
                 shipSnapshot.forEach(docSnap => {
-                    globalShipmentsData.push({ id: docSnap.id, ...docSnap.data() });
+                    let s = { id: docSnap.id, ...docSnap.data() };
+                    let sComp = String(s.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (sComp === 'company_main' || !s.companyId) : (sComp === targetComp);
+
+                    if (currentUserIsAdmin || matchComp) {
+                        globalShipmentsData.push(s);
+                    }
                 });
                 filterAndRenderDrivers();
             });
 
-            let driversQuery = currentUserIsAdmin ? collection(db, "drivers") : query(collection(db, "drivers"), where("companyId", "==", currentCompanyId));
-            onSnapshot(driversQuery, (snapshot) => {
+            onSnapshot(collection(db, "drivers"), (snapshot) => {
                 globalDriversData = [];
                 snapshot.forEach((docSnap) => {
-                    const data = docSnap.data();
-                    if (!data.test) {
-                        globalDriversData.push({ id: docSnap.id, ...data });
+                    const data = { id: docSnap.id, ...docSnap.data() };
+                    let dComp = String(data.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !data.companyId) : (dComp === targetComp);
+
+                    if (!data.test && (currentUserIsAdmin || matchComp)) {
+                        globalDriversData.push(data);
                     }
                 });
                 filterAndRenderDrivers();
-            }, err => {
-                onSnapshot(collection(db, "drivers"), snap => {
-                    globalDriversData = [];
-                    snap.forEach(docSnap => {
-                        let d = docSnap.data();
-                        if (!d.test && (currentUserIsAdmin || !d.companyId || d.companyId === currentCompanyId)) {
-                            globalDriversData.push({ id: docSnap.id, ...d });
-                        }
-                    });
-                    filterAndRenderDrivers();
-                });
             });
         }
 
