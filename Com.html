@@ -507,6 +507,32 @@
             70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
             100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
         }
+
+        /* قائمة اقتراحات البحث التلقائي */
+        #autocompleteResults {
+            position: absolute;
+            top: 52px;
+            left: 50px;
+            right: 50px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            z-index: 1003;
+            max-height: 180px;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #0f172a;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .autocomplete-item:hover {
+            background: #f1f5f9;
+        }
     </style>
 </head>
 <body class="dark-mode">
@@ -521,7 +547,7 @@
                     <div class="online-dot" title="متصل الآن"></div>
                 </div>
                 <div class="profile-info-text">
-                    <span id="headerNameText" class="header-name-text">جاري مزامنة الحساب لحظياً...</span>
+                    <span id="headerNameText" class="header-name-text">مزامنة الحساب لحظياً...</span>
                     <span class="header-sub-meta">
                         <span id="headerTitleTextBadge">سائق معتمد</span>
                     </span>
@@ -530,7 +556,7 @@
 
             <div class="header-tools-group">
                 <div class="company-badge-sm">
-                    🏢 <strong id="companyIdLabel">جاري المزامنة...</strong>
+                    🏢 <strong id="companyIdLabel">مزامنة...</strong>
                 </div>
 
                 <div class="wake-lock-pill-sm" id="wakeLockStatusPill">💡 نشط</div>
@@ -677,16 +703,17 @@
         </div>
     </div>
 
-    <!-- نافذة الخريطة المطابقة لتصميم Google Maps Navigation مع دعم الدوران بإصبعين والتوجه التلقائي -->
+    <!-- نافذة الخريطة المطابقة لتصميم Google Maps Navigation مع جميع المميزات المضافة -->
     <div id="liveRadarMapModal">
         <div style="position:relative; width:100%; height:100%;">
-            <!-- شريط البحث العلوي مع دعم البحث الحقيقي وانتقال الخريطة فوراً -->
+            <!-- شريط البحث العلوي مع اقتراحات البحث التلقائي (Autocomplete) -->
             <div class="gmap-header-bar">
                 <div style="width:28px; height:28px; border-radius:50%; background:var(--accent); color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px;" id="gmapAvatarBadge">ك</div>
-                <input type="text" id="gmapSearchInput" placeholder="ابحث عن وجهة أو محطة وقود مثل جوجل ماب..." style="margin-bottom:0; border:none; background:transparent; font-size:11px; flex:1;" onkeydown="if(event.key==='Enter') searchLocationOnMap(this.value)">
+                <input type="text" id="gmapSearchInput" placeholder="ابحث عن وجهة أو منطقة (مثل: أبو النمرس، المعادي...)" style="margin-bottom:0; border:none; background:transparent; font-size:11px; flex:1;" oninput="onSearchInputChanged(this.value)" onkeydown="if(event.key==='Enter') searchLocationOnMap(this.value)">
                 <span style="font-size:16px; cursor:pointer;" onclick="searchLocationOnMap(document.getElementById('gmapSearchInput').value)">🔍</span>
                 <span style="font-size:18px; cursor:pointer; margin-right:4px;" onclick="closeLiveRadarMap()">✕</span>
             </div>
+            <div id="autocompleteResults"></div>
 
             <!-- شريط اتجاهات الطريق العلوي (مثل Google Navigation) -->
             <div class="gmap-route-top-banner" id="gmapRouteBanner">
@@ -700,7 +727,7 @@
                 <span style="background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:8px; font-size:10px;" id="gmapSpeedBadge">0 كم/س</span>
             </div>
 
-            <!-- الأزرار العائمة على الجانب الأيمن (تغيير خريطة، تدوير شمال/تلقائي، إعادة توسط، طبقة مرور، مسارات سابقة، ورش ومحطات) -->
+            <!-- الأزرار العائمة على الجانب الأيمن تشمل الأداة الجديدة لإضافة النطاق الجغرافي Geofence -->
             <div class="gmap-floating-controls">
                 <button class="gmap-float-btn" onclick="cycleMapLayer()" title="تغيير نوع الخريطة (شوارع/قمر صناعي/تضاريس)">🗺️</button>
                 <button class="gmap-float-btn" onclick="resetMapBearingToNorth()" title="إعادة توجيه الشمال للأعلى (North Up)">🧭</button>
@@ -709,17 +736,18 @@
                 <button class="gmap-float-btn" onclick="openTripReplayModal()" title="تشغيل سجل الرحلات السابق (Firebase)">▶️</button>
                 <button class="gmap-float-btn" onclick="shareLiveTrackingLink()" title="مشاركة رابط التتبع الحي مع العميل">🔗</button>
                 <button class="gmap-float-btn" onclick="toggleNearbyStations()" title="محطات الوقود وورش الصيانة القريبة">⛽</button>
+                <button class="gmap-float-btn" onclick="openGeofenceModal()" title="إضافة نطاق جغرافي سحابي (Geofence)">📍</button>
             </div>
 
             <!-- عنصر خريطة Leaflet المزود بخاصية تدوير اللمس (Touch Rotate) -->
             <div id="leafletMapContainer" style="width:100%; height:100%;"></div>
 
-            <!-- بطاقة التنقل السفلية -->
+            <!-- بطاقة التنقل السفلية لعرض المسافة والوقت ETA -->
             <div class="gmap-bottom-nav-card">
                 <div style="width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px; margin: 0 auto 10px auto;"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div>
-                        <span style="font-size:12px; color:#64748b;" id="gmapTimeEstimate">ملاحة فورية متصلة بسحابة Firebase</span>
+                        <span style="font-size:12px; color:#0f766e; font-weight:bold;" id="gmapRouteEta">مسافة الرحلة والوقت المتوقع: --</span>
                         <h4 style="font-size:13px; color:#0f172a; margin-top:2px;" id="gmapDestinationInfo">📡 رادارات الطرق العامة: <strong style="color:var(--accent);" id="mapRadarCount">0</strong></h4>
                     </div>
                     <span style="font-size:11px; font-weight:bold; color:var(--success);" id="mapCoordsVal">جاري تحديد الموقع...</span>
@@ -729,6 +757,18 @@
                     <button class="btn-danger" onclick="closeLiveRadarMap()" style="flex:1; padding:10px; border-radius:24px; font-size:11px;">✕ خروج</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- نافذة إضافة نطاق جغرافي (Geofence Creator) -->
+    <div id="geofenceModal" class="custom-modal" onclick="closeGeofenceModal()">
+        <div class="card" style="width: 100%; max-width: 360px; margin: auto;" onclick="event.stopPropagation()">
+            <h3 style="color: var(--accent);">📍 إضافة نطاق جغرافي سحابي (Geofence)</h3>
+            <p style="font-size: 10px; color: var(--secondary-text); margin-bottom: 8px;">حدد اسم المنطقة والمدى بالأيلومتر لتنبيه السائق فور دخولها.</p>
+            <input type="text" id="geofenceNameInput" placeholder="اسم المنطقة (مثلاً: مخزن أكتوبر الرئيسي)" style="margin-bottom:6px;">
+            <input type="number" step="0.1" id="geofenceRadiusInput" placeholder="نصف القطر بالكم (مثلاً: 1.5)" value="1.0" style="margin-bottom:6px;">
+            <button class="btn-success" onclick="saveCurrentLocationAsGeofence()" style="padding:9px; margin-bottom:6px;">حفظ موقعي الحالي كنطاق سحابي 💾</button>
+            <button type="button" class="btn-danger" onclick="closeGeofenceModal()" style="width: 100%;">إغلاق</button>
         </div>
     </div>
 
@@ -854,6 +894,7 @@
         let chatUnsubscribe = null;
         let driversUnsubscribe = null;
         let radarsUnsubscribe = null;
+        let fleetLocationsUnsubscribe = null;
         let userLiveSyncUnsubscribe = null;
         let callsUnsubscribe = null;
         
@@ -862,6 +903,8 @@
         let leafletMap = null;
         let truckMarker = null;
         let radarMarkersLayer = null;
+        let fleetMarkersLayer = null;
+        let routePolylineLayer = null;
         let trafficLayerObj = null;
         let serviceStationsLayer = null;
         let replayPolyline = null;
@@ -909,6 +952,17 @@
                 globalAudioCtx.resume();
             }
         }, { once: true });
+
+        // ميزة التوجيه الصوتي عبر Text-to-Speech (TTS)
+        function speakInstruction(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel(); // إيقاف أي كلام سابق لمنع التداخل
+                let utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ar-EG';
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
 
         async function changeTheme(themeName) {
             document.body.className = '';
@@ -1123,7 +1177,7 @@
         function openProfileModal() { document.getElementById('profileModal').style.display = 'flex'; }
         function closeProfileModal() { document.getElementById('profileModal').style.display = 'none'; }
 
-        // --- خريطة ماب المتقدمة مع خاصية الدوران باللمس (Touch Rotate) وتجربة Google Maps Navigation ---
+        // --- خريطة ماب المتقدمة مع جميع الميزات المضافة ---
         function openLiveRadarMapModal() {
             const modal = document.getElementById('liveRadarMapModal');
             modal.style.display = 'block';
@@ -1136,6 +1190,7 @@
                 }
                 startLiveTruckTrackingAndCloudLogging();
                 loadRadarsOnMap();
+                listenToFleetLocations();
             }, 200);
         }
 
@@ -1145,6 +1200,10 @@
             if (watchPositionId !== null) {
                 navigator.geolocation.clearWatch(watchPositionId);
                 watchPositionId = null;
+            }
+            if (fleetLocationsUnsubscribe) {
+                fleetLocationsUnsubscribe();
+                fleetLocationsUnsubscribe = null;
             }
         }
 
@@ -1170,19 +1229,19 @@
 
             mapLayersList = [streetLayer, satelliteLayer, terrainLayer];
 
-            // تهيئة الخريطة مع تفعيل خاصية التدوير باللمس (Touch Rotate) ودوران الخريطة مثل جوجل ماب
             leafletMap = L.map('leafletMapContainer', {
                 center: [30.0444, 31.2357], 
                 zoom: 16,
                 layers: [streetLayer],
                 zoomControl: false,
                 preferCanvas: true,
-                rotate: true,             // تفعيل المحرك الدوار
-                touchRotate: true,        // تفعيل التدوير بلمس إصبعين (Pinch-Rotate) مثل جوجل ماب تماماً
+                rotate: true,
+                touchRotate: true,
                 rotateControl: false
             });
 
             radarMarkersLayer = L.layerGroup().addTo(leafletMap);
+            fleetMarkersLayer = L.layerGroup().addTo(leafletMap);
             serviceStationsLayer = L.layerGroup().addTo(leafletMap);
 
             leafletMap.on('dragstart', () => {
@@ -1208,7 +1267,173 @@
             }
         }
 
-        // 1. طبقة حركة المرور الحية (Live Traffic Conditions)
+        // 1. مراقبة وعرض أسطول الشاحنات بالكامل (Multi-Driver Fleet View) عبر Firebase
+        function listenToFleetLocations() {
+            if (!window.db || !window.firebaseModules || !fleetMarkersLayer) return;
+            if (fleetLocationsUnsubscribe) fleetLocationsUnsubscribe();
+
+            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const q = query(collection(window.db, 'driver_locations'), where('companyId', '==', currentCompanyId));
+
+            fleetLocationsUnsubscribe = onSnapshot(q, snapshot => {
+                fleetMarkersLayer.clearLayers();
+                snapshot.forEach(docSnap => {
+                    let d = docSnap.data();
+                    if (d.lat && d.lng && d.driverName !== currentDriverProfile.name) {
+                        const fleetIcon = L.divIcon({
+                            className: 'fleet-truck-div',
+                            html: `<div style="background:#1e293b; color:#38bdf8; border:2px solid #3b82f6; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 3px 10px rgba(0,0,0,0.4);" title="${d.driverName}">🚛</div>`,
+                            iconSize: [34, 34],
+                            iconAnchor: [17, 17]
+                        });
+                        let marker = L.marker([d.lat, d.lng], { icon: fleetIcon });
+                        marker.bindPopup(`<b>🚛 الزميل: ${d.driverName}</b><br>السرعة: ${d.speed || 0} كم/س`);
+                        fleetMarkersLayer.addLayer(marker);
+                    }
+                });
+            });
+        }
+
+        // 2. ميزة البحث التلقائي (Autocomplete) لأسماء الأماكن والقرى في مصر
+        let autocompleteTimer = null;
+        async function onSearchInputChanged(queryText) {
+            clearTimeout(autocompleteTimer);
+            const resultsBox = document.getElementById('autocompleteResults');
+            if (!queryText.trim() || queryText.length < 2) {
+                resultsBox.style.display = 'none';
+                return;
+            }
+
+            autocompleteTimer = setTimeout(async () => {
+                try {
+                    let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryText)}&countrycodes=eg&limit=5&addressdetails=1`);
+                    let data = await res.json();
+                    if (data && data.length > 0) {
+                        let html = '';
+                        data.forEach(item => {
+                            let displayName = item.display_name.replace(/'/g, '');
+                            html += `<div class="autocomplete-item" onclick="selectAutocompleteItem(${item.lat}, ${item.lon}, '${displayName}')">📍 ${displayName}</div>`;
+                        });
+                        resultsBox.innerHTML = html;
+                        resultsBox.style.display = 'block';
+                    } else {
+                        resultsBox.style.display = 'none';
+                    }
+                } catch(e) {
+                    resultsBox.style.display = 'none';
+                }
+            }, 300);
+        }
+
+        function selectAutocompleteItem(lat, lon, name) {
+            document.getElementById('gmapSearchInput').value = name;
+            document.getElementById('autocompleteResults').style.display = 'none';
+            navigateToDestination(lat, lon, name);
+        }
+
+        // 3. رسم المسارات الفعلية (OSRM Turn-by-Turn Routing & ETA)
+        async function navigateToDestination(destLat, destLon, destName) {
+            if (!truckMarker) {
+                alert('⚠️ جاري تحديد موقعك الحالي أولاً...');
+                return;
+            }
+            let currentPos = truckMarker.getLatLng();
+            leafletMap.setView([destLat, destLon], 15, { animate: true });
+            L.marker([destLat, destLon]).addTo(leafletMap).bindPopup(`<b>🏁 الوجهة: ${destName}</b>`).openPopup();
+            document.getElementById('gmapCurrentStreetName').innerText = destName;
+
+            try {
+                let osrmUrl = `https://router.project-osrm.org/route/v1/driving/${currentPos.lng},${currentPos.lat};${destLon},${destLat}?overview=full&geometries=geojson`;
+                let res = await fetch(osrmUrl);
+                let data = await res.json();
+
+                if (data && data.routes && data.routes.length > 0) {
+                    let route = data.routes[0];
+                    let distanceKm = (route.distance / 1000).toFixed(1);
+                    let durationMin = Math.round(route.duration / 60);
+
+                    document.getElementById('gmapRouteEta').innerText = `المسافة: ${distanceKm} كم | الوقت المتوقع: ${durationMin} دقيقة`;
+                    speakInstruction(`تم تحديد المسار إلى ${destName}. المسافة ${distanceKm} كيلومتر والوقت المتوقع ${durationMin} دقيقة.`);
+
+                    if (routePolylineLayer) leafletMap.removeLayer(routePolylineLayer);
+
+                    let coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routePolylineLayer = L.polyline(coords, { color: '#3b82f6', weight: 6, opacity: 0.85 }).addTo(leafletMap);
+                    leafletMap.fitBounds(routePolylineLayer.getBounds(), { padding: [50, 50] });
+                }
+            } catch (e) {
+                alert('⚠️ تعذر رسم المسار الفعلي من خادم الملاحة.');
+            }
+        }
+
+        async function searchLocationOnMap(queryText) {
+            let cleanQuery = queryText.trim();
+            if (!cleanQuery) return;
+            document.getElementById('autocompleteResults').style.display = 'none';
+            document.getElementById('gmapCurrentStreetName').innerText = `جاري البحث عن: ${cleanQuery}...`;
+            try {
+                let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanQuery)}&countrycodes=eg&addressdetails=1`);
+                let data = await res.json();
+                
+                if (!data || data.length === 0) {
+                    let fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanQuery + '، مصر')}&addressdetails=1`);
+                    data = await fallbackRes.json();
+                }
+
+                if (data && data.length > 0) {
+                    let lat = parseFloat(data[0].lat);
+                    let lon = parseFloat(data[0].lon);
+                    navigateToDestination(lat, lon, data[0].display_name);
+                } else {
+                    alert('لم يتم العثور على الوجهة المطلوبة.');
+                    document.getElementById('gmapCurrentStreetName').innerText = 'تعذر العثور على الوجهة';
+                }
+            } catch(e) {
+                alert('حدث خطأ أثناء الاتصال بخدمة البحث الجغرافي.');
+            }
+        }
+
+        // 4. أداة رسم النطاقات الجغرافية وتخزينها في Firebase (Geofencing Tool)
+        function openGeofenceModal() {
+            document.getElementById('geofenceModal').style.display = 'flex';
+        }
+        function closeGeofenceModal() {
+            document.getElementById('geofenceModal').style.display = 'none';
+        }
+
+        async function saveCurrentLocationAsGeofence() {
+            if (!truckMarker) {
+                alert('⚠️ يجب تحديد موقعك الحالي أولاً.');
+                return;
+            }
+            let name = document.getElementById('geofenceNameInput').value.trim();
+            let radius = parseFloat(document.getElementById('geofenceRadiusInput').value) || 1.0;
+            if (!name) {
+                alert('الرجاء إدخال اسم النطاق الجغرافي.');
+                return;
+            }
+            let pos = truckMarker.getLatLng();
+
+            if (window.db && window.firebaseModules) {
+                try {
+                    const { collection, addDoc } = window.firebaseModules;
+                    await addDoc(collection(window.db, 'geofences'), {
+                        name: name,
+                        lat: pos.lat,
+                        lng: pos.lng,
+                        radiusKm: radius,
+                        companyId: currentCompanyId,
+                        createdBy: currentDriverProfile.name,
+                        timestamp: Date.now()
+                    });
+                    closeGeofenceModal();
+                    alert('✅ تم حفظ النطاق الجغرافي السحابي بنجاح!');
+                } catch(e) {
+                    alert('⚠️ فشل الحفظ: ' + e.message);
+                }
+            }
+        }
+
         function toggleLiveTrafficLayer() {
             if (!trafficLayerObj) {
                 trafficLayerObj = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
@@ -1225,7 +1450,6 @@
             }
         }
 
-        // 2. محطات الوقود وورش الصيانة القريبة (Nearby Fuel & Repair Stations)
         async function toggleNearbyStations() {
             if (!serviceStationsLayer) return;
             if (serviceStationsLayer.getLayers().length > 0) {
@@ -1271,7 +1495,6 @@
             }
         }
 
-        // 3. رابط التتبع الحي للعملاء (Live Tracking Share Link)
         function shareLiveTrackingLink() {
             let driverId = currentDriverProfile.id || urlUserId || 'guest_driver';
             let shareUrl = `${window.location.origin}${window.location.pathname}?trackDriver=${encodeURIComponent(driverId)}&companyId=${encodeURIComponent(currentCompanyId)}`;
@@ -1300,7 +1523,6 @@
             alert('📋 تم نسخ رابط التتبع الحي السحابي بنجاح!');
         }
 
-        // 4. إعادة تشغيل مسار الرحلة التاريخي (Trip Replay from Firebase Cloud)
         async function openTripReplayModal() {
             document.getElementById('tripReplayModal').style.display = 'flex';
             if (!window.db || !window.firebaseModules) return;
@@ -1366,29 +1588,7 @@
             }
         }
 
-        // بحث حقيقي باستخدام Nominatim API للانتقال الفوري للوجهة
-        async function searchLocationOnMap(queryText) {
-            if (!queryText.trim()) return;
-            document.getElementById('gmapCurrentStreetName').innerText = `جاري البحث عن: ${queryText}...`;
-            try {
-                let res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryText)}`);
-                let data = await res.json();
-                if (data && data.length > 0) {
-                    let lat = parseFloat(data[0].lat);
-                    let lon = parseFloat(data[0].lon);
-                    leafletMap.setView([lat, lon], 16, { animate: true });
-                    L.marker([lat, lon]).addTo(leafletMap).bindPopup(`<b>📍 ${data[0].display_name}</b>`).openPopup();
-                    document.getElementById('gmapCurrentStreetName').innerText = data[0].display_name;
-                } else {
-                    alert('لم يتم العثور على الوجهة المطلوبة.');
-                    document.getElementById('gmapCurrentStreetName').innerText = 'تعذر العثور على الوجهة';
-                }
-            } catch(e) {
-                alert('حدث خطأ أثناء البحث عن الوجهة.');
-            }
-        }
-
-        // التتبع الحي وحفظ النقاط مع توجيه الخريطة تلقائياً حسب اتجاه السير (Heading Up مثل Google Maps Navigation)
+        // التتبع الحي مع رصد السرعة وتنبيهات تجاوز الحد الأقصى
         function startLiveTruckTrackingAndCloudLogging() {
             if (!navigator.geolocation) {
                 alert('خدمة تحديد الموقع غير مدعومة.');
@@ -1405,6 +1605,12 @@
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
                 const speedKmh = position.coords.speed ? (position.coords.speed * 3.6).toFixed(1) : '0.0';
+
+                // تنبيه تجاوز السرعة (أكثر من 110 كم/س)
+                if (parseFloat(speedKmh) > 110) {
+                    if ('vibrate' in navigator) navigator.vibrate(500);
+                    speakInstruction('تحذير! لقد تجاوزت السرعة المسموحة، خفف السرعة حفاظاً على سلامتك.');
+                }
 
                 if (position.coords.heading !== null && !isNaN(position.coords.heading) && position.coords.heading >= 0) {
                     currentHeading = position.coords.heading;
@@ -1433,7 +1639,6 @@
 
                 if (isMapFollowing && leafletMap) {
                     leafletMap.setView([lat, lng], leafletMap.getZoom(), { animate: true });
-                    // تدوير الخريطة تلقائياً لاتجاه الحركة (Heading-Up مثل Google Maps Navigation)
                     if (typeof leafletMap.setBearing === 'function' && currentHeading > 0) {
                         leafletMap.setBearing(-currentHeading);
                     }
@@ -1880,9 +2085,7 @@
                     return;
                 }
 
-                let existingIds = new Set();
                 posts.forEach(p => {
-                    existingIds.add(p.id);
                     let card = document.getElementById(`post-card-${p.id}`);
                     
                     let likesCountEl = document.getElementById(`likes-count-${p.id}`);
@@ -2178,6 +2381,7 @@
 
         function triggerRadarWarning(radarName) {
             if ('vibrate' in navigator) navigator.vibrate([800, 200, 800, 200]);
+            speakInstruction(`تنبيه رادار! أنت تقترب من ${radarName}، خفف السرعة فوراً.`);
             addNotification(`🚨 تنبيه رادار سحابي: أنت تقترب من (${radarName})، خفف السرعة!`);
             
             const alertBox = document.createElement('div');
