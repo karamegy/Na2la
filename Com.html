@@ -15,7 +15,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc, increment, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -32,7 +32,7 @@
         const db = getFirestore(app);
 
         window.db = db;
-        window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc };
+        window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc, increment, arrayUnion };
 
         signInAnonymously(auth).then(() => {
             console.log("✅ تم المصادقة سحابياً بنجاح في Com.html");
@@ -876,7 +876,6 @@
 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    let dComp = String(d.companyId || 'company_main').trim();
                     allDrivers.push({ id: docSnap.id, ...d });
                     
                     let docId = String(docSnap.id || '').trim().toLowerCase();
@@ -884,7 +883,6 @@
                     let dPhone = String(d.phone || '').trim();
 
                     if (targetId) {
-                        // مطابقة دقيقة وصارمة بناءً على معرف فايربيس أو الهاتف أو الاسم المطابق حصراً
                         if (docId === targetId || dName === targetId || dPhone === targetId) {
                             found = { id: docSnap.id, ...d };
                         }
@@ -1280,6 +1278,7 @@
             }
         }
 
+        // ⚡ التحديث الفوري الفائق للتعليقات بدون تأخير وبدون قراءة مسبقة
         async function addComment(id) {
             if (!window.db || !window.firebaseModules) return;
             let input = document.getElementById(`comment-input-${id}`);
@@ -1291,25 +1290,45 @@
                 return;
             }
 
+            let newComment = { 
+                author: currentDriverProfile.name, 
+                text: text, 
+                image: img, 
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) 
+            };
+
+            // تفريغ الحقل فوراً لاستجابة بصرية سريعة طلقة
+            if(input) input.value = '';
+            commentImagesTemp[id] = '';
+            const infoEl = document.getElementById(`comment-preview-info-${id}`);
+            if(infoEl) infoEl.innerText = '';
+
+            // ظهور التعليق على الشاشة فوراً دون انتظار السيرفر (Optimistic UI)
+            const commentsListContainer = document.getElementById(`comments-list-${id}`);
+            if (commentsListContainer) {
+                let emptyMsg = commentsListContainer.querySelector('.no-comments-msg');
+                if (emptyMsg) emptyMsg.remove();
+
+                let commentImg = newComment.image ? `<img src="${newComment.image}" style="max-width:110px; max-height:90px; border-radius:8px; display:block; margin-top:6px; cursor:pointer; border:1px solid var(--border-color);" onclick="viewMedia('${newComment.image}')"/>` : '';
+                let commentDiv = document.createElement('div');
+                commentDiv.className = 'comment-item';
+                commentDiv.innerHTML = `
+                    <div class="comment-header">
+                        <span>👤 ${newComment.author}</span>
+                        <span style="font-size:8px; opacity:0.6;">${newComment.time}</span>
+                    </div>
+                    <div style="color:var(--text-color); margin-top:2px;">${newComment.text}</div>
+                    ${commentImg}
+                `;
+                commentsListContainer.appendChild(commentDiv);
+                commentsListContainer.scrollTop = commentsListContainer.scrollHeight;
+            }
+
+            // الحفظ الذري في الخلفية باستخدام arrayUnion
             try {
-                const { doc, getDoc, updateDoc } = window.firebaseModules;
+                const { doc, updateDoc, arrayUnion } = window.firebaseModules;
                 let docRef = doc(window.db, 'communityPosts', String(id));
-                let docSnap = await getDoc(docRef);
-                if(docSnap.exists()) {
-                    let data = docSnap.data();
-                    let comments = data.comments || [];
-                    comments.push({ 
-                        author: currentDriverProfile.name, 
-                        text: text, 
-                        image: img, 
-                        time: new Date().toLocaleTimeString('ar-EG') 
-                    });
-                    await updateDoc(docRef, { comments: comments });
-                    if(input) input.value = '';
-                    commentImagesTemp[id] = '';
-                    const infoEl = document.getElementById(`comment-preview-info-${id}`);
-                    if(infoEl) infoEl.innerText = '';
-                }
+                await updateDoc(docRef, { comments: arrayUnion(newComment) });
             } catch (err) {
                 alert('⚠️ فشل إرسال التعليق: ' + err.message);
             }
@@ -1354,10 +1373,6 @@
             communityUnsubscribe = onSnapshot(collection(window.db, 'communityPosts'), snapshot => {
                 const container = document.getElementById('community-posts-container');
                 if(!container) return;
-
-                if (document.activeElement && container.contains(document.activeElement)) {
-                    return;
-                }
 
                 let openCommentBoxes = {};
                 let commentInputValues = {};
@@ -1421,6 +1436,8 @@
                                     ${commentImg}
                                 </div>`;
                         });
+                    } else {
+                        commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:6px;">لا توجد تعليقات بعد، كن أول المداخلين!</div>`;
                     }
 
                     let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
@@ -1449,14 +1466,14 @@
                         ${mediaHtml}
                         
                         <div class="post-actions-bar">
-                            <button class="action-icon-btn" onclick="likePost('${p.id}')">👍 تفاعل (${p.likes || 0})</button>
+                            <button class="action-icon-btn" onclick="likePost(this, '${p.id}')">👍 تفاعل (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
                             <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (${p.comments ? p.comments.length : 0})</button>
                             ${shareBtnHtml}
                             ${deleteBtnHtml}
                         </div>
 
                         <div id="comments-sec-${p.id}" class="comments-box" style="display: ${openCommentBoxes[p.id] ? 'block' : 'none'};">
-                            <div style="max-height: 160px; overflow-y: auto; margin-bottom: 8px;">${commentsHtml || '<div style="font-size:10px; opacity:0.6; text-align:center; padding:6px;">لا توجد تعليقات بعد، كن أول المداخلين!</div>'}</div>
+                            <div id="comments-list-${p.id}" style="max-height: 160px; overflow-y: auto; margin-bottom: 8px;">${commentsHtml}</div>
                             <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
                                 <input type="text" id="comment-input-${p.id}" value="${commentInputValues[p.id] || ''}" placeholder="اكتب تعليقاً جميلاً..." style="margin-bottom:0; flex:1; padding:7px 10px; border-radius:8px;">
                                 <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 8px; font-size: 10px; cursor: pointer; margin-bottom:0; display:flex; align-items:center; gap:3px;" title="إرفاق صورة بالتعليق">
@@ -1472,14 +1489,22 @@
             }, error => {});
         }
 
-        async function likePost(id) {
+        // ⚡ التفاعل (Like) الفوري اللحظي باستخدام increment
+        async function likePost(btnElement, id) {
             if (!window.db || !window.firebaseModules) return;
-            const { doc, getDoc, updateDoc } = window.firebaseModules;
-            let docRef = doc(window.db, 'communityPosts', String(id));
-            let docSnap = await getDoc(docRef);
-            if(docSnap.exists()) {
-                await updateDoc(docRef, { likes: (docSnap.data().likes || 0) + 1 });
+            
+            // زيادة الرقم على الشاشة فوراً دون انتظار السيرفر
+            let countSpan = document.getElementById(`likes-count-${id}`);
+            if (countSpan) {
+                countSpan.innerText = parseInt(countSpan.innerText || '0') + 1;
             }
+
+            // التحديث الذري في الخلفية
+            const { doc, updateDoc, increment } = window.firebaseModules;
+            let docRef = doc(window.db, 'communityPosts', String(id));
+            try {
+                await updateDoc(docRef, { likes: increment(1) });
+            } catch (err) {}
         }
 
         function toggleCommentsSection(id) {
