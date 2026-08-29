@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>أسطورة الطريق (Na2la) - المنصة المتكاملة والمزامنة السحابية الحية V107 ONLINE PURE</title>
+    <title>أسطورة الطريق (Na2la) - المنصة المتكاملة والمزامنة السحابية الحية V108 PURE ISOLATED</title>
     
     <!-- مكتبات Firebase V10 الحديثة (Modular SDK) -->
     <script type="module">
@@ -613,7 +613,7 @@
         function isUserAdmin(roleValue, nameValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
             return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
         }
 
@@ -744,9 +744,10 @@
             });
         }
 
+        // دالة المزامنة السحابية الذكية مع عزل الشركات ودعم البيانات القديمة بدون فقدان
         function initLiveFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, doc, query, where } = window.firebaseModules;
+            const { collection, onSnapshot, doc } = window.firebaseModules;
 
             ['drivers', 'users', 'team'].forEach(colName => {
                 onSnapshot(collection(window.db, colName), (snapshot) => {
@@ -785,16 +786,19 @@
 
             Object.keys(collectionsMap).forEach(targetKey => {
                 let colName = collectionsMap[targetKey];
-                let q;
-
-                if (currentCompanyId && currentCompanyId !== 'company_main') {
-                    q = query(collection(window.db, colName), where("companyId", "==", currentCompanyId));
-                } else {
-                    q = collection(window.db, colName);
-                }
-
-                onSnapshot(q, (snapshot) => {
+                
+                // جلب المجموعة بالكامل وتصفيتها في الذاكرة لتجنب خطأ فقدان المستندات التي ليس لها companyId
+                onSnapshot(collection(window.db, colName), (snapshot) => {
                     let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // تصفية الشركات مع دعم التوافقية العكسية للمستندات القديمة
+                    colItems = colItems.filter(item => {
+                        let itemComp = String(item.companyId || 'company_main').trim();
+                        let targetComp = String(currentCompanyId || 'company_main').trim();
+                        
+                        let matchComp = (targetComp === 'company_main') ? (itemComp === 'company_main' || !item.companyId) : (itemComp === targetComp);
+                        return matchComp;
+                    });
 
                     if (!superAdmin && !supervisor) {
                         let currentName = String(window.currentLoggedInUser?.name || '').trim();
@@ -818,24 +822,23 @@
 
         function initLiveEmergencyListener() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const { collection, onSnapshot } = window.firebaseModules;
 
-            let q;
-            if (currentCompanyId && currentCompanyId !== 'company_main') {
-                q = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId));
-            } else {
-                q = collection(window.db, "viper_logistics");
-            }
-
-            onSnapshot(q, (snapshot) => {
+            onSnapshot(collection(window.db, "viper_logistics"), (snapshot) => {
                 let alerts = [];
                 let superAdmin = isSuperAdmin();
                 let supervisor = isSupervisor();
                 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
-                        alerts.push({ id: docSnap.id, ...d });
+                    let itemComp = String(d.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (itemComp === 'company_main' || !d.companyId) : (itemComp === targetComp);
+
+                    if (matchComp) {
+                        if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
+                            alerts.push({ id: docSnap.id, ...d });
+                        }
                     }
                 });
                 alerts.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
@@ -1232,13 +1235,13 @@
             let isAdmin = isSuperAdmin();
             let isSup = isSupervisor();
 
-            let badgeHtml = isAdmin ? ' <span style="background:rgba(255,8,68,0.2); color:var(--primary-orange); padding:2px 8px; border-radius:6px; font-size:11px; border:1px solid rgba(255,8,68,0.4);">👑 admin (مدير)</span>' :
+            let badgeHtml = isAdmin ? ' <span style="background:rgba(255,8,68,0.2); color:var(--primary-orange); padding:2px 8px; border-radius:6px; font-size:11px; border:1px solid rgba(255,8,68,0.4);">👑 admin (مدير شركة)</span>' :
                             (isSup ? ' <span style="background:rgba(245,158,11,0.2); color:var(--warning-color); padding:2px 8px; border-radius:6px; font-size:11px; border:1px solid rgba(245,158,11,0.4);">🛡️ supervisor (مشرف)</span>' :
                             ' <span style="background:rgba(0,242,254,0.2); color:var(--primary-blue); padding:2px 8px; border-radius:6px; font-size:11px;">🚗 driver (سائق)</span>');
             
             document.getElementById('header-username').innerHTML = (user.name || 'مستخدم') + badgeHtml;
             
-            let rankText = isAdmin ? 'admin' : (isSup ? 'supervisor' : 'driver');
+            let rankText = isAdmin ? 'مدير شركة' : (isSup ? 'مشرف' : 'سائق');
             let permText = isAdmin ? 'Full Access' : (isSup ? 'Supervisor (Read-Only)' : 'Standard (Driver)');
             let detailsLine = `رتبة النظام: ${rankText} | هاتف: ${user.phone || 'غير محدد'} | الصلاحيات: ${permText} | شركة: ${currentCompanyId}`;
             document.getElementById('header-details-line').innerText = detailsLine;
@@ -1397,7 +1400,7 @@
 
             let isAdmin = isSuperAdmin();
             let isSup = isSupervisor();
-            let roleTitle = isAdmin ? 'مدير النظام (صلاحية كاملة)' : (isSup ? 'مشرف الأسطول (عرض الجميع دون تعديل)' : 'سائق (عرض حساباته الخاصة)');
+            let roleTitle = isAdmin ? 'مدير شركة (صلاحية كاملة)' : (isSup ? 'مشرف الأسطول (عرض الجميع دون تعديل)' : 'سائق (عرض حساباته الخاصة)');
             document.getElementById("aiAnalyticsReportText").innerHTML = `حالة الحساب السحابي الموثق: <b>${window.currentLoggedInUser?.name || 'مستخدم'}</b>.<br>الصلاحية الفعلية: <b>${roleTitle}</b>.`;
 
             let canEdit = isSuperAdmin();
@@ -1494,7 +1497,7 @@
                             <td>${badge}<br><b>${getSafeAmount(item).toLocaleString()} ج.م</b></td>
                             <td><span class="status-badge status-paid">مسدد ✅</span></td>
                             <td>
-                                <div class="action-btn-group">
+                                the action-btn-group">
                                     <a href="https://wa.me/${getSafePhone(item) !== 'غير محدد' ? getSafePhone(item) : ''}" target="_blank" class="whatsapp-btn">💬 واتساب</a>
                                     <button class="image-btn" onclick='downloadInvoiceAsImage(${JSON.stringify(item)})'>🖼️</button>
                                     <button class="pdf-btn" onclick='downloadInvoiceAsPDF(${JSON.stringify(item)})'>📄</button>
