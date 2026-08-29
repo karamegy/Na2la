@@ -1641,7 +1641,7 @@
                     if(userPhone) existingDrv.phone = userPhone;
                     await db.collection('drivers').doc(String(existingDrv.id || user.uid)).set(existingDrv, { merge: true });
 
-                    if (existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin') {
+                    if (existingDrv.name === 'المدير' || existingDrv.role === 'مدير نظام' || existingDrv.role === 'مدير مساعد' || existingDrv.role === 'admin' || existingDrv.role === 'مدير شركة') {
                         currentUserRole = 'admin';
                     } else if (existingDrv.role === 'مشرف') {
                         currentUserRole = 'supervisor';
@@ -2036,7 +2036,6 @@
                 return;
             }
 
-            // فحص الصارم ضد حسابات Firestore السحابية (منع الحسابات الوهمية)
             try {
                 const snapshot = await db.collection('drivers').get();
                 let matchedUser = null;
@@ -2048,7 +2047,6 @@
                     }
                 });
 
-                // التحقق من حساب المدير الأساسي الافتراضي
                 if (!matchedUser && (identifier === 'المدير' || identifier === '01114099799' || identifier === 'admin') && (pin === storedPin || pin === '01036')) {
                     currentUserRole = 'admin';
                     loggedInDriverName = 'المدير';
@@ -2065,7 +2063,7 @@
                 loggedInDriverName = matchedUser.name;
                 currentCompanyId = matchedUser.companyId || 'Company_main';
                 
-                if (matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin') {
+                if (matchedUser.name === 'المدير' || matchedUser.role === 'مدير نظام' || matchedUser.role === 'مدير مساعد' || matchedUser.role === 'admin' || matchedUser.role === 'مدير شركة') {
                     currentUserRole = 'admin';
                 } else if (matchedUser.role === 'مشرف') {
                     currentUserRole = 'supervisor';
@@ -2080,6 +2078,9 @@
         }
 
         function finishSuccessfulLogin() {
+            if (loggedInDriverName === 'المدير') {
+                currentUserRole = 'admin';
+            }
             localStorage.setItem('current_user_role', currentUserRole);
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
             localStorage.setItem('current_company_id', currentCompanyId);
@@ -2894,7 +2895,7 @@
 
             if (appData.drivers && appData.drivers.length > 0) {
                 if (activeTargetName === 'المدير') {
-                    drv = appData.drivers.find(d => d.name === 'المدير' && d.phone && d.phone !== '01000000000');
+                    drv = appData.drivers.find(d => d.name === 'المدير');
                 }
                 if (!drv) {
                     drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
@@ -2908,8 +2909,8 @@
                     companyName: 'أسطورة الطريق الرئيسية',
                     name: activeTargetName,
                     phone: activeTargetName === 'المدير' ? '+201114099799' : '',
-                    role: activeTargetName === 'المدير' ? 'admin' : 'سائق',
-                    title: 'أسطورة الطريق',
+                    role: (activeTargetName === 'المدير' || loggedInDriverName === 'المدير') ? 'admin' : 'سائق',
+                    title: (activeTargetName === 'المدير' || loggedInDriverName === 'المدير') ? 'مدير عام النظام' : 'أسطورة الطريق',
                     status: 'متاح 🟢',
                     avatar: '',
                     cover: '',
@@ -2917,6 +2918,13 @@
                     advances: 0
                 };
             }
+
+            // فرض تصحيح القيم الخاصة بحساب المدير لمنع ظهور كلمة سائق بالخطأ
+            if (drv.name === 'المدير' || loggedInDriverName === 'المدير') {
+                drv.role = 'admin';
+                drv.title = 'مدير عام النظام';
+            }
+
             return drv;
         }
 
@@ -3281,7 +3289,6 @@
             const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            // حل مشكلة تضارب جدول السائقين: التحقق مما إذا كان السائق مشغولاً بالفعل في رحلة نشطة أخرى
             if (assignedDriver) {
                 let activeConflict = (appData.shipments || []).find(s => {
                     let isSameDriver = s.assignedDriver === assignedDriver;
@@ -4075,7 +4082,7 @@
             }
         }
 
-        function render() {
+                function render() {
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
