@@ -407,9 +407,42 @@
             border: 1px solid #e2e8f0;
         }
 
+        .gmap-categories-bar {
+            position: absolute;
+            top: 72px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            z-index: 1002;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+
+        .gmap-cat-chip {
+            background: #ffffff;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 10.5px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: 0.2s;
+            flex-shrink: 0;
+        }
+        .gmap-cat-chip:hover {
+            background: #0f766e;
+            color: #ffffff;
+            border-color: #0f766e;
+        }
+
         .gmap-route-top-banner {
             position: absolute;
-            top: 70px;
+            top: 114px;
             left: 12px;
             right: 12px;
             background: #0f766e;
@@ -428,7 +461,7 @@
         .gmap-floating-controls {
             position: absolute;
             right: 16px;
-            top: 140px;
+            top: 180px;
             display: flex;
             flex-direction: column;
             gap: 8px;
@@ -714,6 +747,15 @@
                 <span style="font-size:18px; cursor:pointer; margin-right:4px;" onclick="closeLiveRadarMap()">✕</span>
             </div>
             <div id="autocompleteResults"></div>
+
+            <!-- تصنيفات الأماكن القريبة السريعة مثل جوجل ماب -->
+            <div class="gmap-categories-bar">
+                <button class="gmap-cat-chip" onclick="searchNearbyAmenity('fuel', 'محطات الوقود')">⛽ وقود</button>
+                <button class="gmap-cat-chip" onclick="searchNearbyAmenity('restaurant', 'المطاعم')">🍔 مطاعم</button>
+                <button class="gmap-cat-chip" onclick="searchNearbyAmenity('pharmacy', 'الصيدليات')">💊 صيدليات</button>
+                <button class="gmap-cat-chip" onclick="searchNearbyAmenity('car_repair', 'ورش الصيانة')">🛠️ صيانة</button>
+                <button class="gmap-cat-chip" onclick="searchNearbyAmenity('atm', 'الصراف الآلي')">🏧 صراف آلي</button>
+            </div>
 
             <!-- شريط اتجاهات الطريق العلوي (مثل Google Navigation) -->
             <div class="gmap-route-top-banner" id="gmapRouteBanner">
@@ -1340,10 +1382,10 @@
             let currentPos = truckMarker.getLatLng();
             leafletMap.setView([destLat, destLon], 15, { animate: true });
             L.marker([destLat, destLon]).addTo(leafletMap).bindPopup(`<b>🏁 الوجهة: ${destName}</b>`).openPopup();
-            document.getElementById('gmapCurrentStreetName').innerText = destName;
+            document.getElementById('gmapCurrentStreetName').innerText = `الوجهة: ${destName}`;
 
             try {
-                let osrmUrl = `https://router.project-osrm.org/route/v1/driving/${currentPos.lng},${currentPos.lat};${destLon},${destLat}?overview=full&geometries=geojson`;
+                let osrmUrl = `https://router.project-osrm.org/route/v1/driving/${currentPos.lng},${currentPos.lat};${destLon},${destLat}?overview=full&geometries=geojson&steps=true`;
                 let res = await fetch(osrmUrl);
                 let data = await res.json();
 
@@ -1352,13 +1394,19 @@
                     let distanceKm = (route.distance / 1000).toFixed(1);
                     let durationMin = Math.round(route.duration / 60);
 
-                    document.getElementById('gmapRouteEta').innerText = `المسافة: ${distanceKm} كم | الوقت المتوقع: ${durationMin} دقيقة`;
-                    speakInstruction(`تم تحديد المسار إلى ${destName}. المسافة ${distanceKm} كيلومتر والوقت المتوقع ${durationMin} دقيقة.`);
+                    document.getElementById('gmapRouteEta').innerText = `المسافة: ${distanceKm} كم | الوقت المقدر: ${durationMin} دقيقة`;
+                    
+                    if (route.legs && route.legs[0] && route.legs[0].steps && route.legs[0].steps.length > 0) {
+                        let firstStep = route.legs[0].steps[0];
+                        let instruction = firstStep.maneuver ? `اتجه نحو ${firstStep.name || 'الطريق الرئيسي'}` : 'توجه نحو الوجهة';
+                        document.getElementById('gmapCurrentStreetName').innerText = instruction;
+                        speakInstruction(instruction);
+                    }
 
                     if (routePolylineLayer) leafletMap.removeLayer(routePolylineLayer);
 
                     let coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
-                    routePolylineLayer = L.polyline(coords, { color: '#3b82f6', weight: 6, opacity: 0.85 }).addTo(leafletMap);
+                    routePolylineLayer = L.polyline(coords, { color: '#0f766e', weight: 6, opacity: 0.85 }).addTo(leafletMap);
                     leafletMap.fitBounds(routePolylineLayer.getBounds(), { padding: [50, 50] });
                 }
             } catch (e) {
@@ -1390,6 +1438,47 @@
                 }
             } catch(e) {
                 alert('حدث خطأ أثناء الاتصال بخدمة البحث الجغرافي.');
+            }
+        }
+
+        // جلب الأماكن القريبة عبر Overpass API وتوفير زر للانطلاق إليها
+        async function searchNearbyAmenity(amenityTag, categoryName) {
+            if (!truckMarker) {
+                alert('⚠️ يجدر تحديد موقعك الحالي أولاً.');
+                return;
+            }
+            if (serviceStationsLayer) serviceStationsLayer.clearLayers();
+            let pos = truckMarker.getLatLng();
+            
+            let queryTag = `amenity=${amenityTag}`;
+            if (amenityTag === 'car_repair') queryTag = `shop=car_repair`;
+            if (amenityTag === 'atm') queryTag = `amenity=atm`;
+            
+            let overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];node(around:5000,${pos.lat},${pos.lng})[${queryTag}];out;`;
+            
+            try {
+                let res = await fetch(overpassUrl);
+                let data = await res.json();
+                
+                if (data && data.elements && data.elements.length > 0) {
+                    data.elements.forEach(el => {
+                        let titleName = (el.tags && (el.tags.name || el.tags.brand)) ? (el.tags.name || el.tags.brand) : categoryName;
+                        const iconMarkup = L.divIcon({
+                            className: 'amenity-div',
+                            html: `<div style="background:#fff; border:2px solid #0f766e; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:15px; box-shadow:0 3px 10px rgba(0,0,0,0.3);" title="${titleName}">📍</div>`,
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 16]
+                        });
+                        let marker = L.marker([el.lat, el.lon], { icon: iconMarkup });
+                        marker.bindPopup(`<b>📍 ${titleName}</b><br>${categoryName} قريبة من موقعك<br><button onclick="navigateToDestination(${el.lat}, ${el.lon}, '${titleName}')" style="margin-top:4px; padding:4px 8px; background:#0f766e; color:#fff; border:none; border-radius:4px; cursor:pointer;">انطلق إلى هنا 🚀</button>`);
+                        serviceStationsLayer.addLayer(marker);
+                    });
+                    alert(`✅ تم العثور على ${data.elements.length} من ${categoryName} وعرضها على الخريطة.`);
+                } else {
+                    alert(`⚠️ لم يتم العثور على ${categoryName} قريبة ضمن نطاق 5 كم.`);
+                }
+            } catch(e) {
+                alert('⚠️ تعذر جلب الأماكن القريبة.');
             }
         }
 
