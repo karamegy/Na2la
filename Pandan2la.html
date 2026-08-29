@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق الرئيسية - لوحة التحكم المركزية السحابية المباشرة (V96)</title>
+    <title>أسطورة الطريق الرئيسية - لوحة التحكم المركزية السحابية المباشرة (V95)</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -153,7 +153,7 @@
             <div class="rss-title"><i class="fa-solid fa-satellite-dish"></i> شريط الـ RSS الحي:</div>
             <div class="rss-content-wrap">
                 <div class="rss-marquee" id="rss-marquee-container">
-                    <span>📢🐼👑 شركة أسطورة الطريق الرئيسية - الربط السحابي المباشر عبر Firebase بدون تخزين محلي (V96)...</span>
+                    <span>📢🐼👑 شركة أسطورة الطريق الرئيسية - الربط السحابي المباشر عبر Firebase بدون تخزين محلي (V95)...</span>
                 </div>
             </div>
         </div>
@@ -299,7 +299,7 @@
             <div id="invoice-preview-card">
                 <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
                     <h2 style="font-size: 14px; color: #2563eb;">شركة أسطورة الطريق الرئيسية (الأدمين)</h2>
-                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة مركزياً (V96)</p>
+                    <p style="font-size: 9px; color: #64748b;">بوليصة شحن ونقل معتمدة مركزياً (V95)</p>
                 </div>
                 <div style="font-size: 10px; line-height: 1.6;">
                     <p><strong>رقم البوليصة:</strong> <span id="inv-id"></span></p>
@@ -472,7 +472,7 @@
 
     let unsubscribers = [];
 
-    // التحقق من حساب المدير أو المشرف حصرياً لشركة company_main عبر فايربيس
+    // التحقق من حساب المدير أو المشرف حصرياً من فايربيس (بدون أي تخزين محلي وبدون حسابات خلفية وهمية)
     async function verifyAdminSupervisorLogin(e) {
         if (e) e.preventDefault();
         const phoneInput = document.getElementById('auth-phone').value.trim();
@@ -487,11 +487,10 @@
             showToast('جاري التحقق السحابي من الصلاحيات عبر Firebase... 🔄');
             const querySnap = await db.collection('drivers')
                 .where('phone', '==', phoneInput)
-                .where('companyId', '==', 'company_main')
                 .get();
 
             if (querySnap.empty) {
-                showToast('رقم الهاتف غير مسجل في شركة أسطورة الطريق الرئيسية', 'error');
+                showToast('رقم الهاتف غير مسجل في قاعدة البيانات', 'error');
                 return;
             }
 
@@ -508,6 +507,7 @@
                 return;
             }
 
+            // التحقق من أن الرتبة إما مدير (admin / مدير شركة) أو مشرف
             const role = String(userData.role || '').toLowerCase();
             const isManagerOrSupervisor = role.includes('admin') || role.includes('مشرف') || role.includes('مدير');
 
@@ -516,6 +516,7 @@
                 return;
             }
 
+            // تسجيل الدخول الناجح سحابياً بالكامل (بدون تخزين محلي)
             currentLoggedInUser = {
                 ...userData,
                 companyId: 'company_main',
@@ -541,17 +542,15 @@
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
         document.getElementById('authGateModal').style.display = 'flex';
-        showToast('تم تسجيل الخروج بنجاح وتأمين الجلسة');
+        showToast('تم تسليم الخروج بنجاح وتأمين الجلسة');
     }
 
-    // مزامنة البيانات المعزولة الخاصة بشركة company_main فقط (تشمل الشحنات، الأعضاء/السائقين، الاشتراكات، الحسابات)
     function initFirebaseListeners() {
         unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
         unsubscribers = [];
 
-        // عزل المجموعات الخاصة بشركتنا فقط company_main بما فيها الأعضاء والاشتراكات
-        const isolatedCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'trucks', 'maintenanceLogs', 'drivers', 'subscriptions'];
-        const globalCollections = ['communityPosts', 'posts', 'chat', 'centralBroadcasts', 'auditLogs'];
+        const isolatedCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'trucks', 'maintenanceLogs'];
+        const globalCollections = ['drivers', 'communityPosts', 'posts', 'chat', 'centralBroadcasts', 'auditLogs', 'subscriptions'];
 
         isolatedCollections.forEach(colName => {
             let query = db.collection(colName).where('companyId', '==', 'company_main');
@@ -564,20 +563,6 @@
                 
                 appData[colName] = rawData;
                 window.appData = appData;
-
-                if (colName === 'drivers' && currentLoggedInUser) {
-                    let updatedMe = rawData.find(d => String(d.docId || d.id) === String(currentLoggedInUser.docId || currentLoggedInUser.id));
-                    if (updatedMe) {
-                        currentLoggedInUser = {
-                            ...currentLoggedInUser,
-                            ...updatedMe,
-                            avatar: updatedMe.avatar || updatedMe.profileImage || '',
-                            coverUrl: updatedMe.coverUrl || updatedMe.cover || ''
-                        };
-                        window.currentLoggedInUser = currentLoggedInUser;
-                        applyUserPermissionsUI();
-                    }
-                }
 
                 if(typeof renderStats === 'function') renderStats();
                 if(typeof refreshActiveSection === 'function') refreshActiveSection();
@@ -598,6 +583,21 @@
                 appData[colName] = rawData;
                 if (colName === 'posts') appData.wallPosts = appData.posts;
                 window.appData = appData;
+                
+                // مزامنة صور بروفايل وغلاف المستخدم الحالي بدقة تامة ومباشرة من فايربيس
+                if (colName === 'drivers' && currentLoggedInUser) {
+                    let updatedMe = rawData.find(d => String(d.docId || d.id) === String(currentLoggedInUser.docId || currentLoggedInUser.id));
+                    if (updatedMe) {
+                        currentLoggedInUser = {
+                            ...currentLoggedInUser,
+                            ...updatedMe,
+                            avatar: updatedMe.avatar || updatedMe.profileImage || '',
+                            coverUrl: updatedMe.coverUrl || updatedMe.cover || ''
+                        };
+                        window.currentLoggedInUser = currentLoggedInUser;
+                        applyUserPermissionsUI();
+                    }
+                }
 
                 if(typeof refreshActiveSection === 'function') refreshActiveSection();
             });
@@ -622,6 +622,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+        // إظهار بوابة الدخول حصرياً لضمان عدم وجود أي حسابات خلفية أو تخزين محلي
         document.getElementById('authGateModal').style.display = 'flex';
         updateRSSTicker();
     });
@@ -638,7 +639,7 @@
         const tickerEl = document.getElementById('rss-marquee-container');
         if (!tickerEl) return;
         let data = appStateData();
-        let messages = [`<span><i class="fa-solid fa-crown" style="color:#fde047;"></i> شركة أسطورة الطريق الرئيسية - الربط السحابي المباشر عبر Firebase (V96)</span>`];
+        let messages = [`<span><i class="fa-solid fa-crown" style="color:#fde047;"></i> شركة أسطورة الطريق الرئيسية - الربط السحابي المباشر عبر Firebase بدون تخزين محلي (V95)</span>`];
         let broadcasts = data.centralBroadcasts || [];
         if (broadcasts.length > 0) {
             broadcasts.forEach(b => {
@@ -688,13 +689,13 @@
 
         sidebarList.innerHTML = `
             <button onclick="switchSection('pandaAdmin'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">👑 الرئيسية وغرفة التحكم</button>
-            <button onclick="switchSection('subscriptionsManager'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">💳 إدارة اشتراكات المنصة والشركة</button>
+            <button onclick="switchSection('subscriptionsManager'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">💳 إدارة اشتراكات المنصة</button>
             <button onclick="switchSection('profile'); toggleSidebar();" style="background:var(--accent-main); color:#fff;">👤 الملف الشخصي وصورة البروفايل</button>
             <button onclick="switchSection('shipments'); toggleSidebar();">📦 شحنات الشركة</button>
             <button onclick="switchSection('consolidatedInvoices'); toggleSidebar();" style="background:var(--green-success); color:#fff;">📑 الفواتير المجمعة</button>
             <button onclick="switchSection('deferredInvoices'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">⏳ الفواتير المؤجلة والآجلة</button>
             <button onclick="switchSection('centralChat'); toggleSidebar();">📢 الشات المركزي وبث التعاميم</button>
-            <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة حسابات وأعضاء الشركة والصلاحيات</button>
+            <button onclick="switchSection('driversControl'); toggleSidebar();">👑 إدارة الحسابات والألقاب</button>
             <button onclick="switchSection('cargoTracking'); toggleSidebar();" style="background:var(--purple-color); color:#fff;">📍 تتبع مراحل الشحنة</button>
             <button onclick="switchSection('fleet'); toggleSidebar();">🚚 أسطول المركبات</button>
             <button onclick="switchSection('fleetMaintenance'); toggleSidebar();" style="background:var(--yellow-warning); color:#000;">🔧 جدولة الصيانة الدورية</button>
@@ -832,9 +833,9 @@
         } else if (sectionId === 'subscriptionsManager') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--purple-color);">
-                    <h3 style="color:var(--purple-color);">💳 إدارة اشتراكات الشركات (مزامنة قسم الاشتراك مع الشركات)</h3>
+                    <h3 style="color:var(--purple-color);">💳 إدارة اشتراكات الشركات (أسطورة الطريق الرئيسية)</h3>
                     <form onsubmit="saveCompanySubscription(event)">
-                        <input type="text" id="sub-company-name" value="أسطورة الطريق الرئيسية (company_main)" required>
+                        <input type="text" id="sub-company-name" value="أسطورة الطريق الرئيسية" required>
                         <select id="sub-plan" style="margin-bottom:5px;">
                             <option value="الباقة البلاتينية الشهرية">الباقة البلاتينية الشهرية (شامل الكل)</option>
                             <option value="الباقة الذهبية السنوية">الباقة الذهبية السنوية</option>
@@ -844,15 +845,15 @@
                             <option value="نشط 🟢">نشط ومفعل 🟢</option>
                             <option value="موقوف مؤقتاً 🔴">موقوف مؤقتاً 🔴</option>
                         </select>
-                        <button type="submit" class="btn-success">حفظ وتجديد الاشتراك في Firebase 💳</button>
+                        <button type="submit" class="btn-success">حفظ وتجديد الاشتراك سحابياً في Firebase 💳</button>
                     </form>
                     <div class="table-responsive" style="margin-top:8px;">
                         <table>
-                            <thead><tr><th>معرف الشركة</th><th>الباقة</th><th>تاريخ الانتهاء</th><th>الحالة</th><th>إجراء</th></tr></thead>
+                            <thead><tr><th>الشركة</th><th>الباقة</th><th>تاريخ الانتهاء</th><th>الحالة</th><th>إجراء</th></tr></thead>
                             <tbody>
                                 ${(data.subscriptions || []).map(sub => `
                                     <tr>
-                                        <td style="font-weight:bold; color:var(--accent-main);">${sub.companyName || 'أسطورة الطريق'}</td>
+                                        <td style="font-weight:bold; color:var(--accent-main);">${sub.companyName}</td>
                                         <td>${sub.plan}</td>
                                         <td>${sub.expiryDate}</td>
                                         <td><span class="badge ${sub.status.includes('نشط') ? 'bg-delivered' : 'bg-danger'}">${sub.status}</span></td>
@@ -860,7 +861,7 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('subscriptions', '${sub.docId || sub.id}')">حذف</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد اشتراكات مسجلة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد اشتراكات مسجلة</td></tr>'}
                             </tbody>
                         </table>
                     </div>
@@ -871,7 +872,7 @@
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
                     <h3 style="color:var(--yellow-warning);">👑 لوحة التحكم المركزية - شركة أسطورة الطريق الرئيسية</h3>
                     <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">
-                        مرحباً بك يا فخامة المدير/المشرف. يتم مزامنة حساب شركتك حصرياً ومعرفها (<strong style="color:var(--green-success);">company_main</strong>) والتحكم في صلاحيات أعضاء الشركة المسجلين على نفس المعرف.
+                        مرحباً بك يا فخامة المدير/المشرف. النظام مرتبط حصرياً بـ Firebase لشركة <strong style="color:var(--green-success);">أسطورة الطريق الرئيسية (company_main)</strong> بدون أي تخزين محلي.
                     </p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
@@ -886,8 +887,9 @@
                     <h3><span>📊 مؤشرات شحنات وحسابات أسطورة الطريق الرئيسية</span></h3>
                     <div style="font-size: 10px; line-height: 1.6;">
                         <p>📦 شحنات الشركة الحالية: <strong>${(data.shipments || []).length} شحنة</strong></p>
-                        <p>👥 أعضاء الشركة المصرح لهم: <strong>${(data.drivers || []).length} عضو</strong></p>
                         <p>📑 فواتير مجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
+                        <p>⏳ فواتير مؤجلة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
+                        <p>💵 حركات الخزينة: <strong>${(data.treasury || []).length} حركة</strong></p>
                         <p>🟢 حالة الاتصال: <strong style="color:var(--green-success);">متصل بـ Firebase سحابياً بالكامل</strong></p>
                     </div>
                 </div>
@@ -1035,7 +1037,7 @@
         } else if (sectionId === 'driversControl') {
             content.innerHTML = `
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 إدارة أعضاء وصلاحيات شركة أسطورة الطريق الرئيسية (company_main)</h3>
+                    <h3 style="color:var(--yellow-warning);">👑 إدارة الحسابات والألقاب والصلاحيات في Firebase</h3>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب</th><th>رمز (PIN)</th><th>إدارة</th></tr></thead>
@@ -1063,13 +1065,13 @@
                                             <button class="btn-danger btn-sm" onclick="deleteItem('drivers', '${d.docId || d.id}')">حذف</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد حسابات أعضاء مسجلة لهذه الشركة</td></tr>'}
+                                `).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
                             </tbody>
                         </table>
                     </div>
                 </div>
                 <div class="card">
-                    <h3>➕ إضافة عضو / سائق جديد لشركتي</h3>
+                    <h3>➕ إضافة حساب جديد للسحابي</h3>
                     <form onsubmit="saveNewDriver(event)">
                         <input type="text" id="new-d-name" placeholder="الاسم الرباعي" required>
                         <input type="text" id="new-d-phone" placeholder="رقم الهاتف / واتساب (أرقام فقط)" required>
@@ -1079,7 +1081,7 @@
                             <option value="مشرف">مشرف</option>
                             <option value="admin">أدمين</option>
                         </select>
-                        <button type="submit" class="btn-success">إضافة وحفظ العضو في Firebase 🚀</button>
+                        <button type="submit" class="btn-success">إضافة وحفظ الحساب في Firebase 🚀</button>
                     </form>
                 </div>
             `;
@@ -1541,7 +1543,6 @@
 
     function listenForIncomingCalls() {
         db.collection('webrtc_calls')
-            .where('companyId', '==', currentCompanyId)
             .where('status', '==', 'ringing')
             .onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(async change => {
@@ -1676,6 +1677,7 @@
         showToast('تم إنهاء المكالمة بنجاح');
     }
 
+    // رفع وتحديث صورة البروفايل والغلاف وحفظها في Firebase ومزامنتها لحظياً
     function uploadAvatarPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1725,7 +1727,6 @@
         let pId = String(Date.now());
         const newPost = {
             id: pId,
-            companyId: currentCompanyId,
             author: user.name || 'المدير',
             user: user.name || 'المدير',
             avatar: user.avatar || '',
@@ -1739,20 +1740,18 @@
         });
     }
 
-    // حفظ اشتراك الشركة ومزامنته مع معرف الشركة companyId
     function saveCompanySubscription(e) {
         e.preventDefault();
         let subId = String(Date.now());
         const newSub = {
             id: subId,
-            companyId: 'company_main',
             companyName: document.getElementById('sub-company-name').value,
             plan: document.getElementById('sub-plan').value,
             expiryDate: document.getElementById('sub-expiry').value,
             status: document.getElementById('sub-status').value
         };
         db.collection('subscriptions').doc(subId).set(newSub).then(() => {
-            showToast('تم حفظ وتحديث اشتراك الشركة في Firebase بنجاح! 💳');
+            showToast('تم حفظ الاشتراك في Firebase بنجاح! 💳');
             switchSection('subscriptionsManager');
         });
     }
@@ -1863,7 +1862,6 @@
                 
                 const newMsg = {
                     id: newMsgId,
-                    companyId: currentCompanyId,
                     sender: userName,
                     text: text,
                     mediaUrl: base64Data,
@@ -1882,7 +1880,6 @@
         } else {
             const newMsg = {
                 id: newMsgId,
-                companyId: currentCompanyId,
                 sender: userName,
                 text: text,
                 mediaUrl: null,
@@ -1931,7 +1928,7 @@
         let defId = String(Date.now());
         const newDef = {
             id: defId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             invoiceId: `INV-${defId}`,
             clientName: document.getElementById('def-client').value,
             clientPhone: '',
@@ -1961,7 +1958,7 @@
         let custId = String(Date.now());
         const newCust = {
             id: custId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             name: document.getElementById('cust-name').value,
             phone: document.getElementById('cust-phone').value,
             debt: Number(document.getElementById('cust-debt').value || 0)
@@ -2127,7 +2124,7 @@
         const conId = String(Date.now());
         const newConsolidated = {
             id: conId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             clientName: clientName,
             client: clientName,
             phone: clientPhone,
@@ -2284,7 +2281,7 @@
         let maintId = String(Date.now());
         const newTask = {
             id: maintId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             truck: document.getElementById('maint-truck').value,
             service: document.getElementById('maint-service').value,
             km: Number(document.getElementById('maint-km').value)
@@ -2304,7 +2301,6 @@
         let bId = String(Date.now());
         const newMsg = {
             id: bId,
-            companyId: currentCompanyId,
             sender: window.currentLoggedInUser ? window.currentLoggedInUser.name : 'الإدارة',
             text: text,
             priority: priority,
@@ -2335,13 +2331,11 @@
         }
     }
 
-    // إضافة عضو جديد مرتبط حصرياً بـ companyId (company_main)
     function saveNewDriver(e) {
         e.preventDefault();
         let drvId = String(Date.now());
         const newDrv = {
             id: drvId,
-            companyId: currentCompanyId,
             name: document.getElementById('new-d-name').value,
             phone: document.getElementById('new-d-phone').value,
             pin: document.getElementById('new-d-pin').value,
@@ -2352,7 +2346,7 @@
         };
         db.collection('drivers').doc(drvId).set(newDrv).then(() => {
             switchSection('driversControl');
-            showToast('تم إضافة العضو وصلاحياته في Firebase بنجاح!');
+            showToast('تم إضافة الحساب في Firebase بنجاح!');
         });
     }
 
@@ -2361,7 +2355,7 @@
         const shipmentId = String(Date.now());
         const newShipment = {
             id: shipmentId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             name: document.getElementById('s-name').value,
             phone: document.getElementById('s-phone').value,
             address: document.getElementById('s-address').value,
@@ -2390,7 +2384,7 @@
         let trId = String(Date.now());
         const newTruck = {
             id: trId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             num: document.getElementById('tr-num').value,
             driver: document.getElementById('tr-driver').value,
             km: Number(document.getElementById('tr-km').value || 0)
@@ -2406,7 +2400,7 @@
         let tId = String(Date.now());
         const newT = {
             id: tId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             type: document.getElementById('t-type').value,
             amount: Number(document.getElementById('t-amount').value),
             desc: document.getElementById('t-desc').value,
@@ -2423,7 +2417,7 @@
         let exId = String(Date.now());
         const newEx = {
             id: exId,
-            companyId: currentCompanyId,
+            companyId: 'company_main',
             title: document.getElementById('exp-title').value,
             amount: Number(document.getElementById('exp-amount').value),
             date: new Date().toLocaleDateString('ar-EG')
@@ -2441,7 +2435,6 @@
         let userName = window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير';
         const newPost = {
             id: pId,
-            companyId: currentCompanyId,
             author: userName,
             user: userName,
             text: text,
@@ -2462,7 +2455,6 @@
         let pId = String(Date.now());
         const newPost = {
             id: pId,
-            companyId: currentCompanyId,
             author: userName,
             user: userName,
             text: text,
