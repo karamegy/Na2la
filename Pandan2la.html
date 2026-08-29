@@ -368,7 +368,7 @@
     const db = firebase.firestore();
     window.db = db;
 
-    // النطاق حصرياً لشركة أسطورة الطريق الرئيسية
+    // مزامنة حساب شركتي أنا فقط (company_main)
     const currentCompanyId = 'company_main';
     window.currentCompanyId = currentCompanyId;
 
@@ -472,7 +472,6 @@
 
     let unsubscribers = [];
 
-    // التحقق من حساب المدير أو المشرف حصرياً من فايربيس (بدون أي تخزين محلي وبدون حسابات خلفية وهمية)
     async function verifyAdminSupervisorLogin(e) {
         if (e) e.preventDefault();
         const phoneInput = document.getElementById('auth-phone').value.trim();
@@ -507,7 +506,6 @@
                 return;
             }
 
-            // التحقق من أن الرتبة إما مدير (admin / مدير شركة) أو مشرف
             const role = String(userData.role || '').toLowerCase();
             const isManagerOrSupervisor = role.includes('admin') || role.includes('مشرف') || role.includes('مدير');
 
@@ -516,7 +514,6 @@
                 return;
             }
 
-            // تسجيل الدخول الناجح سحابياً بالكامل (بدون تخزين محلي)
             currentLoggedInUser = {
                 ...userData,
                 companyId: 'company_main',
@@ -584,7 +581,6 @@
                 if (colName === 'posts') appData.wallPosts = appData.posts;
                 window.appData = appData;
                 
-                // مزامنة صور بروفايل وغلاف المستخدم الحالي بدقة تامة ومباشرة من فايربيس
                 if (colName === 'drivers' && currentLoggedInUser) {
                     let updatedMe = rawData.find(d => String(d.docId || d.id) === String(currentLoggedInUser.docId || currentLoggedInUser.id));
                     if (updatedMe) {
@@ -622,7 +618,6 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        // إظهار بوابة الدخول حصرياً لضمان عدم وجود أي حسابات خلفية أو تخزين محلي
         document.getElementById('authGateModal').style.display = 'flex';
         updateRSSTicker();
     });
@@ -830,67 +825,65 @@
                     </div>
                 </div>
             `;
-        } else if (sectionId === 'subscriptionsManager') {
+        } else if (sectionId === 'subscriptionsManager' || sectionId === 'pandaAdmin') {
+            // عرض لوحة إدارة الشركات والاشتراكات النشطة (SaaS Hub) تماماً مثل الصورة المطلوبة
+            let subsList = data.subscriptions || [];
+            if(subsList.length === 0) {
+                subsList = [{ companyName: 'شركة أسطورة الطريق', plan: 'monthly', expiryDate: 'غير محدد', status: 'نشط 🟢', phone: '01114099799', manager: 'المدير' }];
+            }
             content.innerHTML = `
-                <div class="card" style="border: 2px solid var(--purple-color);">
-                    <h3 style="color:var(--purple-color);">💳 إدارة اشتراكات الشركات (أسطورة الطريق الرئيسية)</h3>
-                    <form onsubmit="saveCompanySubscription(event)">
-                        <input type="text" id="sub-company-name" value="أسطورة الطريق الرئيسية" required>
-                        <select id="sub-plan" style="margin-bottom:5px;">
-                            <option value="الباقة البلاتينية الشهرية">الباقة البلاتينية الشهرية (شامل الكل)</option>
-                            <option value="الباقة الذهبية السنوية">الباقة الذهبية السنوية</option>
-                        </select>
-                        <input type="date" id="sub-expiry" required style="margin-bottom:5px;">
-                        <select id="sub-status" style="margin-bottom:5px;">
-                            <option value="نشط 🟢">نشط ومفعل 🟢</option>
-                            <option value="موقوف مؤقتاً 🔴">موقوف مؤقتاً 🔴</option>
-                        </select>
-                        <button type="submit" class="btn-success">حفظ وتجديد الاشتراك سحابياً في Firebase 💳</button>
-                    </form>
-                    <div class="table-responsive" style="margin-top:8px;">
+                <div class="card" style="border: 1px solid var(--border-color); background: var(--card-bg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid var(--border-color); padding-bottom: 6px;">
+                        <h3 style="color: var(--accent-main); margin: 0; font-size: 11px;">🏢 لوحة إدارة الشركات والاشتراكات النشطة (SaaS Hub)</h3>
+                        <button class="btn-success btn-sm" onclick="openModal('subAddModal')">+ إضافة شركة جديدة</button>
+                    </div>
+                    <p style="font-size: 8px; color: var(--text-muted); margin-bottom: 8px;">
+                        إدارة جميع الشركات المسجلة على المنصة، متابعة صلاحيات الاشتراكات، وتفقد تواريخ الانتهاء سحابياً:
+                    </p>
+                    <input type="text" id="sub-search-input" placeholder="ابحث باسم الشركة أو المدير..." style="margin-bottom: 8px;" oninput="filterSubscriptionsTable()">
+                    
+                    <div class="table-responsive">
                         <table>
-                            <thead><tr><th>الشركة</th><th>الباقة</th><th>تاريخ الانتهاء</th><th>الحالة</th><th>إجراء</th></tr></thead>
-                            <tbody>
-                                ${(data.subscriptions || []).map(sub => `
+                            <thead>
+                                <tr>
+                                    <th>اسم الشركة</th>
+                                    <th>مدير الشركة</th>
+                                    <th>رقم الهاتف</th>
+                                    <th>الباقة</th>
+                                    <th>تاريخ الانتهاء</th>
+                                    <th>الحالة</th>
+                                    <th>إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="subscriptions-table-body">
+                                ${subsList.map(sub => `
                                     <tr>
-                                        <td style="font-weight:bold; color:var(--accent-main);">${sub.companyName}</td>
-                                        <td>${sub.plan}</td>
-                                        <td>${sub.expiryDate}</td>
-                                        <td><span class="badge ${sub.status.includes('نشط') ? 'bg-delivered' : 'bg-danger'}">${sub.status}</span></td>
+                                        <td style="font-weight:bold; color:var(--accent-main);">${sub.companyName || 'شركة أسطورة الطريق'}</td>
+                                        <td>${sub.manager || 'المدير'}</td>
+                                        <td>${sub.phone || '01114099799'}</td>
+                                        <td>${sub.plan || 'monthly'}</td>
+                                        <td style="color:var(--red-danger);">${sub.expiryDate || 'غير محدد'}</td>
+                                        <td><span class="badge ${String(sub.status || '').includes('نشط') ? 'bg-delivered' : 'bg-danger'}">${sub.status || 'نشط 🟢'}</span></td>
                                         <td>
                                             <button class="btn-danger btn-sm" onclick="deleteItem('subscriptions', '${sub.docId || sub.id}')">حذف</button>
                                         </td>
                                     </tr>
-                                `).join('') || '<tr><td colspan="5" style="text-align:center;">لا توجد اشتراكات مسجلة</td></tr>'}
+                                `).join('')}
                             </tbody>
                         </table>
                     </div>
                 </div>
-            `;
-        } else if (sectionId === 'pandaAdmin') {
-            content.innerHTML = `
+
                 <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 لوحة التحكم المركزية - شركة أسطورة الطريق الرئيسية</h3>
+                    <h3 style="color:var(--yellow-warning);">👑 لوحة التحكم المركزية السحابية لشركة أسطورة الطريق</h3>
                     <p style="font-size:10px; margin-bottom:8px; opacity:0.9;">
-                        مرحباً بك يا فخامة المدير/المشرف. النظام مرتبط حصرياً بـ Firebase لشركة <strong style="color:var(--green-success);">أسطورة الطريق الرئيسية (company_main)</strong> بدون أي تخزين محلي.
+                        مرحباً بك يا فخامة المدير. النظام مرتبط حصرياً بـ Firebase لشركة <strong style="color:var(--green-success);">أسطورة الطريق الرئيسية (company_main)</strong>.
                     </p>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;">
                         <button class="btn-main" onclick="switchSection('consolidatedInvoices')">📑 فواتير الشحنات المجمعة</button>
                         <button class="btn-warning" onclick="switchSection('deferredInvoices')">⏳ الفواتير المؤجلة والآجلة</button>
                         <button class="btn-success" onclick="switchSection('shipments')">📦 إدارة شحنات الشركة</button>
-                        <button class="btn-warning" onclick="switchSection('driversControl')">👑 الحسابات والصلاحيات</button>
                         <button class="btn-danger" onclick="switchSection('auditLogs')">🔍 سجل العمليات النشطة</button>
-                        <button class="btn-main" onclick="manualRefreshData()">🔄 مزامنة فورية Firebase</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span>📊 مؤشرات شحنات وحسابات أسطورة الطريق الرئيسية</span></h3>
-                    <div style="font-size: 10px; line-height: 1.6;">
-                        <p>📦 شحنات الشركة الحالية: <strong>${(data.shipments || []).length} شحنة</strong></p>
-                        <p>📑 فواتير مجمعة: <strong>${(data.consolidatedInvoices || []).length} فاتورة</strong></p>
-                        <p>⏳ فواتير مؤجلة: <strong>${(data.deferredInvoices || []).length} فاتورة</strong></p>
-                        <p>💵 حركات الخزينة: <strong>${(data.treasury || []).length} حركة</strong></p>
-                        <p>🟢 حالة الاتصال: <strong style="color:var(--green-success);">متصل بـ Firebase سحابياً بالكامل</strong></p>
                     </div>
                 </div>
             `;
@@ -1036,40 +1029,6 @@
             `;
         } else if (sectionId === 'driversControl') {
             content.innerHTML = `
-                <div class="card" style="border: 2px solid var(--yellow-warning);">
-                    <h3 style="color:var(--yellow-warning);">👑 إدارة الحسابات والألقاب والصلاحيات في Firebase</h3>
-                    <div class="table-responsive">
-                        <table>
-                            <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرتبة</th><th>اللقب</th><th>رمز (PIN)</th><th>إدارة</th></tr></thead>
-                            <tbody>
-                                ${(data.drivers || []).map((d) => `
-                                    <tr>
-                                        <td style="font-weight:bold; color:var(--accent-main);">${d.name || 'بدون اسم'}</td>
-                                        <td>${d.phone || '-'}</td>
-                                        <td>
-                                            <select onchange="updateDriverField('${d.docId || d.id}', 'role', this.value)" style="font-size:9px; padding:3px; width:100%; min-width:85px;">
-                                                <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق</option>
-                                                <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
-                                                <option value="مدير شركة" ${d.role === 'مدير شركة' ? 'selected' : ''}>مدير شركة</option>
-                                                <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>أدمين</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select onchange="updateDriverField('${d.docId || d.id}', 'title', this.value)" style="font-size:9px; padding:4px; font-weight:bold; color:var(--yellow-warning); width:100%; min-width:130px; background:var(--bg-dark); border:1px solid var(--border-color); border-radius:4px;">
-                                                ${professionalTitles.map(t => `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`).join('')}
-                                            </select>
-                                        </td>
-                                        <td style="font-weight:bold;">${d.pin || d.password || '---'}</td>
-                                        <td>
-                                            <button class="btn-warning btn-sm" onclick="promptChangePin('${d.docId || d.id}')">تغيير PIN</button>
-                                            <button class="btn-danger btn-sm" onclick="deleteItem('drivers', '${d.docId || d.id}')">حذف</button>
-                                        </td>
-                                    </tr>
-                                `).join('') || '<tr><td colspan="6" style="text-align:center;">لا توجد حسابات مسجلة</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
                 <div class="card">
                     <h3>➕ إضافة حساب جديد للسحابي</h3>
                     <form onsubmit="saveNewDriver(event)">
@@ -1412,6 +1371,37 @@
         renderStats();
     }
 
+    function filterSubscriptionsTable() {
+        const query = document.getElementById('sub-search-input').value.toLowerCase();
+        let data = appStateData();
+        let subsList = data.subscriptions || [];
+        if(subsList.length === 0) {
+            subsList = [{ companyName: 'شركة أسطورة الطريق', plan: 'monthly', expiryDate: 'غير محدد', status: 'نشط 🟢', phone: '01114099799', manager: 'المدير' }];
+        }
+        const tbody = document.getElementById('subscriptions-table-body');
+        if(!tbody) return;
+
+        const filtered = subsList.filter(sub => {
+            const name = (sub.companyName || '').toLowerCase();
+            const manager = (sub.manager || '').toLowerCase();
+            return name.includes(query) || manager.includes(query);
+        });
+
+        tbody.innerHTML = filtered.map(sub => `
+            <tr>
+                <td style="font-weight:bold; color:var(--accent-main);">${sub.companyName || 'شركة أسطورة الطريق'}</td>
+                <td>${sub.manager || 'المدير'}</td>
+                <td>${sub.phone || '01114099799'}</td>
+                <td>${sub.plan || 'monthly'}</td>
+                <td style="color:var(--red-danger);">${sub.expiryDate || 'غير محدد'}</td>
+                <td><span class="badge ${String(sub.status || '').includes('نشط') ? 'bg-delivered' : 'bg-danger'}">${sub.status || 'نشط 🟢'}</span></td>
+                <td>
+                    <button class="btn-danger btn-sm" onclick="deleteItem('subscriptions', '${sub.docId || sub.id}')">حذف</button>
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="7" style="text-align:center;">لا توجد نتائج مطابقة</td></tr>';
+    }
+
     let pc = null;
     let currentCallId = null;
     let localStream = null;
@@ -1677,7 +1667,6 @@
         showToast('تم إنهاء المكالمة بنجاح');
     }
 
-    // رفع وتحديث صورة البروفايل والغلاف وحفظها في Firebase ومزامنتها لحظياً
     function uploadAvatarPhoto(input) {
         if(input.files && input.files[0]) {
             const file = input.files[0];
@@ -1745,14 +1734,16 @@
         let subId = String(Date.now());
         const newSub = {
             id: subId,
-            companyName: document.getElementById('sub-company-name').value,
-            plan: document.getElementById('sub-plan').value,
-            expiryDate: document.getElementById('sub-expiry').value,
-            status: document.getElementById('sub-status').value
+            companyName: 'شركة أسطورة الطريق الرئيسية',
+            manager: window.currentLoggedInUser ? window.currentLoggedInUser.name : 'المدير',
+            phone: window.currentLoggedInUser ? window.currentLoggedInUser.phone : '01114099799',
+            plan: 'monthly',
+            expiryDate: 'غير محدد',
+            status: 'نشط 🟢'
         };
         db.collection('subscriptions').doc(subId).set(newSub).then(() => {
             showToast('تم حفظ الاشتراك في Firebase بنجاح! 💳');
-            switchSection('subscriptionsManager');
+            switchSection('pandaAdmin');
         });
     }
 
@@ -2312,41 +2303,6 @@
             switchSection('centralChat');
             updateRSSTicker();
             showToast('📢 تم بث التعميم في Firebase بنجاح!');
-        });
-    }
-
-    function updateDriverField(docId, field, value) {
-        db.collection('drivers').doc(String(docId)).set({ [field]: value }, { merge: true }).then(() => {
-            showToast('تم التحديث في Firebase بنجاح ✅');
-        });
-    }
-
-    function promptChangePin(docId) {
-        let newPin = prompt('أدخل رمز المرور الجديد (PIN):');
-        if(newPin) {
-            db.collection('drivers').doc(String(docId)).set({ pin: newPin, password: newPin }, { merge: true }).then(() => {
-                showToast('تم تحديث رمز PIN في Firebase! 🔑');
-                switchSection('driversControl');
-            });
-        }
-    }
-
-    function saveNewDriver(e) {
-        e.preventDefault();
-        let drvId = String(Date.now());
-        const newDrv = {
-            id: drvId,
-            name: document.getElementById('new-d-name').value,
-            phone: document.getElementById('new-d-phone').value,
-            pin: document.getElementById('new-d-pin').value,
-            password: document.getElementById('new-d-pin').value,
-            role: document.getElementById('new-d-role').value,
-            title: 'سائق معتمد',
-            status: 'متاح 🟢'
-        };
-        db.collection('drivers').doc(drvId).set(newDrv).then(() => {
-            switchSection('driversControl');
-            showToast('تم إضافة الحساب في Firebase بنجاح!');
         });
     }
 
