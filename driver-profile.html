@@ -724,33 +724,25 @@
         }
         renderInitialUIInstant();
 
-        // عزل تام بين الشركات عند جلب السائقين بناءً على companyId بدقة صارمة
-        db.collection('drivers').onSnapshot(snapshot => {
+        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب سائقي الشركة الحالية فقط سحابياً باستخدام where
+        db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
-                let docCompany = String(d.companyId || 'company_main').trim();
-                let matchComp = (docCompany === String(currentCompanyId).trim());
-                return matchComp && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
             });
             renderMyAccount();
             renderChatAccountsList();
         });
 
-        // عزل تام للشحنات بناءً على companyId للشركة الحالية فقط
-        db.collection('shipments').onSnapshot(snapshot => {
-            appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(s => {
-                let docComp = String(s.companyId || 'company_main').trim();
-                return docComp === String(currentCompanyId).trim();
-            });
+        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب شحنات الشركة الحالية فقط سحابياً
+        db.collection('shipments').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
         });
 
-        // عزل تام للشات والمحادثات بناءً على companyId
-        db.collection('chat').onSnapshot(snapshot => {
-            appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(c => {
-                let docComp = String(c.companyId || 'company_main').trim();
-                return docComp === String(currentCompanyId).trim();
-            });
+        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب محادثات الشركة الحالية فقط سحابياً
+        db.collection('chat').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderChatMessages();
             renderChatAccountsList();
         });
@@ -794,14 +786,14 @@
         let unsubscribeWall = null;
         function setupWallListener(profileId) {
             if (unsubscribeWall) unsubscribeWall();
+            // 🚀 [توفير Reads]: تصفية حائط النشر سحابياً حسب الشركة
             unsubscribeWall = db.collection('profileWalls')
+              .where('companyId', '==', currentCompanyId)
               .onSnapshot(snapshot => {
                   let posts = [];
                   snapshot.forEach(doc => {
                       let d = doc.data();
-                      let docComp = String(d.companyId || 'company_main').trim();
-                      let matchComp = (docComp === String(currentCompanyId).trim());
-                      if(matchComp && String(d.profileId) === String(profileId)) {
+                      if(String(d.profileId) === String(profileId)) {
                           posts.push({ docId: doc.id, ...d });
                       }
                   });
@@ -1646,6 +1638,7 @@
                 
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
+                // النقر على بطاقة السائق لعرض بروفايله مباشرة وتحديثه
                 item.onclick = () => {
                     viewingProfileId = d.id || cleanN;
                     renderMyAccount();
