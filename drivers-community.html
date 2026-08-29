@@ -103,7 +103,7 @@
     import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc, increment, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
-        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+        apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
         authDomain: "n2la-642d3.firebaseapp.com",
         projectId: "n2la-642d3",
         storageBucket: "n2la-642d3.firebasestorage.app",
@@ -120,6 +120,7 @@
     let currentUserRole = 'driver';
     let currentUserPermissions = 'صلاحيات تشغيلية أساسية';
     let currentUserAvatar = '';
+    let manualAdminOverride = false;
 
     window.currentCompanyId = currentCompanyId;
     window.manualAdminOverride = false;
@@ -133,7 +134,7 @@
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
-        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+        const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
         return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
     }
 
@@ -164,7 +165,7 @@
     function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-        let urlComp = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id');
+        let urlComp = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || localStorage.getItem('current_company_id');
 
         if (externalId && externalId.trim() !== '' && externalId !== 'null') {
             activeSessionName = externalId.trim();
@@ -177,6 +178,7 @@
             currentCompanyId = urlComp.trim();
         }
         localStorage.setItem('current_company_id', currentCompanyId);
+        window.currentCompanyId = currentCompanyId;
     }
 
     parseURLSession();
@@ -201,11 +203,12 @@
 
             snapshot.forEach(docSnap => {
                 let d = docSnap.data();
-                let dName = String(d.name || '').trim().toLowerCase();
+                let docId = String(docSnap.id || '').trim().toLowerCase();
+                let dName = String(d.name || d.driverName || '').trim().toLowerCase();
                 let dPhone = String(d.phone || '').trim();
                 let targetId = String(activeSessionName).trim().toLowerCase();
 
-                if (docSnap.id.toLowerCase() === targetId || dName === targetId || dPhone === targetId) {
+                if (docId === targetId || dName === targetId || dPhone === targetId || dName.includes(targetId)) {
                     foundDriver = d;
                 }
             });
@@ -214,12 +217,13 @@
 
             if (foundDriver) {
                 activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
-                currentUserRole = isAdm ? 'admin' : 'driver';
+                currentUserRole = isAdm ? 'admin' : (foundDriver.role || foundDriver.rank || 'driver');
                 currentUserPermissions = isAdm ? 'صلاحيات كاملة لإدارة النظام والأسطول' : 'صلاحيات تشغيلية: تسجيل رحلات وشحنات';
                 currentUserAvatar = foundDriver.avatar || '';
-                if (foundDriver.companyId && foundDriver.companyId.trim() !== '') {
-                    currentCompanyId = foundDriver.companyId.trim();
+                if (foundDriver.companyId && String(foundDriver.companyId).trim() !== '') {
+                    currentCompanyId = String(foundDriver.companyId).trim();
                     localStorage.setItem('current_company_id', currentCompanyId);
+                    window.currentCompanyId = currentCompanyId;
                 }
             } else {
                 currentUserRole = isAdm ? 'admin' : 'driver';
@@ -251,7 +255,7 @@
     }
 
     function isSuperAdmin() {
-        return window.manualAdminOverride || currentUserRole === 'admin';
+        return manualAdminOverride || isUserAdmin(currentUserRole, activeSessionName);
     }
     window.isSuperAdmin = isSuperAdmin;
 
@@ -263,7 +267,7 @@
         if (superAdmin) {
             statusEl.innerText = `حالة الحساب: [صلاحيات إدارة عليا - رؤية شاملة لكافة الشراكات]`;
             statusEl.style.color = "#28a745";
-            btnEl.innerText = window.manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
+            btnEl.innerText = manualAdminOverride ? "إلغاء وضع المؤسس اليدوي" : "مسؤول عام معتمد 🛡️";
         } else {
             statusEl.innerText = `حالة الحساب: متصل بـ (${activeSessionName}) ضمن شراكة معزولة (${currentCompanyId})`;
             statusEl.style.color = "#333";
@@ -281,9 +285,11 @@
             allPostsData = [];
             snapshot.forEach(docSnap => {
                 let post = docSnap.data();
-                let pComp = (post.companyId || "").trim();
-                
-                if (superAdmin || !pComp || pComp === currentCompanyId) {
+                let pComp = String(post.companyId || "company_main").trim();
+                let targetComp = String(currentCompanyId || "company_main").trim();
+                let matchComp = (targetComp === 'company_main') ? (pComp === 'company_main' || !post.companyId) : (pComp === targetComp);
+
+                if (superAdmin || matchComp) {
                     allPostsData.push({ id: docSnap.id, ...post });
                 }
             });
@@ -295,7 +301,11 @@
         const container = document.getElementById("postsContainer");
         container.innerHTML = "";
         
-        posts.sort((a, b) => Number(b.id) - Number(a.id));
+        posts.sort((a, b) => {
+            let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : Number(a.id) || 0);
+            let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : Number(b.id) || 0);
+            return timeB - timeA;
+        });
 
         if (posts.length === 0) {
             container.innerHTML = "<p style='text-align:center; color:#777;'>لا توجد منشورات متاحة لشراكتك حالياً.</p>";
@@ -415,9 +425,10 @@
     };
 
     window.toggleAdminMode = function() {
-        if (!window.manualAdminOverride && currentUserRole !== 'admin') {
+        if (!manualAdminOverride && !isUserAdmin(currentUserRole, activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
             if (pass === "admin123") {
+                manualAdminOverride = true;
                 window.manualAdminOverride = true;
                 updateAdminUIStatus();
                 loadPosts();
@@ -426,6 +437,7 @@
                 alert("كلمة المرور غير صحيحة!");
             }
         } else {
+            manualAdminOverride = false;
             window.manualAdminOverride = false;
             updateAdminUIStatus();
             loadPosts();
