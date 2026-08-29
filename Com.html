@@ -18,7 +18,7 @@
         import { getFirestore, collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -116,8 +116,6 @@
         }
 
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
-        
-        /* زيادة المساحة السفلية لمنع تداخل شريط التنقل مع المحتوى */
         body { background-color: var(--bg); color: var(--text-color); padding: 10px; padding-bottom: 140px; direction: rtl; transition: background 0.3s, color 0.3s; }
         
         .top-command-header {
@@ -803,6 +801,7 @@
         let chatUnsubscribe = null;
         let driversUnsubscribe = null;
         let radarsUnsubscribe = null;
+        let userLiveSyncUnsubscribe = null;
         
         let activeRadarZones = new Set();
 
@@ -872,7 +871,7 @@
         function isUserAdmin(roleValue, nameValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
             return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
         }
 
@@ -908,6 +907,7 @@
 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
+                    let dComp = String(d.companyId || 'company_main').trim();
                     allDrivers.push({ id: docSnap.id, ...d });
                     
                     let docId = String(docSnap.id || '').trim().toLowerCase();
@@ -922,34 +922,22 @@
                 });
 
                 if (found) {
-                    if (found.companyId && found.companyId.trim() !== '') {
-                        currentCompanyId = found.companyId.trim();
+                    if (found.companyId && String(found.companyId).trim() !== '') {
+                        currentCompanyId = String(found.companyId).trim();
                     }
-                    let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
-                    
-                    let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || '';
-                    if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
-
-                    currentDriverProfile = {
-                        id: found.id,
-                        name: found.name || found.driverName || 'سائق معتمد',
-                        phone: found.phone || '',
-                        rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
-                        title: found.title || (isAdm ? 'مدير النظام' : 'سائق معتمد'),
-                        permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
-                        avatar: userAvatar
-                    };
+                    applyFoundDriverProfile(found);
                 } else if (urlUserId) {
                     let isAdmCheck = isUserAdmin('', urlUserId);
                     currentDriverProfile = {
                         id: urlUserId,
                         name: urlUserId,
                         rank: isAdmCheck ? 'admin' : 'driver',
-                        title: isAdmCheck ? 'مدير النظام' : 'سائق معتمد',
+                        title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
                         permissions: 'صلاحيات تشغيلية أساسية',
                         phone: '',
                         avatar: ''
                     };
+                    syncProfileAndLoad();
                 } else {
                     currentDriverProfile = {
                         id: 'guest',
@@ -960,6 +948,7 @@
                         phone: '',
                         avatar: ''
                     };
+                    syncProfileAndLoad();
                 }
             } catch (err) {
                 currentDriverProfile = {
@@ -971,9 +960,45 @@
                     phone: '',
                     avatar: ''
                 };
+                syncProfileAndLoad();
             }
+        }
+
+        function applyFoundDriverProfile(found) {
+            let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
+            let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || '';
+            if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
+
+            currentDriverProfile = {
+                id: found.id,
+                name: found.name || found.driverName || 'سائق معتمد',
+                phone: found.phone || '',
+                rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
+                title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
+                permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
+                avatar: userAvatar
+            };
 
             syncProfileAndLoad();
+            initLiveUserSync(found.id);
+        }
+
+        // تفعيل المزامنة الحية المباشرة لبيانات البروفايل والصلاحيات ومعرف الشركة من Firestore
+        function initLiveUserSync(userId) {
+            if (!window.db || !window.firebaseModules || !userId) return;
+            if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
+
+            const { doc, onSnapshot } = window.firebaseModules;
+            userLiveSyncUnsubscribe = onSnapshot(doc(window.db, 'drivers', String(userId)), docSnap => {
+                if (docSnap.exists()) {
+                    let d = docSnap.data();
+                    let dComp = String(d.companyId || '').trim();
+                    if (dComp && dComp !== currentCompanyId) {
+                        currentCompanyId = dComp;
+                    }
+                    applyFoundDriverProfile({ id: docSnap.id, ...d });
+                }
+            }, err => {});
         }
 
         function syncProfileAndLoad() {
@@ -1161,9 +1186,11 @@
 
                 snapshot.forEach(docSnap => {
                     let r = docSnap.data();
-                    let rComp = (r.companyId || 'company_main').trim();
-                    // فصل صارم للرادارات الخاصة بالشركة الحالية
-                    if (rComp === currentCompanyId) {
+                    let rComp = String(r.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (rComp === 'company_main' || !r.companyId) : (rComp === targetComp);
+
+                    if (matchComp) {
                         if (r.lat && r.lng) {
                             count++;
                             const radarIcon = L.divIcon({
@@ -1260,7 +1287,7 @@
                     likes: 0,
                     comments: [],
                     isEmergency: isEmergency,
-                    companyId: currentCompanyId, // ربط صارم بالشركة الحالية
+                    companyId: currentCompanyId,
                     date: new Date().toLocaleString('ar-EG')
                 };
 
@@ -1358,9 +1385,11 @@
                 let posts = [];
                 snapshot.forEach(docSnap => {
                     let p = docSnap.data();
-                    let pComp = (p.companyId || 'company_main').trim();
-                    // [فصل صارم] إظهار منشورات الشركة الحالية فقط دون تسريب بيانات الشركات الأخرى
-                    if (pComp === currentCompanyId) {
+                    let pComp = String(p.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (pComp === 'company_main' || !p.companyId) : (pComp === targetComp);
+
+                    if (matchComp) {
                         posts.push({ id: docSnap.id, ...p });
                     }
                 });
@@ -1498,7 +1527,7 @@
                     name: name,
                     lat: lat,
                     lng: lng,
-                    companyId: currentCompanyId, // فصل صارم للرادار برقم الشركة
+                    companyId: currentCompanyId,
                     addedBy: currentDriverProfile.name,
                     date: new Date().toLocaleString('ar-EG')
                 };
@@ -1574,9 +1603,11 @@
                 let radars = [];
                 snapshot.forEach(docSnap => {
                     let r = docSnap.data();
-                    let rComp = (r.companyId || 'company_main').trim();
-                    // [فصل صارم] عرض رادارات الشركة الحالية فقط
-                    if (rComp === currentCompanyId) {
+                    let rComp = String(r.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (rComp === 'company_main' || !r.companyId) : (rComp === targetComp);
+
+                    if (matchComp) {
                         radars.push({ id: docSnap.id, ...r });
                     }
                 });
@@ -1624,8 +1655,11 @@
                         
                         snapshot.forEach(docSnap => {
                             const radar = docSnap.data();
-                            let rComp = (radar.companyId || 'company_main').trim();
-                            if (rComp === currentCompanyId) {
+                            let rComp = String(radar.companyId || 'company_main').trim();
+                            let targetComp = String(currentCompanyId || 'company_main').trim();
+                            let matchComp = (targetComp === 'company_main') ? (rComp === 'company_main' || !radar.companyId) : (rComp === targetComp);
+
+                            if (matchComp) {
                                 const distance = calculateDistance(userLat, userLng, radar.lat, radar.lng);
                                 if (distance <= 0.5) {
                                     if (!activeRadarZones.has(radar.id)) {
@@ -1717,9 +1751,11 @@
                 let myCargos = [];
                 snapshot.forEach(docSnap => {
                     let data = docSnap.data();
-                    let dComp = (data.companyId || 'company_main').trim();
-                    // [فصل صارم] شحنات الشركة الحالية فقط
-                    if (dComp === currentCompanyId) {
+                    let dComp = String(data.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !data.companyId) : (dComp === targetComp);
+
+                    if (matchComp) {
                         if (data.assignedDriver === currentDriverProfile.name || data.driver === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
                             myCargos.push({ id: docSnap.id, ...data });
                         }
@@ -1768,9 +1804,11 @@
 
                 snapshot.forEach(docSnap => {
                     let data = docSnap.data();
-                    let dComp = (data.companyId || 'company_main').trim();
-                    // [فصل صارم] المعاملات المالية للشركة الحالية فقط
-                    if (dComp === currentCompanyId) {
+                    let dComp = String(data.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !data.companyId) : (dComp === targetComp);
+
+                    if (matchComp) {
                         if (data.driverName === currentDriverProfile.name || data.name === currentDriverProfile.name || isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name)) {
                             myTransactions.push({ id: docSnap.id, ...data });
                             let val = Number(data.amount || 0);
@@ -1813,9 +1851,11 @@
                 allDrivers = [];
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    let dComp = (d.companyId || 'company_main').trim();
-                    // [فصل صارم] سائقي الشركة الحالية فقط
-                    if (dComp === currentCompanyId) {
+                    let dComp = String(d.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !d.companyId) : (dComp === targetComp);
+
+                    if (matchComp) {
                         allDrivers.push({ id: docSnap.id, ...d });
                     }
                 });
@@ -1856,7 +1896,7 @@
                 sender: currentDriverProfile.name,
                 receiver: currentChatTarget,
                 text: msg,
-                companyId: currentCompanyId, // [فصل صارم] ربط الشات بالشركة الحالية
+                companyId: currentCompanyId,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
@@ -1877,9 +1917,11 @@
                 let msgs = [];
                 snapshot.forEach(docSnap => {
                     let m = docSnap.data();
-                    let mComp = (m.companyId || 'company_main').trim();
-                    // [فصل صارم] رسائل الشات الخاصة بالشركة الحالية فقط
-                    if (mComp === currentCompanyId) {
+                    let mComp = String(m.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (mComp === 'company_main' || !m.companyId) : (mComp === targetComp);
+
+                    if (matchComp) {
                         msgs.push(m);
                     }
                 });
@@ -1934,7 +1976,7 @@
                 id: newId, type, amount, desc, 
                 driverName: currentDriverProfile.name,
                 category: 'treasury', 
-                companyId: currentCompanyId, // [فصل صارم] ربط المعاملة المالية بالشركة
+                companyId: currentCompanyId,
                 date: new Date().toLocaleString('ar-EG') 
             };
 
