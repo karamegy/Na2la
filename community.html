@@ -496,7 +496,7 @@
             <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; flex: 1;">
                     <input type="file" id="groupPostMedia" accept="image/*,video/*" style="display: none;" onchange="previewSelectedMedia(this)">
-                    <button type="button" class="btn" style="background: var(--card-bg); border: 1px solid var(--border-color); width: auto; padding: 6px 12px; font-size: 0.75rem;" onclick="document.getElementById('groupPostMedia').click()">📷 صورة / 📹 فيديو</button>
+                    <button type="button" class="btn" style="background: var(--card-bg); border: 1px solid var(--border-color); width: auto; padding: 6px 12px; font-size: 0.75rem;" onclick="document.getElementById('groupPostMedia').click()">📷 صورة / 📹 فيديو قصيّر</button>
                     <button type="button" class="btn" style="background: var(--card-bg); border: 1px solid var(--border-color); width: auto; padding: 6px 12px; font-size: 0.75rem;" onclick="appendCurrentLocation()">📍 موقعي GPS</button>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">
@@ -565,7 +565,6 @@
         let userLiveSyncUnsubscribe = null;
         let cachedPosts = [];
         let currentFilterCategory = 'الكل';
-        let companyDisplayName = 'أسطورة الطريق الرئيسية';
 
         const urlParams = new URLSearchParams(window.location.search);
         let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || '').trim();
@@ -657,6 +656,7 @@
                     updateAccountUI();
                 }
                 updateUIHeaders();
+                loadCompanyCover();
                 initRealtimeFeed();
             } catch (err) {
                 currentDriverProfile = {
@@ -673,6 +673,7 @@
                     companyId: currentCompanyId
                 };
                 updateAccountUI();
+                loadCompanyCover();
                 initRealtimeFeed();
             }
         }
@@ -761,7 +762,6 @@
                 avatarSmall.style.backgroundImage = 'none';
                 avatarSmall.innerText = '👤';
             }
-            loadCompanyCover();
             updateUIHeaders();
         }
 
@@ -792,6 +792,7 @@
         window.toggleThemeModal = function() { document.getElementById('themeModal').style.display = 'flex'; }
         window.closeThemeModal = function(e) { if(e.target.id === 'themeModal') document.getElementById('themeModal').style.display = 'none'; }
 
+        // ✅ حل مشكلة الغلاف وصلاحيات فايربيس (استخدام مجموعة companySettings مع معرّف الشركة)
         window.handleCoverUpload = async function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -801,7 +802,7 @@
                     img.src = e.target.result;
                     img.onload = async function() {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 800;
+                        const MAX_WIDTH = 600; // ضغط قوي للغلاف لضمان عدم تجاوز الحجم المسموح
                         let width = img.width;
                         let height = img.height;
                         if (width > MAX_WIDTH) {
@@ -812,12 +813,17 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
 
                         try {
-                            await setDoc(doc(db, `companies_${currentCompanyId}_settings`, "cover"), { url: compressedBase64, companyId: currentCompanyId });
+                            await setDoc(doc(db, "companySettings", currentCompanyId), { 
+                                coverUrl: compressedBase64, 
+                                companyId: currentCompanyId,
+                                updatedAt: new Date()
+                            }, { merge: true });
+                            
                             document.getElementById('communityCoverArea').style.backgroundImage = `url('${compressedBase64}')`;
-                            alert("✔ تم تحديث وعرض غلاف الشركة سحابياً بنجاح!");
+                            alert("✔ تم حفظ وتحديث غلاف شركة (" + currentCompanyId + ") سحابياً بنجاح!");
                         } catch(err) {
                             alert("خطأ في حفظ الغلاف سحابياً: " + err.message);
                         }
@@ -829,9 +835,11 @@
 
         async function loadCompanyCover() {
             try {
-                const docSnap = await getDoc(doc(db, `companies_${currentCompanyId}_settings`, "cover"));
-                if (docSnap.exists() && docSnap.data().url) {
-                    document.getElementById('communityCoverArea').style.backgroundImage = `url('${docSnap.data().url}')`;
+                const docSnap = await getDoc(doc(db, "companySettings", currentCompanyId));
+                if (docSnap.exists() && docSnap.data().coverUrl) {
+                    document.getElementById('communityCoverArea').style.backgroundImage = `url('${docSnap.data().coverUrl}')`;
+                } else {
+                    document.getElementById('communityCoverArea').style.backgroundImage = 'none';
                 }
             } catch(e) {}
         }
@@ -845,7 +853,7 @@
                     img.src = e.target.result;
                     img.onload = async function() {
                         const canvas = document.createElement('canvas');
-                        const MAX_SIZE = 250;
+                        const MAX_SIZE = 200;
                         let width = img.width;
                         let height = img.height;
 
@@ -860,7 +868,7 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
                         
                         currentDriverProfile.avatar = compressedBase64;
                         await syncUserProfileToCloud();
@@ -1228,31 +1236,68 @@
             box.style.display = box.style.display === 'none' ? 'block' : 'none';
         }
 
+        let pendingMediaObj = null;
+
+        // ✅ حل مشكلة امتلاء فايربيس (فحص وضغط الصور والفيديوهات تلقائياً أقل من 700KB)
         window.previewSelectedMedia = function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
-                const reader = new FileReader();
                 const container = document.getElementById('mediaPreviewContainer');
                 const imgThumb = document.getElementById('imagePreviewThumb');
                 const vidThumb = document.getElementById('videoPreviewThumb');
 
-                reader.onload = function(e) {
-                    container.style.display = 'block';
-                    if (file.type.startsWith('video/')) {
+                if (file.type.startsWith('video/')) {
+                    // فحص حجم الفيديو (أقصى حجم 700 كيلوبايت لتجنب تجاوز حد 1MB في مستند فايربيس)
+                    if (file.size > 700 * 1024) {
+                        alert("⚠️ حجم الفيديو كبير جداً (" + Math.round(file.size / 1024) + " كيلوبايت).\nالحد الأقصى المسموح للفيديو في قاعدة البيانات هو 700 كيلوبايت لتجنب امتلاء مساحة فايربيس وتوقف التطبيق.\nيرجى اختيار فيديو أقصر أو أصغر حجماً.");
+                        input.value = "";
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        pendingMediaObj = { data: e.target.result, type: 'video' };
+                        container.style.display = 'block';
                         imgThumb.style.display = 'none';
                         vidThumb.style.display = 'block';
                         vidThumb.src = e.target.result;
-                    } else {
-                        vidThumb.style.display = 'none';
-                        imgThumb.style.display = 'block';
-                        imgThumb.src = e.target.result;
-                    }
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    // ضغط الصور بشدة لتصبح أقل بكثير من 1MB
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 700;
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
+
+                            pendingMediaObj = { data: compressedBase64, type: 'image' };
+                            container.style.display = 'block';
+                            vidThumb.style.display = 'none';
+                            imgThumb.style.display = 'block';
+                            imgThumb.src = compressedBase64;
+                        };
+                    };
+                    reader.readAsDataURL(file);
                 }
-                reader.readAsDataURL(file);
             }
         }
 
         window.clearAttachedMedia = function() {
+            pendingMediaObj = null;
             document.getElementById('groupPostMedia').value = "";
             document.getElementById('imagePreviewThumb').src = "";
             document.getElementById('videoPreviewThumb').src = "";
@@ -1264,7 +1309,6 @@
         window.publishGroupPost = function() {
             const text = document.getElementById('groupPostText').value.trim();
             const category = document.getElementById('postCategorySelect').value;
-            const fileInput = document.getElementById('groupPostMedia');
             const isPinned = document.getElementById('pinPostCheckbox').checked;
             
             let pollData = null;
@@ -1285,19 +1329,12 @@
                 }
             }
 
-            if(!text && fileInput.files.length === 0 && !pollData) return alert("يرجى كتابة نص، إرفاق صورة/فيديو، أو إنشاء استطلاع رأي.");
+            if(!text && !pendingMediaObj && !pollData) return alert("يرجى كتابة نص، إرفاق صورة/فيديو، أو إنشاء استطلاع رأي.");
             
-            if(fileInput.files[0]) {
-                const file = fileInput.files[0];
-                const reader = new FileReader();
-                reader.onload = e => {
-                    let mediaType = file.type.startsWith('video/') ? 'video' : 'image';
-                    savePostToCloud(text, category, e.target.result, mediaType, pollData, isPinned);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                savePostToCloud(text, category, "", "", pollData, isPinned);
-            }
+            let mediaData = pendingMediaObj ? pendingMediaObj.data : "";
+            let mediaType = pendingMediaObj ? pendingMediaObj.type : "";
+
+            savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned);
         }
 
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
@@ -1329,7 +1366,7 @@
                 clearAttachedMedia();
                 alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
             } catch(e) {
-                alert("خطأ أثناء النشر: " + e.message);
+                alert("خطأ أثناء النشر (قد يكون حجم الملف كبيراً جداً على قاعدة البيانات): " + e.message);
             }
         }
 
@@ -1388,9 +1425,30 @@
         window.handleCommentMediaPreview = function(input, postId) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
+                if (file.type.startsWith('video/') && file.size > 500 * 1024) {
+                    alert("حجم الفيديو في التعليق كبير جداً. الحد الأقصى 500 كيلوبايت.");
+                    input.value = "";
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    window[`commentMedia_${postId}`] = { data: e.target.result, type: file.type.startsWith('video/') ? 'video' : 'image' };
+                    if(file.type.startsWith('image/')) {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = function() {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 500;
+                            let width = img.width;
+                            let height = img.height;
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                            canvas.width = width; canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            window[`commentMedia_${postId}`] = { data: canvas.toDataURL('image/jpeg', 0.5), type: 'image' };
+                        };
+                    } else {
+                        window[`commentMedia_${postId}`] = { data: e.target.result, type: 'video' };
+                    }
                     const previewBox = document.getElementById(`commentMediaPreview_${postId}`);
                     if(previewBox) {
                         previewBox.style.display = 'block';
