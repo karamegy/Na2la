@@ -542,75 +542,52 @@
         showToast('تم تسليم الخروج بنجاح وتأمين الجلسة');
     }
 
-    function initFirebaseListeners() {
-        unsubscribers.forEach(unsub => { if(typeof unsub === 'function') unsub(); });
-        unsubscribers = [];
+    function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-        const isolatedCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'customers', 'trucks', 'maintenanceLogs'];
-        const globalCollections = ['drivers', 'communityPosts', 'posts', 'chat', 'centralBroadcasts', 'auditLogs', 'subscriptions'];
-
-        isolatedCollections.forEach(colName => {
-            let query = db.collection(colName).where('companyId', '==', 'company_main');
-
-            const unsub = query.onSnapshot(snapshot => {
-                let rawData = snapshot.docs.map(doc => {
-                    let d = doc.data();
-                    return { docId: doc.id, id: doc.id, ...d };
-                });
-                
-                appData[colName] = rawData;
-                window.appData = appData;
-
-                if(typeof renderStats === 'function') renderStats();
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
-                if(typeof updateRSSTicker === 'function') updateRSSTicker();
-            }, err => {
-                console.error(`خطأ في استماع مجموعة ${colName}:`, err);
-            });
-            unsubscribers.push(unsub);
-        });
-
-        globalCollections.forEach(colName => {
-            let query = db.collection(colName);
-            const unsub = query.onSnapshot(snapshot => {
-                let rawData = snapshot.docs.map(doc => {
-                    let d = doc.data();
-                    return { docId: doc.id, id: doc.id, ...d };
-                });
-                appData[colName] = rawData;
-                if (colName === 'posts') appData.wallPosts = appData.posts;
-                window.appData = appData;
-                
-                if (colName === 'drivers' && currentLoggedInUser) {
-                    let updatedMe = rawData.find(d => String(d.docId || d.id) === String(currentLoggedInUser.docId || currentLoggedInUser.id));
-                    if (updatedMe) {
-                        currentLoggedInUser = {
-                            ...currentLoggedInUser,
-                            ...updatedMe,
-                            avatar: updatedMe.avatar || updatedMe.profileImage || '',
-                            coverUrl: updatedMe.coverUrl || updatedMe.cover || ''
-                        };
-                        window.currentLoggedInUser = currentLoggedInUser;
-                        applyUserPermissionsUI();
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+            
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // العزل الصحيح والصارم بين الشركات (يتم فلترة البيانات لكل شركة على حدة بدقة تامة لمنع التسريب)
+                    if (loggedInDriverName === 'المدير' && currentCompanyId === 'Company_main') {
+                        // المدير الرئيسي للشركة الأم يرى حصرياً بيانات الشركة الرئيسية والبيانات غير المخصصة
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main');
+                    } else if (currentCompanyId && currentCompanyId !== 'Company_main') {
+                        // الشركات الفرعية ترى فقط بياناتها الخاصة المرتبطة بمعرفها الحصري
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
+                    } else {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || !d.companyId || d.companyId === 'Company_main');
                     }
-                }
+                    
+                    scheduleSmartRender();
 
-                if(typeof refreshActiveSection === 'function') refreshActiveSection();
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
             });
-            unsubscribers.push(unsub);
-        });
 
-        listenForIncomingCalls();
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
     }
-
-    window.manualRefreshData = function() {
-        showToast('جاري التحديث والمزامنة الفورية من Firebase... 🔄');
-        initFirebaseListeners();
-        setTimeout(() => {
-            showToast('تمت المزامنة السحابية بنجاح! ✅');
-        }, 1000);
-    };
-
     async function initCloudSession() {
         if (!currentLoggedInUser) return;
         applyUserPermissionsUI();
