@@ -128,66 +128,107 @@
     </nav>
 
     <script>
-        let activeSessionName = 'زائر';
+        let currentDriverProfile = {
+            name: 'زائر',
+            role: 'driver',
+            badge: '',
+            id: ''
+        };
         let currentCompanyId = 'company_main';
         let allCargoData = [];
 
-        function parseURLSession() {
-            const urlParams = new URLSearchParams(window.location.search);
-            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-            let urlComp = urlParams.get('companyId') || urlParams.get('company') || localStorage.getItem('current_company_id');
-
-            if (externalId && externalId.trim() !== '' && externalId !== 'null') {
-                activeSessionName = externalId.trim();
-                localStorage.setItem('logged_in_driver_name', activeSessionName);
+        async function initCargoApp() {
+            if (window.db && window.firebaseModules) {
+                await fetchCloudSession();
             } else {
-                activeSessionName = localStorage.getItem('logged_in_driver_name') || 'زائر';
+                window.addEventListener('firebase-ready', async () => {
+                    await fetchCloudSession();
+                }, { once: true });
             }
-
-            if (urlComp && urlComp.trim() !== '' && urlComp !== 'null') {
-                currentCompanyId = urlComp.trim();
-            }
-            localStorage.setItem('current_company_id', currentCompanyId);
         }
 
-        parseURLSession();
+        async function fetchCloudSession() {
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, getDocs } = window.firebaseModules;
+
+            const urlParams = new URLSearchParams(window.location.search);
+            let externalId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || '').trim();
+            let urlComp = (urlParams.get('companyId') || urlParams.get('company') || '').trim();
+
+            if (urlComp && urlComp !== 'null' && urlComp !== '') {
+                currentCompanyId = urlComp;
+            }
+
+            try {
+                const snapshot = await getDocs(collection(window.db, 'drivers'));
+                let found = null;
+                snapshot.forEach(docSnap => {
+                    let d = docSnap.data();
+                    let docId = String(docSnap.id || '').trim().toLowerCase();
+                    let dName = String(d.name || '').trim().toLowerCase();
+                    let dPhone = String(d.phone || '').trim();
+
+                    if (externalId) {
+                        let target = externalId.toLowerCase();
+                        if (docId === target || dName === target || dPhone === target || dName.includes(target)) {
+                            found = { id: docSnap.id, ...d };
+                        }
+                    }
+                });
+
+                if (found) {
+                    if (found.companyId && String(found.companyId).trim() !== '') {
+                        currentCompanyId = String(found.companyId).trim();
+                    }
+                    currentDriverProfile = {
+                        id: found.id,
+                        name: found.name || 'سائق معتمد',
+                        role: found.role || found.rank || 'driver',
+                        badge: found.badge || ''
+                    };
+                } else if (externalId) {
+                    currentDriverProfile = {
+                        id: externalId,
+                        name: externalId,
+                        role: isUserAdmin('', externalId) ? 'admin' : 'driver',
+                        badge: ''
+                    };
+                }
+            } catch (e) {}
+
+            document.getElementById('company-badge-display').innerText = `🏢 الشراكة: ${currentCompanyId}`;
+            setupCargoRealtimeSync();
+        }
 
         window.navigateToPage = function(pageName) {
-            const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
+            const queryParams = `?userId=${encodeURIComponent(currentDriverProfile.name)}&companyId=${encodeURIComponent(currentCompanyId)}`;
             window.location.href = pageName + queryParams;
         };
 
         function isUserAdmin(roleValue, nameValue) {
-            let role = String(roleValue || '').toLowerCase().trim();
-            let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير'];
-            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
-        }
-
-        async function initCargoApp() {
-            if (window.db && window.firebaseModules) {
-                setupCargoRealtimeSync();
-            } else {
-                window.addEventListener('firebase-ready', () => {
-                    setupCargoRealtimeSync();
-                }, { once: true });
-            }
+            let role = String(roleValue || currentDriverProfile.role || '').toLowerCase().trim();
+            let name = String(nameValue || currentDriverProfile.name || '').toLowerCase().trim();
+            let badge = String(currentDriverProfile.badge || '').toLowerCase().trim();
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
+            return adminGuesses.includes(role) || adminGuesses.includes(name) || badge === 'admin' || name.includes('المدير') || name.includes('كرم');
         }
 
         function setupCargoRealtimeSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot } = window.firebaseModules;
 
-            document.getElementById('company-badge-display').innerText = `🏢 الشراكة: ${currentCompanyId}`;
-
             onSnapshot(collection(window.db, "cargo"), (snapshot) => {
+                // منع التحديث العشوائي للواجهة إذا كان المستخدم يكتب في حقل البحث لمنع فقدان التركيز أو تهنيج الصفحة
+                if (document.activeElement && document.activeElement.id === 'searchBar') {
+                    return;
+                }
+
                 allCargoData = [];
                 snapshot.docs.forEach(docSnap => {
                     let c = docSnap.data();
                     let cComp = (c.companyId || "").trim();
-                    let isSuper = isUserAdmin('', activeSessionName);
+                    let isSuper = isUserAdmin();
 
-                    // تطبيق العزل التام للشركات مع استثناء المدير العام
                     if (isSuper || !cComp || cComp === currentCompanyId) {
                         allCargoData.push({ id: docSnap.id, ...c });
                     }
