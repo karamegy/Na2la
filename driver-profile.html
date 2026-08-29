@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - بروفايل السائق والأسطول V95 PRO SECURE ISOLATED</title>
+    <title>أسطورة الطريق - بروفايل السائق والأسطول V96 PRO SECURE SYNCED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     
@@ -673,7 +673,7 @@
                 if (drv) {
                     let cleanN = getCleanDriverName(drv.name);
                     let roleStr = String(drv.role || '').toLowerCase();
-                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير';
+                    let isAdmin = roleStr === 'admin' || roleStr === 'مدير' || roleStr === 'مدير شركة';
                     return { ...drv, name: cleanN, role: isAdmin ? 'admin' : 'driver' };
                 }
             }
@@ -701,8 +701,6 @@
             }
             return getLoggedInUser();
         }
-
-        // تم إزالة دالة التسجيل التلقائي (autoRegisterUserType) لمنع إنشاء حسابات وهمية تلقائياً في قاعدة البيانات.
 
         function toggleChatAccountsListCollapse() {
             const content = document.getElementById('chat-accounts-collapsible-content');
@@ -741,46 +739,36 @@
         }
         renderInitialUIInstant();
 
-        db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+        // استماع فوري للبيانات مع ضمان عمله بشكل كامل دون انقطاع
+        db.collection('drivers').onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
-                return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                let docCompany = d.companyId || 'company_main';
+                let matchComp = (docCompany === currentCompanyId || docCompany === 'company_main' || currentCompanyId === 'company_main');
+                return matchComp && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
             });
             renderMyAccount();
             renderChatAccountsList();
-        }, err => {
-            db.collection('drivers').onSnapshot(snap => {
-                appData.drivers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => {
-                    let name = String(d.name || d.id || '').trim().toLowerCase();
-                    return (!d.companyId || d.companyId === currentCompanyId) && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
-                });
-                renderMyAccount();
-                renderChatAccountsList();
-            });
         });
 
-        db.collection('shipments').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
-            appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        db.collection('shipments').onSnapshot(snapshot => {
+            appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(s => {
+                let docComp = s.companyId || 'company_main';
+                return (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+            });
             renderMyAccount();
-        }, err => {
-            db.collection('shipments').onSnapshot(snap => {
-                appData.shipments = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => !s.companyId || s.companyId === currentCompanyId);
-                renderMyAccount();
-            });
         });
 
-        db.collection('chat').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
-            appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        db.collection('chat').onSnapshot(snapshot => {
+            appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(c => {
+                let docComp = c.companyId || 'company_main';
+                return (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+            });
             renderChatMessages();
             renderChatAccountsList();
-        }, err => {
-            db.collection('chat').onSnapshot(snap => {
-                appData.chat = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.companyId || c.companyId === currentCompanyId);
-                renderChatMessages();
-                renderChatAccountsList();
-            });
         });
 
+        // مزامنة مكالمات الصوت والفيديو الفورية (WebRTC Signaling)
         db.collection('webrtc_calls')
           .where('status', '==', 'calling')
           .onSnapshot(snapshot => {
@@ -797,10 +785,11 @@
                       let isForMe = (
                           targetCallee === myName ||
                           targetCallee === mySession ||
-                          getCleanDriverName(targetCallee) === myName
+                          getCleanDriverName(targetCallee) === myName ||
+                          targetCallee === 'general'
                       );
 
-                      if (isForMe) {
+                      if (isForMe && callData.caller !== myName) {
                           let callerCleanName = getCleanDriverName(callData.caller);
                           playAdvancedRingtone('incoming');
                           if (confirm(`📞 لديك مكالمة واردة من (${callerCleanName}). هل تريد الرد؟`)) {
@@ -819,27 +808,17 @@
         function setupWallListener(profileId) {
             if (unsubscribeWall) unsubscribeWall();
             unsubscribeWall = db.collection('profileWalls')
-              .where('companyId', '==', currentCompanyId)
               .onSnapshot(snapshot => {
                   let posts = [];
                   snapshot.forEach(doc => {
                       let d = doc.data();
-                      if(String(d.profileId) === String(profileId)) {
+                      let docComp = d.companyId || 'company_main';
+                      let matchComp = (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+                      if(matchComp && String(d.profileId) === String(profileId)) {
                           posts.push({ docId: doc.id, ...d });
                       }
                   });
                   renderWallPostsFromList(posts);
-              }, err => {
-                  unsubscribeWall = db.collection('profileWalls').onSnapshot(snap => {
-                      let posts = [];
-                      snap.forEach(doc => {
-                          let d = doc.data();
-                          if((!d.companyId || d.companyId === currentCompanyId) && String(d.profileId) === String(profileId)) {
-                              posts.push({ docId: doc.id, ...d });
-                          }
-                      });
-                      renderWallPostsFromList(posts);
-                  });
               });
         }
 
@@ -1079,6 +1058,10 @@
                         alert('⚠️ تم رفض المكالمة من الطرف الآخر.');
                         endActiveWebRTCCall();
                     }
+                    if (data && data.status === 'ended') {
+                        stopAdvancedRingtone();
+                        endActiveWebRTCCall();
+                    }
                 });
 
                 answerCandidates.onSnapshot(snapshot => {
@@ -1144,6 +1127,13 @@
                 await callDocRef.update({
                     answer: { type: answerDescription.type, sdp: answerDescription.sdp },
                     status: 'answered'
+                });
+
+                callDocRef.onSnapshot(snapshot => {
+                    const data = snapshot.data();
+                    if (data && data.status === 'ended') {
+                        endActiveWebRTCCall();
+                    }
                 });
 
                 offerCandidates.onSnapshot(snapshot => {
@@ -1691,4 +1681,4 @@
         window.onload = renderMyAccount;
     </script>
 </body>
-    </html>
+</html>
