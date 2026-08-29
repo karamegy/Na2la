@@ -523,7 +523,7 @@
                 return externalId.trim();
             }
 
-            return 'المدير';
+            return '';
         }
 
         let activeExternalSessionName = getExternalLoginSession();
@@ -638,33 +638,31 @@
 
         function getLoggedInUser() {
             let sessionName = String(activeExternalSessionName || '').trim();
-            let isMasterSession = (sessionName === 'المدير' || sessionName === '1' || sessionName.toLowerCase() === 'admin' || sessionName.toLowerCase() === 'مدير شركة');
 
-            if (appData.drivers && appData.drivers.length > 0) {
+            if (appData.drivers && appData.drivers.length > 0 && sessionName) {
                 let drv = appData.drivers.find(d => 
                     String(d.id).trim() === sessionName || 
                     String(d.name).trim() === sessionName || 
-                    String(d.phone).trim() === sessionName ||
-                    (isMasterSession && (String(d.name).trim() === 'المدير' || String(d.id).trim() === '1' || String(d.role).toLowerCase().includes('مدير') || String(d.role).toLowerCase().includes('admin')))
+                    String(d.phone).trim() === sessionName
                 );
                 if (drv) {
-                    let cleanN = isMasterSession ? 'المدير' : getCleanDriverName(drv.name);
+                    let cleanN = getCleanDriverName(drv.name);
                     let roleStr = String(drv.role || '').toLowerCase();
-                    let isAdmin = isMasterSession || roleStr.includes('admin') || roleStr.includes('مدير') || cleanN === 'المدير' || String(drv.id) === '1';
+                    let isAdmin = roleStr.includes('admin') || roleStr.includes('مدير');
                     return { 
                         ...drv, 
                         name: cleanN, 
                         role: isAdmin ? 'admin' : 'driver',
-                        title: drv.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد')
+                        title: drv.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد')
                     };
                 }
             }
 
             return {
-                id: sessionName,
-                name: isMasterSession ? 'المدير' : getCleanDriverName(sessionName),
-                role: isMasterSession ? 'admin' : 'driver',
-                title: isMasterSession ? 'مدير عام النظام' : 'سائق معتمد',
+                id: sessionName || 'guest',
+                name: getCleanDriverName(sessionName || 'زائر'),
+                role: 'driver',
+                title: 'سائق معتمد',
                 status: 'متاح 🟢',
                 advances: 0,
                 companyId: currentCompanyId
@@ -677,13 +675,12 @@
                 if (drv) {
                     let cleanN = getCleanDriverName(drv.name);
                     let roleStr = String(drv.role || '').toLowerCase();
-                    let isMaster = (String(viewingProfileId) === 'المدير' || String(viewingProfileId) === '1' || cleanN === 'المدير' || String(drv.id) === '1');
-                    let isAdmin = isMaster || roleStr.includes('admin') || roleStr.includes('مدير');
+                    let isAdmin = roleStr.includes('admin') || roleStr.includes('مدير');
                     return { 
                         ...drv, 
-                        name: isMaster ? 'المدير' : cleanN,
+                        name: cleanN,
                         role: isAdmin ? 'admin' : 'driver',
-                        title: drv.title || (isAdmin ? 'مدير عام النظام' : 'سائق معتمد')
+                        title: drv.title || (isAdmin ? 'مدير النظام' : 'سائق معتمد')
                     };
                 }
             }
@@ -722,36 +719,39 @@
         }
         renderInitialUIInstant();
 
+        // عزل تام بين الشركات عند جلب السائقين بناءً على companyId بدقة صارمة
         db.collection('drivers').onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
-                let docCompany = d.companyId || 'company_main';
-                let matchComp = (docCompany === currentCompanyId || docCompany === 'company_main' || currentCompanyId === 'company_main');
-                return matchComp && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
+                let docCompany = String(d.companyId || 'company_main').trim();
+                let matchComp = (docCompany === String(currentCompanyId).trim());
+                return matchComp && name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest' && name !== 'المدير';
             });
             renderMyAccount();
             renderChatAccountsList();
         });
 
+        // عزل تام للشحنات بناءً على companyId للشركة الحالية فقط
         db.collection('shipments').onSnapshot(snapshot => {
             appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(s => {
-                let docComp = s.companyId || 'company_main';
-                return (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+                let docComp = String(s.companyId || 'company_main').trim();
+                return docComp === String(currentCompanyId).trim();
             });
             renderMyAccount();
         });
 
+        // عزل تام للشات والمحادثات بناءً على companyId
         db.collection('chat').onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(c => {
-                let docComp = c.companyId || 'company_main';
-                return (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+                let docComp = String(c.companyId || 'company_main').trim();
+                return docComp === String(currentCompanyId).trim();
             });
             renderChatMessages();
             renderChatAccountsList();
         });
 
         db.collection('webrtc_calls')
-          .where('status', '==', 'calling')
+          .where('companyId', '==', currentCompanyId)
           .onSnapshot(snapshot => {
               snapshot.docChanges().forEach(change => {
                   if (change.type === 'added') {
@@ -770,7 +770,7 @@
                           targetCallee === 'general'
                       );
 
-                      if (isForMe && callData.caller !== myName) {
+                      if (isForMe && callData.caller !== myName && callData.status === 'calling') {
                           let callerCleanName = getCleanDriverName(callData.caller);
                           playAdvancedRingtone('incoming');
                           if (confirm(`📞 لديك مكالمة واردة من (${callerCleanName}). هل تريد الرد؟`)) {
@@ -793,8 +793,8 @@
                   let posts = [];
                   snapshot.forEach(doc => {
                       let d = doc.data();
-                      let docComp = d.companyId || 'company_main';
-                      let matchComp = (docComp === currentCompanyId || docComp === 'company_main' || currentCompanyId === 'company_main');
+                      let docComp = String(d.companyId || 'company_main').trim();
+                      let matchComp = (docComp === String(currentCompanyId).trim());
                       if(matchComp && String(d.profileId) === String(profileId)) {
                           posts.push({ docId: doc.id, ...d });
                       }
@@ -991,14 +991,19 @@
                 } : { audio: true, video: false };
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('localVideo').srcObject = localStream;
+                
+                const localVideoElem = document.getElementById('localVideo');
+                localVideoElem.srcObject = localStream;
+                localVideoElem.play().catch(e => console.log("Local video play error:", e));
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
                 peerConnection.ontrack = event => {
                     stopAdvancedRingtone();
-                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    const remoteVideoElem = document.getElementById('remoteVideo');
+                    remoteVideoElem.srcObject = event.streams[0];
+                    remoteVideoElem.play().catch(e => console.log("Remote video play error:", e));
                     document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
                 };
 
@@ -1022,7 +1027,8 @@
                     companyId: currentCompanyId,
                     offer: { type: offerDescription.type, sdp: offerDescription.sdp },
                     isVideo: isVideo,
-                    status: 'calling'
+                    status: 'calling',
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
                 await callDocRef.set(callData);
@@ -1034,12 +1040,7 @@
                         const answerDescription = new RTCSessionDescription(data.answer);
                         peerConnection.setRemoteDescription(answerDescription);
                     }
-                    if (data && data.status === 'rejected') {
-                        stopAdvancedRingtone();
-                        alert('⚠️ تم رفض المكالمة من الطرف الآخر.');
-                        endActiveWebRTCCall();
-                    }
-                    if (data && data.status === 'ended') {
+                    if (data && (data.status === 'rejected' || data.status === 'ended')) {
                         stopAdvancedRingtone();
                         endActiveWebRTCCall();
                     }
@@ -1080,13 +1081,18 @@
                 } : { audio: true, video: false };
 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('localVideo').srcObject = localStream;
+                
+                const localVideoElem = document.getElementById('localVideo');
+                localVideoElem.srcObject = localStream;
+                localVideoElem.play().catch(e => console.log("Local video play error:", e));
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
                 peerConnection.ontrack = event => {
-                    document.getElementById('remoteVideo').srcObject = event.streams[0];
+                    const remoteVideoElem = document.getElementById('remoteVideo');
+                    remoteVideoElem.srcObject = event.streams[0];
+                    remoteVideoElem.play().catch(e => console.log("Remote video play error:", e));
                     document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
                 };
 
@@ -1146,7 +1152,9 @@
                 });
 
                 localStream = newStream;
-                document.getElementById('localVideo').srcObject = localStream;
+                const localVideoElem = document.getElementById('localVideo');
+                localVideoElem.srcObject = localStream;
+                localVideoElem.play().catch(e => console.log("Local video play error:", e));
 
                 if (peerConnection) {
                     const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -1220,7 +1228,7 @@
 
             filteredAccounts.forEach(acc => {
                 let roleStr = String(acc.role || '').toLowerCase();
-                let isManager = roleStr.includes('admin') || roleStr.includes('مدير') || ['مدير', 'المدير'].includes(acc.name);
+                let isManager = roleStr.includes('admin') || roleStr.includes('مدير');
                 let roleBadgeText = isManager ? 'مشرف/مدير 🛡️' : 'سائق 🚚';
                 let roleBadgeColor = isManager ? 'var(--warning)' : 'var(--accent)';
 
@@ -1513,7 +1521,7 @@
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
                     let loggedInUser = getLoggedInUser();
-                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest', 'تاج'].includes(String(loggedInUser.id).toLowerCase())) {
                         alert('⚠️ عذراً، لا يمكن حفظ الصورة لحساب غير مسجل.');
                         return;
                     }
@@ -1622,13 +1630,13 @@
             let filtered = (appData.drivers || []).filter(d => {
                 let cleanN = getCleanDriverName(d.name);
                 let matchesQuery = (cleanN && cleanN.toLowerCase().includes(query)) || (d.phone && d.phone.includes(query));
-                return matchesQuery && cleanN !== 'مستخدم' && cleanN !== 'زائر';
+                return matchesQuery && cleanN !== 'مستخدم' && cleanN !== 'زائر' && cleanN !== 'المدير';
             });
 
             filtered.forEach(d => {
                 let cleanN = getCleanDriverName(d.name);
                 let roleStr = String(d.role || '').toLowerCase();
-                let isManager = roleStr.includes('admin') || roleStr.includes('مدير') || cleanN === 'المدير' || String(d.id) === '1';
+                let isManager = roleStr.includes('admin') || roleStr.includes('مدير');
                 
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
