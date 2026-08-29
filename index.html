@@ -1827,49 +1827,30 @@
                 db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
+                    // العزل الصحيح والصارم بين الشركات (يتم فلترة البيانات لكل شركة على حدة بدقة تامة لمنع التسريب)
                     if (loggedInDriverName === 'المدير' && currentCompanyId === 'Company_main') {
-                        if (colName === 'drivers') {
-                            appData[colName] = rawData; // جلب كافة السائقين والشركات للماستر أدمن
-                        } else {
-                            appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main');
-                        }
+                        // المدير الرئيسي للشركة الأم يرى حصرياً بيانات الشركة الرئيسية والبيانات غير المخصصة
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main');
                     } else if (currentCompanyId && currentCompanyId !== 'Company_main') {
+                        // الشركات الفرعية ترى فقط بياناتها الخاصة المرتبطة بمعرفها الحصري
                         appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
                     } else {
                         appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || !d.companyId || d.companyId === 'Company_main');
                     }
                     
-                    // تحديثات خاصة بالدردشة لتسريع الاستجابة بدون تجميد كامل
-                    if (colName === 'chat') {
-                        if (typeof renderChatMessages === 'function') renderChatMessages();
-                        if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                        return; // خروج آمن لتجنب إعادة رسم كل أقسام التطبيق عند كل رسالة دردشة
-                    }
-
                     scheduleSmartRender();
 
-                    // التحديث الآمن للأقسام النشطة فقط
-                    try {
-                        const defTab = document.getElementById('deferred-invoices-tab');
-                        if (defTab && defTab.classList.contains('active') && typeof loadDeferredInvoicesTable === 'function') {
-                            loadDeferredInvoicesTable();
-                        }
-
-                        const repTab = document.getElementById('reports-tab');
-                        if (repTab && repTab.classList.contains('active')) {
-                            if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
-                            if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
-                            if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
-                        }
-
-                        const compTab = document.getElementById('companies-tab');
-                        if (compTab && compTab.classList.contains('active') && typeof renderCompaniesManagementTable === 'function') {
-                            renderCompaniesManagementTable();
-                        }
-                    } catch (uiErr) {
-                        console.error("خطأ في تحديث الواجهة النشطة:", uiErr);
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
                     }
-
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
                 }, error => {
                     console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
                 });
@@ -1878,7 +1859,7 @@
             db.collection('systemSettings').doc('config').onSnapshot(doc => {
                 if (doc.exists && doc.data().newsText) {
                     appData.newsText = doc.data().newsText;
-                    if (typeof renderRSSTicker === 'function') renderRSSTicker();
+                    renderRSSTicker();
                 }
             });
         }
