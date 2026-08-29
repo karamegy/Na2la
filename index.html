@@ -1253,6 +1253,36 @@
 
         db.enablePersistence({ synchronizeTabs: true }).catch(err => console.log('Persistence:', err.code));
 
+        // قناة المزامنة الفورية بين التبويبات والصفحات (BroadcastChannel)
+        const na2laSyncChannel = new BroadcastChannel('Na2la_Realtime_Sync_V90');
+
+        function broadcastSessionState() {
+            const sessionData = {
+                loggedInDriverName: loggedInDriverName,
+                currentCompanyId: currentCompanyId,
+                currentUserRole: currentUserRole,
+                timestamp: Date.now()
+            };
+            na2laSyncChannel.postMessage(sessionData);
+        }
+
+        na2laSyncChannel.onmessage = function (event) {
+            if (event.data && event.data.loggedInDriverName) {
+                loggedInDriverName = event.data.loggedInDriverName;
+                currentCompanyId = event.data.currentCompanyId || 'Company_main';
+                currentUserRole = event.data.currentUserRole || 'driver';
+
+                localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+                localStorage.setItem('current_company_id', currentCompanyId);
+                localStorage.setItem('current_user_role', currentUserRole);
+
+                const badge = document.getElementById('user-role-badge');
+                if (badge) badge.innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
+                
+                if (typeof render === 'function') render();
+            }
+        };
+
         const CASH_WALLETS = {
             fawry: "01114099799",
             we: "01554440996"
@@ -1282,6 +1312,10 @@
         function goToAuthenticatedPage(pageName) {
             let userId = loggedInDriverName || localStorage.getItem('logged_in_driver_name') || 'المدير';
             let companyId = currentCompanyId || localStorage.getItem('current_company_id') || 'Company_main';
+            
+            localStorage.setItem('logged_in_driver_name', userId);
+            localStorage.setItem('current_company_id', companyId);
+
             window.location.href = `${pageName}?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         }
 
@@ -1631,6 +1665,7 @@
                 document.getElementById('lock-screen').style.display = 'none';
                 document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
                 
+                broadcastSessionState();
                 setupNavigation();
                 if (currentUserRole === 'admin') setAdminUIMode();
                 else if (currentUserRole === 'supervisor') setSupervisorUIMode();
@@ -1792,7 +1827,6 @@
                 db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // العزل الصحيح والصارم بين الشركات (منع أي تداخل أو تسريب بيانات)
                     if (loggedInDriverName === 'المدير' && currentCompanyId === 'Company_main') {
                         appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main' || colName === 'drivers');
                     } else if (currentCompanyId && currentCompanyId !== 'Company_main') {
@@ -2000,7 +2034,6 @@
             }
         }
 
-        // مطابقة الحسابات والمدير بدقة تامة ومنع الحسابات الوهمية أو المكررة
         async function performUnifiedLogin() {
             const identifier = document.getElementById('login-identifier').value.trim();
             const pin = document.getElementById('login-pin-input').value.trim();
@@ -2010,7 +2043,6 @@
                 return;
             }
 
-            // مطابقة الماستر أدمن الأساسي (المدير)
             if (identifier === 'المدير' || identifier === '01114099799' || identifier === 'admin') {
                 if (pin !== storedPin && pin !== '01036') {
                     alert('الرقم السري للمدير غير صحيح!');
@@ -2023,7 +2055,6 @@
                 return;
             }
 
-            // مطابقة حسابات السائقين ومديري الشركات من قاعدة البيانات بصرامة
             try {
                 const snapshot = await db.collection('drivers').get();
                 let matchedUser = null;
@@ -2065,6 +2096,7 @@
             document.getElementById('lock-screen').style.display = 'none';
             document.getElementById('user-role-badge').innerText = `حساب: ${loggedInDriverName} (${currentUserRole})`;
             
+            broadcastSessionState();
             setupNavigation();
             if (currentUserRole === 'admin') setAdminUIMode();
             else if (currentUserRole === 'supervisor') setSupervisorUIMode();
@@ -3007,6 +3039,7 @@
             
             loggedInDriverName = drv.name;
             localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+            broadcastSessionState();
             
             db.collection('drivers').doc(String(drv.id)).set(drv, { merge: true }).then(() => {
                 alert('تم تحديث بروفايلك الشخصي ورقم الهاتف بنجاح! 💾');
@@ -3144,7 +3177,6 @@
             }
         }
 
-        // عرض السائقين بدون تكرار أو حسابات وهمية
         function renderProfileDriverSearch() {
             const query = (document.getElementById('profile-driver-search-input')?.value || '').toLowerCase();
             const container = document.getElementById('profile-driver-search-results');
@@ -3152,7 +3184,6 @@
             container.innerHTML = '';
             
             let drivers = appData.drivers || [];
-            // تصفية فريدة لمنع أي تكرار بالأسماء أو الهواتف
             let uniqueDriversMap = new Map();
             uniqueDriversMap.set('المدير', { name: 'المدير', title: 'المدير العام', phone: '01114099799', avatar: '' });
             
@@ -4050,7 +4081,7 @@
                 });
             }
         }
-function render() {
+        function render() {
             try {
                 renderDriverDropdownOptions();
                 renderRSSTicker();
