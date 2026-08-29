@@ -769,8 +769,9 @@
                 <span style="background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:8px; font-size:10px;" id="gmapSpeedBadge">0 كم/س</span>
             </div>
 
-            <!-- الأزرار العائمة على الجانب الأيمن تشمل الأداة الجديدة لإضافة النطاق الجغرافي Geofence -->
+            <!-- الأزرار العائمة على الجانب الأيمن وتشمل الأداة الجديدة للإبلاغ السريع Waze Style والنطاق الجغرافي Geofence -->
             <div class="gmap-floating-controls">
+                <button class="gmap-float-btn" onclick="openQuickReportModal()" title="إبلاغ سريع عن خطر أو كمين (Waze Style)">⚠️</button>
                 <button class="gmap-float-btn" onclick="cycleMapLayer()" title="تغيير نوع الخريطة (شوارع/قمر صناعي/تضاريس)">🗺️</button>
                 <button class="gmap-float-btn" onclick="resetMapBearingToNorth()" title="إعادة توجيه الشمال للأعلى (North Up)">🧭</button>
                 <button class="gmap-float-btn" onclick="centerMapOnTruck()" title="إعادة التوسط على الشاحنة">🎯</button>
@@ -802,11 +803,28 @@
         </div>
     </div>
 
+    <!-- نافذة الإبلاغ السريع المباشر على الخريطة (Waze Style) -->
+    <div id="quickReportModal" class="custom-modal" onclick="closeQuickReportModal()">
+        <div class="card" style="width: 100%; max-width: 340px; margin: auto;" onclick="event.stopPropagation()">
+            <h3 style="color: var(--danger);">⚠️ إبلاغ سريع عن خطر في موقعك الحالي</h3>
+            <p style="font-size: 10px; color: var(--secondary-text); margin-bottom: 10px;">اختر نوع البلاغ ليظهر لجميع السائقين على الخريطة فوراً:</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+                <button type="button" class="btn-success" onclick="sendQuickReport('🚨 رادار شرطة متحرك')" style="padding: 10px; font-size: 10px;">🚨 رادار متحرك</button>
+                <button type="button" class="btn-danger" onclick="sendQuickReport('💥 حادث طريق')" style="padding: 10px; font-size: 10px;">💥 حادث طريق</button>
+                <button type="button" class="btn-success" onclick="sendQuickReport('🚧 أعمال طريق / تحويلة')" style="padding: 10px; font-size: 10px;">🚧 أعمال طريق</button>
+                <button type="button" class="btn-danger" onclick="sendQuickReport('🛑 كمين أمني')" style="padding: 10px; font-size: 10px;">🛑 كمين أمني</button>
+            </div>
+            
+            <button type="button" class="btn-danger" onclick="closeQuickReportModal()" style="width: 100%;">إغلاق</button>
+        </div>
+    </div>
+
     <!-- نافذة إضافة نطاق جغرافي (Geofence Creator) -->
     <div id="geofenceModal" class="custom-modal" onclick="closeGeofenceModal()">
         <div class="card" style="width: 100%; max-width: 360px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--accent);">📍 إضافة نطاق جغرافي سحابي (Geofence)</h3>
-            <p style="font-size: 10px; color: var(--secondary-text); margin-bottom: 8px;">حدد اسم المنطقة والمدى بالأيلومتر لتنبيه السائق فور دخولها.</p>
+            <p style="font-size: 10px; color: var(--secondary-text); margin-bottom: 8px;">حدد اسم المنطقة والمدى بالكيلومتر لتنبيه السائق فور دخولها.</p>
             <input type="text" id="geofenceNameInput" placeholder="اسم المنطقة (مثلاً: مخزن أكتوبر الرئيسي)" style="margin-bottom:6px;">
             <input type="number" step="0.1" id="geofenceRadiusInput" placeholder="نصف القطر بالكم (مثلاً: 1.5)" value="1.0" style="margin-bottom:6px;">
             <button class="btn-success" onclick="saveCurrentLocationAsGeofence()" style="padding:9px; margin-bottom:6px;">حفظ موقعي الحالي كنطاق سحابي 💾</button>
@@ -998,7 +1016,7 @@
         // ميزة التوجيه الصوتي عبر Text-to-Speech (TTS)
         function speakInstruction(text) {
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel(); // إيقاف أي كلام سابق لمنع التداخل
+                window.speechSynthesis.cancel();
                 let utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ar-EG';
                 utterance.rate = 1.0;
@@ -1291,6 +1309,46 @@
             });
         }
 
+        // دوال الإبلاغ السريع (Waze Style)
+        function openQuickReportModal() {
+            if (!truckMarker) {
+                alert('⚠️ يجب انتظار تحديد موقعك الحالي أولاً.');
+                return;
+            }
+            document.getElementById('quickReportModal').style.display = 'flex';
+        }
+
+        function closeQuickReportModal() {
+            document.getElementById('quickReportModal').style.display = 'none';
+        }
+
+        async function sendQuickReport(reportType) {
+            if (!truckMarker || !window.db || !window.firebaseModules) return;
+            let pos = truckMarker.getLatLng();
+
+            try {
+                let reportId = String(Date.now());
+                const { doc, setDoc } = window.firebaseModules;
+                
+                await setDoc(doc(window.db, 'radars', reportId), {
+                    id: reportId,
+                    name: `${reportType} (${currentDriverProfile.name})`,
+                    lat: pos.lat,
+                    lng: pos.lng,
+                    addedBy: currentDriverProfile.name,
+                    companyId: currentCompanyId,
+                    date: new Date().toLocaleString('ar-EG')
+                });
+
+                closeQuickReportModal();
+                alert(`✅ تم إرسال البلاغ (${reportType}) ونشره على الخريطة بنجاح!`);
+                loadRadarsOnMap();
+                loadRadarsList();
+            } catch(e) {
+                alert('⚠️ تعذر إرسال البلاغ السحابي.');
+            }
+        }
+
         function cycleMapLayer() {
             if (!leafletMap || mapLayersList.length === 0) return;
             leafletMap.removeLayer(mapLayersList[currentMapLayerIndex]);
@@ -1309,7 +1367,6 @@
             }
         }
 
-        // 1. مراقبة وعرض أسطول الشاحنات بالكامل (Multi-Driver Fleet View) عبر Firebase
         function listenToFleetLocations() {
             if (!window.db || !window.firebaseModules || !fleetMarkersLayer) return;
             if (fleetLocationsUnsubscribe) fleetLocationsUnsubscribe();
@@ -1336,7 +1393,6 @@
             });
         }
 
-        // 2. ميزة البحث التلقائي (Autocomplete) لأسماء الأماكن والقرى في مصر
         let autocompleteTimer = null;
         async function onSearchInputChanged(queryText) {
             clearTimeout(autocompleteTimer);
@@ -1373,7 +1429,6 @@
             navigateToDestination(lat, lon, name);
         }
 
-        // 3. رسم المسارات الفعلية (OSRM Turn-by-Turn Routing & ETA)
         async function navigateToDestination(destLat, destLon, destName) {
             if (!truckMarker) {
                 alert('⚠️ جاري تحديد موقعك الحالي أولاً...');
@@ -1441,7 +1496,6 @@
             }
         }
 
-        // جلب الأماكن القريبة عبر Overpass API وتوفير زر للانطلاق إليها
         async function searchNearbyAmenity(amenityTag, categoryName) {
             if (!truckMarker) {
                 alert('⚠️ يجدر تحديد موقعك الحالي أولاً.');
@@ -1482,13 +1536,8 @@
             }
         }
 
-        // 4. أداة رسم النطاقات الجغرافية وتخزينها في Firebase (Geofencing Tool)
-        function openGeofenceModal() {
-            document.getElementById('geofenceModal').style.display = 'flex';
-        }
-        function closeGeofenceModal() {
-            document.getElementById('geofenceModal').style.display = 'none';
-        }
+        function openGeofenceModal() { document.getElementById('geofenceModal').style.display = 'flex'; }
+        function closeGeofenceModal() { document.getElementById('geofenceModal').style.display = 'none'; }
 
         async function saveCurrentLocationAsGeofence() {
             if (!truckMarker) {
@@ -1677,7 +1726,6 @@
             }
         }
 
-        // التتبع الحي مع رصد السرعة وتنبيهات تجاوز الحد الأقصى
         function startLiveTruckTrackingAndCloudLogging() {
             if (!navigator.geolocation) {
                 alert('خدمة تحديد الموقع غير مدعومة.');
@@ -1695,7 +1743,6 @@
                 const lng = position.coords.longitude;
                 const speedKmh = position.coords.speed ? (position.coords.speed * 3.6).toFixed(1) : '0.0';
 
-                // تنبيه تجاوز السرعة (أكثر من 110 كم/س)
                 if (parseFloat(speedKmh) > 110) {
                     if ('vibrate' in navigator) navigator.vibrate(500);
                     speakInstruction('تحذير! لقد تجاوزت السرعة المسموحة، خفف السرعة حفاظاً على سلامتك.');
@@ -2032,6 +2079,7 @@
                     text: text,
                     files: [...communityFilesArr],
                     likes: 0,
+                    likedBy: [],
                     comments: [],
                     isEmergency: isEmergency,
                     companyId: currentCompanyId,
@@ -2266,17 +2314,39 @@
             }, error => {});
         }
 
+        // ميزة الإعجاب الواحد لكل حساب سحابياً
         async function likePost(btnElement, id) {
             if (!window.db || !window.firebaseModules) return;
-            let countSpan = document.getElementById(`likes-count-${id}`);
-            if (countSpan) {
-                countSpan.innerText = parseInt(countSpan.innerText || '0') + 1;
-            }
-            const { doc, updateDoc, increment } = window.firebaseModules;
+            let userName = currentDriverProfile.name || 'زائر';
+            
+            const { doc, getDoc, updateDoc, arrayUnion, increment } = window.firebaseModules;
             let docRef = doc(window.db, 'communityPosts', String(id));
+            
             try {
-                await updateDoc(docRef, { likes: increment(1) });
-            } catch (err) {}
+                let snap = await getDoc(docRef);
+                if (snap.exists()) {
+                    let data = snap.data();
+                    let likedBy = data.likedBy || [];
+                    
+                    if (likedBy.includes(userName)) {
+                        alert('⚠️ لقد قمت بالتفاعل على هذا المنشور مسبقاً (إعجاب واحد لكل حساب).');
+                        return;
+                    }
+                    
+                    await updateDoc(docRef, {
+                        likes: increment(1),
+                        likedBy: arrayUnion(userName)
+                    });
+                    
+                    let countSpan = document.getElementById(`likes-count-${id}`);
+                    if (countSpan) {
+                        countSpan.innerText = (data.likes || 0) + 1;
+                    }
+                    alert('❤️ تم تسجيل إعجابك بنجاح!');
+                }
+            } catch (err) {
+                alert('⚠️ حدث خطأ أثناء تسجيل الإعجاب.');
+            }
         }
 
         function toggleCommentsSection(id) {
