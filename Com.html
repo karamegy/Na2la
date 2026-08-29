@@ -841,7 +841,7 @@
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
             const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
-            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
+            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || role.includes('مدير شركة');
         }
 
         async function initApp() {
@@ -884,7 +884,7 @@
                     let dPhone = String(d.phone || '').trim();
 
                     if (targetId) {
-                        // مطابقة دقيقة وصارمة لمنع الحسابات الوهمية والتطابقات الجزئية الخاطئة
+                        // مطابقة دقيقة وصارمة بناءً على معرف فايربيس أو الهاتف أو الاسم المطابق حصراً
                         if (docId === targetId || dName === targetId || dPhone === targetId) {
                             found = { id: docSnap.id, ...d };
                         }
@@ -944,7 +944,7 @@
                 name: found.name || found.driverName || 'سائق معتمد',
                 phone: found.phone || '',
                 rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
-                title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
+                title: found.title || found.companyName || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
                 permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                 avatar: userAvatar
             };
@@ -1286,25 +1286,32 @@
             let text = input ? input.value.trim() : '';
             let img = commentImagesTemp[id] || '';
 
-            if(!text && !img) return;
+            if(!text && !img) {
+                alert('الرجاء كتابة تعليق أو إرفاق صورة أولاً.');
+                return;
+            }
 
-            const { doc, getDoc, updateDoc } = window.firebaseModules;
-            let docRef = doc(window.db, 'communityPosts', String(id));
-            let docSnap = await getDoc(docRef);
-            if(docSnap.exists()) {
-                let data = docSnap.data();
-                let comments = data.comments || [];
-                comments.push({ 
-                    author: currentDriverProfile.name, 
-                    text: text, 
-                    image: img, 
-                    time: new Date().toLocaleTimeString('ar-EG') 
-                });
-                await updateDoc(docRef, { comments: comments });
-                if(input) input.value = '';
-                commentImagesTemp[id] = '';
-                const infoEl = document.getElementById(`comment-preview-info-${id}`);
-                if(infoEl) infoEl.innerText = '';
+            try {
+                const { doc, getDoc, updateDoc } = window.firebaseModules;
+                let docRef = doc(window.db, 'communityPosts', String(id));
+                let docSnap = await getDoc(docRef);
+                if(docSnap.exists()) {
+                    let data = docSnap.data();
+                    let comments = data.comments || [];
+                    comments.push({ 
+                        author: currentDriverProfile.name, 
+                        text: text, 
+                        image: img, 
+                        time: new Date().toLocaleTimeString('ar-EG') 
+                    });
+                    await updateDoc(docRef, { comments: comments });
+                    if(input) input.value = '';
+                    commentImagesTemp[id] = '';
+                    const infoEl = document.getElementById(`comment-preview-info-${id}`);
+                    if(infoEl) infoEl.innerText = '';
+                }
+            } catch (err) {
+                alert('⚠️ فشل إرسال التعليق: ' + err.message);
             }
         }
 
@@ -1737,7 +1744,7 @@
                     let d = docSnap.data();
                     let dComp = String(d.companyId || 'company_main').trim();
                     let targetComp = String(currentCompanyId || 'company_main').trim();
-                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !d.companyId) : (dComp === targetComp);
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !d.companyId) : (rComp === targetComp || dComp === targetComp);
 
                     if (matchComp) {
                         allDrivers.push({ id: docSnap.id, ...d });
