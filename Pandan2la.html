@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق - إدارة الشركات والاشتراكات الموسعة (SaaS Hub)</title>
+    <title>أسطورة الطريق - إدارة الشركات والاشتراكات الموسعة (SaaS Hub PRO)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- مكتبات Firebase V8 -->
@@ -65,7 +65,9 @@
         .stat-card { 
             background: var(--card-bg); padding: 10px; border-radius: 10px; border-right: 5px solid var(--purple); 
             text-align: center; box-shadow: var(--shadow-3d); border-top: 1px solid var(--border-color); border-left: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);
+            cursor: pointer; transition: transform 0.2s;
         }
+        .stat-card:hover { transform: translateY(-2px); }
         .stat-card h4 { font-size: 10px; opacity: 0.85; }
         .stat-card p { font-size: 14px; font-weight: bold; margin-top: 4px; color: var(--purple); }
 
@@ -86,6 +88,8 @@
         .btn-success { background: var(--success-gradient); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
         .btn-danger { background: var(--danger-gradient); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(239,68,68,0.3); }
         .btn-purple { background: var(--purple-gradient); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(139,92,246,0.3); }
+        .btn-warning { background: var(--warning-gradient); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(245,158,11,0.3); }
+        .btn-whatsapp { background: linear-gradient(135deg, #22c55e, #15803d); color: white; border: none; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(34,197,94,0.3); }
         .btn-sm { padding: 5px 10px; font-size: 10px; width: auto; display: inline-block; margin: 2px; border-radius: 6px; }
 
         .search-box { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 12px; font-size: 12px; background: var(--card-bg); color: var(--text-color); }
@@ -95,9 +99,16 @@
             background: rgba(15, 23, 42, 0.9); z-index: 10000; justify-content: center; align-items: center; padding: 15px; overflow-y: auto;
             backdrop-filter: blur(5px);
         }
+
+        /* نظام التنبيهات العائمة (Toasts) */
+        #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 11px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); border-right: 4px solid var(--purple); animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(-50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body>
+
+    <div id="toast-container"></div>
 
     <div class="app-3d-logo-container">
         <div class="logo-3d">
@@ -117,31 +128,40 @@
         </div>
         <div style="display: flex; gap: 6px; align-items: center;">
             <button type="button" class="btn-sm btn-purple" onclick="openAddCompanyModal()">+ إضافة شركة جديدة</button>
+            <button type="button" class="btn-sm btn-warning" onclick="exportCompaniesJSON()" title="تصدير نسخة احتياطية لبيانات الشركات">📥 تصدير البيانات</button>
             <button type="button" class="btn-sm" onclick="toggleDarkMode()" style="background:#475569; color:#fff;">🌙/☀️</button>
         </div>
     </header>
 
-    <!-- شريط الإحصائيات الشامل -->
+    <!-- شريط الإحصائيات الشامل + مؤشرات الإيرادات المالية MRR & ARR -->
     <div class="stats-grid">
-        <div class="stat-card">
-            <h4>إجمالي الشركات والأعضاء</h4>
+        <div class="stat-card" onclick="filterByCard('all')">
+            <h4>إجمالي الشركات</h4>
             <p id="stat-total-companies">0</p>
         </div>
-        <div class="stat-card" style="border-right-color: var(--success);">
+        <div class="stat-card" style="border-right-color: var(--success);" onclick="filterByCard('active')">
             <h4>الاشتراكات النشطة</h4>
             <p id="stat-active-subs" style="color: var(--success);">0</p>
         </div>
-        <div class="stat-card" style="border-right-color: var(--danger);">
+        <div class="stat-card" style="border-right-color: var(--danger);" onclick="filterByCard('expired')">
             <h4>الاشتراكات المنتهية</h4>
             <p id="stat-expired-subs" style="color: var(--danger);">0</p>
         </div>
-        <div class="stat-card" style="border-right-color: var(--warning);">
+        <div class="stat-card" style="border-right-color: var(--warning);" onclick="scrollToSection('master-cash-requests-card')">
             <h4>طلبات الكاش المعلقة</h4>
             <p id="stat-pending-requests" style="color: var(--warning);">0</p>
         </div>
+        <div class="stat-card" style="border-right-color: var(--accent);">
+            <h4>الإيراد الشهري (MRR)</h4>
+            <p id="stat-mrr" style="color: var(--accent);">0 ج.م</p>
+        </div>
+        <div class="stat-card" style="border-right-color: var(--purple);">
+            <h4>الإيراد السنوي (ARR)</h4>
+            <p id="stat-arr" style="color: var(--purple);">0 ج.م</p>
+        </div>
     </div>
 
-    <!-- نافذة إضافة شركة جديدة -->
+    <!-- نافذة إضافة شركة جديدة مع أكواد الخصم -->
     <div id="addCompanyModal" class="custom-modal">
         <div class="card" style="width: 100%; max-width: 440px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -156,13 +176,26 @@
                 
                 <label style="font-size:10px; font-weight:bold;">باقة الاشتراك التأسيسية للشركة:</label>
                 <select id="new-comp-plan" style="font-weight:bold;">
-                    <option value="1">اشتراك شهري (30 يوم)</option>
-                    <option value="3">اشتراك ربع سنوي (90 يوم)</option>
-                    <option value="12">اشتراك سنوي (365 يوم)</option>
+                    <option value="1">اشتراك شهري (30 يوم) - 300 ج.م</option>
+                    <option value="3">اشتراك ربع سنوي (90 يوم) - 800 ج.م</option>
+                    <option value="12">اشتراك سنوي (365 يوم) - 2500 ج.م</option>
                 </select>
+
+                <input type="text" id="new-comp-promo" placeholder="كود الخصم أو العرض الترويجي (اختياري، مثلاً: N2LA30 أو VIP)" style="text-transform:uppercase;">
 
                 <button type="submit" class="btn-success" style="padding:10px; margin-top:6px;">إنشاء الشركة وتفعيل الحساب فوراً 🚀</button>
             </form>
+        </div>
+    </div>
+
+    <!-- نافذة تفاصيل الشركة / العضو المتقدمة -->
+    <div id="companyDetailsModal" class="custom-modal">
+        <div class="card" style="width: 100%; max-width: 450px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:var(--purple);">📋 تفاصيل حساب الشركة والاشتراك</h3>
+                <button type="button" onclick="closeModal('companyDetailsModal')" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
+            </div>
+            <div id="company-details-content" style="font-size: 11px; line-height: 1.6;"></div>
         </div>
     </div>
 
@@ -187,9 +220,21 @@
                 <option value="active">النشطة فقط ✅</option>
                 <option value="expired">المنتهية فقط ⚠️</option>
             </select>
+            <select id="sort-order-select" style="flex:1; font-weight:bold; margin-bottom:0;" onchange="renderMemberSubscriptionsList()">
+                <option value="newest">الأحدث إنشاؤها ⏳</option>
+                <option value="expiry">قريب الانتهاء ⚠️</option>
+                <option value="name">ترتيب هجائي 🔤</option>
+            </select>
         </div>
         
         <div style="max-height: 480px; overflow-y: auto; margin-top: 10px;" id="members-subscriptions-container"></div>
+    </div>
+
+    <!-- سجل العمليات والتدقيق (Audit Trail) -->
+    <div class="card" id="master-audit-logs-card" style="border: 2px solid var(--accent); margin-bottom: 12px;">
+        <h3 style="color: var(--accent); margin:0;">📜 سجل العمليات والتدقيق (Audit Logs)</h3>
+        <p style="font-size: 10px; opacity: 0.85; margin-top: 6px; margin-bottom: 10px;">تتبع العمليات والأنشطة الإدارية الحساسة في النظام سحابياً:</p>
+        <div id="audit-logs-container" style="max-height: 200px; overflow-y: auto; font-size: 10px;"></div>
     </div>
 
     <script>
@@ -209,13 +254,27 @@
         const db = firebase.firestore();
 
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
-        let appData = { drivers: [], subscriptionRequests: [] };
+        let appData = { drivers: [], subscriptionRequests: [], auditLogs: [] };
 
         window.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
             document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName}`;
             initListeners();
         });
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (type === 'error') toast.style.borderRightColor = 'var(--danger)';
+            if (type === 'warning') toast.style.borderRightColor = 'var(--warning)';
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
 
         function initListeners() {
             db.collection('drivers').onSnapshot(snapshot => {
@@ -229,6 +288,24 @@
                 updateStatistics();
                 renderAdminPendingCashRequests();
             });
+
+            db.collection('audit_logs').orderBy('timestamp', 'desc').limit(30).onSnapshot(snapshot => {
+                appData.auditLogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAuditLogs();
+            });
+        }
+
+        async function logAuditAction(action, details) {
+            try {
+                await db.collection('audit_logs').add({
+                    adminName: loggedInDriverName,
+                    action: action,
+                    details: details,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (err) {
+                console.error('Error logging audit:', err);
+            }
         }
 
         function updateStatistics() {
@@ -238,29 +315,41 @@
             const totalComp = drivers.length;
             let activeCount = 0;
             let expiredCount = 0;
+            let totalMonthlyRevenue = 0;
 
             const today = new Date();
             today.setHours(0,0,0,0);
 
             drivers.forEach(d => {
                 let expiry = d.subExpiry ? new Date(d.subExpiry) : null;
-                if (expiry && expiry < today) {
+                let isExpired = expiry && expiry < today;
+
+                if (isExpired) {
                     expiredCount++;
                 } else {
                     activeCount++;
+                    // احتساب الإيرادات المتكررة MRR بناءً على الباقة
+                    let plan = d.subPlan || 'monthly';
+                    if (plan === 'monthly' || plan === '1') totalMonthlyRevenue += 300;
+                    else if (plan === 'quarterly' || plan === '3') totalMonthlyRevenue += (800 / 3);
+                    else if (plan === 'yearly' || plan === '12') totalMonthlyRevenue += (2500 / 12);
+                    else if (plan === 'lifetime') totalMonthlyRevenue += 200; // تقديري للمداخيل
                 }
             });
 
             let pendingReqCount = requests.filter(r => r.status === 'pending').length;
+            let arr = totalMonthlyRevenue * 12;
 
             document.getElementById('stat-total-companies').innerText = totalComp;
             document.getElementById('stat-active-subs').innerText = activeCount;
             document.getElementById('stat-expired-subs').innerText = expiredCount;
             document.getElementById('stat-pending-requests').innerText = pendingReqCount;
+            document.getElementById('stat-mrr').innerText = Math.round(totalMonthlyRevenue).toLocaleString() + ' ج.م';
+            document.getElementById('stat-arr').innerText = Math.round(arr).toLocaleString() + ' ج.م';
         }
 
         function goBackToMain() {
-            window.location.href = 'Na2la.net'; 
+            window.location.href = 'index.html'; 
         }
 
         function openAddCompanyModal() {
@@ -276,15 +365,29 @@
             localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode'));
         }
 
+        function scrollToSection(id) {
+            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function filterByCard(status) {
+            const statusSelect = document.getElementById('filter-sub-status');
+            if (statusSelect) {
+                statusSelect.value = status;
+                renderMemberSubscriptionsList();
+                scrollToSection('master-saas-hub-card');
+            }
+        }
+
         async function handleCreateCompanySubmit() {
             const companyName = document.getElementById('new-comp-name').value.trim();
             const adminName = document.getElementById('new-comp-admin-name').value.trim();
             const adminPhone = document.getElementById('new-comp-admin-phone').value.trim();
             const adminPin = document.getElementById('new-comp-admin-pin').value.trim();
             const months = Number(document.getElementById('new-comp-plan').value);
+            const promoCode = document.getElementById('new-comp-promo').value.trim().toUpperCase();
 
             if (!companyName || !adminName || !adminPhone || !adminPin) {
-                alert('الرجاء إكمال كافة البيانات المطلوبة!');
+                showToast('الرجاء إكمال كافة البيانات المطلوبة!', 'error');
                 return;
             }
 
@@ -293,6 +396,14 @@
             
             let expiryDate = new Date();
             expiryDate.setMonth(expiryDate.getMonth() + months);
+
+            // تطبيق خصم أو أيام إضافية عبر كود الترويج (Promo Codes)
+            let bonusDays = 0;
+            if (promoCode === 'N2LA30' || promoCode === 'VIP') {
+                bonusDays = 30; // 30 يوم هدية إضافية
+                expiryDate.setDate(expiryDate.getDate() + bonusDays);
+            }
+
             const expiryStr = expiryDate.toISOString().split('T')[0];
 
             const newCompanyAdmin = {
@@ -313,13 +424,27 @@
 
             try {
                 await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
+                await logAuditAction('إضافة شركة جديدة', `تم إنشاء شركة ${companyName} (${adminName}) برمز ${newCompanyId} ${bonusDays ? '(تم تطبيق كود خصم/هدية)' : ''}`);
+                
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
-                alert(`تم إنشاء شركة (${companyName}) بنجاح! 🎉\nرمز الشركة: ${newCompanyId}\nتاريخ انتهاء الاشتراك: ${expiryStr}`);
+                showToast(`تم إنشاء شركة (${companyName}) بنجاح! 🎉 ${bonusDays ? 'تم إضافة 30 يوم هدية عبر الكود.' : ''}`);
                 renderMemberSubscriptionsList();
             } catch (err) {
-                alert('حدث خطأ أثناء إضافة الشركة سحابياً: ' + err.message);
+                showToast('حدث خطأ أثناء إضافة الشركة سحابياً: ' + err.message, 'error');
             }
+        }
+
+        function exportCompaniesJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData.drivers, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `saas_companies_backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('تم تصدير نسخ احتياطية لبيانات الشركات بنجاح 📥');
+            logAuditAction('تصدير بيانات', 'تم تصدير نسخة احتياطية بصيغة JSON');
         }
 
         function renderAdminPendingCashRequests() {
@@ -362,7 +487,7 @@
                 });
 
                 if (!targetDriverDoc) {
-                    alert('لم يتم العثور على حساب العضو/الشركة المرتبط بهذا الطلب!');
+                    showToast('لم يتم العثور على حساب العضو/الشركة المرتبط بهذا الطلب!', 'error');
                     return;
                 }
 
@@ -380,25 +505,29 @@
 
                 await db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
 
-                alert(`تم تفعيل اشتراك العضو/الشركة بنجاح حتى تاريخ: ${newExpiryStr} ✅🚀`);
+                await logAuditAction('موافقة على كاش', `تم الموافقة على طلب تجديد للعضو ${targetDriverDoc.name} لمدة ${months} أشهر حتى ${newExpiryStr}`);
+
+                showToast(`تم تفعيل اشتراك الحساب حتى تاريخ: ${newExpiryStr} ✅🚀`);
                 renderAdminPendingCashRequests();
                 renderMemberSubscriptionsList();
             } catch (err) {
-                alert('حدث خطأ أثناء تفعيل الاشتراك: ' + err.message);
+                showToast('حدث خطأ أثناء تفعيل الاشتراك: ' + err.message, 'error');
             }
         }
 
         function renderMemberSubscriptionsList() {
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
             const statusFilter = document.getElementById('filter-sub-status')?.value || 'all';
+            const sortOrder = document.getElementById('sort-order-select')?.value || 'newest';
             const container = document.getElementById('members-subscriptions-container');
             if (!container) return;
             container.innerHTML = '';
 
-            let drivers = appData.drivers || [];
+            let drivers = [...(appData.drivers || [])];
             const today = new Date();
             today.setHours(0,0,0,0);
 
+            // تصفية
             let filtered = drivers.filter(d => {
                 const nameStr = d.name ? d.name.toLowerCase() : '';
                 const compStr = d.companyName ? d.companyName.toLowerCase() : '';
@@ -415,6 +544,21 @@
                 return matchesSearch && matchesStatus;
             });
 
+            // ترتيب
+            filtered.sort((a, b) => {
+                if (sortOrder === 'name') {
+                    return (a.companyName || a.name || '').localeCompare(b.companyName || b.name || '');
+                } else if (sortOrder === 'expiry') {
+                    let expA = a.subExpiry ? new Date(a.subExpiry) : new Date(0);
+                    let expB = b.subExpiry ? new Date(b.subExpiry) : new Date(0);
+                    return expA - expB;
+                } else {
+                    let timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    let timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeB - timeA;
+                }
+            });
+
             if (filtered.length === 0) {
                 container.innerHTML = `<p style="font-size: 10px; text-align: center; opacity: 0.8; padding: 15px;">لا توجد حسابات شركات أو أعضاء مطابقة للبحث.</p>`;
                 return;
@@ -428,7 +572,7 @@
 
                 let statusBadge = !isExpired ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
                 let compNameLabel = d.companyName ? `🏢 الشركة: <strong>${d.companyName}</strong>` : `🏢 الحساب الرئيسي`;
-                let companyIdLabel = d.companyId ? `<span style="font-size:9px; opacity:0.7;">معرف الشركة: ${d.companyId}</span>` : '';
+                let companyIdLabel = d.companyId ? `<span style="font-size:9px; opacity:0.7;">معرف: ${d.companyId}</span>` : '';
 
                 let itemDiv = document.createElement('div');
                 itemDiv.style.cssText = 'background:var(--card-bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px; font-size:11px;';
@@ -447,11 +591,47 @@
                             <option value="lifetime" ${plan==='lifetime'?'selected':''}>ترخيص دائم ♾️</option>
                         </select>
                         <button type="button" class="btn-success btn-sm" style="width:auto; margin-bottom:0;" onclick="updateMemberSub('${d.id}')">تفعيل الباقة 🚀</button>
+                        <button type="button" class="btn-whatsapp btn-sm" style="width:auto; margin-bottom:0;" onclick="sendWhatsAppReminder('${d.phone || ''}', '${d.companyName || d.name || ''}', '${expiry}')" title="إرسال تذكير واتساب">💬 واتساب</button>
+                        <button type="button" class="btn-purple btn-sm" style="width:auto; margin-bottom:0;" onclick="openCompanyDetails('${d.id}')">🔍 تفاصيل</button>
                         <button type="button" class="btn-danger btn-sm" style="width:auto; margin-bottom:0;" onclick="deleteCompanyAccount('${d.id}', '${d.name || d.companyName || 'المستخدم'}')">🗑️ حذف</button>
                     </div>
                 `;
                 container.appendChild(itemDiv);
             });
+        }
+
+        function sendWhatsAppReminder(phone, name, expiryDate) {
+            if (!phone) {
+                showToast('رقم هاتف العضو غير مسجل!', 'error');
+                return;
+            }
+            let cleanPhone = phone.replace(/[^0-9]/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '2' + cleanPhone; // Egypt country code format check or standard
+            if (!cleanPhone.startsWith('20') && cleanPhone.length === 10) cleanPhone = '20' + cleanPhone;
+
+            const message = encodeURIComponent(`مرحباً بك يا مدير شركة (${name})،\nنود تذكيركم بأن اشتراكم في نظام "أسطورة الطريق" (SaaS Hub PRO) ينتهي بتاريخ (${expiryDate}). يرجى تجديد الاشتراك لضمان استمرار عمل منظومة الشحن والتتبع دون توقف.\nشكراً لثقتكم بنا 🚀`);
+            window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+        }
+
+        function openCompanyDetails(driverId) {
+            const driver = (appData.drivers || []).find(d => String(d.id) === String(driverId));
+            if (!driver) return;
+
+            const contentDiv = document.getElementById('company-details-content');
+            contentDiv.innerHTML = `
+                <p><strong>اسم الشركة:</strong> ${driver.companyName || 'غير مسجل'}</p>
+                <p><strong>اسم المدير:</strong> ${driver.name || 'غير مسجل'}</p>
+                <p><strong>رقم الهاتف:</strong> ${driver.phone || 'غير مسجل'}</p>
+                <p><strong>رمز المرور (PIN):</strong> ${driver.pin || 'غير محدد'}</p>
+                <p><strong>معرف الشركة (ID):</strong> ${driver.companyId || 'رئيسي'}</p>
+                <p><strong>الباقة الحالية:</strong> ${driver.subPlan || 'monthly'}</p>
+                <p><strong>تاريخ انتهاء الاشتراك:</strong> <span style="color:var(--danger);">${driver.subExpiry || 'غير محدد'}</span></p>
+                <p><strong>تاريخ الإنشاء:</strong> ${driver.createdAt ? new Date(driver.createdAt).toLocaleString('ar-EG') : 'غير متوفر'}</p>
+                <div style="margin-top:10px;">
+                    <button type="button" class="btn-whatsapp btn-sm" onclick="sendWhatsAppReminder('${driver.phone || ''}', '${driver.companyName || driver.name || ''}', '${driver.subExpiry || ''}')">💬 إرسال رسالة تذكير واتساب</button>
+                </div>
+            `;
+            document.getElementById('companyDetailsModal').style.display = 'flex';
         }
 
         function updateMemberSub(driverId) {
@@ -472,11 +652,12 @@
             driver.subStatus = 'active';
             driver.subExpiry = newExpiryDate;
 
-            db.collection('drivers').doc(String(driver.id)).set(driver, { merge: true }).then(() => {
-                alert(`تم تحديث وتفعيل اشتراك الحساب (${driver.name}) بنجاح حتى تاريخ: ${newExpiryDate} 🚀✨`);
+            db.collection('drivers').doc(String(driver.id)).set(driver, { merge: true }).then(async () => {
+                await logAuditAction('تحديث باقة', `تم تحديث باقة العضو ${driver.name} إلى ${selectedPlan} حتى تاريخ ${newExpiryDate}`);
+                showToast(`تم تفعيل اشتراك الحساب (${driver.name}) حتى تاريخ: ${newExpiryDate} 🚀✨`);
                 renderMemberSubscriptionsList();
             }).catch(err => {
-                alert('حدث خطأ أثناء التحديث السحابي: ' + err.message);
+                showToast('حدث خطأ أثناء التحديث السحابي: ' + err.message, 'error');
             });
         }
 
@@ -487,11 +668,38 @@
 
             try {
                 await db.collection('drivers').doc(String(driverId)).delete();
-                alert(`تم حذف الحساب والشركة (${name}) بنجاح من قاعدة البيانات سحابياً 🗑️`);
+                await logAuditAction('حذف حساب/شركة', `تم حذف الشركة أو الحساب (${name}) نهائياً من النظام.`);
+                showToast(`تم حذف الحساب والشركة (${name}) بنجاح 🗑️`);
                 renderMemberSubscriptionsList();
             } catch (err) {
-                alert('حدث خطأ أثناء محاولة الحذف: ' + err.message);
+                showToast('حدث خطأ أثناء محاولة الحذف: ' + err.message, 'error');
             }
+        }
+
+        function renderAuditLogs() {
+            const container = document.getElementById('audit-logs-container');
+            if (!container) return;
+            const logs = appData.auditLogs || [];
+            container.innerHTML = '';
+
+            if (logs.length === 0) {
+                container.innerHTML = '<p style="text-align:center; opacity:0.7; padding:10px;">لا توجد سجلات تدقيق حتى الآن.</p>';
+                return;
+            }
+
+            logs.forEach(log => {
+                let timeStr = log.timestamp && log.timestamp.toDate ? log.timestamp.toDate().toLocaleString('ar-EG') : 'منذ قليل';
+                let div = document.createElement('div');
+                div.style.cssText = 'border-bottom: 1px solid var(--border-color); padding: 6px 0; margin-bottom: 4px;';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                        <span>👤 ${log.adminName || 'المدير'} - <span style="color:var(--accent);">${log.action}</span></span>
+                        <span style="opacity:0.7; font-size:9px;">${timeStr}</span>
+                    </div>
+                    <p style="opacity:0.9; margin-top:2px;">${log.details || ''}</p>
+                `;
+                container.appendChild(div);
+            });
         }
     </script>
 </body>
