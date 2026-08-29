@@ -557,6 +557,8 @@
     <div class="container" style="max-width: 800px; margin: 0 auto; padding: 0 10px;">
         <div class="space-sectors">
             <button class="sector-btn active" onclick="switchSection('feed-sec', this)">🌐 رادار</button>
+            <button class="sector-btn" onclick="switchSection('cargo-sec', this)">📦 الشحنات</button>
+            <button class="sector-btn" onclick="switchSection('treasury-sec', this)">💵 الخزنة</button>
             <button class="sector-btn" onclick="switchSection('chat-sec', this)">💬 دردشة</button>
             <button class="sector-btn" onclick="openLiveRadarMapModal()" style="border: 1px solid var(--accent); background: var(--accent-gradient); color: white;">🛰️ رادارات الطريق</button>
             <button class="sector-btn" onclick="switchSection('radar-alerts-sec', this)">⚙️ إدارة الرادارات</button>
@@ -648,6 +650,22 @@
             </div>
         </div>
 
+        <div id="treasury-sec" class="app-section" style="display: none;">
+            <div class="card" style="border: 2px solid var(--danger);">
+                <h3 style="color: var(--danger);">💵 خزنة وحسابات الشركة النقدية</h3>
+                <form onsubmit="event.preventDefault(); saveCashHandler(event);" style="background: var(--bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);">
+                    <select id="cash-type" style="font-weight:bold;">
+                        <option value="in">إيداع / تحصيل نقدي شركتي (+)</option>
+                        <option value="out">سحب / مصروفات شركتي (-)</option>
+                    </select>
+                    <input type="number" id="cash-amount" placeholder="المبلغ (ج.م)" required>
+                    <input type="text" id="cash-desc" placeholder="البيان / السبب" required>
+                    <button type="submit" class="btn-success" style="padding: 11px;">حفظ في transactions المعزولة 💾</button>
+                </form>
+                <div id="my-treasury-container">جاري جلب حركات الخزنة لشركتك...</div>
+            </div>
+        </div>
+
         <div id="calculator-sec" class="app-section">
             <div class="card" style="border: 2px solid var(--warning);">
                 <h3 style="color: var(--warning);">🧮 حاسبة تكلفة الرحلة وأرباح النقل</h3>
@@ -671,22 +689,6 @@
                 </div>
                 <button class="btn-success" onclick="calculateTrip()" style="padding: 11px;">حساب تكلفة وصافي الرحلة 🚀</button>
                 <div id="calcResult" class="result-box" style="display: none;"></div>
-            </div>
-        </div>
-
-        <div id="treasury-sec" class="app-section" style="display: none;">
-            <div class="card" style="border: 2px solid var(--danger);">
-                <h3 style="color: var(--danger);">💵 خزنة وحسابات الشركة النقدية</h3>
-                <form onsubmit="event.preventDefault(); saveCashHandler(event);" style="background: var(--bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);">
-                    <select id="cash-type" style="font-weight:bold;">
-                        <option value="in">إيداع / تحصيل نقدي شركتي (+)</option>
-                        <option value="out">سحب / مصروفات شركتي (-)</option>
-                    </select>
-                    <input type="number" id="cash-amount" placeholder="المبلغ (ج.م)" required>
-                    <input type="text" id="cash-desc" placeholder="البيان / السبب" required>
-                    <button type="submit" class="btn-success" style="padding: 11px;">حفظ في transactions المعزولة 💾</button>
-                </form>
-                <div id="my-treasury-container">جاري جلب حركات الخزنة لشركتك...</div>
             </div>
         </div>
     </div>
@@ -1378,6 +1380,23 @@
             communityUnsubscribe = onSnapshot(collection(window.db, 'communityPosts'), snapshot => {
                 const container = document.getElementById('community-posts-container');
                 if(!container) return;
+
+                // الحفاظ على حالة الصناديق المفتوحة ونصوص التعليقات أثناء التحديث السحابي
+                let openCommentBoxes = {};
+                let commentInputValues = {};
+                container.querySelectorAll('.comments-box').forEach(box => {
+                    let id = box.id.replace('comments-sec-', '');
+                    if (box.style.display === 'block') {
+                        openCommentBoxes[id] = true;
+                    }
+                });
+                container.querySelectorAll('[id^="comment-input-"]').forEach(inp => {
+                    let id = inp.id.replace('comment-input-', '');
+                    if (inp.value) {
+                        commentInputValues[id] = inp.value;
+                    }
+                });
+
                 container.innerHTML = '';
                 let posts = [];
                 snapshot.forEach(docSnap => {
@@ -1459,10 +1478,10 @@
                             ${deleteBtnHtml}
                         </div>
 
-                        <div id="comments-sec-${p.id}" class="comments-box">
+                        <div id="comments-sec-${p.id}" class="comments-box" style="display: ${openCommentBoxes[p.id] ? 'block' : 'none'};">
                             <div style="max-height: 160px; overflow-y: auto; margin-bottom: 8px;">${commentsHtml || '<div style="font-size:10px; opacity:0.6; text-align:center; padding:6px;">لا توجد تعليقات بعد، كن أول المداخلين!</div>'}</div>
                             <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
-                                <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً جميلاً..." style="margin-bottom:0; flex:1; padding:7px 10px; border-radius:8px;">
+                                <input type="text" id="comment-input-${p.id}" value="${commentInputValues[p.id] || ''}" placeholder="اكتب تعليقاً جميلاً..." style="margin-bottom:0; flex:1; padding:7px 10px; border-radius:8px;">
                                 <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 8px; font-size: 10px; cursor: pointer; margin-bottom:0; display:flex; align-items:center; gap:3px;" title="إرفاق صورة بالتعليق">
                                     📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
                                 </label>
@@ -2035,4 +2054,4 @@
         window.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
-    </html>
+</html>
