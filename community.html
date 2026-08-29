@@ -230,7 +230,6 @@
         .comment-item { background: var(--bg-color); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 0.8rem; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; }
         .comment-media-thumb { max-width: 120px; max-height: 90px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border-color); margin-top: 4px; }
 
-        /* شاشة الشات المحدثة مع قائمة السائقين المتصلين */
         #fullScreenChatPage {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: var(--bg-color); z-index: 4000; display: none;
@@ -548,165 +547,209 @@
         const db = getFirestore(app);
         window.db = db;
 
-        const urlParams = new URLSearchParams(window.location.search);
-        
-        window.companyId = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c');
-        if (!window.companyId) {
-            window.companyId = "company_main";
-        }
-        
-        localStorage.setItem('current_company_id', window.companyId);
-        localStorage.setItem('na2la_company_id', window.companyId);
+        let currentCompanyId = 'company_main';
+        let currentDriverProfile = {
+            id: '',
+            name: 'جاري التحميل...',
+            avatar: '',
+            title: '...',
+            phone: '',
+            rank: 'guest',
+            role: 'driver',
+            badge: 'سائق',
+            permissions: 'صلاحيات تشغيلية',
+            status: 'available',
+            details: ''
+        };
 
-        const activeUserFromStorage = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username');
-        const targetDriverName = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || "";
-        const urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || localStorage.getItem('google_avatar') || localStorage.getItem('user_avatar') || "";
-        const isUserExplicitlyAdmin = (urlParams.get('role') === 'admin' || targetDriverName === 'المدير' || localStorage.getItem('na2la_is_admin') === 'true');
-        
-        let companyDisplayName = urlParams.get('companyName') || urlParams.get('cn') || localStorage.getItem('na2la_company_name') || (window.companyId === 'company_main' ? "اسطورة الطريق الرئيسية" : window.companyId);
+        let userLiveSyncUnsubscribe = null;
+        let cachedPosts = [];
+        let currentFilterCategory = 'الكل';
+        let companyDisplayName = 'أسطورة الطريق الرئيسية';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || '').trim();
+        currentCompanyId = (urlCompanyId && urlCompanyId !== 'null' && urlCompanyId !== '') ? urlCompanyId : 'company_main';
+        window.companyId = currentCompanyId;
+
+        const activeUserFromStorage = localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user') || localStorage.getItem('currentUser') || localStorage.getItem('na2la_username') || '';
+        let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || activeUserFromStorage || '').trim();
+        let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || localStorage.getItem('google_avatar') || localStorage.getItem('user_avatar') || '';
 
         window.navigateToMain = function() {
-            let userId = window.currentAccount ? window.currentAccount.name : (targetDriverName || '');
-            let companyId = window.companyId || 'company_main';
+            let userId = currentDriverProfile.id || urlUserId || '';
+            let companyId = currentCompanyId || 'company_main';
             window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
         };
 
-        window.currentAccount = {
-            id: "temp_user_id",
-            name: targetDriverName,
-            details: `${companyDisplayName} | ${isUserExplicitlyAdmin ? 'مدير النظام' : 'سائق الأسطول'}`,
-            badge: isUserExplicitlyAdmin ? "admin" : "سائق",
-            role: isUserExplicitlyAdmin ? "admin" : "driver",
-            status: "available",
-            companyId: window.companyId,
-            avatar: urlAvatar
-        };
+        function isUserAdmin(roleValue, nameValue) {
+            let role = String(roleValue || '').toLowerCase().trim();
+            let name = String(nameValue || '').toLowerCase().trim();
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
+            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
+        }
 
         function updateUIHeaders() {
-            document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${companyDisplayName}`;
-            document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${companyDisplayName}`;
-            document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات ${companyDisplayName}`;
-            document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${window.companyId}`;
-        }
-        updateUIHeaders();
-
-        function getCol(name) { 
-            if(name === 'users') return collection(db, 'drivers');
-            if(name === 'posts') return collection(db, 'communityPosts');
-            if(name === 'public_chat') return collection(db, 'chat');
-            return collection(db, `companies_${window.companyId}_${name}`); 
+            document.getElementById('companyIdDisplayBadge').innerText = `شركة: ${currentCompanyId}`;
+            document.getElementById('companyCommunityTitle').innerText = `مجتمع شركة: ${currentCompanyId}`;
+            document.getElementById('wallSectionTitle').innerText = `📢 حائط منشورات الأسطول`;
+            document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${currentCompanyId}`;
         }
 
-        function updateAdminPrivileges() {
-            const role = (window.currentAccount.role || '').toLowerCase();
-            const badge = (window.currentAccount.badge || '').toLowerCase();
-            window.isAdminMode = (role === 'admin' || badge === 'admin' || isUserExplicitlyAdmin);
-        }
-
-        async function initRealtimeUserSync() {
+        async function initCloudSession() {
             try {
-                if (!window.currentAccount.name || window.currentAccount.name.trim() === "" || window.currentAccount.name === "null") {
-                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
-                    if (enteredName && enteredName.trim() !== "") {
-                        window.currentAccount.name = enteredName.trim();
-                    } else {
-                        window.currentAccount.name = "سائق_" + Math.floor(Math.random() * 1000);
-                    }
-                    localStorage.setItem('logged_in_driver_name', window.currentAccount.name);
-                    localStorage.setItem('na2la_current_user', window.currentAccount.name);
-                }
+                const snapshot = await getDocs(collection(db, 'drivers'));
+                let found = null;
+                let targetId = urlUserId.toLowerCase();
 
-                const driversRef = collection(db, 'drivers');
-                const q = query(driversRef, where("name", "==", window.currentAccount.name));
-                const querySnapshot = await getDocs(q);
+                snapshot.forEach(docSnap => {
+                    let d = docSnap.data();
+                    let docId = String(docSnap.id || '').trim().toLowerCase();
+                    let dName = String(d.name || d.driverName || '').trim().toLowerCase();
+                    let dPhone = String(d.phone || '').trim();
 
-                let foundDriver = false;
-                querySnapshot.forEach((documentSnapshot) => {
-                    let data = documentSnapshot.data();
-                    let docCompany = data.companyId || "company_main";
-                    
-                    if (docCompany === window.companyId) {
-                        window.currentAccount = { 
-                            id: documentSnapshot.id, 
-                            ...data,
-                            companyId: window.companyId,
-                            avatar: urlAvatar || data.avatar || "",
-                            role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
-                            badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
-                        };
-                        foundDriver = true;
+                    if (targetId) {
+                        if (docId === targetId || dName === targetId || dPhone === targetId || dName.includes(targetId) || targetId.includes(dName)) {
+                            found = { id: docSnap.id, ...d };
+                        }
                     }
                 });
 
-                updateUIHeaders();
-
-                if (foundDriver && window.currentAccount.id) {
-                    onSnapshot(doc(db, 'drivers', window.currentAccount.id), (docSnap) => {
-                        if (docSnap.exists()) {
-                            let data = docSnap.data();
-                            window.currentAccount = { 
-                                id: docSnap.id, 
-                                ...data,
-                                avatar: window.currentAccount.avatar || data.avatar || "",
-                                role: isUserExplicitlyAdmin ? 'admin' : (data.role || 'driver'),
-                                badge: isUserExplicitlyAdmin ? 'admin' : (data.badge || 'سائق')
-                            };
-                        }
-                        updateAdminPrivileges();
-                        window.updateAccountUI();
-                    });
-                } else {
-                    const newDriverRef = doc(collection(db, 'drivers'));
-                    const newDriverData = {
-                        name: window.currentAccount.name,
-                        details: `${companyDisplayName} | سائق معتمد`,
-                        badge: isUserExplicitlyAdmin ? "admin" : "سائق",
-                        role: isUserExplicitlyAdmin ? "admin" : "driver",
-                        status: "available",
-                        companyId: window.companyId,
-                        avatar: urlAvatar || ""
+                if (found) {
+                    if (found.companyId && String(found.companyId).trim() !== '') {
+                        currentCompanyId = String(found.companyId).trim();
+                        window.companyId = currentCompanyId;
+                    }
+                    applyFoundDriverProfile(found);
+                } else if (urlUserId) {
+                    let isAdmCheck = isUserAdmin('', urlUserId);
+                    currentDriverProfile = {
+                        id: urlUserId,
+                        name: urlUserId,
+                        rank: isAdmCheck ? 'admin' : 'driver',
+                        role: isAdmCheck ? 'admin' : 'driver',
+                        badge: isAdmCheck ? 'admin' : 'سائق',
+                        title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
+                        permissions: 'صلاحيات أساسية',
+                        phone: '',
+                        avatar: urlAvatar || '',
+                        status: 'available',
+                        companyId: currentCompanyId
                     };
-                    await setDoc(newDriverRef, newDriverData);
-                    window.currentAccount = { id: newDriverRef.id, ...newDriverData };
-
-                    onSnapshot(newDriverRef, (docSnap) => {
-                        if (docSnap.exists()) {
-                            window.currentAccount = { id: docSnap.id, ...docSnap.data() };
-                        }
-                        updateAdminPrivileges();
-                        window.updateAccountUI();
-                    });
+                    updateAccountUI();
+                    initLiveUserSync(urlUserId);
+                } else {
+                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
+                    let assignedName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
+                    
+                    let isAdmCheck = isUserAdmin('', assignedName);
+                    currentDriverProfile = {
+                        id: assignedName,
+                        name: assignedName,
+                        rank: isAdmCheck ? 'admin' : 'driver',
+                        role: isAdmCheck ? 'admin' : 'driver',
+                        badge: isAdmCheck ? 'admin' : 'سائق',
+                        title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
+                        phone: '',
+                        avatar: urlAvatar || '',
+                        status: 'available',
+                        companyId: currentCompanyId
+                    };
+                    localStorage.setItem('logged_in_driver_name', assignedName);
+                    localStorage.setItem('na2la_current_user', assignedName);
+                    updateAccountUI();
                 }
-                updateAdminPrivileges();
-                window.updateAccountUI();
+                updateUIHeaders();
                 initRealtimeFeed();
-            } catch (e) {
-                updateAdminPrivileges();
-                window.updateAccountUI();
+            } catch (err) {
+                currentDriverProfile = {
+                    id: urlUserId || 'guest',
+                    name: urlUserId || 'كابتن الأسطول',
+                    rank: 'driver',
+                    role: 'driver',
+                    badge: 'سائق',
+                    title: 'سائق معتمد',
+                    permissions: 'صلاحيات أساسية',
+                    phone: '',
+                    avatar: urlAvatar || '',
+                    status: 'available',
+                    companyId: currentCompanyId
+                };
+                updateAccountUI();
                 initRealtimeFeed();
             }
         }
 
-        window.updateAccountUI = async function() {
-            updateAdminPrivileges();
-            localStorage.setItem('logged_in_driver_name', window.currentAccount.name);
-            localStorage.setItem('na2la_current_user', window.currentAccount.name);
-            localStorage.setItem('current_company_id', window.companyId);
+        function applyFoundDriverProfile(found) {
+            let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
+            let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || urlAvatar || '';
+            if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
-            document.getElementById('postingAsAccountName').innerText = window.currentAccount.name;
-            document.getElementById('topBarUserName').innerText = window.currentAccount.name;
-            document.getElementById('topBarUserBadge').innerText = window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق');
+            currentDriverProfile = {
+                id: found.id,
+                name: found.name || found.driverName || 'سائق معتمد',
+                phone: found.phone || '',
+                rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
+                role: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
+                badge: isAdmKey(found.badge || (isAdm ? 'admin' : 'سائق')),
+                title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
+                permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
+                avatar: userAvatar,
+                status: found.status || 'available',
+                companyId: currentCompanyId
+            };
+
+            updateAccountUI();
+            initLiveUserSync(found.id);
+        }
+
+        function isAdmKey(val) {
+            let s = String(val || '').toLowerCase();
+            if (s === 'admin' || s === 'مدير') return 'admin';
+            return val || 'سائق';
+        }
+
+        function initLiveUserSync(userId) {
+            if (!db || !userId) return;
+            if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
+
+            userLiveSyncUnsubscribe = onSnapshot(doc(db, 'drivers', String(userId)), docSnap => {
+                if (docSnap.exists()) {
+                    let d = docSnap.data();
+                    let dComp = String(d.companyId || '').trim();
+                    if (dComp && dComp !== currentCompanyId) {
+                        currentCompanyId = dComp;
+                        window.companyId = currentCompanyId;
+                    }
+                    applyFoundDriverProfile({ id: docSnap.id, ...d });
+                }
+            }, err => {});
+        }
+
+        window.updateAccountUI = function() {
+            window.companyId = currentCompanyId;
+            localStorage.setItem('logged_in_driver_name', currentDriverProfile.name);
+            localStorage.setItem('na2la_current_user', currentDriverProfile.name);
+            localStorage.setItem('current_company_id', currentCompanyId);
+            localStorage.setItem('na2la_company_id', currentCompanyId);
+
+            let isAdmin = isUserAdmin(currentDriverProfile.role || currentDriverProfile.rank, currentDriverProfile.name);
+            window.isAdminMode = isAdmin;
+
+            document.getElementById('postingAsAccountName').innerText = currentDriverProfile.name;
+            document.getElementById('topBarUserName').innerText = currentDriverProfile.name;
+            document.getElementById('topBarUserBadge').innerText = currentDriverProfile.badge || (isAdmin ? 'admin' : 'سائق');
 
             const adminBadgeTag = document.getElementById('adminMasterBadgeTag');
-            if(window.isAdminMode) {
+            if (isAdmin) {
                 adminBadgeTag.style.display = 'inline-block';
             } else {
                 adminBadgeTag.style.display = 'none';
             }
 
             const topAvatar = document.getElementById('topBarUserAvatar');
-            if(window.currentAccount.avatar) {
-                topAvatar.style.backgroundImage = `url('${window.currentAccount.avatar}')`;
+            if (currentDriverProfile.avatar) {
+                topAvatar.style.backgroundImage = `url('${currentDriverProfile.avatar}')`;
                 topAvatar.style.backgroundSize = 'cover';
                 topAvatar.style.backgroundPosition = 'center';
                 topAvatar.innerText = '';
@@ -716,8 +759,8 @@
             }
 
             const avatarSmall = document.getElementById('postingAvatarSmall');
-            if(window.currentAccount.avatar) {
-                avatarSmall.style.backgroundImage = `url('${window.currentAccount.avatar}')`;
+            if (currentDriverProfile.avatar) {
+                avatarSmall.style.backgroundImage = `url('${currentDriverProfile.avatar}')`;
                 avatarSmall.style.backgroundSize = 'cover';
                 avatarSmall.style.backgroundPosition = 'center';
                 avatarSmall.innerText = '';
@@ -726,16 +769,25 @@
                 avatarSmall.innerText = '👤';
             }
             loadCompanyCover();
+            updateUIHeaders();
         }
 
         async function syncUserProfileToCloud() {
             try {
-                updateAdminPrivileges();
-                if (!window.currentAccount.id || window.currentAccount.id === "temp_user_id") {
+                if (!currentDriverProfile.id || currentDriverProfile.id === 'temp_user_id') {
                     const newDriverRef = doc(collection(db, 'drivers'));
-                    window.currentAccount.id = newDriverRef.id;
+                    currentDriverProfile.id = newDriverRef.id;
                 }
-                await setDoc(doc(db, 'drivers', window.currentAccount.id), window.currentAccount, { merge: true });
+                await setDoc(doc(db, 'drivers', currentDriverProfile.id), {
+                    name: currentDriverProfile.name,
+                    avatar: currentDriverProfile.avatar || '',
+                    role: currentDriverProfile.role || 'driver',
+                    badge: currentDriverProfile.badge || 'سائق',
+                    status: currentDriverProfile.status || 'available',
+                    companyId: currentCompanyId,
+                    phone: currentDriverProfile.phone || '',
+                    title: currentDriverProfile.title || 'سائق معتمد'
+                }, { merge: true });
             } catch(e) {}
         }
 
@@ -770,7 +822,7 @@
                         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
                         try {
-                            await setDoc(doc(db, `companies_${window.companyId}_settings`, "cover"), { url: compressedBase64 });
+                            await setDoc(doc(db, `companies_${currentCompanyId}_settings`, "cover"), { url: compressedBase64, companyId: currentCompanyId });
                             document.getElementById('communityCoverArea').style.backgroundImage = `url('${compressedBase64}')`;
                             alert("✔ تم تحديث وعرض غلاف الشركة سحابياً بنجاح!");
                         } catch(err) {
@@ -784,7 +836,7 @@
 
         async function loadCompanyCover() {
             try {
-                const docSnap = await getDoc(doc(db, `companies_${window.companyId}_settings`, "cover"));
+                const docSnap = await getDoc(doc(db, `companies_${currentCompanyId}_settings`, "cover"));
                 if (docSnap.exists() && docSnap.data().url) {
                     document.getElementById('communityCoverArea').style.backgroundImage = `url('${docSnap.data().url}')`;
                 }
@@ -817,10 +869,10 @@
                         
                         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
                         
-                        window.currentAccount.avatar = compressedBase64;
+                        currentDriverProfile.avatar = compressedBase64;
                         localStorage.setItem('user_avatar', compressedBase64);
                         await syncUserProfileToCloud();
-                        window.updateAccountUI();
+                        updateAccountUI();
                         alert("✔ تم ضغط وتحديث صورتك الشخصية سحابياً بنجاح!");
                         openBottomSheet('profile');
                     };
@@ -830,7 +882,7 @@
         }
 
         window.updateDriverStatus = async function(newStatus) {
-            window.currentAccount.status = newStatus;
+            currentDriverProfile.status = newStatus;
             await syncUserProfileToCloud();
             alert("✔ تم تحديث حالتك التشغيلية سحابياً!");
             openBottomSheet('profile');
@@ -841,17 +893,17 @@
             const contentEl = document.getElementById('bottomSheetDynamicContent');
             modal.style.display = 'flex';
             if(type === 'profile') {
-                let avatarBg = (window.currentAccount && window.currentAccount.avatar) ? `background-image: url('${window.currentAccount.avatar}'); background-size: cover; background-position: center;` : '';
-                let currentStatus = window.currentAccount.status || 'available';
+                let avatarBg = currentDriverProfile.avatar ? `background-image: url('${currentDriverProfile.avatar}'); background-size: cover; background-position: center;` : '';
+                let currentStatus = currentDriverProfile.status || 'available';
                 contentEl.innerHTML = `
                     <div style="padding: 10px; text-align: center;">
                         <div class="profile-avatar-preview-box" style="${avatarBg}">
-                            ${(window.currentAccount && window.currentAccount.avatar) ? '' : '👤'}
+                            ${currentDriverProfile.avatar ? '' : '👤'}
                             <input type="file" accept="image/*" onchange="handleProfileAvatarUpload(this)" title="تغيير الصورة الشخصية">
                         </div>
-                        <p style="font-size: 0.75rem; color: var(--secondary-text); margin-bottom: 12px;">(اضغط على الدائرة لرفع صورتك الشخصية 📷 أو مزامنتها من جوجل)</p>
-                        <h3 style="font-size: 1.1rem; color: var(--text-color); margin-bottom: 4px;">${window.currentAccount.name}</h3>
-                        <p style="font-size: 0.8rem; color: var(--secondary-text);">${window.currentAccount.details || ''}</p>
+                        <p style="font-size: 0.75rem; color: var(--secondary-text); margin-bottom: 12px;">(اضغط على الدائرة لرفع صورتك الشخصية 📷)</p>
+                        <h3 style="font-size: 1.1rem; color: var(--text-color); margin-bottom: 4px;">${currentDriverProfile.name}</h3>
+                        <p style="font-size: 0.8rem; color: var(--secondary-text);">${currentDriverProfile.title || ''}</p>
                         
                         <div style="margin-top: 12px; text-align: right;">
                             <label style="font-size: 0.80rem; color: var(--secondary-text);">الحالة التشغيلية الفورية:</label>
@@ -863,8 +915,8 @@
                         </div>
 
                         <div style="border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 12px; text-align: right; font-size: 0.85rem;">
-                            <p style="margin-bottom: 6px;"><strong>🏅 الرتبة / الصلاحية:</strong> <span style="color: var(--primary-color);">${window.currentAccount.badge || window.currentAccount.role || 'سائق'}</span></p>
-                            <p style="margin-bottom: 6px;"><strong>🏢 معرّف الشركة (السحابة):</strong> <span style="color: var(--primary-color);">${window.companyId}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏅 الصلاحية:</strong> <span style="color: var(--primary-color);">${currentDriverProfile.badge || currentDriverProfile.role || 'سائق'}</span></p>
+                            <p style="margin-bottom: 6px;"><strong>🏢 معرّف الشركة (السحابة):</strong> <span style="color: var(--primary-color);">${currentCompanyId}</span></p>
                         </div>
                     </div>
                 `;
@@ -875,7 +927,7 @@
         window.deletePostByAdmin = async function(postId) {
             if (confirm("🛡️ (صلاحيات المدير): هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
                 try {
-                    await deleteDoc(doc(getCol("posts"), postId));
+                    await deleteDoc(doc(collection(db, 'communityPosts'), postId));
                     alert("✔ تم حذف المنشور بنجاح.");
                 } catch(e) {
                     alert("خطأ في الحذف: " + e.message);
@@ -890,7 +942,7 @@
                     if (!post) return;
                     let comments = [...(post.comments || [])];
                     comments.splice(commentIndex, 1);
-                    await updateDoc(doc(getCol("posts"), postId), { comments: comments });
+                    await updateDoc(doc(collection(db, 'communityPosts'), postId), { comments: comments });
                 } catch(e) {
                     alert("خطأ في حذف التعليق: " + e.message);
                 }
@@ -914,8 +966,11 @@
                 let driversList = [];
                 snapshot.forEach(docSnap => {
                     let d = { id: docSnap.id, ...docSnap.data() };
-                    let dCompany = d.companyId || "company_main";
-                    if (dCompany === window.companyId) {
+                    let dComp = String(d.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !d.companyId) : (dComp === targetComp);
+
+                    if (matchComp) {
                         driversList.push(d);
                     }
                 });
@@ -951,13 +1006,13 @@
             const text = input.value.trim();
             if(!text) return;
             try {
-                await addDoc(getCol("public_chat"), {
-                    sender: window.currentAccount.name,
-                    avatar: window.currentAccount.avatar || "",
+                await addDoc(collection(db, 'chat'), {
+                    sender: currentDriverProfile.name,
+                    avatar: currentDriverProfile.avatar || "",
                     text: text,
-                    companyId: window.companyId,
+                    companyId: currentCompanyId,
                     timestamp: new Date(),
-                    time: "الآن"
+                    time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
                 });
                 input.value = "";
             } catch(e) {
@@ -967,13 +1022,16 @@
 
         function initRealtimeFullScreenChat() {
             const stream = document.getElementById('fullScreenChatMessages');
-            onSnapshot(getCol("public_chat"), (snapshot) => {
+            onSnapshot(collection(db, 'chat'), (snapshot) => {
                 let msgs = [];
                 snapshot.forEach(d => {
-                    let data = { id: d.id, ...d.data() };
-                    let msgCompany = data.companyId || 'company_main';
-                    if (msgCompany === window.companyId) {
-                        msgs.push(data);
+                    let m = { id: d.id, ...d.data() };
+                    let mComp = String(m.companyId || 'company_main').trim();
+                    let targetComp = String(currentCompanyId || 'company_main').trim();
+                    let matchComp = (targetComp === 'company_main') ? (mComp === 'company_main' || !m.companyId) : (mComp === targetComp);
+
+                    if (matchComp) {
+                        msgs.push(m);
                     }
                 });
                 msgs.sort((a, b) => {
@@ -987,7 +1045,7 @@
                     return;
                 }
                 stream.innerHTML = msgs.map(m => {
-                    let isMe = m.sender === window.currentAccount.name;
+                    let isMe = m.sender === currentDriverProfile.name;
                     let av = m.avatar ? `background-image:url('${m.avatar}'); background-size: cover; background-position: center;` : '';
                     let adminDeleteChatBtn = window.isAdminMode ? `<button onclick="deleteChatMessage('${m.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.65rem; margin-right:8px;" title="حذف إداري">🗑️</button>` : '';
                     return `
@@ -1010,7 +1068,7 @@
         window.deleteChatMessage = async function(msgId) {
             if(confirm("🛡️ حذف هذه الرسالة من الشات العام؟")) {
                 try {
-                    await deleteDoc(doc(getCol("public_chat"), msgId));
+                    await deleteDoc(doc(collection(db, 'chat'), msgId));
                 } catch(e) {}
             }
         }
@@ -1037,11 +1095,11 @@
                     statusText.innerText = '● متصل بالمكالمة بنجاح!';
                 };
 
-                const callRef = doc(db, `companies_${window.companyId}_signals`, "active_call");
+                const callRef = doc(db, `companies_${currentCompanyId}_signals`, "active_call");
                 
                 peerConnection.onicecandidate = event => {
                     if (event.candidate) {
-                        addDoc(collection(db, `companies_${window.companyId}_signals`, "active_call", "candidates"), event.candidate.toJSON());
+                        addDoc(collection(db, `companies_${currentCompanyId}_signals`, "active_call", "candidates"), event.candidate.toJSON());
                     }
                 };
 
@@ -1050,8 +1108,9 @@
 
                 await setDoc(callRef, {
                     offer: { type: offer.type, sdp: offer.sdp },
-                    caller: window.currentAccount.name,
+                    caller: currentDriverProfile.name,
                     type: type,
+                    companyId: currentCompanyId,
                     timestamp: new Date()
                 });
 
@@ -1065,7 +1124,7 @@
                     }
                 });
 
-                onSnapshot(collection(db, `companies_${window.companyId}_signals`, "active_call", "candidates"), snapshot => {
+                onSnapshot(collection(db, `companies_${currentCompanyId}_signals`, "active_call", "candidates"), snapshot => {
                     snapshot.docChanges().forEach(change => {
                         if (change.type === 'added') {
                             peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(e => {});
@@ -1080,9 +1139,9 @@
         }
 
         function initCallSignalingListener() {
-            onSnapshot(doc(db, `companies_${window.companyId}_signals`, "active_call"), snapshot => {
+            onSnapshot(doc(db, `companies_${currentCompanyId}_signals`, "active_call"), snapshot => {
                 const data = snapshot.data();
-                if (data && data.caller && data.caller !== window.currentAccount.name && !peerConnection && data.offer) {
+                if (data && data.caller && data.caller !== currentDriverProfile.name && !peerConnection && data.offer) {
                     document.getElementById('incomingCallBanner').style.display = 'block';
                     document.getElementById('incomingCallText').innerText = `📞 مكالمة ${data.type === 'video' ? 'فيديو' : 'صوتية'} واردة من: ${data.caller}`;
                     window.incomingCallData = data;
@@ -1112,11 +1171,11 @@
                     statusText.innerText = '● متصل بالمكالمة بنجاح!';
                 };
 
-                const callRef = doc(db, `companies_${window.companyId}_signals`, "active_call");
+                const callRef = doc(db, `companies_${currentCompanyId}_signals`, "active_call");
 
                 peerConnection.onicecandidate = event => {
                     if (event.candidate) {
-                        addDoc(collection(db, `companies_${window.companyId}_signals`, "active_call", "candidates"), event.candidate.toJSON());
+                        addDoc(collection(db, `companies_${currentCompanyId}_signals`, "active_call", "candidates"), event.candidate.toJSON());
                     }
                 };
 
@@ -1128,7 +1187,7 @@
                     answer: { type: answer.type, sdp: answer.sdp }
                 });
 
-                onSnapshot(collection(db, `companies_${window.companyId}_signals`, "active_call", "candidates"), snapshot => {
+                onSnapshot(collection(db, `companies_${currentCompanyId}_signals`, "active_call", "candidates"), snapshot => {
                     snapshot.docChanges().forEach(change => {
                         if (change.type === 'added') {
                             peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(e => {});
@@ -1150,7 +1209,7 @@
             if(localStream) localStream.getTracks().forEach(t => t.stop());
             if(peerConnection) { peerConnection.close(); peerConnection = null; }
             try {
-                await setDoc(doc(db, `companies_${window.companyId}_signals`, "active_call"), { caller: null, offer: null, answer: null });
+                await setDoc(doc(db, `companies_${currentCompanyId}_signals`, "active_call"), { caller: null, offer: null, answer: null });
             } catch(e) {}
             document.getElementById('callOverlayModal').style.display = 'none';
             document.getElementById('incomingCallBanner').style.display = 'none';
@@ -1251,18 +1310,18 @@
 
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
             try {
-                await addDoc(getCol("posts"), {
-                    author: window.currentAccount.name,
-                    badge: window.currentAccount.badge || (window.isAdminMode ? 'admin' : 'سائق'),
-                    avatar: window.currentAccount.avatar || '',
-                    status: window.currentAccount.status || 'available',
+                await addDoc(collection(db, 'communityPosts'), {
+                    author: currentDriverProfile.name,
+                    badge: currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق'),
+                    avatar: currentDriverProfile.avatar || '',
+                    status: currentDriverProfile.status || 'available',
                     category: category,
                     text: text,
                     media: mediaData,
                     mediaType: mediaType || "",
                     poll: pollData || null,
                     isPinned: isPinned || false,
-                    companyId: window.companyId,
+                    companyId: currentCompanyId,
                     timestamp: new Date(),
                     reactions: { like: 0, love: 0, fire: 0, clap: 0 },
                     reactedUsers: {},
@@ -1283,7 +1342,7 @@
         }
 
         window.votePoll = async function(postId, optionIndex) {
-            const postRef = doc(getCol("posts"), postId);
+            const postRef = doc(collection(db, 'communityPosts'), postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
@@ -1291,11 +1350,11 @@
             if(!poll) return;
 
             if(!poll.votedUsers) poll.votedUsers = {};
-            if(poll.votedUsers[window.currentAccount.name]) {
+            if(poll.votedUsers[currentDriverProfile.name]) {
                 return alert("لقد قمت بالتصويت مسبقاً في هذا الاستطلاع!");
             }
 
-            poll.votedUsers[window.currentAccount.name] = optionIndex;
+            poll.votedUsers[currentDriverProfile.name] = optionIndex;
             poll.options[optionIndex].votes = (poll.options[optionIndex].votes || 0) + 1;
 
             await updateDoc(postRef, { poll: poll });
@@ -1312,23 +1371,23 @@
             const popup = document.getElementById(`reactionPicker_${postId}`);
             if(popup) popup.classList.remove('active');
 
-            const postRef = doc(getCol("posts"), postId);
+            const postRef = doc(collection(db, 'communityPosts'), postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
             let reactions = data.reactions || { like: 0, love: 0, fire: 0, clap: 0 };
             let reactedUsers = data.reactedUsers || {};
 
-            let prevReaction = reactedUsers[window.currentAccount.name];
+            let prevReaction = reactedUsers[currentDriverProfile.name];
             if(prevReaction === reactionType) {
                 reactions[reactionType] = Math.max(0, reactions[reactionType] - 1);
-                delete reactedUsers[window.currentAccount.name];
+                delete reactedUsers[currentDriverProfile.name];
             } else {
                 if(prevReaction) {
                     reactions[prevReaction] = Math.max(0, reactions[prevReaction] - 1);
                 }
                 reactions[reactionType] = (reactions[reactionType] || 0) + 1;
-                reactedUsers[window.currentAccount.name] = reactionType;
+                reactedUsers[currentDriverProfile.name] = reactionType;
             }
 
             await updateDoc(postRef, { reactions: reactions, reactedUsers: reactedUsers });
@@ -1372,16 +1431,16 @@
             let comments = post ? [...(post.comments || [])] : [];
             
             comments.push({
-                author: window.currentAccount.name,
-                avatar: window.currentAccount.avatar || "",
+                author: currentDriverProfile.name,
+                avatar: currentDriverProfile.avatar || "",
                 text: text,
                 media: mediaObj ? mediaObj.data : "",
                 mediaType: mediaObj ? mediaObj.type : "",
-                time: "الآن"
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             });
 
             try {
-                await updateDoc(doc(getCol("posts"), postId), { comments: comments });
+                await updateDoc(doc(collection(db, 'communityPosts'), postId), { comments: comments });
                 input.value = "";
                 clearCommentMedia(postId);
             } catch(e) {
@@ -1401,9 +1460,6 @@
                 alert("✔ تم نسخ نص المنشور بنجاح!");
             }
         }
-
-        let cachedPosts = [];
-        let currentFilterCategory = 'الكل';
 
         window.setCategoryFilter = function(category, element) {
             currentFilterCategory = category;
@@ -1472,7 +1528,7 @@
                 }
 
                 let commentsHtml = (p.comments || []).map((c, cIdx) => {
-                    let canDeleteComment = (c.author === window.currentAccount.name || window.isAdminMode);
+                    let canDeleteComment = (c.author === currentDriverProfile.name || window.isAdminMode);
                     let commentMediaHtml = '';
                     if(c.media) {
                         if(c.mediaType === 'video') {
@@ -1549,13 +1605,16 @@
         }
 
         function initRealtimeFeed() {
-            onSnapshot(getCol("posts"), (snapshot) => {
+            onSnapshot(collection(db, 'communityPosts'), (snapshot) => {
                 try {
                     cachedPosts = [];
                     snapshot.forEach(d => {
                         let data = { id: d.id, ...d.data() };
-                        let postCompany = data.companyId || 'company_main';
-                        if (postCompany === window.companyId) {
+                        let postCompany = String(data.companyId || 'company_main').trim();
+                        let targetComp = String(currentCompanyId || 'company_main').trim();
+                        let matchComp = (targetComp === 'company_main') ? (postCompany === 'company_main' || !data.companyId) : (postCompany === targetComp);
+
+                        if (matchComp) {
                             cachedPosts.push(data);
                         }
                     });
@@ -1568,20 +1627,13 @@
 
                     cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
                     filterWallPosts();
-                } catch(err) {
-                    console.error("خطأ أثناء معالجة المنشورات:", err);
-                }
-            }, (error) => {
-                console.error("خطأ في الاتصال بقاعدة البيانات لجلب المنشورات:", error);
-                document.getElementById('groupFeedStream').innerHTML = `<p style="text-align: center; color: var(--danger-color); padding: 20px;">تعذر تحميل المنشورات، يرجى التحقق من الاتصال.</p>`;
-            });
+                } catch(err) {}
+            }, (error) => {});
         }
 
         window.onload = function() {
-            initRealtimeUserSync();
+            initCloudSession();
             initCallSignalingListener();
-            updateAdminPrivileges();
-            window.updateAccountUI();
         };
     </script>
 </body>
