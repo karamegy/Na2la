@@ -1817,52 +1817,7 @@
             }, 300);
         }
 
-        function initRealtimeListeners() {
-            if (isListenersInitialized) return;
-            isListenersInitialized = true;
-
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
-            
-            collections.forEach(colName => {
-                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
-                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    // العزل الصحيح والصارم بين الشركات (يتم فلترة البيانات لكل شركة على حدة بدقة تامة لمنع التسريب)
-                    if (loggedInDriverName === 'المدير' && currentCompanyId === 'Company_main') {
-                        // المدير الرئيسي للشركة الأم يرى حصرياً بيانات الشركة الرئيسية والبيانات غير المخصصة
-                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main');
-                    } else if (currentCompanyId && currentCompanyId !== 'Company_main') {
-                        // الشركات الفرعية ترى فقط بياناتها الخاصة المرتبطة بمعرفها الحصري
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
-                    } else {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || !d.companyId || d.companyId === 'Company_main');
-                    }
-                    
-                    scheduleSmartRender();
-
-                    if (typeof renderChatMessages === 'function') renderChatMessages();
-                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-                    if (document.getElementById('reports-tab').classList.contains('active')) {
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
-                        renderCompanyAdminSubscriptionView();
-                    }
-                    if (document.getElementById('companies-tab').classList.contains('active')) {
-                        renderCompaniesManagementTable();
-                    }
-                }, error => {
-                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-                });
-            });
-
-            db.collection('systemSettings').doc('config').onSnapshot(doc => {
-                if (doc.exists && doc.data().newsText) {
-                    appData.newsText = doc.data().newsText;
-                    renderRSSTicker();
-                }
-            });
-        }
+        
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
@@ -1900,7 +1855,54 @@
                     </div>
                     <p style="font-size:10px; opacity:0.85; margin-bottom:4px;">${compNameLabel}</p>
                     <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${d.phone || 'غير مسجل'} | الباقة: <strong>${plan}</strong> | الانتهاء: <span style="color:var(--danger);">${expiry}</span></p>
-                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:cen        function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
+
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+            
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (loggedInDriverName === 'المدير' && currentCompanyId === 'Company_main') {
+                        if (colName === 'drivers') {
+                            appData[colName] = rawData; // جلب كافة السائقين والشركات والحسابات المسجلة للماستر أدمن دون عزل
+                        } else {
+                            appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'Company_main');
+                        }
+                    } else if (currentCompanyId && currentCompanyId !== 'Company_main') {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId);
+                    } else {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || !d.companyId || d.companyId === 'Company_main');
+                    }
+                    
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
+
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
+        }
+ter;">
                         <select id="plan-select-${d.id}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
                             <option value="monthly" ${plan==='monthly'?'selected':''}>اشتراك شهري (30 يوم) 🗓️</option>
                             <option value="quarterly" ${plan==='quarterly'?'selected':''}>اشتراك ربع سنوي (90 يوم) 📊</option>
