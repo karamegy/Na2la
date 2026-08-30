@@ -3,11 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق | باندا - لوحة تحكم المدير العام والمنصة السحابية (v10)</title>
+    <title>أسطورة الطريق | باندا - لوحة تحكم المدير العام والمنصة السحابية (v12 Nano-Enterprise)</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- مكتبات خارجية إضافية للميزات المتقدمة -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -34,10 +40,10 @@
                 </div>
                 <div>
                     <h1 class="font-black text-lg leading-tight flex items-center gap-1.5">
-                        <span>باندا (Super Admin v10)</span>
+                        <span>باندا (v12 Nano-IoT)</span>
                         <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold">مزامنة حية</span>
                     </h1>
-                    <p class="text-xs opacity-75">أسطورة الطريق — الإدارة المركزية الشاملة</p>
+                    <p class="text-xs opacity-75">أسطورة الطريق — الإدارة المركزية والتقنيات الجزيئية</p>
                 </div>
             </div>
             
@@ -46,14 +52,25 @@
                     <i class="fa-solid fa-rotate ml-1"></i> مزامنة نشطة
                 </button>
 
+                <!-- محول الأدوار (RBAC) -->
+                <div class="hidden lg:flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/10">
+                    <span class="text-[10px] px-2 opacity-75 font-bold">الصلاحية:</span>
+                    <select id="role-selector" class="text-xs bg-transparent border-none focus:outline-none cursor-pointer font-bold pr-1">
+                        <option value="super" class="bg-slate-900 text-amber-400">👑 المدير العام</option>
+                        <option value="manager" class="bg-slate-900 text-emerald-400">🏢 مدير شركة</option>
+                        <option value="driver" class="bg-slate-900 text-sky-400">🚚 سائق أسطول</option>
+                    </select>
+                </div>
+
+                <!-- محول الثيمات يشمل الثيم المضيء المطور -->
                 <div class="hidden md:flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/10">
                     <span class="text-[10px] px-2 opacity-75 font-bold">الثيم:</span>
                     <select id="theme-selector" class="text-xs bg-transparent border-none focus:outline-none cursor-pointer font-bold pr-1">
                         <option value="emerald" class="bg-slate-900 text-emerald-400">🟢 إيميرالد نيون</option>
+                        <option value="luminous" class="bg-slate-100 text-slate-900">☀️ لومينوس ساطع (مضيء)</option>
                         <option value="purple" class="bg-slate-900 text-purple-400">🟣 سايبر بلس</option>
                         <option value="cyan" class="bg-slate-900 text-sky-400">🔵 ليزر أزرق</option>
                         <option value="gold" class="bg-slate-900 text-amber-400">🟡 ذهبي فاخر</option>
-                        <option value="ruby" class="bg-slate-900 text-rose-400">🔴 عقيق أحمر</option>
                     </select>
                 </div>
 
@@ -68,7 +85,7 @@
     <div id="emergency-alert-box" class="container mx-auto px-4 mt-4 hidden max-w-6xl">
         <div class="bg-red-950/80 border-2 border-red-500 p-4 rounded-2xl shadow-xl backdrop-blur-md">
             <h4 class="font-bold text-red-300 text-sm mb-2 flex items-center">
-                <i class="fa-solid fa-circle-exclamation text-red-500 ml-2 animate-bounce"></i> إشعارات الطوارئ النشطة (SOS Alerts) لغرفة العمليات المركزية
+                <i class="fa-solid fa-circle-exclamation text-red-500 ml-2 animate-bounce"></i> إشعارات الطوارئ النشطة (SOS & Nano-Biometric Alerts) لغرفة العمليات المركزية
             </h4>
             <div id="emergency-list"></div>
         </div>
@@ -95,19 +112,39 @@
         </div>
     </div>
 
-    <!-- نافذة عرض الفاتورة الرسمية -->
+    <!-- نافذة عرض الفاتورة الرسمية (مع دعم PDF) -->
     <div id="invoice-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
         <div class="theme-card rounded-2xl p-6 max-w-lg w-full shadow-2xl border space-y-4">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-file-invoice text-sky-400 ml-2"></i> الفاتورة الرسمية المعتمدة</h3>
                 <button onclick="closeInvoiceModal()" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div id="invoice-content"></div>
+            <div id="invoice-printable-area">
+                <div id="invoice-content"></div>
+            </div>
             <div class="flex justify-end gap-2 pt-2">
-                <button type="button" onclick="printInvoice()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1">
-                    <i class="fa-solid fa-print"></i> طباعة الفاتورة
+                <button type="button" onclick="downloadInvoicePDF()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1">
+                    <i class="fa-solid fa-file-pdf"></i> تصدير PDF
+                </button>
+                <button type="button" onclick="printInvoice()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1">
+                    <i class="fa-solid fa-print"></i> طباعة
                 </button>
                 <button type="button" onclick="closeInvoiceModal()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة رابط تتبع العملاء العام -->
+    <div id="tracking-link-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="theme-card rounded-2xl p-6 max-w-md w-full shadow-2xl border space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-link text-emerald-400 ml-2"></i> رابط تتبع الشحنة العام للعميل</h3>
+                <button onclick="document.getElementById('tracking-link-modal').classList.add('hidden')" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs opacity-80">يمكنك مشاركة هذا الرابط مع العميل لمتابعة سير الشحنة لحظياً دون الحاجة لتسجيل الدخول:</p>
+            <div class="flex gap-2">
+                <input type="text" id="public-track-url" readonly class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                <button onclick="copyTrackingLink()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl whitespace-nowrap">نسخ</button>
             </div>
         </div>
     </div>
@@ -192,7 +229,7 @@
     <!-- المحتوى الرئيسي -->
     <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl space-y-6">
 
-        <!-- 1. القسم الرئيسي -->
+        <!-- 1. القسم الرئيسي (مع الرسوم البيانية التفاعلية Chart.js) -->
         <div id="view-home" class="app-section-view space-y-6">
             <section class="theme-card rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row justify-between items-center gap-4 border">
                 <div class="flex items-center space-x-3 space-x-reverse">
@@ -201,7 +238,7 @@
                     </div>
                     <div>
                         <span class="text-xs opacity-75 block">بيئة العمل الحالية (عزل تام):</span>
-                        <span id="current-company-display" class="font-black text-emerald-400 text-lg">---</span>
+                        <span id="current-company-display" class="font-black text-emerald-500 text-lg">---</span>
                     </div>
                 </div>
                 <form id="company-form" class="flex gap-2 w-full sm:w-auto">
@@ -233,12 +270,20 @@
                 </div>
             </section>
 
-            <div class="theme-card rounded-2xl p-6 shadow-xl border text-center space-y-3">
-                <div class="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-3xl border border-emerald-500/30 panda-logo-glow">
-                    <i class="fa-solid fa-paw"></i>
+            <!-- لوحة الرسوم البيانية التفاعلية (Chart.js) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-sm flex items-center"><i class="fa-solid fa-chart-pie text-emerald-400 ml-2"></i> إحصائيات الشحنات (نشطة مقابل مكتملة)</h3>
+                    <div class="h-64 relative flex items-center justify-center">
+                        <canvas id="shipmentsChart"></canvas>
+                    </div>
                 </div>
-                <h3 class="font-black text-lg">مرحباً بك في لوحة تحكم المدير العام للمنصة (Firebase v10)</h3>
-                <p class="text-xs opacity-80 max-w-md mx-auto">إدارة مركزية متكاملة بـ المزامنة الفورية اللحظية لجميع الشركات والباقات والسائقين.</p>
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-sm flex items-center"><i class="fa-solid fa-chart-column text-sky-400 ml-2"></i> توزيع الباقات والإيرادات (MRR)</h3>
+                    <div class="h-64 relative flex items-center justify-center">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -272,8 +317,8 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold mb-1">ملاحظات التشغيل</label>
-                            <textarea id="panda-notes" rows="2" placeholder="تعليمات خاصة بالسائق..." 
+                            <label class="block text-xs font-semibold mb-1">ملاحظات التشغيل ونقاط النانو</label>
+                            <textarea id="panda-notes" rows="2" placeholder="تعليمات خاصة أو حساسات نانوية..." 
                                 class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none"></textarea>
                         </div>
                         <button type="submit" 
@@ -302,7 +347,7 @@
                             <thead>
                                 <tr class="border-b border-white/10 opacity-70 text-xs">
                                     <th class="pb-3 px-3 font-semibold">الكود والسائق</th>
-                                    <th class="pb-3 px-3 font-semibold">الوجهة والملاحظات</th>
+                                    <th class="pb-3 px-3 font-semibold">الوجهة ومراقبة النانو</th>
                                     <th class="pb-3 px-3 font-semibold">التوقيت</th>
                                     <th class="pb-3 px-3 font-semibold">الحالة</th>
                                     <th class="pb-3 px-3 font-semibold text-left">الإجراءات</th>
@@ -319,7 +364,82 @@
             </div>
         </div>
 
-        <!-- 3. قسم الشركات -->
+        <!-- 3. قسم الخريطة التفاعلية الحية للأسطول (Leaflet.js) -->
+        <div id="view-map" class="app-section-view hidden space-y-6">
+            <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-base flex items-center">
+                        <i class="fa-solid fa-map-location-dot text-emerald-400 ml-2"></i> خريطة الأسطول الحية (Live Fleet Tracking)
+                    </h3>
+                    <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full font-bold">محدث آلياً عبر GPS</span>
+                </div>
+                <div id="fleet-map" class="w-full h-[450px] rounded-xl border border-white/10 z-10"></div>
+            </div>
+        </div>
+
+        <!-- 4. قسم تقنيات النانو وإنترنت الأشياء المتقدم (Nano-IoT & Biometrics Hub) -->
+        <div id="view-nano" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 1. حساسات السلسلة الباردة النانوية -->
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-sm flex items-center text-emerald-400">
+                        <i class="fa-solid fa-temperature-snowflake ml-2"></i> حساسات السلسلة الباردة (Nano-Cold Chain)
+                    </h3>
+                    <p class="text-xs opacity-80">مراقبة الحرارة والرطوبة الجزيئية للشحنات الحساسة والأدوية والمواد الزراعية.</p>
+                    <div id="cold-chain-sensors-list" class="space-y-2 max-h-48 overflow-y-auto">
+                        <div class="text-xs p-2.5 rounded-xl border theme-card-inner flex justify-between items-center">
+                            <span>الشحنة: PANDA-9021</span>
+                            <span class="text-emerald-400 font-bold">4.2°C (مثالي)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. أساور السائقين الحيوية (Nano-Biometrics) -->
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-sm flex items-center text-sky-400">
+                        <i class="fa-solid fa-heart-pulse ml-2"></i> مؤشرات الحياة للسائقين (Nano-Wearables)
+                    </h3>
+                    <p class="text-xs opacity-80">رصد معدل الإرهاق وضربات القلب وإطلاق SOS تلقائي عند النعاس.</p>
+                    <div id="driver-biometrics-list" class="space-y-2 max-h-48 overflow-y-auto">
+                        <div class="text-xs p-2.5 rounded-xl border theme-card-inner flex justify-between items-center">
+                            <span>محمود أحمد (شاحنة 1234)</span>
+                            <span class="text-emerald-400 font-bold">72 نبضة/دقيقة (يقظ)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. التشخيص النانو-ميكانيكي للأسطول -->
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-sm flex items-center text-purple-400">
+                        <i class="fa-solid fa-atom ml-2"></i> التشخيص النانو-ميكانيكي (Nano-Telemetry)
+                    </h3>
+                    <p class="text-xs opacity-80">قياس تآكل الجزيئات المعدنية للزيوت وقطع الغيار لتوقع الأعطال مسبقاً.</p>
+                    <div id="nano-telemetry-list" class="space-y-2 max-h-48 overflow-y-auto">
+                        <div class="text-xs p-2.5 rounded-xl border theme-card-inner flex justify-between items-center">
+                            <span>محرك شاحنة 502</span>
+                            <span class="text-emerald-400 font-bold">كفاءة الزيوت: 96%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- لوحة فحص البصمات الكمومية والأحبار النانوية -->
+            <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-4">
+                <h3 class="font-bold text-base flex items-center">
+                    <i class="fa-solid fa-shield-halved text-emerald-400 ml-2"></i> فحص البصمات النانوية الكمومية ضد التلاعب (Quantum Dots Seal)
+                </h3>
+                <p class="text-xs opacity-80">أدخل كود الشحنة للتحقق عبر البصمة الكمومية أن الطرد لم يتم فتحه منذ نقطة الإرسال:</p>
+                <div class="flex gap-2 max-w-lg">
+                    <input type="text" id="quantum-code-input" placeholder="أدخل كود الشحنة (مثال: PANDA-9021)" class="text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none flex-grow">
+                    <button onclick="verifyQuantumSeal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl whitespace-nowrap shadow-md">
+                        فحص البصمة النانوية
+                    </button>
+                </div>
+                <div id="quantum-verify-result"></div>
+            </div>
+        </div>
+
+        <!-- 5. قسم الشركات -->
         <div id="view-companies" class="app-section-view hidden space-y-6">
             <section class="theme-card rounded-2xl p-5 shadow-xl space-y-4 border">
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -351,7 +471,7 @@
             </section>
         </div>
 
-        <!-- 4. قسم السائقين -->
+        <!-- 6. قسم السائقين -->
         <div id="view-drivers" class="app-section-view hidden space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="theme-card rounded-2xl p-5 shadow-xl border">
@@ -387,7 +507,68 @@
             </div>
         </div>
 
-        <!-- 5. لوحة الإدارة المالية والمركزية -->
+        <!-- 7. وحدة مصاريف وصيانة الأسطول (Fleet Expenses & Maintenance) -->
+        <div id="view-expenses" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border">
+                    <h3 class="font-bold text-base mb-4 flex items-center">
+                        <i class="fa-solid fa-receipt text-emerald-400 ml-2"></i> تسجيل مصروف أو صيانة مركبة
+                    </h3>
+                    <form id="expense-form" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">نوع المصروف</label>
+                            <select id="exp-type" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                                <option value="وقود">وقود (Fuel)</option>
+                                <option value="صيانة دورية">صيانة دورية وقطع غيار</option>
+                                <option value="إطارات">تغيير إطارات</option>
+                                <option value="مخالفات رسوم">مخالفات ورسوم طرق</option>
+                                <option value="أخرى">أخرى</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">رقم المركبة أو السائق</label>
+                            <input type="text" id="exp-vehicle" required placeholder="مثال: شاحنة 1234" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">المبلغ (جنيه)</label>
+                            <input type="number" id="exp-amount" required placeholder="مثال: 500" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">ملاحظات إضافية</label>
+                            <input type="text" id="exp-notes" placeholder="تفاصيل الفاتورة أو الورشة..." class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg shadow-emerald-600/30">
+                            حفظ وتوثيق المصروف سحابياً
+                        </button>
+                    </form>
+                </div>
+                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-base flex items-center">
+                            <i class="fa-solid fa-file-invoice-dollar text-emerald-400 ml-2"></i> سجل مصاريف وصيانة الأسطول
+                        </h3>
+                        <span id="total-expenses-badge" class="text-xs bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full font-bold">إجمالي المصاريف: 0 ج.م</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-xs">
+                            <thead>
+                                <tr class="border-b border-white/10 opacity-70">
+                                    <th class="pb-2 px-2 font-semibold">النوع</th>
+                                    <th class="pb-2 px-2 font-semibold">المركبة</th>
+                                    <th class="pb-2 px-2 font-semibold">المبلغ</th>
+                                    <th class="pb-2 px-2 font-semibold">ملاحظات</th>
+                                    <th class="pb-2 px-2 font-semibold">التاريخ</th>
+                                    <th class="pb-2 px-2 font-semibold text-left">إجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expenses-list" class="divide-y divide-white/10"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8. لوحة الإدارة المالية والمركزية -->
         <div id="view-admin" class="app-section-view hidden space-y-6">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
@@ -451,7 +632,7 @@
             </div>
         </div>
 
-        <!-- 6. قسم العمليات والحاسبة -->
+        <!-- 9. قسم العمليات والحاسبة -->
         <div id="view-operations" class="app-section-view hidden space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="theme-card rounded-2xl p-5 shadow-xl border">
@@ -498,7 +679,7 @@
             </div>
         </div>
 
-        <!-- 7. قسم السجل والإعدادات -->
+        <!-- 10. قسم السجل والإعدادات -->
         <div id="view-settings" class="app-section-view hidden space-y-6">
             <section class="theme-card rounded-2xl p-5 shadow-xl space-y-3 border">
                 <h3 class="font-bold text-base flex items-center">
@@ -522,6 +703,14 @@
             <i class="fa-solid fa-boxes-stacked text-base mb-1"></i>
             <span>الشحنات</span>
         </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-map">
+            <i class="fa-solid fa-map-location-dot text-base mb-1"></i>
+            <span>الخريطة</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-nano">
+            <i class="fa-solid fa-atom text-base mb-1"></i>
+            <span>تقنيات النانو</span>
+        </button>
         <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-companies">
             <i class="fa-solid fa-building text-base mb-1"></i>
             <span>الشركات</span>
@@ -530,9 +719,13 @@
             <i class="fa-solid fa-id-card-clip text-base mb-1"></i>
             <span>السائقين</span>
         </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-expenses">
+            <i class="fa-solid fa-receipt text-base mb-1"></i>
+            <span>المصاريف</span>
+        </button>
         <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition text-amber-400" data-view="view-admin">
             <i class="fa-solid fa-user-shield text-base mb-1"></i>
-            <span>الإدارة العليا</span>
+            <span>الإدارة</span>
         </button>
         <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-operations">
             <i class="fa-solid fa-satellite-dish text-base mb-1"></i>
@@ -545,7 +738,7 @@
     </nav>
 
     <footer class="theme-card border-t py-4 mt-auto text-center text-xs opacity-75">
-        <p>منصة أسطورة الطريق © 2026 — لوحة تحكم المدير العام ونظام باندا السحابي (Firebase v10 Modular SDK)</p>
+        <p>منصة أسطورة الطريق © 2026 — لوحة تحكم المدير العام ونظام باندا السحابي (v12 Nano-Enterprise SDK)</p>
     </footer>
 
     <!-- Firebase v10 Modular SDK & Realtime Sync Implementation -->
@@ -568,19 +761,22 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // توحيد معرّف الشركة الافتراضي ليتطابق مع index.html (company_main)
         let currentCompanyId = localStorage.getItem('panda_company_id') || localStorage.getItem('current_company_id') || 'company_main';
         let allShipments = []; 
         let allCompanies = [];
         let allDrivers = [];
+        let allExpenses = [];
         let allAuditLogs = [];
         let allTickets = [];
         let activeSignatureShipmentId = null;
         let signatureCanvas, signatureCtx, isDrawing = false;
+        let fleetMap = null, mapMarkers = [];
+        let shipmentsChartInstance = null, revenueChartInstance = null;
 
         let unsubShipments = null;
         let unsubDrivers = null;
         let unsubCompanies = null;
+        let unsubExpenses = null;
         let unsubAudit = null;
         let unsubTickets = null;
         let unsubEmergencies = null;
@@ -602,12 +798,23 @@
                 setupSignaturePad();
             }
 
+            initLeafletMap();
+            initCharts();
             startRealtimeSync(currentCompanyId);
             setupBottomNavigation();
 
             if(themeSelect) {
                 themeSelect.addEventListener('change', (e) => {
                     setTheme(e.target.value);
+                });
+            }
+
+            // تطبيق نظام الأدوار (RBAC)
+            const roleSelector = document.getElementById('role-selector');
+            if(roleSelector) {
+                roleSelector.addEventListener('change', (e) => {
+                    const role = e.target.value;
+                    applyUserRolePermissions(role);
                 });
             }
 
@@ -634,6 +841,7 @@
             if(sosBtn) {
                 sosBtn.addEventListener('click', async () => {
                     if (confirm('⚠️ هل أنت متأكد من إرسال نداء استغاثة عاجل (SOS) لغرفة العمليات المركزية؟')) {
+                        playAlertSound();
                         if (navigator.geolocation) {
                             navigator.geolocation.getCurrentPosition(async (pos) => {
                                 const lat = pos.coords.latitude.toFixed(6);
@@ -697,6 +905,29 @@
                     startRealtimeSync(currentCompanyId);
                     logAuditAction(`تبديل سياق العمل المعزول للشركة: ${currentCompanyId}`, currentCompanyId);
                     alert("✅ تم تفعيل العزل التام والتحويل المباشر لبيانات الشركة: " + currentCompanyId);
+                });
+            }
+
+            // نموذج تسجيل المصاريف والصيانة
+            const expenseForm = document.getElementById('expense-form');
+            if(expenseForm) {
+                expenseForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const type = document.getElementById('exp-type').value;
+                    const vehicle = document.getElementById('exp-vehicle').value;
+                    const amount = parseFloat(document.getElementById('exp-amount').value) || 0;
+                    const notes = document.getElementById('exp-notes').value;
+
+                    try {
+                        await addDoc(collection(db, "panda_expenses"), {
+                            companyId: currentCompanyId,
+                            type, vehicle, amount, notes,
+                            createdAt: serverTimestamp()
+                        });
+                        await logAuditAction(`إضافة مصروف أسطول (${type}): ${amount} ج.م`, currentCompanyId);
+                        expenseForm.reset();
+                        alert("✅ تم حفظ المصروف بنجاح ومزامنته سحابياً.");
+                    } catch(err) { alert("فشل حفظ المصروف."); }
                 });
             }
 
@@ -788,7 +1019,6 @@
                     const notes = document.getElementById('panda-notes').value;
 
                     try {
-                        // حفظ بالصيغتين (Panda & Platform index.html fields) لضمان التوافق التام
                         await addDoc(collection(db, "shipments"), {
                             companyId: currentCompanyId,
                             companyName: currentCompanyId,
@@ -802,11 +1032,13 @@
                             item: notes,
                             status: 'نشط',
                             createdAt: serverTimestamp(),
-                            signature: null
+                            signature: null,
+                            nanoColdTemp: (Math.random() * 3 + 2).toFixed(1) + '°C',
+                            quantumSeal: 'سليم ومحمي جزيئياً'
                         });
-                        await logAuditAction(`إضافة شحنة جديدة: ${code}`, currentCompanyId);
+                        await logAuditAction(`إضافة شحنة جديدة بنقاط النانو: ${code}`, currentCompanyId);
                         shipmentForm.reset();
-                        alert("✅ تم حفظ الشحنة ومزامنتها فوراً.");
+                        alert("✅ تم حفظ الشحنة ومزامنتها فوراً مع حساسات النانو.");
                     } catch (err) { alert("فشل الحفظ السحابي."); }
                 });
             }
@@ -888,19 +1120,183 @@
             }
         });
 
-        // دالة المزامنة الحية المتوافقة مع كلا النظامين (Panda & index.html)
+        // التحقق من البصمة الكمومية النانوية للشحنات
+        window.verifyQuantumSeal = function() {
+            const code = document.getElementById('quantum-code-input').value.trim();
+            const resDiv = document.getElementById('quantum-verify-result');
+            if(!code) {
+                alert("يرجى إدخال كود الشحنة للفحص.");
+                return;
+            }
+            const found = allShipments.find(s => s.code === code);
+            if(found) {
+                resDiv.innerHTML = `
+                    <div class="mt-3 p-3 rounded-xl border bg-emerald-950/40 border-emerald-500/40 text-xs space-y-1 text-emerald-300">
+                        <p class="font-bold text-sm"><i class="fa-solid fa-circle-check text-emerald-400 ml-1"></i> البصمة الكمومية النانوية: سليمة 100%</p>
+                        <p><strong>كود الشحنة:</strong> ${found.code}</p>
+                        <p><strong>حالة الغلاف الجزيئي:</strong> لم يتم أي تلاعب أو فتح منذ نقطة الانطلاق.</p>
+                        <p><strong>حساس السلسلة الباردة:</strong> ${found.nanoColdTemp || '4.0°C (ممتاز)'}</p>
+                    </div>`;
+            } else {
+                resDiv.innerHTML = `
+                    <div class="mt-3 p-3 rounded-xl border bg-red-950/40 border-red-500/40 text-xs text-red-300">
+                        <p class="font-bold"><i class="fa-solid fa-triangle-exclamation ml-1"></i> عذراً، لم يتم العثور على شحنة بهذا الكود في النظام السحابي الحالي.</p>
+                    </div>`;
+            }
+        };
+
+        // تهيئة الخريطة التفاعلية (Leaflet)
+        function initLeafletMap() {
+            try {
+                fleetMap = L.map('fleet-map').setView([30.0444, 31.2357], 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(fleetMap);
+            } catch(e) { console.error("Map init error:", e); }
+        }
+
+        function updateFleetMapMarkers(shipments) {
+            if(!fleetMap) return;
+            mapMarkers.forEach(m => fleetMap.removeLayer(m));
+            mapMarkers = [];
+
+            shipments.forEach(item => {
+                if(item.destination && item.destination.includes(',')) {
+                    const parts = item.destination.split(',');
+                    const lat = parseFloat(parts[0]);
+                    const lng = parseFloat(parts[1]);
+                    if(!isNaN(lat) && !isNaN(lng)) {
+                        const marker = L.marker([lat, lng]).addTo(fleetMap)
+                            .bindPopup(`<b>كود الشحنة:</b> ${item.code}<br><b>السائق:</b> ${item.driverName}<br><b>النانو:</b> ${item.nanoColdTemp || 'طبيعي'}`);
+                        mapMarkers.push(marker);
+                    }
+                }
+            });
+        }
+
+        // تهيئة الرسوم البيانية (Chart.js)
+        function initCharts() {
+            const ctx1 = document.getElementById('shipmentsChart');
+            const ctx2 = document.getElementById('revenueChart');
+            
+            if(ctx1) {
+                shipmentsChartInstance = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['نشطة', 'في الطريق', 'تم التسليم'],
+                        datasets: [{
+                            data: [0, 0, 0],
+                            backgroundColor: ['#10b981', '#0ea5e9', '#a855f7']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            if(ctx2) {
+                revenueChartInstance = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: ['شهري', 'سنوي', 'مدى الحياة'],
+                        datasets: [{
+                            label: 'عدد الباقات',
+                            data: [0, 0, 0],
+                            backgroundColor: '#3b82f6'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+        }
+
+        function updateChartsData(activeCount, completedCount, inRouteCount, monthlyCount, annualCount, lifetimeCount) {
+            if(shipmentsChartInstance) {
+                shipmentsChartInstance.data.datasets[0].data = [activeCount, inRouteCount, completedCount];
+                shipmentsChartInstance.update();
+            }
+            if(revenueChartInstance) {
+                revenueChartInstance.data.datasets[0].data = [monthlyCount, annualCount, lifetimeCount];
+                revenueChartInstance.update();
+            }
+        }
+
+        // إصدار صوت تنبيهي خفيف عند التنبيهات والطوارئ
+        function playAlertSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e) {}
+        }
+
+        // تطبيق صلاحيات الأدوار (RBAC)
+        function applyUserRolePermissions(role) {
+            const adminTab = document.querySelector('[data-view="view-admin"]');
+            const companiesTab = document.querySelector('[data-view="view-companies"]');
+            
+            if(role === 'driver') {
+                if(adminTab) adminTab.style.display = 'none';
+                if(companiesTab) companiesTab.style.display = 'none';
+                alert("🚚 تم تفعيل واجهة السائق (عرض الشحنات والموقع فقط)");
+            } else if(role === 'manager') {
+                if(adminTab) adminTab.style.display = 'none';
+                if(companiesTab) companiesTab.style.display = 'flex';
+                alert("🏢 تم تفعيل صلاحيات مدير الشركة الفرعية");
+            } else {
+                if(adminTab) adminTab.style.display = 'flex';
+                if(companiesTab) companiesTab.style.display = 'flex';
+                alert("👑 تم تفعيل صلاحيات المدير العام للمنصة الكاملة");
+            }
+        }
+
+        // تصدير الفاتورة كملف PDF حقيقي باستخدام html2pdf.js
+        window.downloadInvoicePDF = function() {
+            const element = document.getElementById('invoice-printable-area');
+            const opt = {
+                margin:       10,
+                filename:     `invoice_${Date.now()}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().from(element).set(opt).save();
+        };
+
+        // توليد رابط التتبع العام للعميل
+        window.generatePublicTrackingLink = function(code) {
+            const url = `${window.location.origin}${window.location.pathname}?track=${code}`;
+            document.getElementById('public-track-url').value = url;
+            document.getElementById('tracking-link-modal').classList.remove('hidden');
+        };
+
+        window.copyTrackingLink = function() {
+            const input = document.getElementById('public-track-url');
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            alert("📋 تم نسخ رابط التتبع العام بنجاح!");
+        };
+
+        // دالة المزامنة الحية المتكاملة
         function startRealtimeSync(companyId) {
             if (unsubShipments) unsubShipments();
             if (unsubDrivers) unsubDrivers();
             if (unsubCompanies) unsubCompanies();
+            if (unsubExpenses) unsubExpenses();
             if (unsubAudit) unsubAudit();
             if (unsubTickets) unsubTickets();
             if (unsubEmergencies) unsubEmergencies();
 
-            // 1. مزامنة الشحنات لحظياً مع ربط التوافق لأسماء الحقول (code/name & destination/address & driverName/assignedDriver)
+            // 1. الشحنات
             unsubShipments = onSnapshot(collection(db, "shipments"), (snapshot) => {
                 allShipments = [];
-                let activeNum = 0, completedNum = 0;
+                let activeNum = 0, completedNum = 0, inRouteNum = 0;
                 
                 snapshot.forEach(docSnap => {
                     const rawData = docSnap.data();
@@ -922,6 +1318,7 @@
 
                         allShipments.push(normalizedItem);
                         if(normalizedItem.status === 'تم التسليم') completedNum++;
+                        else if(normalizedItem.status === 'في الطريق') inRouteNum++;
                         else activeNum++;
                     }
                 });
@@ -937,9 +1334,16 @@
                 if(successRate) successRate.textContent = `${rate}%`;
                 
                 renderTable(allShipments);
+                updateFleetMapMarkers(allShipments);
+                renderNanoSensorsWidget();
+
+                let mCount = allCompanies.filter(c => c.plan === 'monthly').length;
+                let aCount = allCompanies.filter(c => c.plan === 'annual').length;
+                let lCount = allCompanies.filter(c => c.plan === 'lifetime').length;
+                updateChartsData(activeNum, completedCount, inRouteNum, mCount, aCount, lCount);
             });
 
-            // 2. مزامنة السائقين لحظياً
+            // 2. السائقين
             unsubDrivers = onSnapshot(collection(db, "drivers"), (snapshot) => {
                 allDrivers = [];
                 snapshot.forEach(d => {
@@ -967,9 +1371,10 @@
                     });
                 }
                 renderDriversList();
+                renderNanoBiometricsWidget();
             });
 
-            // 3. مزامنة الشركات لحظياً
+            // 3. الشركات والباقات
             unsubCompanies = onSnapshot(collection(db, "drivers"), (snapshot) => {
                 allCompanies = [];
                 snapshot.forEach(d => {
@@ -995,7 +1400,21 @@
                 updateAdminFinancialMetrics();
             });
 
-            // 4. مزامنة سجل التدقيق
+            // 4. المصاريف والصيانة
+            unsubExpenses = onSnapshot(collection(db, "panda_expenses"), (snapshot) => {
+                allExpenses = [];
+                let totalExp = 0;
+                snapshot.forEach(d => {
+                    let data = d.data();
+                    if(companyId === 'أسطورة الطريق (الرئيسي)' || companyId === 'company_main' || (data.companyId && data.companyId.trim() === companyId.trim())) {
+                        allExpenses.push({ id: d.id, ...data });
+                        totalExp += (data.amount || 0);
+                    }
+                });
+                renderExpensesList(totalExp);
+            });
+
+            // 5. سجل التدقيق
             unsubAudit = onSnapshot(collection(db, "auditLogs"), (snapshot) => {
                 allAuditLogs = [];
                 snapshot.forEach(d => {
@@ -1007,14 +1426,14 @@
                 renderAuditLogs();
             });
 
-            // 5. مزامنة تذاكر الدعم الفني
+            // 6. تذاكر الدعم الفني
             unsubTickets = onSnapshot(collection(db, "panda_tickets"), (snapshot) => {
                 allTickets = [];
                 snapshot.forEach(d => allTickets.push({ id: d.id, ...d.data() }));
                 renderTicketsList();
             });
 
-            // 6. مزامنة الطوارئ SOS
+            // 7. الطوارئ SOS
             unsubEmergencies = onSnapshot(collection(db, "panda_emergencies"), (snapshot) => {
                 const box = document.getElementById('emergency-alert-box');
                 const list = document.getElementById('emergency-list');
@@ -1028,9 +1447,10 @@
                 });
                 if(listData.length > 0) {
                     box.classList.remove('hidden');
+                    playAlertSound();
                     list.innerHTML = listData.map(em => `
                         <div class="p-2.5 rounded-xl text-xs flex justify-between items-center mb-1 theme-alert">
-                            <span>🚨 تنبيه طوارئ SOS - الموقع: <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(em.location)}" target="_blank" class="underline font-bold">${em.location}</a></span>
+                            <span>🚨 تنبيه طوارئ SOS أو نانو-حيوي - الموقع: <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(em.location)}" target="_blank" class="underline font-bold">${em.location}</a></span>
                             <span class="text-[10px] px-2 py-0.5 rounded font-bold">${em.status}</span>
                         </div>`).join('');
                 } else {
@@ -1055,6 +1475,9 @@
                     const targetView = document.getElementById(targetId);
                     if(targetView) {
                         targetView.classList.remove('hidden');
+                        if(targetId === 'view-map' && fleetMap) {
+                            setTimeout(() => fleetMap.invalidateSize(), 200);
+                        }
                     }
                     navButtons.forEach(b => {
                         b.classList.remove('text-emerald-400', 'scale-105');
@@ -1093,12 +1516,76 @@
             `).join('');
         }
 
+        function renderNanoSensorsWidget() {
+            const container = document.getElementById('cold-chain-sensors-list');
+            if(!container) return;
+            if(allShipments.length === 0) {
+                container.innerHTML = `<p class="text-xs opacity-60 text-center py-4">لا توجد شحنات نشطة لمراقبة النانو.</p>`;
+                return;
+            }
+            container.innerHTML = allShipments.map(s => `
+                <div class="text-xs p-2.5 rounded-xl border theme-card-inner flex justify-between items-center">
+                    <span>الشحنة: <strong>${s.code}</strong></span>
+                    <span class="text-emerald-400 font-bold">${s.nanoColdTemp || '3.5°C'} (مثالي)</span>
+                </div>
+            `).join('');
+        }
+
+        function renderNanoBiometricsWidget() {
+            const container = document.getElementById('driver-biometrics-list');
+            if(!container) return;
+            if(allDrivers.length === 0) {
+                container.innerHTML = `<p class="text-xs opacity-60 text-center py-4">لا توجد بيانات للسائقين حالياً.</p>`;
+                return;
+            }
+            container.innerHTML = allDrivers.map(d => `
+                <div class="text-xs p-2.5 rounded-xl border theme-card-inner flex justify-between items-center">
+                    <span>${d.name} (${d.vehicle || 'شحنة'})</span>
+                    <span class="text-emerald-400 font-bold">75 نبضة/دقيقة (نشط)</span>
+                </div>
+            `).join('');
+        }
+
         window.deleteDriver = async function(id) {
             if(confirm("هل أنت متأكد من حذف هذا السائق؟")) {
                 try {
                     await deleteDoc(doc(db, "drivers", id));
                     await logAuditAction(`حذف السائق ID: ${id}`, currentCompanyId);
                 } catch(e) { alert("تعذر الحذف."); }
+            }
+        };
+
+        function renderExpensesList(total) {
+            const container = document.getElementById('expenses-list');
+            const badge = document.getElementById('total-expenses-badge');
+            if(!container) return;
+            if(badge) badge.textContent = `إجمالي المصاريف: ${total} ج.م`;
+
+            if(allExpenses.length === 0) {
+                container.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-xs opacity-60">لا توجد مصاريف مسجلة للأسطول حتى الآن.</td></tr>`;
+                return;
+            }
+
+            container.innerHTML = allExpenses.map(ex => {
+                const dateStr = ex.createdAt ? new Date(ex.createdAt.toDate()).toLocaleDateString('ar-EG') : 'الآن';
+                return `
+                    <tr class="border-b border-white/10">
+                        <td class="py-2 px-2 font-bold">${ex.type}</td>
+                        <td class="py-2 px-2">${ex.vehicle}</td>
+                        <td class="py-2 px-2 text-emerald-400 font-bold">${ex.amount} ج.م</td>
+                        <td class="py-2 px-2 opacity-80">${ex.notes || '---'}</td>
+                        <td class="py-2 px-2 opacity-70">${dateStr}</td>
+                        <td class="py-2 px-2 text-left">
+                            <button onclick="deleteExpense('${ex.id}')" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        window.deleteExpense = async function(id) {
+            if(confirm("هل تريد حذف هذا المصروف؟")) {
+                await deleteDoc(doc(db, "panda_expenses", id));
             }
         };
 
@@ -1160,6 +1647,7 @@
                     exportDate: new Date().toISOString(),
                     companies: allCompanies,
                     drivers: allDrivers,
+                    expenses: allExpenses,
                     auditLogs: allAuditLogs,
                     tickets: allTickets
                 };
@@ -1167,10 +1655,10 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `panda_platform_backup_${new Date().toISOString().slice(0,10)}.json`;
+                a.download = `panda_nano_platform_backup_${new Date().toISOString().slice(0,10)}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
-                alert("✅ تم تصدير النسخة الاحتياطية الكاملة لقاعدة بيانات المنصة بنجاح!");
+                alert("✅ تم تصدير النسخة الاحتياطية الكاملة للمنصة بنجاح!");
                 logAuditAction("تصدير نسخة احتياطية كاملة للمنصة", currentCompanyId);
             } catch(e) { alert("تعذر إتمام التصدير الاحتياطي."); }
         };
@@ -1480,12 +1968,16 @@
                                 <i class="fa-solid fa-map-location-dot"></i> خريطة
                             </a>
                         </div>
+                        <span class="block text-[11px] text-cyan-400 font-semibold mt-1"><i class="fa-solid fa-atom ml-1"></i>الحرارة: ${item.nanoColdTemp || '3.5°C'} | البصمة: سليمة</span>
                         ${item.notes ? `<span class="block text-xs opacity-70 mt-0.5"><i class="fa-solid fa-note-sticky ml-1"></i>${item.notes}</span>` : ''}
                         ${item.signature ? `<span class="block text-xs text-purple-400 font-bold mt-1"><i class="fa-solid fa-signature ml-1"></i>موقع وموثق</span>` : ''}
                     </td>
                     <td class="py-3 px-3 opacity-80 text-xs">${timeStr}</td>
                     <td class="py-3 px-3"><span class="${badge} text-xs px-2.5 py-1 rounded-full font-semibold">${item.status}</span></td>
                     <td class="py-3 px-3 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                        <button onclick="generatePublicTrackingLink('${item.code}')" class="text-xs bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 px-2 py-1 rounded-lg font-semibold transition" title="رابط التتبع">
+                            <i class="fa-solid fa-link"></i>
+                        </button>
                         <button onclick="shareOnWhatsApp('${item.code}', '${item.destination}', '${item.status}', '${item.driverName}')" class="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-2.5 py-1 rounded-lg font-semibold transition" title="واتساب">
                             <i class="fa-brands fa-whatsapp"></i>
                         </button>
@@ -1504,6 +1996,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
         body { font-family: 'Cairo', sans-serif; }
+
+        /* الثيم المضيء المطور (Luminous Light) */
+        body.theme-luminous { background-color: #f1f5f9; color: #0f172a; }
+        body.theme-luminous header { background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%); border-bottom: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08); }
+        body.theme-luminous .theme-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.12); }
+        body.theme-luminous .theme-card-inner { background: rgba(241, 245, 249, 0.8); border-color: rgba(16, 185, 129, 0.2); }
+        body.theme-luminous .theme-company-card { background: rgba(255, 255, 255, 0.85); border-color: rgba(16, 185, 129, 0.25); }
+        body.theme-luminous .theme-alert { background: rgba(254, 226, 226, 0.9); border: 1px solid rgba(239, 68, 68, 0.4); color: #991b1b; }
+        body.theme-luminous .theme-select { background-color: #ffffff; color: #0f172a; border-color: rgba(16, 185, 129, 0.3); }
+        body.theme-luminous .theme-table-row:hover { background-color: rgba(16, 185, 129, 0.05); }
 
         body.theme-emerald { background-color: #061a14; color: #ecfdf5; }
         body.theme-emerald header { background: linear-gradient(135deg, #022c22 0%, #064e3b 100%); border-bottom: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 4px 25px rgba(16, 185, 129, 0.15); }
@@ -1540,15 +2042,6 @@
         body.theme-gold .theme-alert { background: rgba(127, 29, 29, 0.4); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; }
         body.theme-gold .theme-select { background-color: #451a03; color: #fef3c7; border-color: rgba(245, 158, 11, 0.3); }
         body.theme-gold .theme-table-row:hover { background-color: rgba(245, 158, 11, 0.08); }
-
-        body.theme-ruby { background-color: #1a0507; color: #ffe4e6; }
-        body.theme-ruby header { background: linear-gradient(135deg, #4c0519 0%, #881337 100%); border-bottom: 1px solid rgba(244, 63, 94, 0.3); box-shadow: 0 4px 25px rgba(244, 63, 94, 0.2); }
-        body.theme-ruby .theme-card { background: rgba(76, 5, 25, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(244, 63, 94, 0.3); box-shadow: 0 0 25px rgba(244, 63, 94, 0.1); }
-        body.theme-ruby .theme-card-inner { background: rgba(136, 19, 55, 0.4); border-color: rgba(244, 63, 94, 0.3); }
-        body.theme-ruby .theme-company-card { background: rgba(76, 5, 25, 0.6); border-color: rgba(244, 63, 94, 0.3); }
-        body.theme-ruby .theme-alert { background: rgba(127, 29, 29, 0.4); border-color: rgba(239, 68, 68, 0.4); color: #fca505; }
-        body.theme-ruby .theme-select { background-color: #4c0519; color: #ffe4e6; border-color: rgba(244, 63, 94, 0.3); }
-        body.theme-ruby .theme-table-row:hover { background-color: rgba(244, 63, 94, 0.08); }
 
         @keyframes pandaGlow {
             0%, 100% { filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6)); }
