@@ -8,6 +8,11 @@
     <meta name="theme-color" content="#0f172a">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- مكتبات Firebase V8 المتوافقة والمستقرة -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -20,12 +25,490 @@
             }
         }
     </script>
-    
-    <!-- Firebase SDK والمزامنة الشاملة -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+</head>
+<body class="min-h-screen flex flex-col pb-24 theme-emerald">
 
+    <!-- شريط التنقل العلوي -->
+    <header class="sticky top-0 z-50 transition-all duration-300">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <div class="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-900 text-xl font-black shadow-lg panda-logo-glow">
+                    <i class="fa-solid fa-paw"></i>
+                    <div class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-cyan-400 rounded-full border-2 border-slate-900 animate-ping"></div>
+                </div>
+                <div>
+                    <h1 class="font-black text-lg leading-tight flex items-center gap-1.5">
+                        <span>باندا (Super Admin)</span>
+                        <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold">لوحة تحكم المدير</span>
+                    </h1>
+                    <p class="text-xs opacity-75">أسطورة الطريق — الإدارة المركزية الشاملة</p>
+                </div>
+            </div>
+            
+            <nav class="flex items-center space-x-2 sm:space-x-3 space-x-reverse">
+                <div class="hidden md:flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/10">
+                    <span class="text-[10px] px-2 opacity-75 font-bold">الثيم:</span>
+                    <select id="theme-selector" class="text-xs bg-transparent border-none focus:outline-none cursor-pointer font-bold pr-1">
+                        <option value="emerald" class="bg-slate-900 text-emerald-400">🟢 إيميرالد نيون</option>
+                        <option value="purple" class="bg-slate-900 text-purple-400">🟣 سايبر بلس</option>
+                        <option value="cyan" class="bg-slate-900 text-sky-400">🔵 ليزر أزرق</option>
+                        <option value="gold" class="bg-slate-900 text-amber-400">🟡 ذهبي فاخر</option>
+                        <option value="ruby" class="bg-slate-900 text-rose-400">🔴 عقيق أحمر</option>
+                    </select>
+                </div>
+
+                <button id="sos-panic-btn" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center shadow-lg shadow-red-600/30 animate-pulse">
+                    <i class="fa-solid fa-triangle-exclamation ml-1"></i> طوارئ (SOS)
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- تنبيهات الطوارئ الفورية -->
+    <div id="emergency-alert-box" class="container mx-auto px-4 mt-4 hidden max-w-6xl">
+        <div class="bg-red-950/80 border-2 border-red-500 p-4 rounded-2xl shadow-xl backdrop-blur-md">
+            <h4 class="font-bold text-red-300 text-sm mb-2 flex items-center">
+                <i class="fa-solid fa-circle-exclamation text-red-500 ml-2 animate-bounce"></i> إشعارات الطوارئ النشطة (SOS Alerts) لغرفة العمليات المركزية
+            </h4>
+            <div id="emergency-list"></div>
+        </div>
+    </div>
+
+    <!-- نافذة التوقيع الرقمي -->
+    <div id="signature-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="theme-card rounded-2xl p-6 max-w-md w-full shadow-2xl border">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-signature text-emerald-400 ml-2"></i> توقيع المستلم لاستكمال التسليم</h3>
+                <button onclick="closeSignatureModal()" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p class="text-xs opacity-80 mb-3">يرجى طلب التوقيع من العميل داخل الإطار أدناه لتأكيد استلام الشحنة:</p>
+            <div class="border-2 border-dashed border-emerald-500/40 rounded-xl overflow-hidden bg-white mb-4">
+                <canvas id="signature-pad" width="360" height="180" class="w-full cursor-crosshair touch-none"></canvas>
+            </div>
+            <div class="flex justify-between gap-2">
+                <button type="button" onclick="clearSignature()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl transition">مسح</button>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closeSignatureModal()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl transition">إلغاء</button>
+                    <button type="button" onclick="saveSignatureAndComplete()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/30">اعتماد وحفظ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة عرض الفاتورة الرسمية -->
+    <div id="invoice-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="theme-card rounded-2xl p-6 max-w-lg w-full shadow-2xl border space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-file-invoice text-sky-400 ml-2"></i> الفاتورة الرسمية المعتمدة</h3>
+                <button onclick="closeInvoiceModal()" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="invoice-content"></div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="printInvoice()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1">
+                    <i class="fa-solid fa-print"></i> طباعة الفاتورة
+                </button>
+                <button type="button" onclick="closeInvoiceModal()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة إضافة شركة جديدة -->
+    <div id="add-company-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="theme-card rounded-2xl p-6 max-w-md w-full shadow-2xl border">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-building text-emerald-400 ml-2"></i> تسجيل شركة جديدة بالنظام المركزي</h3>
+                <button id="close-company-modal" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="new-company-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold mb-1">اسم الشركة (معرف العزل)</label>
+                    <input type="text" id="new-comp-name" required placeholder="مثال: شركة النور للنقليات" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1">اسم المسؤول</label>
+                    <input type="text" id="new-comp-manager" required placeholder="اسم المدير أو المسؤول" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1">رقم الهاتف (واتساب)</label>
+                    <input type="text" id="new-comp-phone" required placeholder="مثال: +2010xxxxxxxx" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1">نوع الباقة</label>
+                    <select id="new-comp-plan" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
+                        <option value="monthly">شهري (Monthly)</option>
+                        <option value="annual">سنوي (Annual)</option>
+                        <option value="lifetime">مدى الحياة (Lifetime)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" id="cancel-company-modal" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2 rounded-xl">إلغاء</button>
+                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl shadow-lg shadow-emerald-600/30">حفظ وتسجيل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl space-y-6">
+
+        <!-- 1. القسم الرئيسي -->
+        <div id="view-home" class="app-section-view space-y-6">
+            <section class="theme-card rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row justify-between items-center gap-4 border">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="theme-card-inner p-3 rounded-xl border flex items-center justify-center text-emerald-400 text-xl">
+                        <i class="fa-solid fa-building-shield"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs opacity-75 block">بيئة العمل الحالية (عزل تام):</span>
+                        <span id="current-company-display" class="font-black text-emerald-400 text-lg">---</span>
+                    </div>
+                </div>
+                <form id="company-form" class="flex gap-2 w-full sm:w-auto">
+                    <input type="text" id="company-id-input" required placeholder="معرف الشركة" 
+                        class="text-xs border rounded-xl px-3 py-2 focus:outline-none theme-select w-full sm:w-48">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition whitespace-nowrap shadow-lg shadow-emerald-600/30">
+                        تطبيق العزل
+                    </button>
+                </form>
+            </section>
+
+            <section class="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-6 text-white shadow-2xl relative overflow-hidden border border-emerald-500/30">
+                <div class="absolute -left-10 -bottom-10 text-emerald-500/10 text-9xl pointer-events-none">
+                    <i class="fa-solid fa-paw"></i>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
+                        <span class="text-xs opacity-75 block mb-1">الشحنات النشطة للشركة الحالية</span>
+                        <span id="active-shipments-count" class="text-3xl font-black text-emerald-400">0</span>
+                    </div>
+                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
+                        <span class="text-xs opacity-75 block mb-1">الرحلات المكتملة والموثقة</span>
+                        <span id="completed-shipments-count" class="text-3xl font-black text-purple-400">0</span>
+                    </div>
+                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
+                        <span class="text-xs opacity-75 block mb-1">معدل نجاح التوصيل</span>
+                        <span id="success-rate" class="text-3xl font-black text-sky-400">0%</span>
+                    </div>
+                </div>
+            </section>
+
+            <div class="theme-card rounded-2xl p-6 shadow-xl border text-center space-y-3">
+                <div class="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-3xl border border-emerald-500/30 panda-logo-glow">
+                    <i class="fa-solid fa-paw"></i>
+                </div>
+                <h3 class="font-black text-lg">مرحباً بك في لوحة تحكم المدير العام للمنصة</h3>
+                <p class="text-xs opacity-80 max-w-md mx-auto">تتيح لك هذه اللوحة مراقبة العمليات، الاشتراكات المالية، السائقين، دعم الشركات، وإصدار التعاميم من شاشة مركزية واحدة.</p>
+            </div>
+        </div>
+
+        <!-- 2. قسم الشحنات -->
+        <div id="view-shipments" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border">
+                    <h3 class="font-bold text-base mb-4 flex items-center">
+                        <i class="fa-solid fa-plus-circle text-emerald-400 ml-2"></i> تسجيل شحنة جديدة للشركة الحالية
+                    </h3>
+                    <form id="panda-form" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">كود الشحنة / العميل</label>
+                            <input type="text" id="panda-code" required placeholder="مثال: PANDA-9021" 
+                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-semibold">وجهة التوصيل</label>
+                                <button type="button" id="get-gps-btn" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center">
+                                    <i class="fa-solid fa-location-crosshairs ml-1"></i> إحداثيات GPS تلقائي
+                                </button>
+                            </div>
+                            <input type="text" id="panda-destination" required placeholder="المدينة / المحافظة أو الإحداثيات" 
+                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">السائق المسؤول</label>
+                            <select id="panda-driver" class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                                <option value="">-- جاري تحميل السائقين --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">ملاحظات التشغيل</label>
+                            <textarea id="panda-notes" rows="2" placeholder="تعليمات خاصة بالسائق..." 
+                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none"></textarea>
+                        </div>
+                        <button type="submit" 
+                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-sm shadow-lg shadow-emerald-600/30">
+                            حفظ سحابياً في بيانات الشركة
+                        </button>
+                    </form>
+                </div>
+
+                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl flex flex-col border">
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
+                        <h3 class="font-bold text-base flex items-center">
+                            <i class="fa-solid fa-list-check text-emerald-400 ml-2"></i> سجل شحنات الشركة الحالية
+                        </h3>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <button id="export-csv-btn" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap border border-white/10">
+                                <i class="fa-solid fa-file-excel text-emerald-400"></i> تصدير CSV
+                            </button>
+                            <input type="text" id="search-input" placeholder="بحث برقم الشحنة أو السائق..." 
+                                class="w-full sm:w-52 text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto flex-grow">
+                        <table class="w-full text-right text-sm">
+                            <thead>
+                                <tr class="border-b border-white/10 opacity-70 text-xs">
+                                    <th class="pb-3 px-3 font-semibold">الكود والسائق</th>
+                                    <th class="pb-3 px-3 font-semibold">الوجهة والملاحظات</th>
+                                    <th class="pb-3 px-3 font-semibold">التوقيت</th>
+                                    <th class="pb-3 px-3 font-semibold">الحالة</th>
+                                    <th class="pb-3 px-3 font-semibold text-left">الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="panda-records-list" class="divide-y divide-white/10"></tbody>
+                        </table>
+                        <div id="empty-state" class="text-center py-12 opacity-60">
+                            <i class="fa-solid fa-box-open text-3xl mb-2 block"></i>
+                            لا توجد شحنات مسجلة لهذه الشركة حتى الآن
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. قسم الشركات -->
+        <div id="view-companies" class="app-section-view hidden space-y-6">
+            <section class="theme-card rounded-2xl p-5 shadow-xl space-y-4 border">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <h3 class="font-bold text-base flex items-center">
+                        <i class="fa-solid fa-building-user text-emerald-400 ml-2"></i> قسم إدارة الشركات والاشتراكات النشطة
+                    </h3>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button id="add-company-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-lg shadow-purple-600/30">
+                            <i class="fa-solid fa-plus"></i> إضافة شركة
+                        </button>
+                        <button onclick="sendBulkWhatsAppReminders()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-lg shadow-emerald-600/30">
+                            <i class="fa-brands fa-whatsapp"></i> تذكيرات واتساب جماعية
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select id="company-status-filter" class="text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none w-full sm:w-40">
+                        <option value="all">جميع الحالات</option>
+                        <option value="نشط">نشط</option>
+                        <option value="منتهي">منتهي</option>
+                    </select>
+                    <input type="text" id="company-search-input" placeholder="ابحث باسم الشركة أو الهاتف..." class="text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none w-full flex-grow">
+                </div>
+
+                <div id="companies-container" class="space-y-3">
+                    <div class="text-center py-6 text-slate-400 text-xs">جاري تحميل الشركات السحابية المعزولة...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 4. قسم السائقين -->
+        <div id="view-drivers" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border">
+                    <h3 class="font-bold text-base mb-4 flex items-center">
+                        <i class="fa-solid fa-user-plus text-emerald-400 ml-2"></i> تسجيل سائق جديد للشركة الحالية
+                    </h3>
+                    <form id="driver-form" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">اسم السائق الثلاثي</label>
+                            <input type="text" id="driver-name-input" required placeholder="مثال: محمود أحمد حسن" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">رقم الهاتف (واتساب)</label>
+                            <input type="text" id="driver-phone-input" required placeholder="+2010xxxxxxxx" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">نوع ورقم المركبة</label>
+                            <input type="text" id="driver-vehicle-input" required placeholder="مثال: شاحنة نقل - أ ب ج 1234" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg shadow-emerald-600/30">
+                            حفظ وتسجيل السائق
+                        </button>
+                    </form>
+                </div>
+                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <h3 class="font-bold text-base flex items-center">
+                        <i class="fa-solid fa-id-card-clip text-emerald-400 ml-2"></i> طاقم السائقين المعتمدين للشركة الحالية
+                    </h3>
+                    <div id="drivers-container" class="space-y-2">
+                        <div class="text-center py-6 text-slate-400 text-xs">جاري تحميل السائقين...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. لوحة الإدارة المالية والمركزية -->
+        <div id="view-admin" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
+                    <span class="text-xs opacity-75">إجمالي الشركات المسجلة</span>
+                    <h3 id="admin-total-companies" class="text-3xl font-black text-emerald-400">0</h3>
+                </div>
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
+                    <span class="text-xs opacity-75">الإيرادات المتكررة المقدرة (MRR)</span>
+                    <h3 id="admin-mrr-revenue" class="text-3xl font-black text-sky-400">0 ج.م</h3>
+                </div>
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
+                    <span class="text-xs opacity-75">اشتراكات تنتهي قريباً (تحذير)</span>
+                    <h3 id="admin-expiring-soon" class="text-3xl font-black text-red-400">0</h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-4">
+                    <h3 class="font-bold text-base flex items-center">
+                        <i class="fa-solid fa-bullhorn text-emerald-400 ml-2"></i> مركز التعاميم والإشعارات الجماعية (Broadcasts)
+                    </h3>
+                    <form id="broadcast-form" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">عنوان التعميم</label>
+                            <input type="text" id="broadcast-title" required placeholder="مثال: تحديث أمني هام في المنصة" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">نص الرسالة</label>
+                            <textarea id="broadcast-msg" rows="3" required placeholder="تفاصيل التعميم للشركات..." class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg">
+                            نشر التعميم لكل الشركات
+                        </button>
+                    </form>
+                    <div class="pt-2 border-t border-white/10">
+                        <h4 class="text-xs font-bold opacity-80 mb-2">التعاميم النشطة حالياً:</h4>
+                        <div id="global-broadcasts-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                        <h3 class="font-bold text-base flex items-center">
+                            <i class="fa-solid fa-headset text-sky-400 ml-2"></i> تذاكر الشكاوى والدعم الفني
+                        </h3>
+                        <div id="tickets-container" class="space-y-2 max-h-48 overflow-y-auto">
+                            <p class="text-xs opacity-60 text-center py-4">جاري التحميل...</p>
+                        </div>
+                    </div>
+
+                    <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                        <h3 class="font-bold text-base flex items-center">
+                            <i class="fa-solid fa-database text-purple-400 ml-2"></i> النسخ الاحتياطي وحماية البيانات (Backup Hub)
+                        </h3>
+                        <p class="text-xs opacity-80">يمكنك تصدير نسخة احتياطية مشفرة وشاملة لكافة قواعد بيانات المنصة بضغطة زر واحدة.</p>
+                        <button onclick="exportFullPlatformDatabase()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-download"></i> تصدير قاعدة البيانات الكاملة (JSON)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. قسم العمليات والحاسبة -->
+        <div id="view-operations" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border">
+                    <h3 class="font-bold text-base mb-3 flex items-center">
+                        <i class="fa-solid fa-calculator text-emerald-400 ml-2"></i> الحاسبة المالية المتقدمة (وقود وأرباح)
+                    </h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold mb-1">المسافة التقديرية للرحلة (كم)</label>
+                            <input type="number" id="calc-distance" placeholder="مثال: 150" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold mb-1">معدل الاستهلاك (لتر/100كم)</label>
+                                <input type="number" id="calc-rate" value="10" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold mb-1">سعر لتر الوقود</label>
+                                <input type="number" id="calc-price" value="15" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold mb-1">إيرادات الرحلة المتوقعة (جنيه)</label>
+                            <input type="number" id="calc-revenue" placeholder="مثال: 1200" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
+                        </div>
+                        <button type="button" id="calc-fuel-btn" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs border border-white/10 shadow-md">
+                            احسب التكلفة وصافي الربح
+                        </button>
+                        <div id="calc-result"></div>
+                    </div>
+                </div>
+
+                <div class="theme-card rounded-2xl p-5 shadow-xl border flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-base mb-3 flex items-center text-red-400">
+                            <i class="fa-solid fa-triangle-exclamation ml-2"></i> غرفة عمليات الطوارئ المركزية (SOS)
+                        </h3>
+                        <p class="text-xs opacity-80 mb-4">تلقي نداءات الاستغاثة وإحداثيات الموقع الجغرافي من أي مركبة تابعة لشركات المنصة.</p>
+                    </div>
+                    <button onclick="document.getElementById('sos-panic-btn').click()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition text-sm shadow-lg shadow-red-600/30 animate-pulse flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-satellite-dish"></i> إرسال نداء استغاثة عاجل الآن
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. قسم السجل والإعدادات -->
+        <div id="view-settings" class="app-section-view hidden space-y-6">
+            <section class="theme-card rounded-2xl p-5 shadow-xl space-y-3 border">
+                <h3 class="font-bold text-base flex items-center">
+                    <i class="fa-solid fa-scroll text-emerald-400 ml-2"></i> سجل التدقيق والعمليات الإدارية (Audit Logs) للشركة الحالية
+                </h3>
+                <div id="audit-logs-list" class="space-y-1">
+                    <p class="text-xs opacity-60 text-center py-4">جاري تحميل سجل التدقيق السحابي المعزول...</p>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- شريط التنقل السفلي -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 theme-card border-t py-2 px-2 flex justify-around items-center shadow-2xl backdrop-blur-lg">
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold text-emerald-400 transition transform scale-105" data-view="view-home">
+            <i class="fa-solid fa-chart-pie text-base mb-1"></i>
+            <span>الرئيسية</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-shipments">
+            <i class="fa-solid fa-boxes-stacked text-base mb-1"></i>
+            <span>الشحنات</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-companies">
+            <i class="fa-solid fa-building text-base mb-1"></i>
+            <span>الشركات</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-drivers">
+            <i class="fa-solid fa-id-card-clip text-base mb-1"></i>
+            <span>السائقين</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition text-amber-400" data-view="view-admin">
+            <i class="fa-solid fa-user-shield text-base mb-1"></i>
+            <span>الإدارة العليا</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-operations">
+            <i class="fa-solid fa-satellite-dish text-base mb-1"></i>
+            <span>العمليات</span>
+        </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-settings">
+            <i class="fa-solid fa-scroll text-base mb-1"></i>
+            <span>السجل</span>
+        </button>
+    </nav>
+
+    <footer class="theme-card border-t py-4 mt-auto text-center text-xs opacity-75">
+        <p>منصة أسطورة الطريق © 2026 — لوحة تحكم المدير العام ونظام باندا السحابي (Project: n2la-642d3)</p>
+    </footer>
+
+    <!-- سكريبت التشغيل وربط Firebase V8 -->
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -36,10 +519,9 @@
             measurementId: "G-KH4ZYFB8LC"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-        // إدارة الحالة والبيانات المركزية للمدير
         let currentCompanyId = localStorage.getItem('panda_company_id') || 'أسطورة الطريق (الرئيسي)';
         let allShipments = []; 
         let allCompanies = [];
@@ -55,20 +537,17 @@
             if(companyInput) companyInput.value = currentCompanyId;
             if(companyDisplay) companyDisplay.textContent = currentCompanyId;
 
-            // تطبيق الثيم المخزن
             const savedTheme = localStorage.getItem('panda_theme') || 'emerald';
             setTheme(savedTheme);
             const themeSelect = document.getElementById('theme-selector');
             if(themeSelect) themeSelect.value = savedTheme;
 
-            // إعداد لوحة التوقيع الرقمي
             signatureCanvas = document.getElementById('signature-pad');
             if (signatureCanvas) {
                 signatureCtx = signatureCanvas.getContext('2d');
                 setupSignaturePad();
             }
 
-            // تحميل وتفعيل مستمعي البيانات السحابية
             initRealtimeListeners(currentCompanyId);
             initCompaniesListener();
             initDriversListener(currentCompanyId);
@@ -76,17 +555,14 @@
             initTicketsListener();
             initGlobalBroadcastsListener();
 
-            // تفعيل التنقل بسلاسة
             setupBottomNavigation();
 
-            // تبديل الثيمات
             if(themeSelect) {
                 themeSelect.addEventListener('change', (e) => {
                     setTheme(e.target.value);
                 });
             }
 
-            // GPS Location
             const gpsBtn = document.getElementById('get-gps-btn');
             if(gpsBtn) {
                 gpsBtn.addEventListener('click', () => {
@@ -106,7 +582,6 @@
                 });
             }
 
-            // SOS Emergency Button
             const sosBtn = document.getElementById('sos-panic-btn');
             if(sosBtn) {
                 sosBtn.addEventListener('click', async () => {
@@ -116,25 +591,22 @@
                                 const lat = pos.coords.latitude.toFixed(6);
                                 const lng = pos.coords.longitude.toFixed(6);
                                 try {
-                                    await addDoc(collection(db, "panda_emergencies"), {
+                                    await db.collection("panda_emergencies").add({
                                         companyId: currentCompanyId,
                                         type: "SOS_PANIC",
                                         location: `${lat}, ${lng}`,
-                                        timestamp: serverTimestamp(),
+                                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                                         status: "قيد المتابعة من الإدارة المركزية"
                                     });
                                     await logAuditAction("إرسال نداء استغاثة طارئ SOS", currentCompanyId);
                                     alert("🚨 تم إرسال إشارة الطوارئ بنجاح لغرفة العمليات.");
-                                } catch (err) {
-                                    console.error(err);
-                                }
+                                } catch (err) { console.error(err); }
                             }, () => alert("تعذر تحديد الموقع لجهاز الاستغاثة."));
                         }
                     }
                 });
             }
 
-            // Fuel & Profit Calculator
             const calcBtn = document.getElementById('calc-fuel-btn');
             if(calcBtn) {
                 calcBtn.addEventListener('click', () => {
@@ -163,7 +635,6 @@
                 });
             }
 
-            // Company Tenant Form Switch
             const companyForm = document.getElementById('company-form');
             if(companyForm) {
                 companyForm.addEventListener('submit', (e) => {
@@ -183,7 +654,6 @@
                 });
             }
 
-            // Global Broadcast Form (Admin Feature)
             const broadcastForm = document.getElementById('broadcast-form');
             if(broadcastForm) {
                 broadcastForm.addEventListener('submit', async (e) => {
@@ -191,21 +661,18 @@
                     const title = document.getElementById('broadcast-title').value;
                     const message = document.getElementById('broadcast-msg').value;
                     try {
-                        await addDoc(collection(db, "panda_global_broadcasts"), {
+                        await db.collection("panda_global_broadcasts").add({
                             title, message,
                             sender: "المدير العام (Super Admin)",
-                            timestamp: serverTimestamp()
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         await logAuditAction(`إرسال تعميم عام للمنصة: ${title}`, currentCompanyId);
                         broadcastForm.reset();
                         alert("📢 تم نشر التعميم العام لكافة الشركات على السحابة بنجاح!");
-                    } catch(err) {
-                        alert("فشل نشر التعميم.");
-                    }
+                    } catch(err) { alert("فشل نشر التعميم."); }
                 });
             }
 
-            // Search Filter
             const searchInput = document.getElementById('search-input');
             if(searchInput) {
                 searchInput.addEventListener('input', (e) => {
@@ -219,13 +686,11 @@
                 });
             }
 
-            // Companies Filter & Search UI
             const compSearch = document.getElementById('company-search-input');
             const compStatusFilter = document.getElementById('company-status-filter');
             if(compSearch) compSearch.addEventListener('input', filterAndRenderCompanies);
             if(compStatusFilter) compStatusFilter.addEventListener('change', filterAndRenderCompanies);
 
-            // Driver Form Submit
             const driverForm = document.getElementById('driver-form');
             if(driverForm) {
                 driverForm.addEventListener('submit', async (e) => {
@@ -235,23 +700,19 @@
                     const vehicle = document.getElementById('driver-vehicle-input').value;
 
                     try {
-                        await addDoc(collection(db, "drivers"), {
+                        await db.collection("drivers").add({
                             companyId: currentCompanyId,
                             name, phone, vehicle,
                             status: 'متواجد',
-                            createdAt: serverTimestamp()
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         await logAuditAction(`إضافة سائق جديد: ${name}`, currentCompanyId);
                         driverForm.reset();
                         alert("✅ تمت إضافة السائق بنجاح.");
-                    } catch (err) {
-                        console.error(err);
-                        alert("فشل حفظ السائق.");
-                    }
+                    } catch (err) { alert("فشل حفظ السائق."); }
                 });
             }
 
-            // Export CSV
             const exportBtn = document.getElementById('export-csv-btn');
             if(exportBtn) {
                 exportBtn.addEventListener('click', () => {
@@ -274,7 +735,6 @@
                 });
             }
 
-            // Shipment Form Submit
             const shipmentForm = document.getElementById('panda-form');
             if(shipmentForm) {
                 shipmentForm.addEventListener('submit', async (e) => {
@@ -286,23 +746,19 @@
                     const notes = document.getElementById('panda-notes').value;
 
                     try {
-                        await addDoc(collection(db, "shipments"), {
+                        await db.collection("shipments").add({
                             companyId: currentCompanyId,
                             code, destination, driverName, notes,
                             status: 'نشط',
-                            createdAt: serverTimestamp(),
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                             signature: null
                         });
                         await logAuditAction(`إضافة شحنة جديدة: ${code}`, currentCompanyId);
                         shipmentForm.reset();
-                    } catch (err) {
-                        console.error("خطأ بالحفظ:", err);
-                        alert("فشل الحفظ السحابي.");
-                    }
+                    } catch (err) { alert("فشل الحفظ السحابي."); }
                 });
             }
 
-            // Add Company Modal triggers
             const addCompBtn = document.getElementById('add-company-btn');
             const addCompModal = document.getElementById('add-company-modal');
             const closeCompModal = document.getElementById('close-company-modal');
@@ -327,25 +783,21 @@
                     const plan = document.getElementById('new-comp-plan').value;
 
                     try {
-                        await addDoc(collection(db, "companies"), {
+                        await db.collection("companies").add({
                             companyName, manager, phone, plan,
                             status: "نشط",
                             subExpiry: "2027-08-30",
-                            createdAt: serverTimestamp()
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         await logAuditAction(`تسجيل شركة جديدة: ${companyName}`, currentCompanyId);
                         newCompForm.reset();
                         addCompModal.classList.add('hidden');
                         alert("تمت إضافة الشركة بنجاح.");
-                    } catch (err) {
-                        console.error(err);
-                        alert("خطأ في تسجيل الشركة.");
-                    }
+                    } catch (err) { alert("خطأ في تسجيل الشركة."); }
                 });
             }
         });
 
-        // التنقل بين الأقسام عبر الشريط السفلي
         function setupBottomNavigation() {
             const navButtons = document.querySelectorAll('.nav-tab-btn');
             navButtons.forEach(btn => {
@@ -374,10 +826,8 @@
             document.body.className = `min-h-screen flex flex-col pb-24 transition-all duration-500 theme-${themeName}`;
         }
 
-        // مستمع السائقين المتزامن
         function initDriversListener(companyId) {
-            const q = query(collection(db, "drivers"), where("companyId", "==", companyId));
-            onSnapshot(q, (snapshot) => {
+            db.collection("drivers").where("companyId", "==", companyId).onSnapshot((snapshot) => {
                 allDrivers = [];
                 snapshot.forEach(d => allDrivers.push({ id: d.id, ...d.data() }));
                 
@@ -419,11 +869,9 @@
         window.deleteDriver = async function(id) {
             if(confirm("هل أنت متأكد من حذف هذا السائق؟")) {
                 try {
-                    await deleteDoc(doc(db, "drivers", id));
+                    await db.collection("drivers").doc(id).delete();
                     await logAuditAction(`حذف السائق ID: ${id}`, currentCompanyId);
-                } catch(e) {
-                    alert("تعذر الحذف.");
-                }
+                } catch(e) { alert("تعذر الحذف."); }
             }
         };
 
@@ -432,17 +880,14 @@
             const completedCount = document.getElementById('completed-shipments-count');
             const successRate = document.getElementById('success-rate');
 
-            const q = query(collection(db, "shipments"), where("companyId", "==", companyId));
-            onSnapshot(q, (snapshot) => {
+            db.collection("shipments").where("companyId", "==", companyId).onSnapshot((snapshot) => {
                 allShipments = [];
                 let activeNum = 0, completedNum = 0;
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    if(data.companyId === companyId) {
-                        allShipments.push({ id: docSnap.id, ...data });
-                        if(data.status === 'تم التسليم') completedNum++;
-                        else activeNum++;
-                    }
+                    allShipments.push({ id: docSnap.id, ...data });
+                    if(data.status === 'تم التسليم') completedNum++;
+                    else activeNum++;
                 });
                 if(activeCount) activeCount.textContent = activeNum;
                 if(completedCount) completedCount.textContent = completedNum;
@@ -455,8 +900,7 @@
             const box = document.getElementById('emergency-alert-box');
             const list = document.getElementById('emergency-list');
             if(box && list) {
-                const qEm = query(collection(db, "panda_emergencies"), where("companyId", "==", companyId));
-                onSnapshot(qEm, (snapshot) => {
+                db.collection("panda_emergencies").where("companyId", "==", companyId).onSnapshot((snapshot) => {
                     let listData = [];
                     snapshot.forEach(d => listData.push({ id: d.id, ...d.data() }));
                     if(listData.length > 0) {
@@ -473,9 +917,8 @@
             }
         }
 
-        // مستمع الشركات وحساب مؤشرات الإيرادات المالية مع مطابقة الحقول المرنة
         function initCompaniesListener() {
-            onSnapshot(collection(db, "companies"), (snapshot) => {
+            db.collection("companies").onSnapshot((snapshot) => {
                 allCompanies = [];
                 snapshot.forEach(d => {
                     const data = d.data();
@@ -520,17 +963,15 @@
         }
 
         function initAuditLogsListener(companyId) {
-            const q = query(collection(db, "auditLogs"), where("companyId", "==", companyId));
-            onSnapshot(q, (snapshot) => {
+            db.collection("auditLogs").where("companyId", "==", companyId).onSnapshot((snapshot) => {
                 allAuditLogs = [];
                 snapshot.forEach(d => allAuditLogs.push({ id: d.id, ...d.data() }));
                 renderAuditLogs();
             });
         }
 
-        // مستمع تذاكر الدعم الفني
         function initTicketsListener() {
-            onSnapshot(collection(db, "panda_tickets"), (snapshot) => {
+            db.collection("panda_tickets").onSnapshot((snapshot) => {
                 allTickets = [];
                 snapshot.forEach(d => allTickets.push({ id: d.id, ...d.data() }));
                 renderTicketsList();
@@ -560,15 +1001,13 @@
 
         window.resolveTicket = async function(id) {
             try {
-                await updateDoc(doc(db, "panda_tickets", id), { status: "تم الحل" });
+                await db.collection("panda_tickets").doc(id).update({ status: "تم الحل" });
                 alert("تم تحديث حالة التذاكر بنجاح.");
-            } catch(e) {
-                alert("تعذر التحديث.");
-            }
+            } catch(e) { alert("تعذر التحديث."); }
         };
 
         function initGlobalBroadcastsListener() {
-            onSnapshot(collection(db, "panda_global_broadcasts"), (snapshot) => {
+            db.collection("panda_global_broadcasts").onSnapshot((snapshot) => {
                 const list = document.getElementById('global-broadcasts-list');
                 if(!list) return;
                 let bData = [];
@@ -586,7 +1025,6 @@
             });
         }
 
-        // النسخ الاحتياطي الشامل (Data Backup Hub)
         window.exportFullPlatformDatabase = async function() {
             try {
                 const backupData = {
@@ -605,22 +1043,17 @@
                 URL.revokeObjectURL(url);
                 alert("✅ تم تصدير النسخة الاحتياطية الكاملة لقاعدة بيانات المنصة بنجاح!");
                 logAuditAction("تصدير نسخة احتياطية كاملة للمنصة", currentCompanyId);
-            } catch(e) {
-                console.error(e);
-                alert("تعذر إتمام التصدير الاحتياطي.");
-            }
+            } catch(e) { alert("تعذر إتمام التصدير الاحتياطي."); }
         };
 
         async function logAuditAction(actionDesc, compId) {
             try {
-                await addDoc(collection(db, "auditLogs"), {
+                await db.collection("auditLogs").add({
                     action: actionDesc,
                     companyId: compId || 'general',
-                    timestamp: serverTimestamp()
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
-            } catch(e) {
-                console.error("Audit log error:", e);
-            }
+            } catch(e) { console.error("Audit log error:", e); }
         }
 
         window.filterAndRenderCompanies = function() {
@@ -697,22 +1130,18 @@
 
         window.renewCompanySubscription = async function(id) {
             try {
-                await updateDoc(doc(db, "companies", id), { subExpiry: "2027-08-30" });
+                await db.collection("companies").doc(id).update({ subExpiry: "2027-08-30" });
                 await logAuditAction(`تجديد اشتراك الشركة ID: ${id}`, currentCompanyId);
                 alert("تم تجديد الاشتراك بنجاح.");
-            } catch(e) {
-                alert("تعذر تجديد الاشتراك.");
-            }
+            } catch(e) { alert("تعذر تجديد الاشتراك."); }
         };
 
         window.deleteCompany = async function(id) {
             if(confirm("هل أنت متأكد من حذف هذه الشركة نهائياً من النظام؟")) {
                 try {
-                    await deleteDoc(doc(db, "companies", id));
+                    await db.collection("companies").doc(id).delete();
                     await logAuditAction(`حذف الشركة ID: ${id}`, currentCompanyId);
-                } catch(e) {
-                    alert("تعذر الحذف.");
-                }
+                } catch(e) { alert("تعذر الحذف."); }
             }
         };
 
@@ -783,27 +1212,23 @@
             try {
                 const updateData = { status: newStatus };
                 if (newStatus === 'في الطريق') {
-                    updateData.enRouteAt = serverTimestamp();
+                    updateData.enRouteAt = firebase.firestore.FieldValue.serverTimestamp();
                 } else if (newStatus === 'تم التسليم') {
                     activeSignatureShipmentId = id;
                     openSignatureModal();
                     return;
                 }
-                await updateDoc(doc(db, "shipments", id), updateData);
+                await db.collection("shipments").doc(id).update(updateData);
                 await logAuditAction(`تحديث حالة الشحنة ID ${id} إلى ${newStatus}`, currentCompanyId);
-            } catch (error) {
-                console.error(error);
-            }
+            } catch (error) { console.error(error); }
         };
 
         window.deleteShipment = async function(id) {
             if (confirm('هل أنت متأكد من حذف هذه الشحنة نهائياً؟')) {
                 try {
-                    await deleteDoc(doc(db, "shipments", id));
+                    await db.collection("shipments").doc(id).delete();
                     await logAuditAction(`حذف الشحنة ID ${id}`, currentCompanyId);
-                } catch (error) {
-                    console.error(error);
-                }
+                } catch (error) { console.error(error); }
             }
         };
 
@@ -863,17 +1288,15 @@
             if (!activeSignatureShipmentId) return;
             const sigUrl = signatureCanvas.toDataURL('image/png');
             try {
-                await updateDoc(doc(db, "shipments", activeSignatureShipmentId), {
+                await db.collection("shipments").doc(activeSignatureShipmentId).update({
                     status: 'تم التسليم',
-                    deliveredAt: serverTimestamp(),
+                    deliveredAt: firebase.firestore.FieldValue.serverTimestamp(),
                     signature: sigUrl
                 });
                 await logAuditAction(`توثيق وتسليم الشحنة ID ${activeSignatureShipmentId} بالتوقيع الرقمي`, currentCompanyId);
                 closeSignatureModal();
                 alert("تم توثيق التسليم بنجاح.");
-            } catch (err) {
-                alert("فشل حفظ التوقيع سحابياً.");
-            }
+            } catch (err) { alert("فشل حفظ التوقيع سحابياً."); }
         }
 
         function renderTable(dataArray) {
@@ -933,8 +1356,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
         body { font-family: 'Cairo', sans-serif; }
 
-        /* ثيمات إضاءة متطورة مبهرة (Glowing Themes) */
-        /* 1. Emerald Glow */
         body.theme-emerald { background-color: #061a14; color: #ecfdf5; }
         body.theme-emerald header { background: linear-gradient(135deg, #022c22 0%, #064e3b 100%); border-bottom: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 4px 25px rgba(16, 185, 129, 0.15); }
         body.theme-emerald .theme-card { background: rgba(2, 44, 34, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(16, 185, 129, 0.25); box-shadow: 0 0 20px rgba(16, 185, 129, 0.08); }
@@ -944,7 +1365,6 @@
         body.theme-emerald .theme-select { background-color: #022c22; color: #ecfdf5; border-color: rgba(16, 185, 129, 0.3); }
         body.theme-emerald .theme-table-row:hover { background-color: rgba(16, 185, 129, 0.08); }
 
-        /* 2. Cyber Purple */
         body.theme-purple { background-color: #0f071e; color: #f5f3ff; }
         body.theme-purple header { background: linear-gradient(135deg, #1e1b4b 0%, #311042 100%); border-bottom: 1px solid rgba(168, 85, 247, 0.3); box-shadow: 0 4px 25px rgba(168, 85, 247, 0.2); }
         body.theme-purple .theme-card { background: rgba(30, 27, 75, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(168, 85, 247, 0.3); box-shadow: 0 0 25px rgba(168, 85, 247, 0.1); }
@@ -954,7 +1374,6 @@
         body.theme-purple .theme-select { background-color: #1e1b4b; color: #f5f3ff; border-color: rgba(168, 85, 247, 0.3); }
         body.theme-purple .theme-table-row:hover { background-color: rgba(168, 85, 247, 0.08); }
 
-        /* 3. Laser Cyan */
         body.theme-cyan { background-color: #020617; color: #f8fafc; }
         body.theme-cyan header { background: linear-gradient(135deg, #0f172a 0%, #0369a1 100%); border-bottom: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 4px 25px rgba(56, 189, 248, 0.2); }
         body.theme-cyan .theme-card { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.3); box-shadow: 0 0 25px rgba(56, 189, 248, 0.1); }
@@ -964,7 +1383,6 @@
         body.theme-cyan .theme-select { background-color: #0f172a; color: #f8fafc; border-color: rgba(56, 189, 248, 0.3); }
         body.theme-cyan .theme-table-row:hover { background-color: rgba(56, 189, 248, 0.08); }
 
-        /* 4. Golden Amber */
         body.theme-gold { background-color: #1a1505; color: #fef3c7; }
         body.theme-gold header { background: linear-gradient(135deg, #451a03 0%, #78350f 100%); border-bottom: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 4px 25px rgba(245, 158, 11, 0.2); }
         body.theme-gold .theme-card { background: rgba(69, 26, 3, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: 0 0 25px rgba(245, 158, 11, 0.1); }
@@ -974,7 +1392,6 @@
         body.theme-gold .theme-select { background-color: #451a03; color: #fef3c7; border-color: rgba(245, 158, 11, 0.3); }
         body.theme-gold .theme-table-row:hover { background-color: rgba(245, 158, 11, 0.08); }
 
-        /* 5. Ruby Red */
         body.theme-ruby { background-color: #1a0507; color: #ffe4e6; }
         body.theme-ruby header { background: linear-gradient(135deg, #4c0519 0%, #881337 100%); border-bottom: 1px solid rgba(244, 63, 94, 0.3); box-shadow: 0 4px 25px rgba(244, 63, 94, 0.2); }
         body.theme-ruby .theme-card { background: rgba(76, 5, 25, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(244, 63, 94, 0.3); box-shadow: 0 0 25px rgba(244, 63, 94, 0.1); }
@@ -990,495 +1407,5 @@
         }
         .panda-logo-glow { animation: pandaGlow 3s infinite ease-in-out; }
     </style>
-</head>
-<body class="min-h-screen flex flex-col pb-24 theme-emerald">
-
-    <!-- شريط التنقل العلوي -->
-    <header class="sticky top-0 z-50 transition-all duration-300">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center space-x-3 space-x-reverse">
-                <div class="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-slate-900 text-xl font-black shadow-lg panda-logo-glow">
-                    <i class="fa-solid fa-paw"></i>
-                    <div class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-cyan-400 rounded-full border-2 border-slate-900 animate-ping"></div>
-                </div>
-                <div>
-                    <h1 class="font-black text-lg leading-tight flex items-center gap-1.5">
-                        <span>باندا (Super Admin)</span>
-                        <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30 font-bold">لوحة تحكم المدير</span>
-                    </h1>
-                    <p class="text-xs opacity-75">أسطورة الطريق — الإدارة المركزية الشاملة</p>
-                </div>
-            </div>
-            
-            <nav class="flex items-center space-x-2 sm:space-x-3 space-x-reverse">
-                <!-- محول الثيمات المبهرة -->
-                <div class="hidden md:flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/10">
-                    <span class="text-[10px] px-2 opacity-75 font-bold">الثيم:</span>
-                    <select id="theme-selector" class="text-xs bg-transparent border-none focus:outline-none cursor-pointer font-bold pr-1">
-                        <option value="emerald" class="bg-slate-900 text-emerald-400">🟢 إيميرالد نيون</option>
-                        <option value="purple" class="bg-slate-900 text-purple-400">🟣 سايبر بلس</option>
-                        <option value="cyan" class="bg-slate-900 text-sky-400">🔵 ليزر أزرق</option>
-                        <option value="gold" class="bg-slate-900 text-amber-400">🟡 ذهبي فاخر</option>
-                        <option value="ruby" class="bg-slate-900 text-rose-400">🔴 عقيق أحمر</option>
-                    </select>
-                </div>
-
-                <button id="sos-panic-btn" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center shadow-lg shadow-red-600/30 animate-pulse">
-                    <i class="fa-solid fa-triangle-exclamation ml-1"></i> طوارئ (SOS)
-                </button>
-            </nav>
-        </div>
-    </header>
-
-    <!-- تنبيهات الطوارئ الفورية -->
-    <div id="emergency-alert-box" class="container mx-auto px-4 mt-4 hidden max-w-6xl">
-        <div class="bg-red-950/80 border-2 border-red-500 p-4 rounded-2xl shadow-xl backdrop-blur-md">
-            <h4 class="font-bold text-red-300 text-sm mb-2 flex items-center">
-                <i class="fa-solid fa-circle-exclamation text-red-500 ml-2 animate-bounce"></i> إشعارات الطوارئ النشطة (SOS Alerts) لغرفة العمليات المركزية
-            </h4>
-            <div id="emergency-list"></div>
-        </div>
-    </div>
-
-    <!-- نافذة التوقيع الرقمي -->
-    <div id="signature-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="theme-card rounded-2xl p-6 max-w-md w-full shadow-2xl border">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-signature text-emerald-400 ml-2"></i> توقيع المستلم لاستكمال التسليم</h3>
-                <button onclick="closeSignatureModal()" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <p class="text-xs opacity-80 mb-3">يرجى طلب التوقيع من العميل داخل الإطار أدناه لتأكيد استلام الشحنة:</p>
-            <div class="border-2 border-dashed border-emerald-500/40 rounded-xl overflow-hidden bg-white mb-4">
-                <canvas id="signature-pad" width="360" height="180" class="w-full cursor-crosshair touch-none"></canvas>
-            </div>
-            <div class="flex justify-between gap-2">
-                <button type="button" onclick="clearSignature()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl transition">مسح</button>
-                <div class="flex gap-2">
-                    <button type="button" onclick="closeSignatureModal()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl transition">إلغاء</button>
-                    <button type="button" onclick="saveSignatureAndComplete()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/30">اعتماد وحفظ</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- نافذة عرض الفاتورة الرسمية -->
-    <div id="invoice-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="theme-card rounded-2xl p-6 max-w-lg w-full shadow-2xl border space-y-4">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-file-invoice text-sky-400 ml-2"></i> الفاتورة الرسمية المعتمدة</h3>
-                <button onclick="closeInvoiceModal()" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div id="invoice-content"></div>
-            <div class="flex justify-end gap-2 pt-2">
-                <button type="button" onclick="printInvoice()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-1">
-                    <i class="fa-solid fa-print"></i> طباعة الفاتورة
-                </button>
-                <button type="button" onclick="closeInvoiceModal()" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl">إغلاق</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- نافذة إضافة شركة جديدة -->
-    <div id="add-company-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="theme-card rounded-2xl p-6 max-w-md w-full shadow-2xl border">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-base flex items-center"><i class="fa-solid fa-building text-emerald-400 ml-2"></i> تسجيل شركة جديدة بالنظام المركز</h3>
-                <button id="close-company-modal" class="opacity-70 hover:opacity-100 text-sm"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="new-company-form" class="space-y-3">
-                <div>
-                    <label class="block text-xs font-semibold mb-1">اسم الشركة (معرف العزل)</label>
-                    <input type="text" id="new-comp-name" required placeholder="مثال: شركة النور للنقليات" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold mb-1">اسم المسؤول</label>
-                    <input type="text" id="new-comp-manager" required placeholder="اسم المدير أو المسؤول" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold mb-1">رقم الهاتف (واتساب)</label>
-                    <input type="text" id="new-comp-phone" required placeholder="مثال: +2010xxxxxxxx" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold mb-1">نوع الباقة</label>
-                    <select id="new-comp-plan" class="w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none theme-select">
-                        <option value="monthly">شهري (Monthly)</option>
-                        <option value="annual">سنوي (Annual)</option>
-                        <option value="lifetime">مدى الحياة (Lifetime)</option>
-                    </select>
-                </div>
-                <div class="flex justify-end gap-2 pt-2">
-                    <button type="button" id="cancel-company-modal" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-4 py-2 rounded-xl">إلغاء</button>
-                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl shadow-lg shadow-emerald-600/30">حفظ وتسجيل</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- المحتوى الرئيسي -->
-    <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl space-y-6">
-
-        <!-- ================= 1. القسم الرئيسي (Dashboard) ================= -->
-        <div id="view-home" class="app-section-view space-y-6">
-            <section class="theme-card rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row justify-between items-center gap-4 border">
-                <div class="flex items-center space-x-3 space-x-reverse">
-                    <div class="theme-card-inner p-3 rounded-xl border flex items-center justify-center text-emerald-400 text-xl">
-                        <i class="fa-solid fa-building-shield"></i>
-                    </div>
-                    <div>
-                        <span class="text-xs opacity-75 block">بيئة العمل الحالية (عزل تام):</span>
-                        <span id="current-company-display" class="font-black text-emerald-400 text-lg">---</span>
-                    </div>
-                </div>
-                <form id="company-form" class="flex gap-2 w-full sm:w-auto">
-                    <input type="text" id="company-id-input" required placeholder="معرف الشركة" 
-                        class="text-xs border rounded-xl px-3 py-2 focus:outline-none theme-select w-full sm:w-48">
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition whitespace-nowrap shadow-lg shadow-emerald-600/30">
-                        تطبيق العزل
-                    </button>
-                </form>
-            </section>
-
-            <section class="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-6 text-white shadow-2xl relative overflow-hidden border border-emerald-500/30">
-                <div class="absolute -left-10 -bottom-10 text-emerald-500/10 text-9xl pointer-events-none">
-                    <i class="fa-solid fa-paw"></i>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
-                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
-                        <span class="text-xs opacity-75 block mb-1">الشحنات النشطة للشركة الحالية</span>
-                        <span id="active-shipments-count" class="text-3xl font-black text-emerald-400">0</span>
-                    </div>
-                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
-                        <span class="text-xs opacity-75 block mb-1">الرحلات المكتملة والموثقة</span>
-                        <span id="completed-shipments-count" class="text-3xl font-black text-purple-400">0</span>
-                    </div>
-                    <div class="bg-black/40 border border-emerald-500/20 p-4 rounded-xl backdrop-blur-md">
-                        <span class="text-xs opacity-75 block mb-1">معدل نجاح التوصيل</span>
-                        <span id="success-rate" class="text-3xl font-black text-sky-400">0%</span>
-                    </div>
-                </div>
-            </section>
-
-            <div class="theme-card rounded-2xl p-6 shadow-xl border text-center space-y-3">
-                <div class="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-3xl border border-emerald-500/30 panda-logo-glow">
-                    <i class="fa-solid fa-paw"></i>
-                </div>
-                <h3 class="font-black text-lg">مرحباً بك في لوحة تحكم المدير العام للمنصة</h3>
-                <p class="text-xs opacity-80 max-w-md mx-auto">تتيح لك هذه اللوحة مراقبة العمليات، الاشتراكات المالية، السائقين، دعم الشركات، وإصدار التعاميم من شاشة مركزية واحدة.</p>
-            </div>
-        </div>
-
-        <!-- ================= 2. قسم الشحنات (Shipments View) ================= -->
-        <div id="view-shipments" class="app-section-view hidden space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="theme-card rounded-2xl p-5 shadow-xl border">
-                    <h3 class="font-bold text-base mb-4 flex items-center">
-                        <i class="fa-solid fa-plus-circle text-emerald-400 ml-2"></i> تسجيل شحنة جديدة للشركة الحالية
-                    </h3>
-                    <form id="panda-form" class="space-y-4">
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">كود الشحنة / العميل</label>
-                            <input type="text" id="panda-code" required placeholder="مثال: PANDA-9021" 
-                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                        </div>
-                        <div>
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="text-xs font-semibold">وجهة التوصيل</label>
-                                <button type="button" id="get-gps-btn" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center">
-                                    <i class="fa-solid fa-location-crosshairs ml-1"></i> إحداثيات GPS تلقائي
-                                </button>
-                            </div>
-                            <input type="text" id="panda-destination" required placeholder="المدينة / المحافظة أو الإحداثيات" 
-                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">السائق المسؤول</label>
-                            <select id="panda-driver" class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                                <option value="">-- جاري تحميل السائقين --</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">ملاحظات التشغيل</label>
-                            <textarea id="panda-notes" rows="2" placeholder="تعليمات خاصة بالسائق..." 
-                                class="w-full text-sm border rounded-xl px-3 py-2.5 theme-select focus:outline-none"></textarea>
-                        </div>
-                        <button type="submit" 
-                            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-sm shadow-lg shadow-emerald-600/30">
-                            حفظ سحابياً في بيانات الشركة
-                        </button>
-                    </form>
-                </div>
-
-                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl flex flex-col border">
-                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
-                        <h3 class="font-bold text-base flex items-center">
-                            <i class="fa-solid fa-list-check text-emerald-400 ml-2"></i> سجل شحنات الشركة الحالية
-                        </h3>
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <button id="export-csv-btn" class="text-xs bg-white/10 hover:bg-white/20 font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap border border-white/10">
-                                <i class="fa-solid fa-file-excel text-emerald-400"></i> تصدير CSV
-                            </button>
-                            <input type="text" id="search-input" placeholder="بحث برقم الشحنة أو السائق..." 
-                                class="w-full sm:w-52 text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                        </div>
-                    </div>
-                    
-                    <div class="overflow-x-auto flex-grow">
-                        <table class="w-full text-right text-sm">
-                            <thead>
-                                <tr class="border-b border-white/10 opacity-70 text-xs">
-                                    <th class="pb-3 px-3 font-semibold">الكود والسائق</th>
-                                    <th class="pb-3 px-3 font-semibold">الوجهة والملاحظات</th>
-                                    <th class="pb-3 px-3 font-semibold">التوقيت</th>
-                                    <th class="pb-3 px-3 font-semibold">الحالة</th>
-                                    <th class="pb-3 px-3 font-semibold text-left">الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="panda-records-list" class="divide-y divide-white/10">
-                                <!-- تتم تعبئتها سحابياً -->
-                            </tbody>
-                        </table>
-                        <div id="empty-state" class="text-center py-12 opacity-60">
-                            <i class="fa-solid fa-box-open text-3xl mb-2 block"></i>
-                            لا توجد شحنات مسجلة لهذه الشركة حتى الآن
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= 3. قسم الشركات (Companies View) ================= -->
-        <div id="view-companies" class="app-section-view hidden space-y-6">
-            <section class="theme-card rounded-2xl p-5 shadow-xl space-y-4 border">
-                <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
-                    <h3 class="font-bold text-base flex items-center">
-                        <i class="fa-solid fa-building-user text-emerald-400 ml-2"></i> قسم إدارة الشركات والاشتراكات النشطة
-                    </h3>
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <button id="add-company-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-lg shadow-purple-600/30">
-                            <i class="fa-solid fa-plus"></i> إضافة شركة
-                        </button>
-                        <button onclick="sendBulkWhatsAppReminders()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-lg shadow-emerald-600/30">
-                            <i class="fa-brands fa-whatsapp"></i> تذكيرات واتساب جماعية
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <select id="company-status-filter" class="text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none w-full sm:w-40">
-                        <option value="all">جميع الحالات</option>
-                        <option value="نشط">نشط</option>
-                        <option value="منتهي">منتهي</option>
-                    </select>
-                    <input type="text" id="company-search-input" placeholder="ابحث باسم الشركة أو الهاتف..." class="text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none w-full flex-grow">
-                </div>
-
-                <div id="companies-container" class="space-y-3">
-                    <div class="text-center py-6 text-slate-400 text-xs">جاري تحميل الشركات السحابية المعزولة...</div>
-                </div>
-            </section>
-        </div>
-
-        <!-- ================= 4. قسم السائقين (Drivers View) ================= -->
-        <div id="view-drivers" class="app-section-view hidden space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="theme-card rounded-2xl p-5 shadow-xl border">
-                    <h3 class="font-bold text-base mb-4 flex items-center">
-                        <i class="fa-solid fa-user-plus text-emerald-400 ml-2"></i> تسجيل سائق جديد للشركة الحالية
-                    </h3>
-                    <form id="driver-form" class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">اسم السائق الثلاثي</label>
-                            <input type="text" id="driver-name-input" required placeholder="مثال: محمود أحمد حسن" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">رقم الهاتف (واتساب)</label>
-                            <input type="text" id="driver-phone-input" required placeholder="+2010xxxxxxxx" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">نوع ورقم المركبة</label>
-                            <input type="text" id="driver-vehicle-input" required placeholder="مثال: شاحنة نقل - أ ب ج 1234" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
-                        </div>
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg shadow-emerald-600/30">
-                            حفظ وتسجيل السائق
-                        </button>
-                    </form>
-                </div>
-                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl border space-y-3">
-                    <h3 class="font-bold text-base flex items-center">
-                        <i class="fa-solid fa-id-card-clip text-emerald-400 ml-2"></i> طاقم السائقين المعتمدين للشركة الحالية
-                    </h3>
-                    <div id="drivers-container" class="space-y-2">
-                        <div class="text-center py-6 text-slate-400 text-xs">جاري تحميل السائقين...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= 5. لوحة الإدارة المالية والمركزية (Admin Hub - ميزة كبرى للمدير) ================= -->
-        <div id="view-admin" class="app-section-view hidden space-y-6">
-            <!-- بطاقات مؤشرات الإيرادات (MRR Dashboard) -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
-                    <span class="text-xs opacity-75">إجمالي الشركات المسجلة</span>
-                    <h3 id="admin-total-companies" class="text-3xl font-black text-emerald-400">0</h3>
-                </div>
-                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
-                    <span class="text-xs opacity-75">الإيرادات المتكررة المقدرة (MRR)</span>
-                    <h3 id="admin-mrr-revenue" class="text-3xl font-black text-sky-400">0 ج.م</h3>
-                </div>
-                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-1">
-                    <span class="text-xs opacity-75">اشتراكات تنتهي قريباً (تحذير)</span>
-                    <h3 id="admin-expiring-soon" class="text-3xl font-black text-red-400">0</h3>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- إرسال تعميم عام لكافة الشركات -->
-                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-4">
-                    <h3 class="font-bold text-base flex items-center">
-                        <i class="fa-solid fa-bullhorn text-emerald-400 ml-2"></i> مركز التعاميم والإشعارات الجماعية (Broadcasts)
-                    </h3>
-                    <form id="broadcast-form" class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">عنوان التعميم</label>
-                            <input type="text" id="broadcast-title" required placeholder="مثال: تحديث أمني هام في المنصة" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold mb-1">نص الرسالة</label>
-                            <textarea id="broadcast-msg" rows="3" required placeholder="تفاصيل التعميم للشركات..." class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none"></textarea>
-                        </div>
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg">
-                            نشر التعميم لكل الشركات
-                        </button>
-                    </form>
-                    <div class="pt-2 border-t border-white/10">
-                        <h4 class="text-xs font-bold opacity-80 mb-2">التعاميم النشطة حالياً:</h4>
-                        <div id="global-broadcasts-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
-                    </div>
-                </div>
-
-                <!-- تذاكر الدعم الفني والنسخ الاحتياطي -->
-                <div class="space-y-6">
-                    <!-- تذاكر الدعم -->
-                    <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
-                        <h3 class="font-bold text-base flex items-center">
-                            <i class="fa-solid fa-headset text-sky-400 ml-2"></i> تذاكر الشكاوى والدعم الفني
-                        </h3>
-                        <div id="tickets-container" class="space-y-2 max-h-48 overflow-y-auto">
-                            <p class="text-xs opacity-60 text-center py-4">جاري التحميل...</p>
-                        </div>
-                    </div>
-
-                    <!-- مركز النسخ الاحتياطي الشامل -->
-                    <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-3">
-                        <h3 class="font-bold text-base flex items-center">
-                            <i class="fa-solid fa-database text-purple-400 ml-2"></i> النسخ الاحتياطي وحماية البيانات (Backup Hub)
-                        </h3>
-                        <p class="text-xs opacity-80">يمكنك تصدير نسخة احتياطية مشفرة وشاملة لكافة قواعد بيانات المنصة (شركات، سائقين، شحنات، وسجلات) بضغط زر واحدة.</p>
-                        <button onclick="exportFullPlatformDatabase()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-download"></i> تصدير قاعدة البيانات الكاملة (JSON)
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= 6. قسم العمليات والحاسبة (Operations View) ================= -->
-        <div id="view-operations" class="app-section-view hidden space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="theme-card rounded-2xl p-5 shadow-xl border">
-                    <h3 class="font-bold text-base mb-3 flex items-center">
-                        <i class="fa-solid fa-calculator text-emerald-400 ml-2"></i> الحاسبة المالية المتقدمة (وقود وأرباح)
-                    </h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-[11px] font-semibold mb-1">المسافة التقديرية للرحلة (كم)</label>
-                            <input type="number" id="calc-distance" placeholder="مثال: 150" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-[11px] font-semibold mb-1">معدل الاستهلاك (لتر/100كم)</label>
-                                <input type="number" id="calc-rate" value="10" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold mb-1">سعر لتر الوقود</label>
-                                <input type="number" id="calc-price" value="15" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-semibold mb-1">إيرادات الرحلة المتوقعة (جنيه)</label>
-                            <input type="number" id="calc-revenue" placeholder="مثال: 1200" class="w-full text-xs border rounded-xl px-3 py-2 theme-select focus:outline-none">
-                        </div>
-                        <button type="button" id="calc-fuel-btn" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs border border-white/10 shadow-md">
-                            احسب التكلفة وصافي الربح
-                        </button>
-                        <div id="calc-result"></div>
-                    </div>
-                </div>
-
-                <div class="theme-card rounded-2xl p-5 shadow-xl border flex flex-col justify-between">
-                    <div>
-                        <h3 class="font-bold text-base mb-3 flex items-center text-red-400">
-                            <i class="fa-solid fa-triangle-exclamation ml-2"></i> غرفة عمليات الطوارئ المركزية (SOS)
-                        </h3>
-                        <p class="text-xs opacity-80 mb-4">تلقي نداءات الاستغاثة وإحداثيات الموقع الجغرافي من أي مركبة تابعة لشركات المنصة.</p>
-                    </div>
-                    <button onclick="document.getElementById('sos-panic-btn').click()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition text-sm shadow-lg shadow-red-600/30 animate-pulse flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-satellite-dish"></i> إرسال نداء استغاثة عاجل الآن
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= 7. قسم السجل والإعدادات (Settings View) ================= -->
-        <div id="view-settings" class="app-section-view hidden space-y-6">
-            <section class="theme-card rounded-2xl p-5 shadow-xl space-y-3 border">
-                <h3 class="font-bold text-base flex items-center">
-                    <i class="fa-solid fa-scroll text-emerald-400 ml-2"></i> سجل التدقيق والعمليات الإدارية (Audit Logs) للشركة الحالية
-                </h3>
-                <div id="audit-logs-list" class="space-y-1">
-                    <p class="text-xs opacity-60 text-center py-4">جاري تحميل سجل التدقيق السحابي المعزول...</p>
-                </div>
-            </section>
-        </div>
-
-    </main>
-
-    <!-- شريط التنقل السفلي المخصص (Bottom Navigation Bar) مع زر الإدارة المركزية -->
-    <nav class="fixed bottom-0 left-0 right-0 z-40 theme-card border-t py-2 px-2 flex justify-around items-center shadow-2xl backdrop-blur-lg">
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold text-emerald-400 transition transform scale-105" data-view="view-home">
-            <i class="fa-solid fa-chart-pie text-base mb-1"></i>
-            <span>الرئيسية</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-shipments">
-            <i class="fa-solid fa-boxes-stacked text-base mb-1"></i>
-            <span>الشحنات</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-companies">
-            <i class="fa-solid fa-building text-base mb-1"></i>
-            <span>الشركات</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-drivers">
-            <i class="fa-solid fa-id-card-clip text-base mb-1"></i>
-            <span>السائقين</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition text-amber-400" data-view="view-admin">
-            <i class="fa-solid fa-user-shield text-base mb-1"></i>
-            <span>الإدارة العليا</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-operations">
-            <i class="fa-solid fa-satellite-dish text-base mb-1"></i>
-            <span>العمليات</span>
-        </button>
-        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition" data-view="view-settings">
-            <i class="fa-solid fa-scroll text-base mb-1"></i>
-            <span>السجل</span>
-        </button>
-    </nav>
-
-    <footer class="theme-card border-t py-4 mt-auto text-center text-xs opacity-75">
-        <p>منصة أسطورة الطريق © 2026 — لوحة تحكم المدير العام ونظام باندا السحابي (Project: n2la-642d3)</p>
-    </footer>
-
 </body>
 </html>
