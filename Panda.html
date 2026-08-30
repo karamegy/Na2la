@@ -568,7 +568,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        let currentCompanyId = localStorage.getItem('panda_company_id') || 'أسطورة الطريق (الرئيسي)';
+        // توحيد معرّف الشركة الافتراضي ليتطابق مع index.html (company_main)
+        let currentCompanyId = localStorage.getItem('panda_company_id') || localStorage.getItem('current_company_id') || 'company_main';
         let allShipments = []; 
         let allCompanies = [];
         let allDrivers = [];
@@ -577,7 +578,6 @@
         let activeSignatureShipmentId = null;
         let signatureCanvas, signatureCtx, isDrawing = false;
 
-        // مستمعات المزامنة الحية لإلغاء وتجديد الربط لحظياً عند تغيير الشركة
         let unsubShipments = null;
         let unsubDrivers = null;
         let unsubCompanies = null;
@@ -602,9 +602,7 @@
                 setupSignaturePad();
             }
 
-            // تشغيل المزامنة الحية الفورية لجميع الأقسام
             startRealtimeSync(currentCompanyId);
-
             setupBottomNavigation();
 
             if(themeSelect) {
@@ -693,6 +691,7 @@
                     if (!newId) return;
                     currentCompanyId = newId;
                     localStorage.setItem('panda_company_id', currentCompanyId);
+                    localStorage.setItem('current_company_id', currentCompanyId);
                     if(companyDisplay) companyDisplay.textContent = currentCompanyId;
                     
                     startRealtimeSync(currentCompanyId);
@@ -751,7 +750,7 @@
                         });
                         await logAuditAction(`إضافة سائق جديد: ${name}`, currentCompanyId);
                         driverForm.reset();
-                        alert("✅ تمت إضافة السائق بنجاح وتحديث القائمة فوريأ.");
+                        alert("✅ تمت إضافة السائق بنجاح وتحديث القائمة فورياً.");
                     } catch (err) { alert("فشل حفظ السائق."); }
                 });
             }
@@ -766,7 +765,7 @@
                     let csv = "\uFEFFكود الشحنة,الوجهة,السائق,ملاحظات,الحالة,التوقيت\n";
                     allShipments.forEach(i => {
                         const t = i.createdAt ? new Date(i.createdAt.toDate()).toLocaleString('ar-EG') : 'الآن';
-                        csv += `"${i.code}","${i.destination}","${i.driverName || ''}","${i.notes || ''}","${i.status}","${t}"\n`;
+                        csv += `"${i.code || i.name || ''}","${i.destination || i.address || ''}","${i.driverName || i.assignedDriver || ''}","${i.notes || i.item || ''}","${i.status}","${t}"\n`;
                     });
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
@@ -789,10 +788,18 @@
                     const notes = document.getElementById('panda-notes').value;
 
                     try {
+                        // حفظ بالصيغتين (Panda & Platform index.html fields) لضمان التوافق التام
                         await addDoc(collection(db, "shipments"), {
                             companyId: currentCompanyId,
                             companyName: currentCompanyId,
-                            code, destination, driverName, notes,
+                            code: code,
+                            name: code,
+                            destination: destination,
+                            address: destination,
+                            driverName: driverName,
+                            assignedDriver: driverName,
+                            notes: notes,
+                            item: notes,
                             status: 'نشط',
                             createdAt: serverTimestamp(),
                             signature: null
@@ -881,9 +888,8 @@
             }
         });
 
-        // تشغيل نظام المزامنة الحية (Realtime onSnapshot) لكل الجداول لتفادي أي مشاكل تزامن
+        // دالة المزامنة الحية المتوافقة مع كلا النظامين (Panda & index.html)
         function startRealtimeSync(companyId) {
-            // إيقاف المستمعات القديمة لمنع تداخل البيانات
             if (unsubShipments) unsubShipments();
             if (unsubDrivers) unsubDrivers();
             if (unsubCompanies) unsubCompanies();
@@ -891,21 +897,31 @@
             if (unsubTickets) unsubTickets();
             if (unsubEmergencies) unsubEmergencies();
 
-            // 1. مزامنة الشحنات لحظياً
+            // 1. مزامنة الشحنات لحظياً مع ربط التوافق لأسماء الحقول (code/name & destination/address & driverName/assignedDriver)
             unsubShipments = onSnapshot(collection(db, "shipments"), (snapshot) => {
                 allShipments = [];
                 let activeNum = 0, completedNum = 0;
                 
                 snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const matchCompany = (companyId === 'أسطورة الطريق (الرئيسي)') || 
-                                         (data.companyId && data.companyId.trim() === companyId.trim()) || 
-                                         (data.companyName && data.companyName.trim() === companyId.trim()) || 
-                                         (!data.companyId && !data.companyName);
+                    const rawData = docSnap.data();
+                    const matchCompany = (companyId === 'أسطورة الطريق (الرئيسي)' || companyId === 'company_main') || 
+                                         (rawData.companyId && (rawData.companyId.trim() === companyId.trim() || rawData.companyId === 'company_main')) || 
+                                         (rawData.companyName && (rawData.companyName.trim() === companyId.trim())) || 
+                                         (!rawData.companyId && !rawData.companyName);
 
                     if(matchCompany) {
-                        allShipments.push({ id: docSnap.id, ...data });
-                        if(data.status === 'تم التسليم') completedNum++;
+                        const normalizedItem = {
+                            id: docSnap.id,
+                            ...rawData,
+                            code: rawData.code || rawData.name || rawData.id,
+                            destination: rawData.destination || rawData.address || 'غير محدد',
+                            driverName: rawData.driverName || rawData.assignedDriver || 'غير محدد',
+                            notes: rawData.notes || rawData.item || '',
+                            status: rawData.status === 'مكتملة' ? 'تم التسليم' : (rawData.status || 'نشط')
+                        };
+
+                        allShipments.push(normalizedItem);
+                        if(normalizedItem.status === 'تم التسليم') completedNum++;
                         else activeNum++;
                     }
                 });
@@ -928,9 +944,9 @@
                 allDrivers = [];
                 snapshot.forEach(d => {
                     let data = d.data();
-                    const matchCompany = (companyId === 'أسطورة الطريق (الرئيسي)') || 
-                                         (data.companyId && data.companyId.trim() === companyId.trim()) || 
-                                         (data.companyName && data.companyName.trim() === companyId.trim()) || 
+                    const matchCompany = (companyId === 'أسطورة الطريق (الرئيسي)' || companyId === 'company_main') || 
+                                         (data.companyId && (data.companyId.trim() === companyId.trim() || data.companyId === 'company_main')) || 
+                                         (data.companyName && (data.companyName.trim() === companyId.trim())) || 
                                          (!data.companyId && !data.companyName);
 
                     if(matchCompany) {
@@ -944,7 +960,7 @@
                     allDrivers.forEach(driver => {
                         if(driver.name) {
                             const opt = document.createElement('option');
-                            opt.value = driver.id;
+                            opt.value = driver.name;
                             opt.textContent = driver.name;
                             select.appendChild(opt);
                         }
@@ -979,26 +995,26 @@
                 updateAdminFinancialMetrics();
             });
 
-            // 4. مزامنة سجل التدقيق لحظياً
+            // 4. مزامنة سجل التدقيق
             unsubAudit = onSnapshot(collection(db, "auditLogs"), (snapshot) => {
                 allAuditLogs = [];
                 snapshot.forEach(d => {
                     let data = d.data();
-                    if(companyId === 'أسطورة الطريق (الرئيسي)' || (data.companyId && data.companyId.trim() === companyId.trim())) {
+                    if(companyId === 'أسطورة الطريق (الرئيسي)' || companyId === 'company_main' || (data.companyId && data.companyId.trim() === companyId.trim())) {
                         allAuditLogs.push({ id: d.id, ...data });
                     }
                 });
                 renderAuditLogs();
             });
 
-            // 5. مزامنة تذاكر الدعم الفني لحظياً
+            // 5. مزامنة تذاكر الدعم الفني
             unsubTickets = onSnapshot(collection(db, "panda_tickets"), (snapshot) => {
                 allTickets = [];
                 snapshot.forEach(d => allTickets.push({ id: d.id, ...d.data() }));
                 renderTicketsList();
             });
 
-            // 6. مزامنة الطوارئ SOS لحظياً
+            // 6. مزامنة الطوارئ SOS
             unsubEmergencies = onSnapshot(collection(db, "panda_emergencies"), (snapshot) => {
                 const box = document.getElementById('emergency-alert-box');
                 const list = document.getElementById('emergency-list');
@@ -1006,7 +1022,7 @@
                 let listData = [];
                 snapshot.forEach(d => {
                     let data = d.data();
-                    if(currentCompanyId === 'أسطورة الطريق (الرئيسي)' || (data.companyId && data.companyId.trim() === currentCompanyId.trim())) {
+                    if(currentCompanyId === 'أسطورة الطريق (الرئيسي)' || currentCompanyId === 'company_main' || (data.companyId && data.companyId.trim() === currentCompanyId.trim())) {
                         listData.push({ id: d.id, ...data });
                     }
                 });
@@ -1251,6 +1267,7 @@
         window.switchCompanyContext = function(companyName) {
             currentCompanyId = companyName;
             localStorage.setItem('panda_company_id', currentCompanyId);
+            localStorage.setItem('current_company_id', currentCompanyId);
             document.getElementById('current-company-display').textContent = currentCompanyId;
             document.getElementById('company-id-input').value = currentCompanyId;
             startRealtimeSync(currentCompanyId);
@@ -1345,7 +1362,7 @@
                 const updateData = { status: newStatus };
                 if (newStatus === 'في الطريق') {
                     updateData.enRouteAt = serverTimestamp();
-                } else if (newStatus === 'تم التسليم') {
+                } else if (newStatus === 'تم التسليم' || newStatus === 'مكتملة') {
                     activeSignatureShipmentId = id;
                     openSignatureModal();
                     return;
@@ -1448,7 +1465,7 @@
                 const timeStr = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}) : 'الآن';
                 let badge = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
                 if(item.status === 'في الطريق') badge = "bg-sky-500/20 text-sky-400 border border-sky-500/30";
-                if(item.status === 'تم التسليم') badge = "bg-purple-500/20 text-purple-400 border border-purple-500/30";
+                if(item.status === 'تم التسليم' || item.status === 'مكتملة') badge = "bg-purple-500/20 text-purple-400 border border-purple-500/30";
                 const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.destination)}`;
 
                 tr.innerHTML = `
@@ -1475,7 +1492,7 @@
                         <select onchange="updateStatus('${item.id}', this.value)" class="text-xs border rounded-lg px-2 py-1 theme-select focus:outline-none">
                             <option value="نشط" ${item.status === 'نشط'?'selected':''}>نشط</option>
                             <option value="في الطريق" ${item.status === 'في الطريق'?'selected':''}>في الطريق</option>
-                            <option value="تم التسليم" ${item.status === 'تم التسليم'?'selected':''}>تم التسليم</option>
+                            <option value="تم التسليم" ${item.status === 'تم التسليم' || item.status === 'مكتملة'?'selected':''}>تم التسليم</option>
                         </select>
                         <button onclick="deleteShipment('${item.id}')" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 transition" title="حذف"><i class="fa-solid fa-trash"></i></button>
                     </td>
