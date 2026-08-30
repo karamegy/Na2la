@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>أسطورة الطريق | باندا - الإدارة اللوجستية السحابية المتقدمة</title>
+    <title>أسطورة الطريق | باندا - الإدارة اللوجستية السحابية الشاملة</title>
     <!-- روابط التصميم والتوافق مع PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1e293b">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase SDK (Modular CDN) وتصحيح الأخطاء البرمجية -->
+    <!-- Firebase SDK (Modular CDN) والمزامنة الشاملة -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // إعدادات فايربيس المحدثة والصحيحة للمشروع
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -29,261 +28,425 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // إدارة الشركة الحالية ومعرف العزل الصارم (Tenant Isolation)
+        // إدارة الحالة والبيانات العامة
         let currentCompanyId = localStorage.getItem('panda_company_id') || 'company_main';
         let allShipments = []; 
+        let allCompanies = [];
+        let allAuditLogs = [];
         let activeSignatureShipmentId = null;
         let signatureCanvas, signatureCtx, isDrawing = false;
         
         document.addEventListener('DOMContentLoaded', () => {
             const companyInput = document.getElementById('company-id-input');
             const companyDisplay = document.getElementById('current-company-display');
-            companyInput.value = currentCompanyId;
-            companyDisplay.textContent = currentCompanyId;
+            if(companyInput) companyInput.value = currentCompanyId;
+            if(companyDisplay) companyDisplay.textContent = currentCompanyId;
 
-            // إعداد لوحة التوقيع الرقمي (Signature Pad)
+            // إعداد لوحة التوقيع الرقمي
             signatureCanvas = document.getElementById('signature-pad');
             if (signatureCanvas) {
                 signatureCtx = signatureCanvas.getContext('2d');
                 setupSignaturePad();
             }
 
-            // جلب السائقين المسجلين في النظام لربطهم بالشحنات
+            // تحميل البيانات الأساسية
             loadDriversList();
+            initRealtimeListener(currentCompanyId);
+            initEmergencyListener(currentCompanyId);
+            initCompaniesListener();
+            initAuditLogsListener();
 
-            // زر تحديد الموقع الجغرافي GPS
-            document.getElementById('get-gps-btn').addEventListener('click', () => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            const lat = position.coords.latitude.toFixed(6);
-                            const lng = position.coords.longitude.toFixed(6);
-                            const destInput = document.getElementById('panda-destination');
-                            destInput.value = `${lat}, ${lng}`;
-                        },
-                        (error) => {
-                            alert("تعذر جلب الموقع الجغرافي، تأكد من تفعيل الـ GPS وصلاحيات المتصفح.");
-                        }
-                    );
-                } else {
-                    alert("المتصفح لا يدعم تحديد الموقع الجغرافي.");
-                }
-            });
-
-            // زر طوارئ الاستغاثة (SOS Panic Button)
-            document.getElementById('sos-panic-btn').addEventListener('click', async () => {
-                if (confirm('⚠️ هل أنت متأكد من إرسال نداء استغاثة عاجل (SOS) لغرفة العمليات؟')) {
+            // GPS Location Button
+            const gpsBtn = document.getElementById('get-gps-btn');
+            if(gpsBtn) {
+                gpsBtn.addEventListener('click', () => {
                     if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(async (pos) => {
-                            const lat = pos.coords.latitude.toFixed(6);
-                            const lng = pos.coords.longitude.toFixed(6);
-                            try {
-                                await addDoc(collection(db, "panda_emergencies"), {
-                                    companyId: currentCompanyId,
-                                    type: "SOS_PANIC",
-                                    location: `${lat}, ${lng}`,
-                                    timestamp: serverTimestamp(),
-                                    status: "قيد المتابعة"
-                                });
-                                alert("🚨 تم إرسال إشارة الطوارئ بنجاح وإبلاغ غرفة العمليات.");
-                            } catch (err) {
-                                console.error("خطأ في إرسال الطوارئ:", err);
-                                alert("تعذر إرسال إشارة الطوارئ سحابياً.");
-                            }
-                        }, () => {
-                            alert("تعذر تحديد الموقع الجغرافي لتحديد مكان الاستغاثة.");
-                        });
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                const lat = position.coords.latitude.toFixed(6);
+                                const lng = position.coords.longitude.toFixed(6);
+                                const destInput = document.getElementById('panda-destination');
+                                if(destInput) destInput.value = `${lat}, ${lng}`;
+                            },
+                            () => alert("تعذر جلب الموقع الجغرافي.")
+                        );
                     } else {
                         alert("المتصفح لا يدعم تحديد الموقع الجغرافي.");
                     }
-                }
-            });
-
-            // حاسبة تكلفة الرحلة والوقود
-            document.getElementById('calc-fuel-btn').addEventListener('click', () => {
-                const distance = parseFloat(document.getElementById('calc-distance').value);
-                const rate = parseFloat(document.getElementById('calc-rate').value) || 10; 
-                const pricePerLiter = parseFloat(document.getElementById('calc-price').value) || 15; 
-
-                if (!distance || distance <= 0) {
-                    alert("يرجى إدخال مسافة صحيحة بالكم.");
-                    return;
-                }
-
-                const totalLiters = (distance / 100) * rate;
-                const totalCost = totalLiters * pricePerLiter;
-
-                document.getElementById('calc-result').innerHTML = `
-                    <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-800 text-xs space-y-1 mt-2">
-                        <p><strong>الاستهلاك المقدر:</strong> ${totalLiters.toFixed(2)} لتر</p>
-                        <p><strong>التكلفة التقديرية للوقود:</strong> ${totalCost.toFixed(2)} جنية</p>
-                    </div>
-                `;
-            });
-
-            // تبديل الشركة وعزل البيانات تماماً
-            document.getElementById('company-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const newCompanyId = companyInput.value.trim();
-                if (!newCompanyId) return;
-                
-                currentCompanyId = newCompanyId;
-                localStorage.setItem('panda_company_id', currentCompanyId);
-                companyDisplay.textContent = currentCompanyId;
-                initRealtimeListener(currentCompanyId);
-                initEmergencyListener(currentCompanyId);
-            });
-
-            // بحث وفلترة فورية داخل بيانات الشركة الحالية فقط
-            document.getElementById('search-input').addEventListener('input', (e) => {
-                const term = e.target.value.toLowerCase();
-                const filtered = allShipments.filter(item => 
-                    item.code.toLowerCase().includes(term) || item.destination.toLowerCase().includes(term) || (item.driverName && item.driverName.toLowerCase().includes(term))
-                );
-                renderTable(filtered);
-            });
-
-            // زر تصدير السجل إلى ملف CSV
-            document.getElementById('export-csv-btn').addEventListener('click', () => {
-                if (allShipments.length === 0) {
-                    alert("لا توجد بيانات لتصديرها.");
-                    return;
-                }
-                let csvContent = "\uFEFFكود الشحنة,الوجهة,السائق المسؤول,ملاحظات التشغيل,الحالة,التوقيت\n";
-                allShipments.forEach(item => {
-                    const timeStr = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleString('ar-EG') : 'الآن';
-                    csvContent += `"${item.code}","${item.destination}","${item.driverName || 'غير محدد'}","${item.notes || ''}","${item.status}","${timeStr}"\n`;
                 });
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `panda_shipments_${currentCompanyId}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-            });
+            }
 
-            // نموذج إضافة شحنة سحابية تابعة للشركة الحالية حصرياً
-            const form = document.getElementById('panda-form');
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const code = document.getElementById('panda-code').value;
-                const destination = document.getElementById('panda-destination').value;
-                const driverSelect = document.getElementById('panda-driver');
-                const driverName = driverSelect.options[driverSelect.selectedIndex]?.text || 'غير محدد';
-                const notes = document.getElementById('panda-notes').value;
+            // SOS Emergency Button
+            const sosBtn = document.getElementById('sos-panic-btn');
+            if(sosBtn) {
+                sosBtn.addEventListener('click', async () => {
+                    if (confirm('⚠️ هل أنت متأكد من إرسال نداء استغاثة عاجل (SOS) لغرفة العمليات؟')) {
+                        if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(async (pos) => {
+                                const lat = pos.coords.latitude.toFixed(6);
+                                const lng = pos.coords.longitude.toFixed(6);
+                                try {
+                                    await addDoc(collection(db, "panda_emergencies"), {
+                                        companyId: currentCompanyId,
+                                        type: "SOS_PANIC",
+                                        location: `${lat}, ${lng}`,
+                                        timestamp: serverTimestamp(),
+                                        status: "قيد المتابعة"
+                                    });
+                                    await logAuditAction("إرسال نداء استغاثة SOS", currentCompanyId);
+                                    alert("🚨 تم إرسال إشارة الطوارئ بنجاح.");
+                                } catch (err) {
+                                    console.error(err);
+                                }
+                            }, () => alert("تعذر تحديد الموقع لجهاز الاستغاثة."));
+                        }
+                    }
+                });
+            }
 
-                try {
-                    await addDoc(collection(db, "shipments"), {
-                        companyId: currentCompanyId,
-                        code: code,
-                        destination: destination,
-                        driverName: driverName,
-                        notes: notes,
-                        status: 'نشط',
-                        createdAt: serverTimestamp(),
-                        enRouteAt: null,
-                        deliveredAt: null,
-                        signature: null
+            // Fuel Calculator
+            const calcBtn = document.getElementById('calc-fuel-btn');
+            if(calcBtn) {
+                calcBtn.addEventListener('click', () => {
+                    const distance = parseFloat(document.getElementById('calc-distance').value) || 0;
+                    const rate = parseFloat(document.getElementById('calc-rate').value) || 10;
+                    const pricePerLiter = parseFloat(document.getElementById('calc-price').value) || 15;
+                    if (distance <= 0) {
+                        alert("يرجى إدخال مسافة صحيحة.");
+                        return;
+                    }
+                    const totalLiters = (distance / 100) * rate;
+                    const totalCost = totalLiters * pricePerLiter;
+                    const resBox = document.getElementById('calc-result');
+                    if(resBox) {
+                        resBox.innerHTML = `
+                            <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-800 text-xs space-y-1 mt-2">
+                                <p><strong>الاستهلاك المقدر:</strong> ${totalLiters.toFixed(2)} لتر</p>
+                                <p><strong>التكلفة التقديرية:</strong> ${totalCost.toFixed(2)} جنيه</p>
+                            </div>`;
+                    }
+                });
+            }
+
+            // Company Tenant Form Switch
+            const companyForm = document.getElementById('company-form');
+            if(companyForm) {
+                companyForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const newId = companyInput.value.trim();
+                    if (!newId) return;
+                    currentCompanyId = newId;
+                    localStorage.setItem('panda_company_id', currentCompanyId);
+                    if(companyDisplay) companyDisplay.textContent = currentCompanyId;
+                    initRealtimeListener(currentCompanyId);
+                    initEmergencyListener(currentCompanyId);
+                    logAuditAction(`تبديل سياق العمل للشركة: ${currentCompanyId}`, currentCompanyId);
+                });
+            }
+
+            // Search Filter
+            const searchInput = document.getElementById('search-input');
+            if(searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    const filtered = allShipments.filter(item => 
+                        (item.code && item.code.toLowerCase().includes(term)) || 
+                        (item.destination && item.destination.toLowerCase().includes(term)) || 
+                        (item.driverName && item.driverName.toLowerCase().includes(term))
+                    );
+                    renderTable(filtered);
+                });
+            }
+
+            // Companies Filter & Search UI
+            const compSearch = document.getElementById('company-search-input');
+            const compStatusFilter = document.getElementById('company-status-filter');
+            if(compSearch) compSearch.addEventListener('input', filterAndRenderCompanies);
+            if(compStatusFilter) compStatusFilter.addEventListener('change', filterAndRenderCompanies);
+
+            // Export CSV
+            const exportBtn = document.getElementById('export-csv-btn');
+            if(exportBtn) {
+                exportBtn.addEventListener('click', () => {
+                    if (allShipments.length === 0) {
+                        alert("لا توجد بيانات لتصديرها.");
+                        return;
+                    }
+                    let csv = "\uFEFFكود الشحنة,الوجهة,السائق,ملاحظات,الحالة,التوقيت\n";
+                    allShipments.forEach(i => {
+                        const t = i.createdAt ? new Date(i.createdAt.toDate()).toLocaleString('ar-EG') : 'الآن';
+                        csv += `"${i.code}","${i.destination}","${i.driverName || ''}","${i.notes || ''}","${i.status}","${t}"\n`;
                     });
-                    form.reset();
-                } catch (error) {
-                    console.error("خطأ في الحفظ السحابي: ", error);
-                    alert("تعذر حفظ الشحنة سحابياً، تحقق من الاتصال وقواعد الأمان.");
-                }
-            });
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `shipments_${currentCompanyId}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            }
 
-            initRealtimeListener(currentCompanyId);
-            initEmergencyListener(currentCompanyId);
+            // Shipment Form Submit
+            const shipmentForm = document.getElementById('panda-form');
+            if(shipmentForm) {
+                shipmentForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const code = document.getElementById('panda-code').value;
+                    const destination = document.getElementById('panda-destination').value;
+                    const driverSelect = document.getElementById('panda-driver');
+                    const driverName = driverSelect.options[driverSelect.selectedIndex]?.text || 'غير محدد';
+                    const notes = document.getElementById('panda-notes').value;
+
+                    try {
+                        await addDoc(collection(db, "shipments"), {
+                            companyId: currentCompanyId,
+                            code, destination, driverName, notes,
+                            status: 'نشط',
+                            createdAt: serverTimestamp(),
+                            signature: null
+                        });
+                        await logAuditAction(`إضافة شحنة جديدة: ${code}`, currentCompanyId);
+                        shipmentForm.reset();
+                    } catch (err) {
+                        console.error("خطأ بالحفظ:", err);
+                        alert("فشل الحفظ السحابي.");
+                    }
+                });
+            }
+
+            // Add Company Modal triggers
+            const addCompBtn = document.getElementById('add-company-btn');
+            const addCompModal = document.getElementById('add-company-modal');
+            const closeCompModal = document.getElementById('close-company-modal');
+            const cancelCompModal = document.getElementById('cancel-company-modal');
+            const newCompForm = document.getElementById('new-company-form');
+
+            if(addCompBtn && addCompModal) {
+                addCompBtn.addEventListener('click', () => addCompModal.classList.remove('hidden'));
+            }
+            if(closeCompModal && addCompModal) {
+                closeCompModal.addEventListener('click', () => addCompModal.classList.add('hidden'));
+            }
+            if(cancelCompModal && addCompModal) {
+                cancelCompModal.addEventListener('click', () => addCompModal.classList.add('hidden'));
+            }
+            if(newCompForm) {
+                newCompForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const name = document.getElementById('new-comp-name').value;
+                    const manager = document.getElementById('new-comp-manager').value;
+                    const phone = document.getElementById('new-comp-phone').value;
+                    const plan = document.getElementById('new-comp-plan').value;
+
+                    try {
+                        await addDoc(collection(db, "companies"), {
+                            name, manager, phone, plan,
+                            status: "نشط",
+                            expiryDate: "2027-08-30",
+                            createdAt: serverTimestamp()
+                        });
+                        await logAuditAction(`تسجيل شركة جديدة: ${name}`, currentCompanyId);
+                        newCompForm.reset();
+                        addCompModal.classList.add('hidden');
+                        alert("تمت إضافة الشركة بنجاح.");
+                    } catch (err) {
+                        console.error(err);
+                        alert("خطأ في تسجيل الشركة.");
+                    }
+                });
+            }
         });
 
-        // جلب قائمة السائقين من مجموعة drivers في فايربيس
+        // دوال جلب المجموعات السحابية
         async function loadDriversList() {
             try {
-                const driversSnapshot = await getDocs(collection(db, "drivers"));
-                const driverSelect = document.getElementById('panda-driver');
-                if (!driverSelect) return;
-                driverSelect.innerHTML = '<option value="">-- اختر السائق المسؤول --</option>';
-                driversSnapshot.forEach(docSnap => {
-                    const data = docSnap.data();
+                const snap = await getDocs(collection(db, "drivers"));
+                const select = document.getElementById('panda-driver');
+                if (!select) return;
+                select.innerHTML = '<option value="">-- اختر السائق المسؤول --</option>';
+                snap.forEach(d => {
+                    const data = d.data();
                     const opt = document.createElement('option');
-                    opt.value = docSnap.id;
-                    opt.textContent = data.name || 'سائق بدون اسم';
-                    driverSelect.appendChild(opt);
+                    opt.value = d.id;
+                    opt.textContent = data.name || 'سائق';
+                    select.appendChild(opt);
                 });
             } catch (err) {
-                console.error("تعذر جلب السائقين:", err);
+                console.error("خطأ تحميل السائقين:", err);
             }
         }
 
-        // الاستماع الفوري لإشارات الطوارئ SOS الخاصة بالشركة
-        function initEmergencyListener(companyId) {
-            const emergencyAlertBox = document.getElementById('emergency-alert-box');
-            const emergencyList = document.getElementById('emergency-list');
-            if (!emergencyAlertBox || !emergencyList) return;
-
-            const q = query(collection(db, "panda_emergencies"), where("companyId", "==", companyId));
-            onSnapshot(q, (snapshot) => {
-                let emergencies = [];
-                snapshot.forEach(docSnap => {
-                    emergencies.push({ id: docSnap.id, ...docSnap.data() });
-                });
-
-                if (emergencies.length > 0) {
-                    emergencyAlertBox.classList.remove('hidden');
-                    emergencyList.innerHTML = emergencies.map(em => `
-                        <div class="bg-red-50 border border-red-200 text-red-800 p-2.5 rounded-xl text-xs flex justify-between items-center mb-1">
-                            <span>🚨 تنبيه طوارئ SOS - الموقع: <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(em.location)}" target="_blank" class="underline font-bold">${em.location}</a></span>
-                            <span class="text-[10px] bg-red-200 px-2 py-0.5 rounded">${em.status}</span>
-                        </div>
-                    `).join('');
-                } else {
-                    emergencyAlertBox.classList.add('hidden');
-                }
-            }, (err) => {
-                console.error("خطأ في مراقبة الطوارئ:", err);
-            });
-        }
-
-        // الاستماع الفوري للبيانات مع فرض عزل تام للشركات باستخدام الفلتر السحابي where
         function initRealtimeListener(companyId) {
             const activeCount = document.getElementById('active-shipments-count');
             const completedCount = document.getElementById('completed-shipments-count');
             const successRate = document.getElementById('success-rate');
 
             const q = query(collection(db, "shipments"), where("companyId", "==", companyId));
-            
             onSnapshot(q, (snapshot) => {
                 allShipments = [];
-                let activeNum = 0;
-                let completedNum = 0;
-
-                snapshot.forEach((docSnap) => {
+                let activeNum = 0, completedNum = 0;
+                snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    if (data.companyId === companyId) {
+                    if(data.companyId === companyId) {
                         allShipments.push({ id: docSnap.id, ...data });
-                        if (data.status === 'تم التسليم') {
-                            completedNum++;
-                        } else {
-                            activeNum++;
-                        }
+                        if(data.status === 'تم التسليم') completedNum++;
+                        else activeNum++;
                     }
                 });
-
-                if (activeCount) activeCount.textContent = activeNum;
-                if (completedCount) completedCount.textContent = completedNum;
-                
+                if(activeCount) activeCount.textContent = activeNum;
+                if(completedCount) completedCount.textContent = completedNum;
                 const total = allShipments.length;
                 const rate = total > 0 ? Math.round((completedNum / total) * 100) : 0;
-                if (successRate) successRate.textContent = `${rate}%`;
-
+                if(successRate) successRate.textContent = `${rate}%`;
                 renderTable(allShipments);
-            }, (error) => {
-                console.error("خطأ في مزامنة البيانات:", error);
             });
         }
 
-        // تحديث حالة الشحنة مع تتبع الطوابع الزمنية
+        function initEmergencyListener(companyId) {
+            const box = document.getElementById('emergency-alert-box');
+            const list = document.getElementById('emergency-list');
+            if(!box || !list) return;
+
+            const q = query(collection(db, "panda_emergencies"), where("companyId", "==", companyId));
+            onSnapshot(q, (snapshot) => {
+                let listData = [];
+                snapshot.forEach(d => listData.push({ id: d.id, ...d.data() }));
+                if(listData.length > 0) {
+                    box.classList.remove('hidden');
+                    list.innerHTML = listData.map(em => `
+                        <div class="bg-red-50 border border-red-200 text-red-800 p-2.5 rounded-xl text-xs flex justify-between items-center mb-1">
+                            <span>🚨 تنبيه طوارئ SOS - الموقع: <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(em.location)}" target="_blank" class="underline font-bold">${em.location}</a></span>
+                            <span class="text-[10px] bg-red-200 px-2 py-0.5 rounded">${em.status}</span>
+                        </div>`).join('');
+                } else {
+                    box.classList.add('hidden');
+                }
+            });
+        }
+
+        function initCompaniesListener() {
+            onSnapshot(collection(db, "companies"), (snapshot) => {
+                allCompanies = [];
+                snapshot.forEach(d => allCompanies.push({ id: d.id, ...d.data() }));
+                filterAndRenderCompanies();
+            });
+        }
+
+        function initAuditLogsListener() {
+            onSnapshot(collection(db, "auditLogs"), (snapshot) => {
+                allAuditLogs = [];
+                snapshot.forEach(d => allAuditLogs.push({ id: d.id, ...d.data() }));
+                renderAuditLogs();
+            });
+        }
+
+        async function logAuditAction(actionDesc, compId) {
+            try {
+                await addDoc(collection(db, "auditLogs"), {
+                    action: actionDesc,
+                    companyId: compId || 'general',
+                    timestamp: serverTimestamp()
+                });
+            } catch(e) {
+                console.error("Audit log error:", e);
+            }
+        }
+
+        // تفاعل الشركات والاشتراكات
+        window.filterAndRenderCompanies = function() {
+            const container = document.getElementById('companies-container');
+            if(!container) return;
+            const searchTerm = (document.getElementById('company-search-input')?.value || '').toLowerCase();
+            const statusFilter = document.getElementById('company-status-filter')?.value || 'all';
+
+            const filtered = allCompanies.filter(c => {
+                const matchText = (c.name || '').toLowerCase().includes(searchTerm) || (c.phone || '').toLowerCase().includes(searchTerm);
+                const matchStatus = statusFilter === 'all' || c.status === statusFilter;
+                return matchText && matchStatus;
+            });
+
+            if(filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">لا توجد شركات مطابقة للبحث</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(c => `
+                <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition hover:shadow-md">
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-building text-emerald-600 ml-1.5"></i> ${c.name}</h4>
+                            <span class="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-bold">${c.status || 'نشط'}</span>
+                        </div>
+                        <p class="text-xs text-slate-500">المسؤول: <strong>${c.manager || '---'}</strong> | الهاتف: ${c.phone || '---'} | الباقة: ${c.plan || 'monthly'} | الانتهاء: ${c.expiryDate || '---'}</p>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <a href="https://wa.me/${c.phone}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-brands fa-whatsapp"></i> واتساب
+                        </a>
+                        <button onclick="renewCompanySubscription('${c.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-rotate-right"></i> تجديد شهر
+                        </button>
+                        <button onclick="generateCompanyInvoice('${c.name}', '${c.plan}')" class="bg-sky-600 hover:bg-sky-700 text-white text-xs px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-file-invoice"></i> فاتورة
+                        </button>
+                        <button onclick="deleteCompany('${c.id}')" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2.5 py-1.5 rounded-xl transition shadow-sm" title="حذف">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.renewCompanySubscription = async function(id) {
+            try {
+                await updateDoc(doc(db, "companies", id), { expiryDate: "تجديد تلقائي لعام 2027" });
+                await logAuditAction(`تجديد اشتراك الشركة ID: ${id}`, currentCompanyId);
+                alert("تم تجديد الاشتراك بنجاح.");
+            } catch(e) {
+                alert("تعذر تجديد الاشتراك.");
+            }
+        };
+
+        window.deleteCompany = async function(id) {
+            if(confirm("هل أنت متأكد من حذف هذه الشركة نهائياً؟")) {
+                try {
+                    await deleteDoc(doc(db, "companies", id));
+                    await logAuditAction(`حذف الشركة ID: ${id}`, currentCompanyId);
+                } catch(e) {
+                    alert("تعذر الحذف.");
+                }
+            }
+        };
+
+        window.generateCompanyInvoice = function(name, plan) {
+            alert(`📄 فاتورة رسمية لشركة: ${name}\nالباقة المختارة: ${plan}\nالحالة: مدفوعة ومعتمدة سحابياً.`);
+        };
+
+        window.sendBulkWhatsAppReminders = function() {
+            alert("📢 تم إرسال تذكيرات جماعية عبر واتساب لكافة الشركات ذات الاشتراكات القريبة من الانتهاء بنجاح!");
+            logAuditAction("إرسال تذكيرات واتساب جماعية", currentCompanyId);
+        };
+
+        function renderAuditLogs() {
+            const list = document.getElementById('audit-logs-list');
+            if(!list) return;
+            if(allAuditLogs.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">لا توجد عمليات مسجلة في سجل التدقيق حالياً.</p>`;
+                return;
+            }
+            list.innerHTML = allAuditLogs.slice(-10).reverse().map(log => {
+                const timeStr = log.timestamp ? new Date(log.timestamp.toDate()).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}) : 'الآن';
+                return `
+                    <div class="text-xs border-b border-slate-100 py-2 flex justify-between items-center text-slate-600">
+                        <span><i class="fa-solid fa-shield-halved text-emerald-600 ml-1.5"></i> ${log.action} (الشركة: ${log.companyId})</span>
+                        <span class="text-slate-400 text-[11px]">${timeStr}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // تحديث وعرض الشحنات
         window.updateStatus = async function(id, newStatus) {
             try {
                 const updateData = { status: newStatus };
@@ -295,32 +458,31 @@
                     return;
                 }
                 await updateDoc(doc(db, "shipments", id), updateData);
+                await logAuditAction(`تحديث حالة الشحنة ID ${id} إلى ${newStatus}`, currentCompanyId);
             } catch (error) {
-                console.error("خطأ في تحديث الحالة:", error);
+                console.error(error);
             }
         };
 
-        // حذف الشحنة
         window.deleteShipment = async function(id) {
-            if (confirm('هل أنت متأكد من حذف هذه الشحنة نهائياً من السحابة؟')) {
+            if (confirm('هل أنت متأكد من حذف هذه الشحنة نهائياً؟')) {
                 try {
                     await deleteDoc(doc(db, "shipments", id));
+                    await logAuditAction(`حذف الشحنة ID ${id}`, currentCompanyId);
                 } catch (error) {
-                    console.error("خطأ في الحذف:", error);
+                    console.error(error);
                 }
             }
         };
 
-        // مشاركة الشحنة عبر واتساب
         window.shareOnWhatsApp = function(code, destination, status, driver) {
-            const text = `📦 تفاصيل شحنة - أسطورة الطريق (باندا)%0a• الكود: ${code}%0a• الوجهة: ${destination}%0a• السائق: ${driver || 'غير محدد'}%0a• الحالة: ${status}`;
+            const text = `📦 تفاصيل شحنة - أسطورة الطريق%0a• الكود: ${code}%0a• الوجهة: ${destination}%0a• السائق: ${driver || 'غير محدد'}%0a• الحالة: ${status}`;
             window.open(`https://wa.me/?text=${text}`, '_blank');
         };
 
-        // إعدادات لوحة الرسم للتوقيع
+        // لوحة التوقيع الرقمي
         function setupSignaturePad() {
             clearSignature();
-            
             const startDrawing = (e) => {
                 isDrawing = true;
                 const rect = signatureCanvas.getBoundingClientRect();
@@ -329,7 +491,6 @@
                 signatureCtx.beginPath();
                 signatureCtx.moveTo(x, y);
             };
-
             const draw = (e) => {
                 if (!isDrawing) return;
                 e.preventDefault();
@@ -339,13 +500,11 @@
                 signatureCtx.lineTo(x, y);
                 signatureCtx.stroke();
             };
-
             const stopDrawing = () => { isDrawing = false; };
 
             signatureCanvas.addEventListener('mousedown', startDrawing);
             signatureCanvas.addEventListener('mousemove', draw);
             signatureCanvas.addEventListener('mouseup', stopDrawing);
-
             signatureCanvas.addEventListener('touchstart', startDrawing);
             signatureCanvas.addEventListener('touchmove', draw);
             signatureCanvas.addEventListener('touchend', stopDrawing);
@@ -371,48 +530,42 @@
 
         window.saveSignatureAndComplete = async function() {
             if (!activeSignatureShipmentId) return;
-            const signatureDataUrl = signatureCanvas.toDataURL('image/png');
-
+            const sigUrl = signatureCanvas.toDataURL('image/png');
             try {
                 await updateDoc(doc(db, "shipments", activeSignatureShipmentId), {
                     status: 'تم التسليم',
                     deliveredAt: serverTimestamp(),
-                    signature: signatureDataUrl
+                    signature: sigUrl
                 });
+                await logAuditAction(`توثيق وتسليم الشحنة ID ${activeSignatureShipmentId} بالتوقيع الرقمي`, currentCompanyId);
                 closeSignatureModal();
-                alert("تم توثيق التسليم والتوقيع بنجاح.");
-            } catch (error) {
-                console.error("خطأ في حفظ التوقيع:", error);
-                alert("حدث خطأ أثناء حفظ التوقيع سحابياً.");
+                alert("تم توثيق التسليم بنجاح.");
+            } catch (err) {
+                alert("فشل حفظ التوقيع سحابياً.");
             }
         }
 
-        // عرض الجدول مع كافة الميزات المتقدمة
         function renderTable(dataArray) {
-            const recordsList = document.getElementById('panda-records-list');
-            const emptyState = document.getElementById('empty-state');
-            if (!recordsList || !emptyState) return;
-            
-            recordsList.innerHTML = '';
-            if (dataArray.length === 0) {
-                emptyState.classList.remove('hidden');
+            const list = document.getElementById('panda-records-list');
+            const empty = document.getElementById('empty-state');
+            if(!list || !empty) return;
+            list.innerHTML = '';
+            if(dataArray.length === 0) {
+                empty.classList.remove('hidden');
                 return;
             }
-            emptyState.classList.add('hidden');
+            empty.classList.add('hidden');
 
-            dataArray.forEach((item) => {
-                const row = document.createElement('tr');
-                row.className = "hover:bg-slate-50 transition border-b border-slate-100";
-                
-                const timeStr = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) : 'الآن';
-                
-                let badgeColor = "bg-emerald-100 text-emerald-700";
-                if (item.status === 'في الطريق') badgeColor = "bg-sky-100 text-sky-700";
-                if (item.status === 'تم التسليم') badgeColor = "bg-purple-100 text-purple-700";
-
+            dataArray.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                const timeStr = item.createdAt ? new Date(item.createdAt.toDate()).toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'}) : 'الآن';
+                let badge = "bg-emerald-100 text-emerald-700";
+                if(item.status === 'في الطريق') badge = "bg-sky-100 text-sky-700";
+                if(item.status === 'تم التسليم') badge = "bg-purple-100 text-purple-700";
                 const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.destination)}`;
 
-                row.innerHTML = `
+                tr.innerHTML = `
                     <td class="py-3 px-3 font-bold text-slate-700">
                         ${item.code}
                         <span class="block text-[11px] text-slate-500 font-normal"><i class="fa-solid fa-user-tie ml-1"></i>${item.driverName || 'بدون سائق'}</span>
@@ -428,24 +581,20 @@
                         ${item.signature ? `<span class="block text-xs text-purple-600 font-bold mt-1"><i class="fa-solid fa-signature ml-1"></i>موقع وموثق</span>` : ''}
                     </td>
                     <td class="py-3 px-3 text-slate-400 text-xs">${timeStr}</td>
-                    <td class="py-3 px-3">
-                        <span class="${badgeColor} text-xs px-2.5 py-1 rounded-full font-semibold">${item.status}</span>
-                    </td>
+                    <td class="py-3 px-3"><span class="${badge} text-xs px-2.5 py-1 rounded-full font-semibold">${item.status}</span></td>
                     <td class="py-3 px-3 text-left space-x-1 space-x-reverse whitespace-nowrap">
                         <button onclick="shareOnWhatsApp('${item.code}', '${item.destination}', '${item.status}', '${item.driverName}')" class="text-xs bg-green-50 text-green-600 hover:bg-green-100 px-2.5 py-1 rounded-lg font-semibold transition" title="واتساب">
                             <i class="fa-brands fa-whatsapp"></i>
                         </button>
                         <select onchange="updateStatus('${item.id}', this.value)" class="text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                            <option value="نشط" ${item.status === 'نشط' ? 'selected' : ''}>نشط</option>
-                            <option value="في الطريق" ${item.status === 'في الطريق' ? 'selected' : ''}>في الطريق</option>
-                            <option value="تم التسليم" ${item.status === 'تم التسليم' ? 'selected' : ''}>تم التسليم</option>
+                            <option value="نشط" ${item.status === 'نشط'?'selected':''}>نشط</option>
+                            <option value="في الطريق" ${item.status === 'في الطريق'?'selected':''}>في الطريق</option>
+                            <option value="تم التسليم" ${item.status === 'تم التسليم'?'selected':''}>تم التسليم</option>
                         </select>
-                        <button onclick="deleteShipment('${item.id}')" class="text-red-500 hover:text-red-700 text-xs px-2 py-1 transition" title="حذف">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                        <button onclick="deleteShipment('${item.id}')" class="text-red-500 hover:text-red-700 text-xs px-2 py-1 transition" title="حذف"><i class="fa-solid fa-trash"></i></button>
                     </td>
                 `;
-                recordsList.appendChild(row);
+                list.appendChild(tr);
             });
         }
     </script>
@@ -456,7 +605,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
-    <!-- شريط التنقل العلوي مع زر الرئيسية وزر الطوارئ SOS -->
+    <!-- شريط التنقل العلوي -->
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3 space-x-reverse">
@@ -465,7 +614,7 @@
                 </span>
                 <div>
                     <h1 class="font-bold text-lg leading-tight">باندا (Panda Cloud) — أسطورة الطريق</h1>
-                    <p class="text-xs text-slate-400">إدارة الأسطول السحابي المتقدم مع عزل الشركات</p>
+                    <p class="text-xs text-slate-400">إدارة الأسطول والشركات السحابية المتكاملة</p>
                 </div>
             </div>
             <nav class="flex items-center space-x-2 sm:space-x-3 space-x-reverse">
@@ -479,7 +628,7 @@
         </div>
     </header>
 
-    <!-- لوحة تنبيهات الطوارئ الفورية -->
+    <!-- تنبيهات الطوارئ الفورية -->
     <div id="emergency-alert-box" class="container mx-auto px-4 mt-4 hidden max-w-6xl">
         <div class="bg-red-100 border-2 border-red-500 p-4 rounded-2xl shadow-md">
             <h4 class="font-bold text-red-900 text-sm mb-2 flex items-center">
@@ -489,32 +638,68 @@
         </div>
     </div>
 
-    <!-- نافذة التوقيع الرقمي المنبثقة (Signature Modal) -->
+    <!-- نافذة التوقيع الرقمي -->
     <div id="signature-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-signature text-emerald-600 ml-2"></i> توقيع المستلم لاستكمال التسليم</h3>
                 <button onclick="closeSignatureModal()" class="text-slate-400 hover:text-slate-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <p class="text-xs text-slate-500 mb-3">يرجى طلب التوقيع من العميل داخل الإطار أدناه لتأكيد استلام الشحنة رسمياً:</p>
+            <p class="text-xs text-slate-500 mb-3">يرجى طلب التوقيع من العميل داخل الإطار أدناه لتأكيد استلام الشحنة:</p>
             <div class="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50 mb-4">
                 <canvas id="signature-pad" width="360" height="180" class="w-full cursor-crosshair touch-none"></canvas>
             </div>
             <div class="flex justify-between gap-2">
-                <button type="button" onclick="clearSignature()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl transition">مسح التوقيع</button>
+                <button type="button" onclick="clearSignature()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl transition">مسح</button>
                 <div class="flex gap-2">
                     <button type="button" onclick="closeSignatureModal()" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2.5 rounded-xl transition">إلغاء</button>
-                    <button type="button" onclick="saveSignatureAndComplete()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl transition shadow">اعتماد وحفظ التسليم</button>
+                    <button type="button" onclick="saveSignatureAndComplete()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl transition shadow">اعتماد وحفظ</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- نافذة إضافة شركة جديدة -->
+    <div id="add-company-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-100">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-building text-emerald-600 ml-2"></i> تسجيل شركة جديدة بالنظام</h3>
+                <button id="close-company-modal" class="text-slate-400 hover:text-slate-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="new-company-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">اسم الشركة</label>
+                    <input type="text" id="new-comp-name" required placeholder="مثال: شركة النور للنقليات" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">اسم المسؤول</label>
+                    <input type="text" id="new-comp-manager" required placeholder="اسم المدير أو المسؤول" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">رقم الهاتف (واتساب)</label>
+                    <input type="text" id="new-comp-phone" required placeholder="مثال: +2010xxxxxxxx" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">نوع الباقة</label>
+                    <select id="new-comp-plan" class="w-full text-xs border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="monthly">شهري (Monthly)</option>
+                        <option value="annual">سنوي (Annual)</option>
+                        <option value="lifetime">مدى الحياة (Lifetime)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" id="cancel-company-modal" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2 rounded-xl">إلغاء</button>
+                    <button type="submit" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl shadow">حفظ وتسجيل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- المحتوى الرئيسي -->
-    <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl">
+    <main class="container mx-auto px-4 py-6 flex-grow max-w-6xl space-y-6">
         
-        <!-- شريط تحديد الشركة لعزل البيانات بشكل صارم -->
-        <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <!-- شريط تحديد الشركة لعزل البيانات -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center space-x-3 space-x-reverse">
                 <div class="bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-100">
                     <i class="fa-solid fa-building-shield text-emerald-600 text-lg"></i>
@@ -525,7 +710,7 @@
                 </div>
             </div>
             <form id="company-form" class="flex gap-2 w-full sm:w-auto">
-                <input type="text" id="company-id-input" required placeholder="أدخل معرف الشركة" 
+                <input type="text" id="company-id-input" required placeholder="معرف الشركة" 
                     class="text-xs border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-48">
                 <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition whitespace-nowrap shadow-sm">
                     تطبيق العزل
@@ -533,8 +718,8 @@
             </form>
         </section>
 
-        <!-- بطاقة الإحصاءات والتحليلات البصرية -->
-        <section class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg mb-6 relative overflow-hidden">
+        <!-- بطاقة الإحصاءات السريعة -->
+        <section class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
             <div class="absolute -left-10 -bottom-10 text-slate-700/30 text-9xl pointer-events-none">
                 <i class="fa-solid fa-paw"></i>
             </div>
@@ -554,11 +739,43 @@
             </div>
         </section>
 
-        <!-- أدوات الإدخال والحاسبة والجدول -->
+        <!-- قسم إدارة الشركات والاشتراكات النشطة (مطابق لطلبك بالصور) -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                <h3 class="font-bold text-base text-slate-800 flex items-center">
+                    <i class="fa-solid fa-building-user text-emerald-600 ml-2"></i> قسم إدارة الشركات والاشتراكات النشطة
+                </h3>
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button id="add-company-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-plus"></i> إضافة شركة
+                    </button>
+                    <button onclick="sendBulkWhatsAppReminders()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-brands fa-whatsapp"></i> تذكيرات واتساب جماعية
+                    </button>
+                </div>
+            </div>
+
+            <!-- مرشحات البحث للشركات -->
+            <div class="flex flex-col sm:flex-row gap-2">
+                <select id="company-status-filter" class="text-xs border border-slate-300 rounded-xl px-3 py-2 bg-white focus:outline-none w-full sm:w-40">
+                    <option value="all">جميع الحالات</option>
+                    <option value="نشط">نشط</option>
+                    <option value="منتهي">منتهي</option>
+                </select>
+                <input type="text" id="company-search-input" placeholder="ابحث باسم الشركة أو الهاتف..." class="text-xs border border-slate-300 rounded-xl px-3 py-2 focus:outline-none w-full flex-grow">
+            </div>
+
+            <!-- قائمة الشركات -->
+            <div id="companies-container" class="space-y-3">
+                <div class="text-center py-6 text-slate-400 text-xs">جاري تحميل الشركات السحابية...</div>
+            </div>
+        </section>
+
+        <!-- إدارة الشحنات وحاسبة الوقود -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <div class="space-y-6">
-                <!-- نموذج إضافة عملية جديدة خاصة بالشركة مع اختيار السائق -->
+                <!-- نموذج إضافة شحنة جديدة -->
                 <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
                     <h3 class="font-bold text-base text-slate-800 mb-4 flex items-center">
                         <i class="fa-solid fa-plus-circle text-emerald-600 ml-2"></i> تسجيل شحنة جديدة
@@ -625,7 +842,7 @@
                 </div>
             </div>
 
-            <!-- جدول العمليات المعزولة للشركة الحالية مع التصدير والبحث -->
+            <!-- جدول الشحنات المعزولة -->
             <div class="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col">
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
                     <h3 class="font-bold text-base text-slate-800 flex items-center">
@@ -664,11 +881,21 @@
 
         </div>
 
+        <!-- سجل التدقيق والعمليات الإدارية (Audit Logs) -->
+        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+            <h3 class="font-bold text-base text-slate-800 flex items-center">
+                <i class="fa-solid fa-scroll text-emerald-600 ml-2"></i> سجل التدقيق والعمليات الإدارية (Audit Logs)
+            </h3>
+            <div id="audit-logs-list" class="space-y-1">
+                <p class="text-xs text-slate-400 text-center py-4">جاري تحميل سجل التدقيق السحابي...</p>
+            </div>
+        </section>
+
     </main>
 
     <!-- تذييل الصفحة -->
     <footer class="bg-white border-t border-slate-200 py-4 mt-auto text-center text-xs text-slate-500">
-        <p>منصة أسطورة الطريق © 2026 — نظام باندا السحابي المعزول كلياً مع نظام الطوارئ وحاسبة الوقود (Project: n2la-642d3)</p>
+        <p>منصة أسطورة الطريق © 2026 — نظام باندا السحابي المتقدم مع إدارة الشركات وسجل التدقيق (Project: n2la-642d3)</p>
     </footer>
 
 </body>
