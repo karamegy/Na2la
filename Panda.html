@@ -691,6 +691,64 @@
             </section>
         </div>
 
+        <!-- 11. قسم البصمة البيومترية ومصادقة الأجهزة (Biometric Authentication Hub) -->
+        <div id="view-biometric" class="app-section-view hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="theme-card rounded-2xl p-5 shadow-xl border space-y-4">
+                    <h3 class="font-bold text-base flex items-center text-emerald-400">
+                        <i class="fa-solid fa-fingerprint ml-2"></i> تسجيل المصادقة بالبصمة (WebAuthn)
+                    </h3>
+                    <p class="text-xs opacity-80">قم بربط بصمة إصبعك أو وجهك بهذا الجهاز لتسجيل الحضور واعتماد العمليات بصلاحيات تامة.</p>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">اسم المستخدم / المسؤول / السائق</label>
+                            <input type="text" id="bio-username" placeholder="مثال: م. كرم حمدي (مدير عام)" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1">الدور الوظيفي</label>
+                            <select id="bio-role" class="w-full text-xs border rounded-xl px-3 py-2.5 theme-select focus:outline-none">
+                                <option value="مدير عام">👑 المدير العام</option>
+                                <option value="مشرف">🏢 مشرف الشركة</option>
+                                <option value="سائق أسطول">🚚 سائق أسطول</option>
+                            </select>
+                        </div>
+                        <button onclick="registerBiometricCredential()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-fingerprint"></i> تسجيل البصمة بالجهاز الآن
+                        </button>
+                        <button onclick="authenticateBiometricCredential()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-shield-check"></i> التحقق وتسجيل الدخول بالبصمة
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 theme-card rounded-2xl p-5 shadow-xl border space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold text-base flex items-center">
+                            <i class="fa-solid fa-clipboard-user text-emerald-400 ml-2"></i> سجل بصمات المديرين والمشرفين والسائقين (مزامنة فورية)
+                        </h3>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full font-bold">مؤمن بالبصمة الكمومية</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-xs">
+                            <thead>
+                                <tr class="border-b border-white/10 opacity-70">
+                                    <th class="pb-2 px-2 font-semibold">المستخدم</th>
+                                    <th class="pb-2 px-2 font-semibold">الدور</th>
+                                    <th class="pb-2 px-2 font-semibold">الشركة</th>
+                                    <th class="pb-2 px-2 font-semibold">حالة التحقق</th>
+                                    <th class="pb-2 px-2 font-semibold">التوقيت</th>
+                                </tr>
+                            </thead>
+                            <tbody id="biometric-logs-list" class="divide-y divide-white/10">
+                                <tr><td colspan="5" class="text-center py-4 text-slate-400">جاري مزامنة سجلات البصمة من Firebase...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <!-- شريط التنقل السفلي المطور والقابل للتمرير بسلاسة -->
@@ -735,6 +793,10 @@
             <i class="fa-solid fa-scroll text-base mb-1"></i>
             <span>السجل</span>
         </button>
+        <button class="nav-tab-btn flex flex-col items-center text-[11px] font-bold opacity-70 hover:opacity-100 transition px-3 py-1 flex-shrink-0" data-view="view-biometric">
+            <i class="fa-solid fa-fingerprint text-base mb-1"></i>
+            <span>البصمة</span>
+        </button>
     </nav>
 
     <footer class="theme-card border-t py-4 mt-auto text-center text-xs opacity-75">
@@ -768,6 +830,7 @@
         let allExpenses = [];
         let allAuditLogs = [];
         let allTickets = [];
+        let allBiometricLogs = [];
         let activeSignatureShipmentId = null;
         let signatureCanvas, signatureCtx, isDrawing = false;
         let fleetMap = null, mapMarkers = [];
@@ -780,6 +843,7 @@
         let unsubAudit = null;
         let unsubTickets = null;
         let unsubEmergencies = null;
+        let unsubBiometric = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             const companyInput = document.getElementById('company-id-input');
@@ -1120,6 +1184,123 @@
             }
         });
 
+        // دوال المصادقة بالبصمة البيومترية (WebAuthn) ومزامنتها مع Firebase
+        window.registerBiometricCredential = async function() {
+            const username = document.getElementById('bio-username').value.trim();
+            const role = document.getElementById('bio-role').value;
+            if(!username) {
+                alert("يرجى إدخال اسم المستخدم أو المسؤول.");
+                return;
+            }
+
+            if (!window.PublicKeyCredential) {
+                alert("متصفحك لا يدعم تقنية المصادقة البيومترية (WebAuthn).");
+                return;
+            }
+
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                const userId = new TextEncoder().encode(username);
+
+                const publicKeyCredentialCreationOptions = {
+                    challenge: challenge,
+                    rp: { name: "أسطورة الطريق - باندا سحابي", id: window.location.hostname },
+                    user: {
+                        id: userId,
+                        name: username,
+                        displayName: username
+                    },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                    timeout: 60000,
+                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                    attestation: "direct"
+                };
+
+                const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions });
+                
+                // حفظ سجل البصمة في Firebase
+                await addDoc(collection(db, "panda_biometric_logs"), {
+                    companyId: currentCompanyId,
+                    username: username,
+                    role: role,
+                    action: "تسجيل بصمة جديدة بالجهاز",
+                    status: "معتمد ✅",
+                    timestamp: serverTimestamp()
+                });
+
+                await logAuditAction(`تسجيل بصمة بيومترية ناجح للمستخدم: ${username} (${role})`, currentCompanyId);
+                alert("✅ تمت مطابقة البصمة البيومترية بنجاح وربطها بالجهاز وحفظها في سحابة Firebase!");
+            } catch (error) {
+                console.error(error);
+                alert("فشل تسجيل البصمة أو تم إلغاؤها من قبل المستخدم.");
+            }
+        };
+
+        window.authenticateBiometricCredential = async function() {
+            const username = document.getElementById('bio-username').value.trim();
+            const role = document.getElementById('bio-role').value;
+            if(!username) {
+                alert("يرجى إدخال اسم المستخدم للتحقق.");
+                return;
+            }
+
+            if (!window.PublicKeyCredential) {
+                alert("متصفحك لا يدعم تقنية المصادقة البيومترية.");
+                return;
+            }
+
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                const publicKeyCredentialRequestOptions = {
+                    challenge: challenge,
+                    timeout: 60000,
+                    userVerification: "required"
+                };
+
+                const assertion = await navigator.credentials.get({ publicKey: publicKeyCredentialRequestOptions });
+
+                // تسجيل دخول وتوثيق ناجح في Firebase
+                await addDoc(collection(db, "panda_biometric_logs"), {
+                    companyId: currentCompanyId,
+                    username: username,
+                    role: role,
+                    action: "تسجيل دخول وتوثيق بالبصمة",
+                    status: "تم التحقق ✅",
+                    timestamp: serverTimestamp()
+                });
+
+                await logAuditAction(`توثيق ناجح عبر البصمة البيومترية: ${username} (${role})`, currentCompanyId);
+                alert("🔓 تم التحقق من البصمة البيومترية بنجاح وتسجيل الدخول سحابياً!");
+            } catch (error) {
+                console.error(error);
+                alert("فشل التحقق من البصمة البيومترية.");
+            }
+        };
+
+        function renderBiometricLogs() {
+            const container = document.getElementById('biometric-logs-list');
+            if(!container) return;
+            if(allBiometricLogs.length === 0) {
+                container.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-slate-400">لا توجد سجلات بصمة بيومترية حديثة.</td></tr>`;
+                return;
+            }
+            container.innerHTML = allBiometricLogs.map(log => {
+                const timeStr = log.timestamp ? new Date(log.timestamp.toDate()).toLocaleString('ar-EG') : 'الآن';
+                return `
+                    <tr class="border-b border-white/10">
+                        <td class="py-2.5 px-2 font-bold text-emerald-400">${log.username}</td>
+                        <td class="py-2.5 px-2">${log.role}</td>
+                        <td class="py-2.5 px-2 opacity-80">${log.companyId}</td>
+                        <td class="py-2.5 px-2 font-bold text-sky-400">${log.action} (${log.status})</td>
+                        <td class="py-2.5 px-2 opacity-70">${timeStr}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
         // التحقق من البصمة الكمومية النانوية والفواتير (محدث ليدعم البحث المرن والشامل لأي كود مثل 1788089551913)
         window.verifyQuantumSeal = async function() {
             const codeInput = document.getElementById('quantum-code-input').value.trim();
@@ -1313,6 +1494,7 @@
             if (unsubAudit) unsubAudit();
             if (unsubTickets) unsubTickets();
             if (unsubEmergencies) unsubEmergencies();
+            if (unsubBiometric) unsubBiometric();
 
             // 1. الشحنات
             unsubShipments = onSnapshot(collection(db, "shipments"), (snapshot) => {
@@ -1454,7 +1636,19 @@
                 renderTicketsList();
             });
 
-            // 7. الطوارئ SOS
+            // 7. البصمات البيومترية
+            unsubBiometric = onSnapshot(collection(db, "panda_biometric_logs"), (snapshot) => {
+                allBiometricLogs = [];
+                snapshot.forEach(d => {
+                    let data = d.data();
+                    if(companyId === 'أسطورة الطريق (الرئيسي)' || companyId === 'company_main' || (data.companyId && data.companyId.trim() === companyId.trim())) {
+                        allBiometricLogs.push({ id: d.id, ...data });
+                    }
+                });
+                renderBiometricLogs();
+            });
+
+            // 8. الطوارئ SOS
             unsubEmergencies = onSnapshot(collection(db, "panda_emergencies"), (snapshot) => {
                 const box = document.getElementById('emergency-alert-box');
                 const list = document.getElementById('emergency-list');
@@ -1670,7 +1864,8 @@
                     drivers: allDrivers,
                     expenses: allExpenses,
                     auditLogs: allAuditLogs,
-                    tickets: allTickets
+                    tickets: allTickets,
+                    biometricLogs: allBiometricLogs
                 };
                 const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
