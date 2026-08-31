@@ -706,8 +706,8 @@
             </div>
 
             <div class="card">
-                <h3>📢 إشارات رادار الأسطول العامة</h3>
-                <div id="community-posts-container">جلب المنشورات سحابياً...</div>
+                <h3>📢 إشارات رادار الشركة الحالية</h3>
+                <div id="community-posts-container">جلب منشورات الشركة سحابياً...</div>
             </div>
         </div>
 
@@ -2284,8 +2284,10 @@
             if (!window.db || !window.firebaseModules) return;
             if (communityUnsubscribe) communityUnsubscribe();
             
-            const { collection, onSnapshot } = window.firebaseModules;
-            communityUnsubscribe = onSnapshot(collection(window.db, 'communityPosts'), snapshot => {
+            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const q = query(collection(window.db, 'communityPosts'), where('companyId', '==', currentCompanyId));
+            
+            communityUnsubscribe = onSnapshot(q, snapshot => {
                 const container = document.getElementById('community-posts-container');
                 if(!container) return;
 
@@ -2297,98 +2299,89 @@
                 posts.sort((a, b) => Number(b.id) - Number(a.id));
 
                 if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات رادار حالياً.</p>`;
+                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات رادار لهذه الشركة حالياً.</p>`;
                     return;
                 }
 
+                container.innerHTML = '';
                 posts.forEach(p => {
-                    let card = document.getElementById(`post-card-${p.id}`);
-                    
-                    let likesCountEl = document.getElementById(`likes-count-${p.id}`);
-                    let commentsCountEl = document.getElementById(`comments-count-${p.id}`);
-                    
-                    if (likesCountEl) likesCountEl.innerText = p.likes || 0;
-                    if (commentsCountEl) commentsCountEl.innerText = p.comments ? p.comments.length : 0;
-
-                    if (!card) {
-                        let mediaHtml = '';
-                        if (p.files && p.files.length > 0) {
-                            mediaHtml += `<div class="load-post-media">`;
-                            p.files.forEach(f => {
-                                if (f.type === 'video') {
-                                    mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
-                                } else {
-                                    mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
-                                }
-                            });
-                            mediaHtml += `</div>`;
-                        }
-
-                        let commentsHtml = '';
-                        if (p.comments && p.comments.length > 0) {
-                            p.comments.forEach(c => {
-                                let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
-                                commentsHtml += `
-                                    <div class="comment-item">
-                                        <div class="comment-header">
-                                            <span>👤 ${c.author}</span>
-                                            <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
-                                        </div>
-                                        <div style="color:var(--text-color);">${c.text || ''}</div>
-                                        ${commentImg}
-                                    </div>`;
-                            });
-                        } else {
-                            commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
-                        }
-
-                        let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
-
-                        let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || currentDriverProfile.name === 'المدير';
-                        let canDelete = (p.author === currentDriverProfile.name) || isManager;
-                        let deleteBtnHtml = canDelete ? `<button class="action-icon-btn delete-btn" onclick="deleteCommunityPost('${p.id}')">🗑️ حذف</button>` : '';
-                        let shareBtnHtml = `<button class="action-icon-btn" onclick="sharePostToProfile('${encodeURIComponent(p.text || '')}', ${JSON.stringify(p.files || []).replace(/"/g, '&quot;')})">🔗 مشاركة</button>`;
-
-                        card = document.createElement('div');
-                        card.className = 'card';
-                        card.id = `post-card-${p.id}`;
-                        if(p.isEmergency) card.style.border = '2px solid var(--danger)';
-                        
-                        card.innerHTML = `
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    ${avatarHtml}
-                                    <div>
-                                        <strong style="font-size:10.5px; color:var(--text-color);">${p.author}</strong>
-                                        <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
-                                    </div>
-                                </div>
-                                <span style="font-size:8.5px; background:rgba(59,130,246,0.15); color:var(--accent); padding:2px 6px; border-radius:8px; font-weight:bold;">${p.category}</span>
-                            </div>
-                            <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
-                            ${mediaHtml}
-                            
-                            <div class="post-actions-bar">
-                                <button class="action-icon-btn" onclick="likePost(this, '${p.id}')">👍 تفاعل (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
-                                <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">${p.comments ? p.comments.length : 0}</span>)</button>
-                                ${shareBtnHtml}
-                                ${deleteBtnHtml}
-                            </div>
-
-                            <div id="comments-sec-${p.id}" class="comments-box">
-                                <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml}</div>
-                                <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
-                                    <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
-                                    <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
-                                        📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
-                                    </label>
-                                    <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}')">إرسال</button>
-                                </div>
-                                <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
-                            </div>
-                        `;
-                        container.appendChild(card);
+                    let mediaHtml = '';
+                    if (p.files && p.files.length > 0) {
+                        mediaHtml += `<div class="load-post-media">`;
+                        p.files.forEach(f => {
+                            if (f.type === 'video') {
+                                mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
+                            } else {
+                                mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
+                            }
+                        });
+                        mediaHtml += `</div>`;
                     }
+
+                    let commentsHtml = '';
+                    if (p.comments && p.comments.length > 0) {
+                        p.comments.forEach(c => {
+                            let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
+                            commentsHtml += `
+                                <div class="comment-item">
+                                    <div class="comment-header">
+                                        <span>👤 ${c.author}</span>
+                                        <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
+                                    </div>
+                                    <div style="color:var(--text-color);">${c.text || ''}</div>
+                                    ${commentImg}
+                                </div>`;
+                        });
+                    } else {
+                        commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
+                    }
+
+                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
+
+                    let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || currentDriverProfile.name === 'المدير';
+                    let canDelete = (p.author === currentDriverProfile.name) || isManager;
+                    let deleteBtnHtml = canDelete ? `<button class="action-icon-btn delete-btn" onclick="deleteCommunityPost('${p.id}')">🗑️ حذف</button>` : '';
+                    let shareBtnHtml = `<button class="action-icon-btn" onclick="sharePostToProfile('${encodeURIComponent(p.text || '')}', ${JSON.stringify(p.files || []).replace(/"/g, '&quot;')})">🔗 مشاركة</button>`;
+
+                    let card = document.createElement('div');
+                    card.className = 'card';
+                    card.id = `post-card-${p.id}`;
+                    if(p.isEmergency) card.style.border = '2px solid var(--danger)';
+                    
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                ${avatarHtml}
+                                <div>
+                                    <strong style="font-size:10.5px; color:var(--text-color);">${p.author}</strong>
+                                    <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
+                                </div>
+                            </div>
+                            <span style="font-size:8.5px; background:rgba(59,130,246,0.15); color:var(--accent); padding:2px 6px; border-radius:8px; font-weight:bold;">${p.category}</span>
+                        </div>
+                        <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
+                        ${mediaHtml}
+                        
+                        <div class="post-actions-bar">
+                            <button class="action-icon-btn" onclick="likePost(this, '${p.id}')">👍 تفاعل (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
+                            <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">${p.comments ? p.comments.length : 0}</span>)</button>
+                            ${shareBtnHtml}
+                            ${deleteBtnHtml}
+                        </div>
+
+                        <div id="comments-sec-${p.id}" class="comments-box">
+                            <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml}</div>
+                            <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
+                                <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
+                                <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
+                                    📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
+                                </label>
+                                <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}')">إرسال</button>
+                            </div>
+                            <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
+                        </div>
+                    `;
+                    container.appendChild(card);
                 });
             }, error => {});
         }
@@ -2785,4 +2778,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
