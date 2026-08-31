@@ -176,7 +176,7 @@
 
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة <b>أسطورة الطريق (Company_main)</b>.<br>- تم تفعيل عزل الحسابات والشركات، مزامنة جهات الاتصال، والإجابات المعرفية الذكية لكافة المجالات.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة <b>أسطورة الطريق</b>.<br>- تم تفعيل عزل الحسابات والشركات، مزامنة جهات الاتصال، والإجابات المعرفية الذكية لكافة المجالات.
                 </div>
             </div>
 
@@ -208,19 +208,39 @@
         const onDrag = (clientX, clientY) => {
             if (!isBotDragging) return;
             let dx = clientX - startBotX, dy = clientY - startBotY;
-            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasBotDragged = true;
+            if (dx * dx + dy * dy > 36) hasBotDragged = true; // أكثر تسامحاً لضمان عدم منع النقرات البسيطة
             let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
             let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
             botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
         };
-        const stopDrag = () => { if (!isBotDragging) return; isBotDragging = false; if (!hasBotDragged) toggleNa2laBot(); };
+        const stopDrag = () => { 
+            if (!isBotDragging) return; 
+            isBotDragging = false; 
+        };
 
         botBtn.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
         document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
         document.addEventListener('mouseup', stopDrag);
-        botBtn.addEventListener('touchstart', (e) => { if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
-        document.addEventListener('touchmove', (e) => { if (isBotDragging && e.touches.length === 1) { e.preventDefault(); onDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
+        
+        botBtn.addEventListener('touchstart', (e) => { 
+            if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); 
+        }, { passive: true });
+        
+        document.addEventListener('touchmove', (e) => { 
+            if (isBotDragging && e.touches.length === 1) { 
+                onDrag(e.touches[0].clientX, e.touches[0].clientY); 
+            } 
+        }, { passive: true });
+        
         document.addEventListener('touchend', stopDrag);
+
+        // جعل النقر يعمل فوراً وبضغطة واحدة مستقلة عن السحب
+        botBtn.addEventListener('click', (e) => {
+            if (!hasBotDragged) {
+                toggleNa2laBot();
+            }
+            hasBotDragged = false;
+        });
     }
 
     window.realFirebaseShipments = [];
@@ -270,17 +290,31 @@
         `;
     };
 
-    // الدالة المحدثة بدقة لضمان التعرف على الحسابات، الشركة الرئيسية Company_main، وعزل المستخدمين
+    // الدالة المحدثة بدقة لتمييز الزائر، السائق، أو المدير دون فرض حساب المدير افتراضياً
     window.getActiveTenantContext = function() {
-        let activeDriver = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || "المدير";
+        // التحقق من الحساب النشط أو الزائر من التخزين المحلي أو متغيرات النافذة
+        let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || localStorage.getItem('na2la_visitor_name') || null;
         
+        let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || localStorage.getItem('user_role') || 'visitor';
+
         let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || 'company_main';
         
         let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || 'أسطورة الطريق الرئيسية';
-        
-        let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || 'admin';
 
-        // توحيد الشركة الرئيسية لتكون Company_main دائماً عند عدم وجود تحديد آخر
+        let activeDriver = rawUser;
+        if (!activeDriver) {
+            // إذا كان زائراً جديداً ولم يتم تسجيل دخوله بعد
+            activeDriver = "زائر كريم";
+            activeRole = "visitor";
+        }
+
+        // إذا كان اسم المستخدم هو "المدير" أو لديه صلاحيات الإدارة
+        if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole.includes('مدير')) {
+            activeRole = "admin";
+        } else if (activeDriver.includes('سائق') || activeRole.includes('driver')) {
+            activeRole = "driver";
+        }
+
         if (!activeCompanyId || activeCompanyId === 'main') {
             activeCompanyId = 'company_main';
             activeCompanyName = 'أسطورة الطريق الرئيسية';
@@ -492,7 +526,7 @@
             <body>
                 <div class="header">
                     <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
-                    <p>صادر من منصة أسطورة الطريق (Company_main) بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
+                    <p>صادر من منصة أسطورة الطريق بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
                 </div>
                 <table>
                     <thead>
@@ -586,8 +620,7 @@
 
     window.syncPlatformUserData = function() {
         let tenant = getActiveTenantContext();
-        let isDriver = tenant.activeRole.includes('driver') || tenant.activeDriver.includes('سائق');
-        let isManager = tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير') || !isDriver;
+        let isManager = (tenant.activeRole === 'admin' || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير'));
 
         let badgeEl = document.getElementById('botUserRoleBadge');
         if (badgeEl) badgeEl.innerText = `🤖 ${tenant.activeDriver} (${tenant.activeCompanyName})`;
@@ -600,7 +633,7 @@
             rssBar.style.display = isManager ? 'block' : 'none';
         }
 
-        renderQuickButtons(isDriver);
+        renderQuickButtons(tenant.activeRole);
         updateSyncButtonBadge();
         checkDutyStatusIndicator();
         return tenant;
@@ -630,13 +663,19 @@
             } catch(e) {}
         }
 
-        // عزل الشحنات بناءً على معرف الشركة (Company_main أو الشركة الحالية)
         let companyFiltered = allShipments.filter(s => !s.companyId || s.companyId === tenant.activeCompanyId || s.companyId === 'company_main' || s.companyName === tenant.activeCompanyName);
 
-        if (tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير')) {
+        // إذا كان مدير النظام، يعرض كافة شحنات الشركة
+        if (tenant.activeRole === 'admin') {
             return companyFiltered;
         }
 
+        // إذا كان زائراً، يعرض شحنات عامة تجريبية أو رسالة ترحيبية
+        if (tenant.activeRole === 'visitor') {
+            return companyFiltered.slice(0, 3);
+        }
+
+        // للسائقين، عرض الشحنات المخصصة لهم فقط
         return companyFiltered.filter(s => {
             let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
             return matchesUser;
@@ -693,7 +732,7 @@
         const syncedShipments = getIsolatedUserShipments();
 
         if (syncedShipments.length === 0) {
-            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: #94a3b8;">لا توجد شحنات مسجلة حالياً</div>`;
+            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: #94a3b8;">لا توجد شحنات مسجلة لحسابك حالياً</div>`;
         } else {
             listContainer.innerHTML = syncedShipments.slice(0, 5).map(s => `
                 <div style="background: var(--card-bg); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
@@ -715,7 +754,7 @@
         if (typeof viewingProfileName !== 'undefined') viewingProfileName = tenant.activeDriver;
         if (typeof switchTab === 'function') switchTab('account-tab');
         const syncedShipments = getIsolatedUserShipments();
-        alert(`👤 الحساب الشخصي: ${tenant.activeDriver}\n🏢 الشركة: ${tenant.activeCompanyName} (${tenant.activeCompanyId})\n📦 إجمالي الشحنات المتزامنة: ${syncedShipments.length}\n✨ الملف الشخصي نشط ومتزامن مع عزل الحسابات والشركات.`);
+        alert(`👤 الحساب الحالي: ${tenant.activeDriver} (${tenant.activeRole === 'visitor' ? 'زائر' : (tenant.activeRole === 'admin' ? 'مدير' : 'سائق')})\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات: ${syncedShipments.length}\n✨ الحساب متزامن ومفعل بنجاح.`);
     };
 
     window.toggleDutyStatus = function() {
@@ -735,7 +774,7 @@
         }
     };
 
-    window.renderQuickButtons = function(isDriver) {
+    window.renderQuickButtons = function(role) {
         let container = document.getElementById('botQuickActionsContainer');
         if (!container) return;
         let commonButtons = `
@@ -746,7 +785,12 @@
             <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">😄 نكت وسفر</button>
             <button onclick="sendBotQuickQuery('صورة شاحنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🖼️ جلب صور</button>
         `;
-        if (isDriver) {
+        if (role === 'visitor') {
+            container.innerHTML = commonButtons + `
+                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🌐 عن نقلة</button>
+            `;
+        } else if (role === 'driver') {
             container.innerHTML = commonButtons + `
                 <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
                 <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
@@ -829,7 +873,7 @@
                 let netWeight = simulatedGross - simulatedTare;
 
                 let imgHtml = `<div style="margin-top:6px;"><img src="${e.target.result}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color);"></div>`;
-                let userMsg = `📎 تم رفع بونة الميزان وتحليلها (OCR) لشركة (${tenant.activeCompanyName}): <b>${file.name}</b>${imgHtml}`;
+                let userMsg = `📎 تم رفع بونة الميزان وتحليلها (OCR) للحساب (${tenant.activeDriver}): <b>${file.name}</b>${imgHtml}`;
                 container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%;">${userMsg}</div>`;
                 saveChatHistory('user', userMsg);
                 container.scrollTop = container.scrollHeight;
@@ -847,7 +891,7 @@
                                    `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
                                    `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
                                    `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
-                                   `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح لشركة <b>${tenant.activeCompanyName}</b>.`;
+                                   `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح.`;
                     container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
                     saveChatHistory('bot', botReply);
                     container.scrollTop = container.scrollHeight;
@@ -858,13 +902,11 @@
         }
     };
 
-    // ميزة مزامنة والبحث في جهات الاتصال الخاصة بحساب المستخدم الهاتفية
     window.syncAndSearchPhoneContacts = async function(searchQuery = '') {
         let tenant = getActiveTenantContext();
         let contactsKey = `na2la_phone_contacts_${tenant.activeCompanyId}_${tenant.activeDriver}`;
         let savedContacts = JSON.parse(localStorage.getItem(contactsKey) || '[]');
 
-        // محاولة استخدام واجهة برمجة جهات الاتصال في المتصفح إن وجدت (Contact Picker API)
         if ('contacts' in navigator && 'select' in navigator.contacts && !searchQuery) {
             try {
                 const supportedProperties = ['name', 'tel', 'email'];
@@ -880,7 +922,6 @@
             } catch(e) {}
         }
 
-        // إذا لم توجد جهات اتصال مخزنة، نقوم بإنشاء قائمة نموذجية افتراضية معزولة لهذا الحساب
         if (savedContacts.length === 0) {
             savedContacts = [
                 { name: "محطة وقود الطريق الصحراوي", phone: "01012345678" },
@@ -891,7 +932,6 @@
             localStorage.setItem(contactsKey, JSON.stringify(savedContacts));
         }
 
-        // إجراء البحث في جهات الاتصال الخاصة بالحساب
         let filteredContacts = savedContacts;
         if (searchQuery && searchQuery.trim() !== '') {
             let q = searchQuery.trim().toLowerCase();
@@ -900,7 +940,7 @@
             );
         }
 
-        let html = `📇 <b>جهات الاتصال المتزامنة الخاصة بحساب [${tenant.activeDriver}] - شركة [${tenant.activeCompanyName}]:</b><br>`;
+        let html = `📇 <b>جهات الاتصال المتزامنة الخاصة بحساب [${tenant.activeDriver}]:</b><br>`;
         if (filteredContacts.length === 0) {
             html += `<i>لم يتم العثور على نتائج مطابقة لـ "${searchQuery}" في جهات الاتصال الخاصة بك.</i><br>` +
                     `<button onclick="sendBotQuickQuery('جهات الاتصال')" style="margin-top:6px; background:var(--primary-color); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:10px;">إعادة عرض كافة جهات الاتصال</button>`;
@@ -933,7 +973,7 @@
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b> - معرف: <b>${tenant.activeCompanyId}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة الحساب والجهات الذكية بنجاح.</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'visitor' ? 'زائر' : 'حساب معتمد'}) في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة بياناتك بنجاح.</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -1014,7 +1054,6 @@
         `;
     };
 
-    // ربط البوت بإجابات Google والمعرفة العامة عبر ويكيبيديا والبحث الشامل لكافة المجالات
     window.fetchLiveWebAndWikipediaAnswer = async function(query) {
         try {
             let searchUrl = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
@@ -1093,7 +1132,7 @@
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
             if (userShipments.length === 0) {
-                botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك (${tenant.activeDriver}) في شركة (${tenant.activeCompanyName}). يمكنك إنشاء شحنة جديدة من قسم الشحنات.`;
+                botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك (${tenant.activeDriver}) في شركة (${tenant.activeCompanyName}).`;
             } else {
                 botReply = `📦 لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة لحسابك ومعزولة بدقة:<br>`;
                 userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
@@ -1159,7 +1198,7 @@
         }
         else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
             window.lastBotContext = 'خدمات المنصة';
-            botReply = `🌐 <b>عن منصة أسطورة الطريق (Company_main):</b><br>` +
+            botReply = `🌐 <b>عن منصة أسطورة الطريق (نقلة):</b><br>` +
                        `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وعزل حسابات الشركات والمستخدمين.<br>` +
                        `- توفر مزامنة تامة لجهات الاتصال، تتبع GPS لحظي، وبوت ذكاء اصطناعي متكامل مرتبط بمحركات Google.`;
         }
