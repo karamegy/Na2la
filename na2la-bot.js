@@ -101,7 +101,7 @@
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (شخصي ومعزول)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (متصل بويكيبيديا وجوجل)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -124,7 +124,7 @@
 
             <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 منصة أسطورة الطريق (Na2la.Net) | المساعد الذكي الشامل لإدارة الأسطول، الشحنات، الاشتراكات والخدمات العامة 24/7
+                    🚀 منصة أسطورة الطريق (Na2la.Net) | متصل سحابياً مع فايربيس، ويكيبيديا ومحرك بحث جوجل 24/7
                 </div>
             </div>
 
@@ -145,7 +145,7 @@
 
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك في مساعد "نقلة" الذكي الشامل!<br>- أنا مساعدك الخاص المربوط ببياناتك وحسابك الشخصي، ومتاح للإجابة على كافة استفساراتك العامة وخاصة المنصة.
+                    مرحباً بك في مساعد "نقلة" الذكي المتصل!<br>- تم ربط البوت بقواعد بيانات المنصة سحابياً (Firebase) بالإضافة إلى محرك بحث ويكيبيديا وجوجل للإجابة الفورية.
                 </div>
             </div>
 
@@ -154,7 +154,7 @@
             <div style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع صورة مستند" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">📎</button>
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك (مثال: شحناتي، الاشتراك، الخدمات، المساعدة...)" style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك أو ابحث في ويكيبيديا وجوجل..." style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
                 <button onclick="startBotVoiceInput()" title="تحدث بالميكروفون" style="background: var(--warning-color); border: none; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
                 <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 12px;">إرسال</button>
             </div>
@@ -193,7 +193,7 @@
         document.addEventListener('touchend', stopDrag);
     }
 
-    // 4. متغيرات النظام وجلب البيانات مع الدمج المحلي والسحابي الشامل
+    // 4. متغيرات النظام وجلب البيانات مع الحفاظ التام على مزامنة فايربيس (Firebase Sync)
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
@@ -593,7 +593,6 @@
         }
     };
 
-    // الأزرار السريعة الموسعة لتخدم كافة المستخدمين
     window.renderQuickButtons = function(isDriver) {
         let container = document.getElementById('botQuickActionsContainer');
         if (!container) return;
@@ -719,7 +718,7 @@
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة حسابك بنجاح.</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك البحث السحابي بنجاح.</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -802,7 +801,40 @@
         `;
     };
 
-    // محرك الاستعلامات والردود الموسع (شامل للمنصة، العملاء، السائقين، والخدمات العامة)
+    // ==========================================
+    // ⭐ دالة البحث الحي في ويكيبيديا وجوجل
+    // ==========================================
+    window.fetchLiveWebAndWikipediaAnswer = async function(query) {
+        try {
+            // محاولة البحث في ويكيبيديا العربية مباشرة عبر واجهة البرمجة العامة (API)
+            let searchUrl = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+            let res = await fetch(searchUrl);
+            let data = await res.json();
+
+            if (data && data.query && data.query.search && data.query.search.length > 0) {
+                let topTitle = data.query.search[0].title;
+                let summaryUrl = `https://ar.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle)}`;
+                let sumRes = await fetch(summaryUrl);
+                if (sumRes.ok) {
+                    let sumData = await sumRes.json();
+                    if (sumData && sumData.extract) {
+                        let pageUrl = sumData.content_urls?.desktop?.page || `https://ar.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`;
+                        return `🌐 <b>إجابة ويكيبيديا المباشرة (${topTitle}):</b><br>` +
+                               `${sumData.extract}<br><br>` +
+                               `<a href="${pageUrl}" target="_blank" style="color: var(--accent-color); font-weight: bold; text-decoration: underline;">🔗 قراءة المقالة كاملة على ويكيبيديا</a>`;
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // في حال عدم وجود نتيجة مطابقة في ويكيبيديا، يتم توجيه البحث لـ محرك بحث جوجل مباشرة
+        let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        return `🌐 <b>نتائج البحث المباشر عبر الإنترنت:</b><br>` +
+               `لم نتمكن من مطابقة سياق محلي مباشر لـ "${query}" في قواعد بيانات المنصة أو ويكيبيديا.<br><br>` +
+               `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 6px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر محرك بحث جوجل</a>`;
+    };
+
+    // محرك الاستعلامات والردود الموسع (شامل للمنصة، السائقين، والبحث المباشر في ويكيبيديا وجوجل)
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
         let container = document.getElementById('na2laBotMessages');
@@ -820,6 +852,7 @@
         container.innerHTML += `<div id="${typingId}" style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
         container.scrollTop = container.scrollHeight;
 
+        // الحفاظ على مزامنة فايربيس أولاً
         await fetchRealFirebaseData();
         let typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
@@ -827,7 +860,7 @@
         let tenant = syncPlatformUserData();
         let financials = getCompanyFinancials();
         let userShipments = getIsolatedUserShipments();
-        let botReply = `أهلاً بك يا <b>${tenant.activeDriver}</b>! جاري فحص طلبك ومعالجة البيانات المعزولة لشركة <b>${tenant.activeCompanyName}</b>...`;
+        let botReply = '';
         let lower = text.toLowerCase();
 
         // 1. الاستعلام عن الاشتراكات والباقات
@@ -883,40 +916,28 @@
             botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
                        `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
         }
-        // 8. خدمات المنصة ومعلومات عامة (للعامة والمستخدمين)
+        // 8. خدمات المنصة ومعلومات عامة
         else if (lower.includes('خدمات المنصة') || lower.includes('الخدمات') || lower.includes('ما هي نقلة') || lower.includes('عن نقلة') || lower.includes('من نحن')) {
             botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
                        `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
-                       `- تتيح لك عزا تاما للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
+                       `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
         }
         else if (lower.includes('المساعدة') || lower.includes('كيف أستخدم') || lower.includes('تعليمات') || lower.includes('شرح')) {
             botReply = `❓ <b>دليل الاستخدام السريع للمساعد الذكي:</b><br>` +
                        `- اكتب <b>"شحناتي"</b> لاستعراض رحلاتك.<br>` +
                        `- اكتب <b>"الاشتراك"</b> لفحص صلاحية باقتك.<br>` +
-                       `- اكتب <b>"الخزنة" أو "تقرير"</b> لعرض الأرقام المالية.<br>` +
-                       `- استخدم زر المرفقات (📎) لرفع بونات الميزان أو المستندات وتوثيقها فوراً.`;
-        }
-        else if (lower.includes('مواعيد العمل') || lower.includes('متى تعملون')) {
-            botReply = `🕒 <b>مواعيد العمل والدعم:</b><br>- النظام السحابي والدعم الفني متاحان للعمل على مدار الساعة <b>24/7</b> دون انقطاع.`;
-        }
-        else if (lower.includes('طرق الدفع') || lower.includes('كيف أدفع') || lower.includes('تحويل')) {
-            botReply = `💳 <b>طرق الدفع والاشتراك:</b><br>- يدعم النظام التحويل عبر المحافظ الإلكترونية، الدفع عبر فوري، أو التحويل البنكي المباشر مع مراجعة الإيصالات سحابياً.`;
+                       `- اكتب أي سؤال عام (مثلاً: معلومات تاريخية، جغرافية، أو عامة) ليقوم البوت بالبحث عنها في ويكيبيديا وجوجل تلقائياً!`;
         }
         else {
-            let tonsMatch = text.match(/(?:نقل|حمل|حمولة|كم سعر)?\s*(\d+)\s*طن/i);
-            if (lower.includes('أطنان') || tonsMatch) {
-                let tons = tonsMatch ? Number(tonsMatch[1]) : 10;
-                let estPrice = tons * 450;
-                botReply = `⚖️ <b>حاسبة الأطنان والأسعار التقديرية لشركة [${tenant.activeCompanyName}]:</b><br>- التكلفة المقدرة لـ ${tons} طن: <b style="color:var(--warning-color);">${estPrice} ج.م</b>.`;
-            } else {
-                botReply = `مرحباً بك يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق! تم ربط حسابك بـ شركة <b>${tenant.activeCompanyName}</b> بنجاح.<br>` +
-                           `- يمكنك طلب استعلام عن: <b>"الاشتراك"</b>، <b>"شحناتي"</b>، <b>"الخزنة"</b>، <b>"خدمات المنصة"</b> أو <b>"المساعدة"</b>.`;
-            }
+            // إذا لم تطابق الشروط الداخلية، يتم البحث الحي عبر ويكيبيديا وجوجل
+            botReply = await window.fetchLiveWebAndWikipediaAnswer(text);
         }
 
         container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
         saveChatHistory('bot', botReply);
         container.scrollTop = container.scrollHeight;
+        
+        // قراءة النطق الصوتي للرد (مع استبعاد الروابط HTML لتجنب قراءتها حرفياً)
         speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
     };
 })();
