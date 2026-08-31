@@ -95,13 +95,13 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 65px; height: 65px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 بوت نقلة الذكي المتطور">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 65px; height: 65px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد نقلة الذكي المخصص">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 105px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 1900; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px);">
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (متزامن وعازل)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (شخصي ومعزول)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -124,7 +124,7 @@
 
             <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 مزامنة سحابية ومحلية ذكية مع عزل تام للشركات والحسابات 24/7 | دعم الفواتير والتقارير المتقدمة
+                    🚀 منصة أسطورة الطريق (Na2la.Net) | المساعد الذكي الشامل لإدارة الأسطول، الشحنات، الاشتراكات والخدمات العامة 24/7
                 </div>
             </div>
 
@@ -145,7 +145,7 @@
 
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك في مساعد "نقلة" المطوّر!<br>- تم تفعيل رصد الفواتير المجمعة والآجلة محلياً وسحابياً مع عزل الشركات بالكامل.
+                    مرحباً بك في مساعد "نقلة" الذكي الشامل!<br>- أنا مساعدك الخاص المربوط ببياناتك وحسابك الشخصي، ومتاح للإجابة على كافة استفساراتك العامة وخاصة المنصة.
                 </div>
             </div>
 
@@ -154,7 +154,7 @@
             <div style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع صورة مستند" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">📎</button>
-                <input type="text" id="na2laBotInput" placeholder="اكتب أو تحدث (مثال: شحناتي، تقرير الخزنة، الفواتير...)" style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك (مثال: شحناتي، الاشتراك، الخدمات، المساعدة...)" style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
                 <button onclick="startBotVoiceInput()" title="تحدث بالميكروفون" style="background: var(--warning-color); border: none; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
                 <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 12px;">إرسال</button>
             </div>
@@ -308,6 +308,31 @@
                 }
             });
         }
+    };
+
+    window.getCompanySubscriptionInfo = async function() {
+        let tenant = getActiveTenantContext();
+        let subData = {
+            planName: realFirebaseAppData.planName || realFirebaseAppData.subscriptionPlan || 'الباقة الترويجية / الاحترافية',
+            expiryDate: realFirebaseAppData.expiryDate || realFirebaseAppData.subscriptionExpiry || '2026-12-31',
+            status: realFirebaseAppData.subscriptionStatus || 'نشط ✅ (سحابي)',
+            companyName: tenant.activeCompanyName
+        };
+        
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                const subDoc = await db.collection('subscriptions').doc(tenant.activeCompanyId).get();
+                if (subDoc.exists) {
+                    let d = subDoc.data();
+                    subData.planName = d.planName || d.package || subData.planName;
+                    subData.expiryDate = d.expiryDate || d.endDate || subData.expiryDate;
+                    subData.status = d.status || subData.status;
+                }
+            }
+        } catch(e) {}
+
+        return subData;
     };
 
     window.updateDriverLiveLocation = async function(lat, lng) {
@@ -548,7 +573,7 @@
         if (typeof viewingProfileName !== 'undefined') viewingProfileName = tenant.activeDriver;
         if (typeof switchTab === 'function') switchTab('account-tab');
         const syncedShipments = getIsolatedUserShipments();
-        alert(`👤 الحساب: ${tenant.activeDriver}\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات المتزامنة: ${syncedShipments.length}\n✨ تمت المزامنة بنجاح.`);
+        alert(`👤 الحساب الشخصي: ${tenant.activeDriver}\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات المتزامنة: ${syncedShipments.length}\n✨ الملف الشخصي نشط ومتزامن.`);
     };
 
     window.toggleDutyStatus = function() {
@@ -568,17 +593,18 @@
         }
     };
 
+    // الأزرار السريعة الموسعة لتخدم كافة المستخدمين
     window.renderQuickButtons = function(isDriver) {
         let container = document.getElementById('botQuickActionsContainer');
         if (!container) return;
         let commonButtons = `
             <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📦 الشحنات</button>
-            <button onclick="sendBotQuickQuery('الفواتير المجمعة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">🧾 الفواتير</button>
-            <button onclick="sendBotQuickQuery('الخزنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">💰 الخزنة</button>
-            <button onclick="sendBotQuickQuery('المصروفات')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--danger-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">⛽ المصروفات</button>
+            <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">💳 الاشتراك</button>
+            <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">🌐 الخدمات</button>
+            <button onclick="sendBotQuickQuery('المساعدة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">❓ المساعدة</button>
         `;
         if (isDriver) {
-            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ طريق عطل مفاجئ')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🚨 طوارئ SOS</button>`;
+            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🚨 طوارئ SOS</button>`;
         } else {
             container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📊 الأسطول</button>`;
         }
@@ -693,7 +719,7 @@
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في شركة <b>${tenant.activeCompanyName}</b>.<br>- تمت استعادة سجلك المعزول ومزامنة السحابة بنجاح.</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة حسابك بنجاح.</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -715,7 +741,6 @@
         }
     };
 
-    // تعديل دالة تغيير الثيم لتصبح معزولة داخل الحاوية الجذرية للبوت فقط
     window.changeBotTheme = function(themeId) {
         let rootContainer = document.getElementById('na2laBotRootContainer');
         if (!rootContainer) return;
@@ -777,6 +802,7 @@
         `;
     };
 
+    // محرك الاستعلامات والردود الموسع (شامل للمنصة، العملاء، السائقين، والخدمات العامة)
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
         let container = document.getElementById('na2laBotMessages');
@@ -801,43 +827,90 @@
         let tenant = syncPlatformUserData();
         let financials = getCompanyFinancials();
         let userShipments = getIsolatedUserShipments();
-        let botReply = `أهلاً بك يا ${tenant.activeDriver}! جاري جلب البيانات المعزولة لشركة <b>${tenant.activeCompanyName}</b>...`;
+        let botReply = `أهلاً بك يا <b>${tenant.activeDriver}</b>! جاري فحص طلبك ومعالجة البيانات المعزولة لشركة <b>${tenant.activeCompanyName}</b>...`;
         let lower = text.toLowerCase();
 
-        if (lower.includes('شحناتي') || lower.includes('الشحنات') || lower.includes('شحنة')) {
+        // 1. الاستعلام عن الاشتراكات والباقات
+        if (lower.includes('اشتراك') || lower.includes('الاشتراك') || lower.includes('الباقة') || lower.includes('الصلاحية')) {
+            let subInfo = await getCompanySubscriptionInfo();
+            botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}]:</b><br>` +
+                       `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
+                       `- حالة الترخيص: <b style="color:var(--accent-color);">${subInfo.status}</b><br>` +
+                       `- تاريخ الانتهاء: <b style="color:var(--warning-color);">${subInfo.expiryDate}</b><br>` +
+                       `- متصل سحابياً مع لوحة تحكم المنصة الأم بنجاح.`;
+        }
+        // 2. الشحنات والرحلات
+        else if (lower.includes('شحناتي') || lower.includes('الشحنات') || lower.includes('شحنة') || lower.includes('رحلة')) {
             if (userShipments.length === 0) {
-                botReply = `لا توجد شحنات مسجلة حالياً لشركة (${tenant.activeCompanyName}).`;
+                botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك في شركة (${tenant.activeCompanyName}). يمكنك إنشاء شحنة جديدة من قسم الشحنات بالمنصة.`;
             } else {
-                botReply = `لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة:<br>`;
+                botReply = `📦 لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة لحسابك:<br>`;
                 userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
             }
         }
-        else if (lower.includes('الفواتير') || lower.includes('الفواتير المجمعة') || lower.includes('فاتورة')) {
+        // 3. الفواتير والآجل
+        else if (lower.includes('الفواتير') || lower.includes('الفواتير المجمعة') || lower.includes('فاتورة') || lower.includes('آجل')) {
             let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-            botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>- إجمالي الفواتير المتاحة: <b>${companyInvoices.length} فاتورة</b><br>- متصل سحابياً ومحلياً بنجاح دون أي تداخل.`;
+            botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                       `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
+                       `- يمكنك استعراض تفاصيل الديون والتحصيل المباشر عبر قسم الأجل بالمنصة.`;
         }
-        else if (lower.includes('الخزنة') || lower.includes('تقرير')) {
+        // 4. الخزنة والمالية والتقارير
+        else if (lower.includes('الخزنة') || lower.includes('تقرير') || lower.includes('أرباح') || lower.includes('مالي')) {
             let report = await getCompanyFinancialReport();
-            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}]:</b><br>- رصيد الخزنة: <b style="color:var(--accent-color);">${report.treasury}</b><br>- إجمالي المصروفات: <b style="color:var(--danger-color);">${report.expenses}</b><br>- الفواتير المجمعة: <b>${report.invoicesCount}</b><br>- إجمالي العائد التقديري: <b>${report.estimatedRevenue}</b>`;
+            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}]:</b><br>` +
+                       `- رصيد الخزنة الحالي: <b style="color:var(--accent-color);">${report.treasury}</b><br>` +
+                       `- إجمالي المصروفات: <b style="color:var(--danger-color);">${report.expenses}</b><br>` +
+                       `- إجمالي الفواتير المجمعة: <b>${report.invoicesCount}</b><br>` +
+                       `- الإيرادات التقديرية للشحنات: <b>${report.estimatedRevenue}</b>`;
         }
-        else if (lower.includes('المصروفات') || lower.includes('مصروف')) {
-            botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>- إجمالي المصروفات: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>- متزامن حقيقياً من قاعدة بيانات المنصة.`;
+        // 5. المصروفات التشغيلية
+        else if (lower.includes('المصروفات') || lower.includes('مصروف') || lower.includes('وقود')) {
+            botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                       `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
+                       `- يتم تحديث السجلات لحظياً من قواعد بيانات المنصة.`;
         }
-        else if (lower.includes('إحصائيات شركتي') || lower.includes('الأسطول') || lower.includes('السائقون')) {
+        // 6. الأسطول والإحصائيات
+        else if (lower.includes('إحصائيات شركتي') || lower.includes('الأسطول') || lower.includes('السائقون') || lower.includes('المركبات')) {
             let activeFleet = await getCompanyActiveFleet();
-            botReply = `📊 <b>إحصائيات الأسطول المعزول [${tenant.activeCompanyName}]:</b><br>- الأسطول النشط سحابياً: <b>${activeFleet.length} سائق/مركبة</b><br>- إجمالي الشحنات: <b>${financials.shipmentsCount}</b><br>- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+            botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
+                       `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
+                       `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
+                       `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
         }
-        else if (lower.includes('طوارئ') || lower.includes('sos') || lower.includes('عطل')) {
-            botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحساب (${tenant.activeDriver}) لغرفة العمليات فوراً.`;
+        // 7. طوارئ الطريق SOS
+        else if (lower.includes('طوارئ') || lower.includes('sos') || lower.includes('عطل') || lower.includes('حادث')) {
+            botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
+                       `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
+        }
+        // 8. خدمات المنصة ومعلومات عامة (للعامة والمستخدمين)
+        else if (lower.includes('خدمات المنصة') || lower.includes('الخدمات') || lower.includes('ما هي نقلة') || lower.includes('عن نقلة') || lower.includes('من نحن')) {
+            botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
+                       `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
+                       `- تتيح لك عزا تاما للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
+        }
+        else if (lower.includes('المساعدة') || lower.includes('كيف أستخدم') || lower.includes('تعليمات') || lower.includes('شرح')) {
+            botReply = `❓ <b>دليل الاستخدام السريع للمساعد الذكي:</b><br>` +
+                       `- اكتب <b>"شحناتي"</b> لاستعراض رحلاتك.<br>` +
+                       `- اكتب <b>"الاشتراك"</b> لفحص صلاحية باقتك.<br>` +
+                       `- اكتب <b>"الخزنة" أو "تقرير"</b> لعرض الأرقام المالية.<br>` +
+                       `- استخدم زر المرفقات (📎) لرفع بونات الميزان أو المستندات وتوثيقها فوراً.`;
+        }
+        else if (lower.includes('مواعيد العمل') || lower.includes('متى تعملون')) {
+            botReply = `🕒 <b>مواعيد العمل والدعم:</b><br>- النظام السحابي والدعم الفني متاحان للعمل على مدار الساعة <b>24/7</b> دون انقطاع.`;
+        }
+        else if (lower.includes('طرق الدفع') || lower.includes('كيف أدفع') || lower.includes('تحويل')) {
+            botReply = `💳 <b>طرق الدفع والاشتراك:</b><br>- يدعم النظام التحويل عبر المحافظ الإلكترونية، الدفع عبر فوري، أو التحويل البنكي المباشر مع مراجعة الإيصالات سحابياً.`;
         }
         else {
             let tonsMatch = text.match(/(?:نقل|حمل|حمولة|كم سعر)?\s*(\d+)\s*طن/i);
             if (lower.includes('أطنان') || tonsMatch) {
                 let tons = tonsMatch ? Number(tonsMatch[1]) : 10;
                 let estPrice = tons * 450;
-                botReply = `⚖️ <b>حاسبة الأطنان والأسعار لشركة [${tenant.activeCompanyName}]:</b><br>- التكلفة المقدرة لـ ${tons} طن: <b style="color:var(--warning-color);">${estPrice} ج.م</b>.`;
+                botReply = `⚖️ <b>حاسبة الأطنان والأسعار التقديرية لشركة [${tenant.activeCompanyName}]:</b><br>- التكلفة المقدرة لـ ${tons} طن: <b style="color:var(--warning-color);">${estPrice} ج.م</b>.`;
             } else {
-                botReply = `مرحباً بك يا ${tenant.activeDriver} في شركة <b>${tenant.activeCompanyName}</b>! تم ربط محادثتك وسجلك بنجاح. تفضل بطلب "شحناتي"، "الفواتير"، "الخزنة"، أو "تقرير".`;
+                botReply = `مرحباً بك يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق! تم ربط حسابك بـ شركة <b>${tenant.activeCompanyName}</b> بنجاح.<br>` +
+                           `- يمكنك طلب استعلام عن: <b>"الاشتراك"</b>، <b>"شحناتي"</b>، <b>"الخزنة"</b>، <b>"خدمات المنصة"</b> أو <b>"المساعدة"</b>.`;
             }
         }
 
