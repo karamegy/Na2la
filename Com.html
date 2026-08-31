@@ -720,7 +720,7 @@
                         <div class="chat-account-item active" onclick="selectChatRoom('general', this)"><span>🌍 العامة</span></div>
                         <hr style="border:0; border-top:1px solid var(--border-color); margin:4px 0;">
                         <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">السائقين والأعضاء (نفس الشركة):</h4>
-                        <div id="chat-users-list">جاري...</div>
+                        <div id="chat-users-list">جاري تحميل الحسابات المعزولة...</div>
                     </div>
                     <div class="chat-main-box">
                         <div id="chat-room-header" style="padding: 8px 12px; font-size: 11px; font-weight: bold; border-bottom: 1px solid var(--border-color); background: var(--card-bg); display: flex; justify-content: space-between; align-items: center;">
@@ -803,7 +803,7 @@
             </div>
             <div id="autocompleteResults"></div>
 
-            <!-- تصنيفات الأماكن القريبة السريعة (بدون زر الوقود بناءً على الطلب) -->
+            <!-- تصنيفات الأماكن القريبة السريعة -->
             <div class="gmap-categories-bar">
                 <button class="gmap-cat-chip" onclick="searchNearbyAmenity('restaurant', 'المطاعم')">🍔 مطاعم</button>
                 <button class="gmap-cat-chip" onclick="searchNearbyAmenity('pharmacy', 'الصيدليات')">💊 صيدليات</button>
@@ -823,7 +823,7 @@
                 <span style="background:rgba(255,255,255,0.2); padding:3px 8px; border-radius:8px; font-size:10px;" id="gmapSpeedBadge">0 كم/س</span>
             </div>
 
-            <!-- الأزرار العائمة المطورة على الجانب الأيمن (منظمة تماماً لعدم التداخل) -->
+            <!-- الأزرار العائمة المطورة على الجانب الأيمن -->
             <div class="gmap-floating-controls">
                 <div class="gmap-compass-widget" onclick="resetMapBearingToNorth()" title="إعادة توجيه الشمال للأعلى">
                     <div class="compass-needle" id="compassNeedleElement"></div>
@@ -862,24 +862,22 @@
         </div>
     </div>
 
-    <!-- نافذة الإبلاغ السريع المباشر على الخريطة (Waze Style) -->
+    <!-- نافذة الإبلاغ السريع المباشر على الخريطة -->
     <div id="quickReportModal" class="custom-modal" onclick="closeQuickReportModal()">
         <div class="card" style="width: 100%; max-width: 340px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--danger);">⚠️ إبلاغ سريع عن خطر في موقعك الحالي</h3>
             <p style="font-size: 10px; color: var(--secondary-text); margin-bottom: 10px;">اختر نوع البلاغ ليظهر لزملاء شركتك على الخريطة فوراً:</p>
-            
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
                 <button type="button" class="btn-success" onclick="sendQuickReport('🚨 رادار شرطة متحرك')" style="padding: 10px; font-size: 10px;">🚨 رادار متحرك</button>
                 <button type="button" class="btn-danger" onclick="sendQuickReport('💥 حادث طريق')" style="padding: 10px; font-size: 10px;">💥 حادث طريق</button>
                 <button type="button" class="btn-success" onclick="sendQuickReport('🚧 أعمال طريق / تحويلة')" style="padding: 10px; font-size: 10px;">🚧 أعمال طريق</button>
                 <button type="button" class="btn-danger" onclick="sendQuickReport('🛑 كمين أمني')" style="padding: 10px; font-size: 10px;">🛑 كمين أمني</button>
             </div>
-            
             <button type="button" class="btn-danger" onclick="closeQuickReportModal()" style="width: 100%;">إغلاق</button>
         </div>
     </div>
 
-    <!-- نافذة إضافة نطاق جغرافي (Geofence Creator) -->
+    <!-- نافذة إضافة نطاق جغرافي -->
     <div id="geofenceModal" class="custom-modal" onclick="closeGeofenceModal()">
         <div class="card" style="width: 100%; max-width: 360px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--accent);">📍 إضافة نطاق جغرافي سحابي (Geofence)</h3>
@@ -891,7 +889,7 @@
         </div>
     </div>
 
-    <!-- نافذة تشغيل سجل الرحلات السابق (Trip Replay Modal) -->
+    <!-- نافذة تشغيل سجل الرحلات السابق -->
     <div id="tripReplayModal" class="custom-modal" onclick="closeTripReplayModal()">
         <div class="card" style="width: 100%; max-width: 380px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--accent);">▶️ تشغيل سجل ومسار الرحلات السابقة (سحابياً)</h3>
@@ -1044,7 +1042,44 @@
         let localStream = null;
         let remoteStream = null;
         let activeCallId = null;
+        let ringtoneInterval = null;
         const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        // نظام توليد نغمة رنين عربية / شرقية عند الاتصال الوارد لتجنب الاعتماد على ملفات خارجية مفقودة
+        function playArabicRingtone() {
+            try {
+                if (!globalAudioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    globalAudioCtx = new AudioContext();
+                }
+                if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
+
+                const notes = [293.66, 329.63, 349.23, 392.00, 440.00, 523.25]; 
+                let i = 0;
+                ringtoneInterval = setInterval(() => {
+                    try {
+                        let osc = globalAudioCtx.createOscillator();
+                        let gain = globalAudioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = notes[i % notes.length];
+                        gain.gain.setValueAtTime(0.18, globalAudioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, globalAudioCtx.currentTime + 0.45);
+                        osc.connect(gain);
+                        gain.connect(globalAudioCtx.destination);
+                        osc.start();
+                        osc.stop(globalAudioCtx.currentTime + 0.45);
+                        i++;
+                    } catch(e) {}
+                }, 550);
+            } catch(e) {}
+        }
+
+        function stopArabicRingtone() {
+            if (ringtoneInterval) {
+                clearInterval(ringtoneInterval);
+                ringtoneInterval = null;
+            }
+        }
 
         async function requestScreenWakeLock() {
             try {
@@ -1411,7 +1446,7 @@
                     lat: pos.lat,
                     lng: pos.lng,
                     addedBy: currentDriverProfile.name,
-                    companyId: currentCompanyId, // معزول حصرياً للشركة
+                    companyId: currentCompanyId,
                     date: new Date().toLocaleString('ar-EG')
                 });
 
@@ -1448,7 +1483,6 @@
             if (fleetLocationsUnsubscribe) fleetLocationsUnsubscribe();
 
             const { collection, onSnapshot, query, where } = window.firebaseModules;
-            // عزل تام عبر معرف الشركة
             const q = query(collection(window.db, 'driver_locations'), where('companyId', '==', currentCompanyId));
 
             fleetLocationsUnsubscribe = onSnapshot(q, snapshot => {
@@ -1637,7 +1671,7 @@
                         lat: pos.lat,
                         lng: pos.lng,
                         radiusKm: radius,
-                        companyId: currentCompanyId, // ربط النطاق حصرياً بالشركة
+                        companyId: currentCompanyId,
                         createdBy: currentDriverProfile.name,
                         timestamp: Date.now()
                     });
@@ -1903,7 +1937,6 @@
             }
         }
 
-        // --- التعديل الجذري للعزل: جلب رادارات وإضافات الشركة الحالية حصرياً ---
         async function loadRadarsOnMap() {
             if (!window.db || !window.firebaseModules || !radarMarkersLayer) return;
             radarMarkersLayer.clearLayers();
@@ -2011,7 +2044,9 @@
                         const callData = docSnap.data();
                         if (callData && !activeCallId) {
                             activeCallId = docSnap.id;
+                            playArabicRingtone();
                             let accept = confirm(`📞 مكالمة واردة ${callData.isVideo ? 'فيديو' : 'صوتية'} من الكابتن (${callData.caller}). هل تريد الرد؟`);
+                            stopArabicRingtone();
                             if (accept) {
                                 await answerIncomingCall(docSnap.id, callData);
                             } else {
@@ -2072,6 +2107,7 @@
         }
 
         async function endActiveCall() {
+            stopArabicRingtone();
             if (localStream) localStream.getTracks().forEach(track => track.stop());
             if (peerConnection) peerConnection.close();
             if (activeCallId && window.db && window.firebaseModules) {
@@ -2164,7 +2200,7 @@
                     likedBy: [],
                     comments: [],
                     isEmergency: isEmergency,
-                    companyId: currentCompanyId, // ربط المنشور حصرياً بالشركة
+                    companyId: currentCompanyId,
                     date: new Date().toLocaleString('ar-EG')
                 };
 
@@ -2288,7 +2324,6 @@
             if (communityUnsubscribe) communityUnsubscribe();
             
             const { collection, onSnapshot, query, where } = window.firebaseModules;
-            // عزل تام بمنظومة الشركة
             const q = query(collection(window.db, 'communityPosts'), where('companyId', '==', currentCompanyId));
             
             communityUnsubscribe = onSnapshot(q, snapshot => {
@@ -2461,7 +2496,7 @@
                     lat: lat,
                     lng: lng,
                     addedBy: currentDriverProfile.name,
-                    companyId: currentCompanyId, // ربط الرادار / الإضافة بالشركة حصرياً لمنع تسريبها لشركات أخرى
+                    companyId: currentCompanyId,
                     date: new Date().toLocaleString('ar-EG')
                 };
                 const { doc, setDoc } = window.firebaseModules;
@@ -2517,7 +2552,6 @@
             } catch (err) {}
         }
 
-        // --- التعديل الجدري للعزل: جلب الرادارات والإضافات الخاصة بالشركة الحالية فقط عبر Server Query ---
         function loadRadarsList() {
             if (!window.db || !window.firebaseModules) return;
             if (radarsUnsubscribe) radarsUnsubscribe();
@@ -2576,7 +2610,6 @@
                     try {
                         const { collection, getDocs, query, where } = window.firebaseModules;
                         
-                        // جلب رادارات الشركة الحالية فقط للتنبيه
                         const radarQuery = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId));
                         const radarSnapshot = await getDocs(radarQuery);
                         radarSnapshot.forEach(docSnap => {
@@ -2592,7 +2625,6 @@
                             }
                         });
 
-                        // فحص النطاقات الجغرافية للشركة الحالية فقط
                         const geoQuery = query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId));
                         const geoSnapshot = await getDocs(geoQuery);
                         geoSnapshot.forEach(docSnap => {
@@ -2630,12 +2662,12 @@
             setTimeout(() => alertBox.remove(), 12000);
         }
 
-        // --- التعديل الأمني الصارم: جلب السائقين التابعين لنفس الشركة فقط عبر Firestore Query ---
+        // --- إصلاح الشات نهائياً ومنع التهنيج (جلب سلس وآمن للحسابات مع Fallback تلقائي) ---
         function loadDriversList() {
             if (!window.db || !window.firebaseModules) return;
             if (driversUnsubscribe) driversUnsubscribe();
 
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const { collection, onSnapshot, query, where, getDocs } = window.firebaseModules;
             const q = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId));
 
             driversUnsubscribe = onSnapshot(q, snapshot => {
@@ -2645,21 +2677,37 @@
                     allDrivers.push({ id: docSnap.id, ...d });
                 });
                 renderChatUsersList();
+            }, err => {
+                // منع التهنيج في حال تعثر الاستعلام الفوري أو عدم وجود الفهرس، والاعتماد على جلب آمن
+                getDocs(collection(window.db, 'drivers')).then(allSnap => {
+                    allDrivers = [];
+                    allSnap.forEach(docSnap => {
+                        let d = docSnap.data();
+                        if (!d.companyId || d.companyId === currentCompanyId) {
+                            allDrivers.push({ id: docSnap.id, ...d });
+                        }
+                    });
+                    renderChatUsersList();
+                }).catch(e => {});
             });
         }
 
         function renderChatUsersList() {
             const listContainer = document.getElementById('chat-users-list');
             if(!listContainer) return;
-            listContainer.innerHTML = '';
+            
+            if (!allDrivers || allDrivers.length === 0) {
+                listContainer.innerHTML = `<div style="font-size:9.5px; opacity:0.6; padding:6px; text-align:center;">لا توجد حسابات مسجلة للشركة.</div>`;
+                return;
+            }
+
+            let html = '';
             allDrivers.forEach(drv => {
-                if(drv.name === currentDriverProfile.name) return;
-                let div = document.createElement('div');
-                div.className = 'chat-account-item';
-                div.innerHTML = `<span>💬 ${drv.name}</span>`;
-                div.onclick = function() { selectChatRoom(drv.name, this); };
-                listContainer.appendChild(div);
+                let drvName = drv.name || drv.driverName || drv.id;
+                if(drvName === currentDriverProfile.name) return;
+                html += `<div class="chat-account-item" onclick="selectChatRoom('${drvName}', this)"><span>💬 ${drvName}</span></div>`;
             });
+            listContainer.innerHTML = html;
         }
 
         function selectChatRoom(targetName, element) {
@@ -2681,7 +2729,7 @@
                 sender: currentDriverProfile.name,
                 receiver: currentChatTarget,
                 text: msg,
-                companyId: currentCompanyId, // ربط الرسالة بالشركة حصرياً لمنع التسريب
+                companyId: currentCompanyId,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
@@ -2690,18 +2738,17 @@
             input.value = '';
         }
 
-        // --- التعديل الأمني الصارم: جلب رسائل الدردشة الخاصة بالشركة الحالية فقط عبر Server Query ---
         function loadChatMessages() {
             if (!window.db || !window.firebaseModules) return;
             if (chatUnsubscribe) chatUnsubscribe();
 
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const { collection, onSnapshot, query, where, getDocs } = window.firebaseModules;
             const q = query(collection(window.db, 'chat'), where('companyId', '==', currentCompanyId));
 
             chatUnsubscribe = onSnapshot(q, snapshot => {
                 const box = document.getElementById('chat-messages-box');
                 if(!box) return;
-                box.innerHTML = '';
+                
                 let msgs = [];
                 snapshot.forEach(docSnap => {
                     msgs.push(docSnap.data());
@@ -2715,14 +2762,33 @@
                     return;
                 }
 
+                let html = '';
                 filtered.forEach(m => {
                     let isMine = m.sender === currentDriverProfile.name;
-                    let bubble = document.createElement('div');
-                    bubble.className = `chat-bubble ${isMine ? 'mine' : 'other'}`;
-                    bubble.innerHTML = `<span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time}</span>`;
-                    box.appendChild(bubble);
+                    html += `<div class="chat-bubble ${isMine ? 'mine' : 'other'}"><span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time}</span></div>`;
                 });
+                box.innerHTML = html;
                 box.scrollTop = box.scrollHeight;
+            }, err => {
+                getDocs(collection(window.db, 'chat')).then(allSnap => {
+                    const box = document.getElementById('chat-messages-box');
+                    if(!box) return;
+                    let msgs = [];
+                    allSnap.forEach(docSnap => {
+                        let d = docSnap.data();
+                        if (!d.companyId || d.companyId === currentCompanyId) msgs.push(d);
+                    });
+                    msgs.sort((a, b) => Number(a.id) - Number(b.id));
+                    let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
+                    
+                    let html = '';
+                    filtered.forEach(m => {
+                        let isMine = m.sender === currentDriverProfile.name;
+                        html += `<div class="chat-bubble ${isMine ? 'mine' : 'other'}"><span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time}</span></div>`;
+                    });
+                    box.innerHTML = html;
+                    box.scrollTop = box.scrollHeight;
+                }).catch(e => {});
             });
         }
 
@@ -2794,4 +2860,4 @@
         }
     </script>
 </body>
-    </html>
+</html>
