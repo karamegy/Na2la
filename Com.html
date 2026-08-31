@@ -719,7 +719,7 @@
                         <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">الغرف:</h4>
                         <div class="chat-account-item active" onclick="selectChatRoom('general', this)"><span>🌍 العامة</span></div>
                         <hr style="border:0; border-top:1px solid var(--border-color); margin:4px 0;">
-                        <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">السائقين والأعضاء:</h4>
+                        <h4 style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">السائقين والأعضاء (نفس الشركة):</h4>
                         <div id="chat-users-list">جاري...</div>
                     </div>
                     <div class="chat-main-box">
@@ -2567,7 +2567,7 @@
 
                 if (window.db && window.firebaseModules) {
                     try {
-                        const { collection, getDocs } = window.firebaseModules;
+                        const { collection, getDocs, query, where } = window.firebaseModules;
                         
                         const radarSnapshot = await getDocs(collection(window.db, 'radars'));
                         radarSnapshot.forEach(docSnap => {
@@ -2583,7 +2583,9 @@
                             }
                         });
 
-                        const geoSnapshot = await getDocs(collection(window.db, 'geofences'));
+                        // تم تأمين فحص النطاقات الجغرافية بحيث تخص الشركة الحالية فقط
+                        const geoQuery = query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId));
+                        const geoSnapshot = await getDocs(geoQuery);
                         geoSnapshot.forEach(docSnap => {
                             const zone = docSnap.data();
                             const distance = calculateDistance(userLat, userLng, zone.lat, zone.lng);
@@ -2619,6 +2621,7 @@
             setTimeout(() => alertBox.remove(), 12000);
         }
 
+        // --- التعديل الأمني الأساسي: جلب السائقين التابعين لنفس الشركة فقط ---
         function loadDriversList() {
             if (!window.db || !window.firebaseModules) return;
             if (driversUnsubscribe) driversUnsubscribe();
@@ -2628,7 +2631,11 @@
                 allDrivers = [];
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    allDrivers.push({ id: docSnap.id, ...d });
+                    let driverComp = (d.companyId && d.companyId.trim() !== '') ? d.companyId.trim() : 'company_main';
+                    // عزل تام: يتم قبول السائقين التابعين لنفس الشركة الحالية فقط
+                    if (driverComp === currentCompanyId) {
+                        allDrivers.push({ id: docSnap.id, ...d });
+                    }
                 });
                 renderChatUsersList();
             });
@@ -2667,7 +2674,7 @@
                 sender: currentDriverProfile.name,
                 receiver: currentChatTarget,
                 text: msg,
-                companyId: currentCompanyId,
+                companyId: currentCompanyId, // ربط الرسالة بالشركة حصرياً
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
@@ -2676,6 +2683,7 @@
             input.value = '';
         }
 
+        // --- التعديل الأمني الأساسي: جلب رسائل الدردشة الخاصة بالشركة الحالية فقط ---
         function loadChatMessages() {
             if (!window.db || !window.firebaseModules) return;
             if (chatUnsubscribe) chatUnsubscribe();
@@ -2688,7 +2696,11 @@
                 let msgs = [];
                 snapshot.forEach(docSnap => {
                     let m = docSnap.data();
-                    msgs.push(m);
+                    let msgComp = (m.companyId && m.companyId.trim() !== '') ? m.companyId.trim() : 'company_main';
+                    // عزل تام: تجاهل أي رسالة لا تنتمي للشركة الحالية
+                    if (msgComp === currentCompanyId) {
+                        msgs.push(m);
+                    }
                 });
                 msgs.sort((a, b) => Number(a.id) - Number(b.id));
 
