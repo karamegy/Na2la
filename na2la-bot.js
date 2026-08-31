@@ -152,8 +152,7 @@
                 </div>
             </div>
 
-            <!-- شريط الأرس إي إس (RSS Ticker) - مخصص لحساب المدير فقط -->
-            <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
+            <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
                     🚀 أسطورة الطريق (Firebase v10) | مدعوم بنموذج Gemini الذكي، مزامنة الصور، التقارير المالية والتحليل اللحظي 24/7
                 </div>
@@ -573,7 +572,6 @@
     window.syncPlatformUserData = function() {
         let tenant = getActiveTenantContext();
         let isDriver = tenant.activeRole.includes('driver') || tenant.activeDriver.includes('سائق');
-        let isManager = tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير') || !isDriver;
 
         let badgeEl = document.getElementById('botUserRoleBadge');
         if (badgeEl) badgeEl.innerText = `🤖 ${tenant.activeDriver} (${tenant.activeCompanyName})`;
@@ -581,12 +579,6 @@
         let companyTagEl = document.getElementById('syncHubCompanyTag');
         if (companyTagEl) companyTagEl.innerText = `🏢 الشركة: ${tenant.activeCompanyName}`;
         
-        // إظهار أو إخفاء شريط الإرس إي إس (RSS Ticker) ليظهر حصرياً لحساب المدير فقط
-        let rssBar = document.getElementById('na2laRssTickerContainer');
-        if (rssBar) {
-            rssBar.style.display = isManager ? 'block' : 'none';
-        }
-
         renderQuickButtons(isDriver);
         updateSyncButtonBadge();
         checkDutyStatusIndicator();
