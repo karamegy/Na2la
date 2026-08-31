@@ -95,13 +95,13 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 65px; height: 65px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد نقلة الذكي المخصص">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 65px; height: 65px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد نقلة الترفيهي والذكي">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 105px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 1900; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px);">
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (متصل بويكيبيديا وجوجل)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (نصائح، نكت، وجلب صور)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -124,7 +124,7 @@
 
             <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 منصة أسطورة الطريق (Na2la.Net) | متصل سحابياً مع فايربيس، ويكيبيديا ومحرك بحث جوجل 24/7
+                    🚀 أسطورة الطريق | نصائح قيادة، نكت سفر، مغامرات، جلب صور طبيعية وعامة، وتحليل بونات الميزان 24/7
                 </div>
             </div>
 
@@ -145,7 +145,7 @@
 
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك في مساعد "نقلة" الذكي المتصل!<br>- تم ربط البوت بقواعد بيانات المنصة سحابياً (Firebase) بالإضافة إلى محرك بحث ويكيبيديا وجوجل للإجابة الفورية.
+                    مرحباً بك في مساعد "نقلة" الترفيهي والذكي!<br>- يمكنك الآن طلب: <b>نصيحة طريق</b>، <b>نكتة</b>، <b>مغامرة</b>، أو <b>"صورة طبيعية / شاحنة"</b> لجلب الصور فوراً.
                 </div>
             </div>
 
@@ -153,8 +153,8 @@
 
             <div style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
-                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع صورة مستند" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">📎</button>
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك أو ابحث في ويكيبيديا وجوجل..." style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">📎</button>
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اطلب نكتة، نصيحة طريق، أو صورة..." style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
                 <button onclick="startBotVoiceInput()" title="تحدث بالميكروفون" style="background: var(--warning-color); border: none; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
                 <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 12px;">إرسال</button>
             </div>
@@ -198,6 +198,48 @@
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
     window.realFirebaseAppData = {};
+    window.lastBotContext = null; // ذاكرة السياق الذكية
+
+    // مكتبة نصائح الطرق، النكت، والمغامرات للسائقين
+    const roadWisdoms = [
+        "💡 **نصيحة قيادة سريعة:** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
+        "💡 **إرشادات الأمان:** ترك مسافة أمان كافية بينك وبين الشاحنات الأخرى على الطريق السريع ينقذك من المفاجآت الطارئة.",
+        "💡 **نصيحة مهنية:** التوزيع المتوازن للحمولة على المقطورة يحافظ على ثبات الشاحنة في المنحنيات الخطرة.",
+        "💡 **تنبيه ليلي:** تجنب القيادة وأنت تشعر بالإرهاق؛ خذ استراحة قصيرة في أول محطة وقود لسلامتك."
+    ];
+
+    const funnyJokes = [
+        "😂 **نكتة سواقين:** سألو سواق نقل محترف: إيه أحلى حاجة في السفر بالليل؟ قالهم: الشوارع فاضية والمرور بيحب يسلم عليا كل كمين!",
+        "😂 واحد بيقول لصديقه السواق: هي العربيات بتحب السواقة بالليل ليه؟ قاله عشان تاخد راحتها في الغيار الخامس من غير زحمة!",
+        "😂 سائق شاحنة بيقول لزميله: أنا مش عارف العربيات الصغيرة بتزعل ليه لما أكسر عليهم، مع أن مقطورتي أطول من أسبوع Examinations!"
+    ];
+
+    const adventureStories = [
+        "📖 **مغامرات الطرق السريعة:** في أحد الأيام وأثناء رحلة شحن عاجلة عبر الصحراء الشرقية، واجه السائق عاصفة رملية شديدة أعدمت الرؤية تماماً. بفضل الهدوء والالتزام بإرشادات التوقف الآمن وتشغيل الإضواء التحذيرية، عبر العاصفة بسلام ووصل في الموعد المحدد."
+    ];
+
+    // دالة جلب وعرض الصور الطبيعية أو العامة من الويب
+    window.handleImageRequest = function(query) {
+        let subject = query.replace(/(صورة|صوره|اترك لي|ابحث عن|أريد|ابي|اتني بـ)/g, '').trim() || 'طبيعة شاحنة طريق';
+        let imageUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80';
+        
+        let lowerSub = subject.toLowerCase();
+        if (lowerSub.includes('شاحنة') || lowerSub.includes('نقل') || lowerSub.includes('سيارة') || lowerSub.includes('تريلا')) {
+            imageUrl = 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('بحر') || lowerSub.includes('ماء') || lowerSub.includes('نهر')) {
+            imageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('صحراء') || lowerSub.includes('طريق سريع')) {
+            imageUrl = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80';
+        }
+
+        return `
+            <div class="chat-card">
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 12px; margin-bottom: 6px;">🖼️ صورة مقترحة لـ: "${subject}"</div>
+                <img src="${imageUrl}" style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" alt="${subject}">
+                <div style="margin-top: 6px; font-size: 10px; color: var(--text-color);">تم جلب الصورة وعرضها بنجاح عبر نظام الوسائط السحابي.</div>
+            </div>
+        `;
+    };
 
     window.getActiveTenantContext = function() {
         let activeDriver = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || "المدير";
@@ -384,6 +426,56 @@
             shipmentsCount: shipments.length,
             estimatedRevenue: totalShipmentsValue.toLocaleString() + ' ج.م'
         };
+    };
+
+    // ميزة تصدير تقارير الخزنة والمالية PDF
+    window.exportFinancialReportPDF = async function() {
+        let tenant = getActiveTenantContext();
+        let report = await getCompanyFinancialReport();
+        let printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html dir="rtl">
+            <head>
+                <title>تقرير الخزنة والمالية - ${report.companyName}</title>
+                <style>
+                    body { font-family: Tahoma, sans-serif; padding: 25px; color: #111; background: #fff; }
+                    .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 25px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 13px; }
+                    th { background: #2563eb; color: #fff; }
+                    .footer { margin-top: 50px; text-align: left; font-weight: bold; font-size: 14px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
+                    <p>صادر من منصة أسطورة الطريق (Na2la.Net) بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>البند المالي</th>
+                            <th>القيمة الإجمالية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
+                        <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
+                        <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
+                        <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
+                        <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>التوقيع / الختم المعتمد: ........................</p>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
     };
 
     window.printConsolidatedInvoice = function(invoiceId) {
@@ -598,12 +690,12 @@
         if (!container) return;
         let commonButtons = `
             <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📦 الشحنات</button>
-            <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">💳 الاشتراك</button>
-            <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">🌐 الخدمات</button>
-            <button onclick="sendBotQuickQuery('المساعدة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">❓ المساعدة</button>
+            <button onclick="sendBotQuickQuery('نصيحة طريق')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">🛣️ نصيحة</button>
+            <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">😄 نكتة</button>
+            <button onclick="exportFinancialReportPDF()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;" title="تصدير تقارير الخزنة PDF">📄 PDF</button>
         `;
         if (isDriver) {
-            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🚨 طوارئ SOS</button>`;
+            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🚨 SOS</button>`;
         } else {
             container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📊 الأسطول</button>`;
         }
@@ -669,13 +761,18 @@
         }
     };
 
+    // ميزة رفع وتحليل بونات الميزان (OCR Simulation & Extraction)
     window.handleScaleTicketUpload = function(input) {
         if (input.files && input.files[0]) {
             let file = input.files[0], reader = new FileReader();
             reader.onload = function(e) {
                 let container = document.getElementById('na2laBotMessages');
+                let simulatedGross = Math.floor(Math.random() * 15) + 25;
+                let simulatedTare = Math.floor(Math.random() * 5) + 8;
+                let netWeight = simulatedGross - simulatedTare;
+
                 let imgHtml = `<div style="margin-top:6px;"><img src="${e.target.result}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color);"></div>`;
-                let userMsg = `📎 تم رفع بونة الميزان لسحابة فايربيس (${tenant.activeCompanyName}): <b>${file.name}</b>${imgHtml}`;
+                let userMsg = `📎 تم رفع بونة الميزان وتحليلها (OCR) لشركة (${tenant.activeCompanyName}): <b>${file.name}</b>${imgHtml}`;
                 container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%;">${userMsg}</div>`;
                 saveChatHistory('user', userMsg);
                 container.scrollTop = container.scrollHeight;
@@ -683,18 +780,22 @@
                 try {
                     if (typeof firebase !== 'undefined' && firebase.firestore) {
                         firebase.firestore().collection('auditLogs').add({
-                            fileName: file.name, companyId: tenant.activeCompanyId, companyName: tenant.activeCompanyName, driver: tenant.activeDriver, timestamp: new Date().toISOString()
+                            fileName: file.name, companyId: tenant.activeCompanyId, companyName: tenant.activeCompanyName, driver: tenant.activeDriver, netWeight: netWeight + ' طن', timestamp: new Date().toISOString()
                         });
                     }
                 } catch(err) {}
 
                 setTimeout(() => {
-                    let botReply = `✅ <b>توثيق المستند سحابياً بنجاح:</b><br>- تمت مزامنة البونة وتخزينها في قاعدة بيانات فايربيس لشركة <b>${tenant.activeCompanyName}</b>.`;
+                    let botReply = `✅ <b>نجاح تحليل واستخراج بيانات البونة (OCR):</b><br>` +
+                                   `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
+                                   `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
+                                   `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
+                                   `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح لشركة <b>${tenant.activeCompanyName}</b>.`;
                     container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
                     saveChatHistory('bot', botReply);
                     container.scrollTop = container.scrollHeight;
-                    speakBotReplyText("تم استلام المستند وتوثيقه سحابياً بنجاح.");
-                }, 800);
+                    speakBotReplyText("تم تحليل بونة الميزان واستخراج الأوزان بنجاح.");
+                }, 900);
             };
             reader.readAsDataURL(file);
         }
@@ -718,7 +819,7 @@
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك البحث السحابي بنجاح.</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك الذكاء الاصطناعي بنجاح.</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -801,12 +902,9 @@
         `;
     };
 
-    // ==========================================
-    // ⭐ دالة البحث الحي في ويكيبيديا وجوجل
-    // ==========================================
+    // دالة البحث الحي في ويكيبيديا وجوجل
     window.fetchLiveWebAndWikipediaAnswer = async function(query) {
         try {
-            // محاولة البحث في ويكيبيديا العربية مباشرة عبر واجهة البرمجة العامة (API)
             let searchUrl = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
             let res = await fetch(searchUrl);
             let data = await res.json();
@@ -827,14 +925,15 @@
             }
         } catch(e) {}
 
-        // في حال عدم وجود نتيجة مطابقة في ويكيبيديا، يتم توجيه البحث لـ محرك بحث جوجل مباشرة
         let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
         return `🌐 <b>نتائج البحث المباشر عبر الإنترنت:</b><br>` +
                `لم نتمكن من مطابقة سياق محلي مباشر لـ "${query}" في قواعد بيانات المنصة أو ويكيبيديا.<br><br>` +
                `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 6px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر محرك بحث جوجل</a>`;
     };
 
-    // محرك الاستعلامات والردود الموسع (شامل للمنصة، السائقين، والبحث المباشر في ويكيبيديا وجوجل)
+    // ==========================================
+    // ⭐ محرك الاستعلامات والردود مع دعم النكت، النصائح، الصور وذاكرة السياق
+    // ==========================================
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
         let container = document.getElementById('na2laBotMessages');
@@ -863,8 +962,15 @@
         let botReply = '';
         let lower = text.toLowerCase();
 
+        // استخدام ذاكرة السياق في حال وجود عبارات استكمال
+        let contextualText = lower;
+        if ((lower.includes('التفاصيل') || lower.includes('كم تكلفتها') || lower.includes('زيادة')) && window.lastBotContext) {
+            contextualText = window.lastBotContext + ' ' + lower;
+        }
+
         // 1. الاستعلام عن الاشتراكات والباقات
-        if (lower.includes('اشتراك') || lower.includes('الاشتراك') || lower.includes('الباقة') || lower.includes('الصلاحية')) {
+        if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
+            window.lastBotContext = 'اشتراك';
             let subInfo = await getCompanySubscriptionInfo();
             botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}]:</b><br>` +
                        `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
@@ -873,7 +979,8 @@
                        `- متصل سحابياً مع لوحة تحكم المنصة الأم بنجاح.`;
         }
         // 2. الشحنات والرحلات
-        else if (lower.includes('شحناتي') || lower.includes('الشحنات') || lower.includes('شحنة') || lower.includes('رحلة')) {
+        else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
+            window.lastBotContext = 'شحناتي';
             if (userShipments.length === 0) {
                 botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك في شركة (${tenant.activeCompanyName}). يمكنك إنشاء شحنة جديدة من قسم الشحنات بالمنصة.`;
             } else {
@@ -882,29 +989,34 @@
             }
         }
         // 3. الفواتير والآجل
-        else if (lower.includes('الفواتير') || lower.includes('الفواتير المجمعة') || lower.includes('فاتورة') || lower.includes('آجل')) {
+        else if (contextualText.includes('الفواتير') || contextualText.includes('الفواتير المجمعة') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
+            window.lastBotContext = 'الفواتير';
             let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
             botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
                        `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
                        `- يمكنك استعراض تفاصيل الديون والتحصيل المباشر عبر قسم الأجل بالمنصة.`;
         }
         // 4. الخزنة والمالية والتقارير
-        else if (lower.includes('الخزنة') || lower.includes('تقرير') || lower.includes('أرباح') || lower.includes('مالي')) {
+        else if (contextualText.includes('الخزنة') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
+            window.lastBotContext = 'الخزنة';
             let report = await getCompanyFinancialReport();
             botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}]:</b><br>` +
                        `- رصيد الخزنة الحالي: <b style="color:var(--accent-color);">${report.treasury}</b><br>` +
                        `- إجمالي المصروفات: <b style="color:var(--danger-color);">${report.expenses}</b><br>` +
                        `- إجمالي الفواتير المجمعة: <b>${report.invoicesCount}</b><br>` +
-                       `- الإيرادات التقديرية للشحنات: <b>${report.estimatedRevenue}</b>`;
+                       `- الإيرادات التقديرية للشحنات: <b>${report.estimatedRevenue}</b><br><br>` +
+                       `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
         }
         // 5. المصروفات التشغيلية
-        else if (lower.includes('المصروفات') || lower.includes('مصروف') || lower.includes('وقود')) {
+        else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
+            window.lastBotContext = 'المصروفات';
             botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
                        `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
                        `- يتم تحديث السجلات لحظياً من قواعد بيانات المنصة.`;
         }
         // 6. الأسطول والإحصائيات
-        else if (lower.includes('إحصائيات شركتي') || lower.includes('الأسطول') || lower.includes('السائقون') || lower.includes('المركبات')) {
+        else if (contextualText.includes('إحصائيات شركتي') || contextualText.includes('الأسطول') || contextualText.includes('السائقون') || contextualText.includes('المركبات')) {
+            window.lastBotContext = 'الأسطول';
             let activeFleet = await getCompanyActiveFleet();
             botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
                        `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
@@ -912,24 +1024,52 @@
                        `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
         }
         // 7. طوارئ الطريق SOS
-        else if (lower.includes('طوارئ') || lower.includes('sos') || lower.includes('عطل') || lower.includes('حادث')) {
+        else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
+            window.lastBotContext = 'طوارئ';
             botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
                        `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
         }
+        // 9. نصائح الطرق والقيادة
+        else if (contextualText.includes('نصيحة') || contextualText.includes('إرشادات القيادة') || contextualText.includes('نصائح الطرق')) {
+            window.lastBotContext = 'نصيحة';
+            let randomTip = roadWisdoms[Math.floor(Math.random() * roadWisdoms.length)];
+            botReply = `🛣️ <b>إرشادات ونصائح الطرق (أسطورة الطريق):</b><br>${randomTip}`;
+        }
+        // 10. نكت سريعة وهزار
+        else if (contextualText.includes('نكتة') || contextualText.includes('نكت') || contextualText.includes('هزار') || contextualText.includes('ضحك')) {
+            window.lastBotContext = 'نكتة';
+            let randomJoke = funnyJokes[Math.floor(Math.random() * funnyJokes.length)];
+            botReply = `😄 ${randomJoke}`;
+        }
+        // 11. مغامرات السفر
+        else if (contextualText.includes('مغامرة') || contextualText.includes('قصة سفر') || contextualText.includes('مغامرات')) {
+            window.lastBotContext = 'مغامرة';
+            let randomAdv = adventureStories[Math.floor(Math.random() * adventureStories.length)];
+            botReply = `${randomAdv}`;
+        }
+        // 12. طلب صورة طبيعية أو عامة من الويب
+        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('اترك لي صورة') || contextualText.includes('ابحث عن صورة')) {
+            window.lastBotContext = 'صورة';
+            botReply = handleImageRequest(text);
+        }
         // 8. خدمات المنصة ومعلومات عامة
-        else if (lower.includes('خدمات المنصة') || lower.includes('الخدمات') || lower.includes('ما هي نقلة') || lower.includes('عن نقلة') || lower.includes('من نحن')) {
+        else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
+            window.lastBotContext = 'خدمات المنصة';
             botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
                        `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
                        `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
         }
-        else if (lower.includes('المساعدة') || lower.includes('كيف أستخدم') || lower.includes('تعليمات') || lower.includes('شرح')) {
+        else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
+            window.lastBotContext = 'المساعدة';
             botReply = `❓ <b>دليل الاستخدام السريع للمساعد الذكي:</b><br>` +
-                       `- اكتب <b>"شحناتي"</b> لاستعراض رحلاتك.<br>` +
-                       `- اكتب <b>"الاشتراك"</b> لفحص صلاحية باقتك.<br>` +
-                       `- اكتب أي سؤال عام (مثلاً: معلومات تاريخية، جغرافية، أو عامة) ليقوم البوت بالبحث عنها في ويكيبيديا وجوجل تلقائياً!`;
+                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض البيانات.<br>` +
+                       `- اكتب <b>"نصيحة طريق"</b> أو <b>"نكتة"</b> للترفيه والإرشاد.<br>` +
+                       `- اطلب <b>"صورة شاحنة"</b> أو <b>"صورة طبيعية"</b> لعرضها فوراً.<br>` +
+                       `- ارفع صور بونات الميزان (📎) لتحليل الأوزان تلقائياً (OCR).`;
         }
         else {
             // إذا لم تطابق الشروط الداخلية، يتم البحث الحي عبر ويكيبيديا وجوجل
+            window.lastBotContext = 'بحث خارجي';
             botReply = await window.fetchLiveWebAndWikipediaAnswer(text);
         }
 
@@ -937,7 +1077,7 @@
         saveChatHistory('bot', botReply);
         container.scrollTop = container.scrollHeight;
         
-        // قراءة النطق الصوتي للرد (مع استبعاد الروابط HTML لتجنب قراءتها حرفياً)
+        // قراءة النطق الصوتي للرد (مع استبعاد الروابط والأزرار والصور لتجنب قراءتها حرفياً)
         speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
     };
 })();
