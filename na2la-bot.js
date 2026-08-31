@@ -142,7 +142,7 @@
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (أسطورة الطريق 10v)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (عزل تام للشركات)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -166,7 +166,7 @@
             <!-- شريط الأرس إي إس (RSS Ticker) - مخصص لحساب المدير فقط -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق (Company_main) | مزامنة الحسابات والشركات، عزل المستخدمين، بحث جهات الاتصال وربط ذكاء Google Gemini 24/7
+                    🚀 أسطورة الطريق (عزل تام للشركات والمستخدمين) | مزامنة الحسابات، حجب شحنات الزوار، وربط ذكاء Google Gemini 24/7
                 </div>
             </div>
 
@@ -187,7 +187,7 @@
 
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة <b>أسطورة الطريق</b>.<br>- تم تفعيل عزل الحسابات والشركات، مزامنة جهات الاتصال، والإجابات المعرفية الذكية لكافة المجالات.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة <b>أسطورة الطريق</b>.<br>- تم تفعيل عزل الحسابات والشركات بدقة تامة وحجب شحنات الزوار عن غير المسجلين.
                 </div>
             </div>
 
@@ -219,7 +219,7 @@
         const onDrag = (clientX, clientY) => {
             if (!isBotDragging) return;
             let dx = clientX - startBotX, dy = clientY - startBotY;
-            if (dx * dx + dy * dy > 36) hasBotDragged = true; // أكثر تسامحاً لضمان عدم منع النقرات البسيطة
+            if (dx * dx + dy * dy > 36) hasBotDragged = true;
             let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
             let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
             botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
@@ -245,8 +245,7 @@
         
         document.addEventListener('touchend', stopDrag);
 
-        // جعل النقر يعمل فوراً وبضغطة واحدة مستقلة عن السحب
-        botBtn.addEventListener('click', (e) => {
+        botBtn.addEventListener('click', () => {
             if (!hasBotDragged) {
                 toggleNa2laBot();
             }
@@ -301,31 +300,33 @@
         `;
     };
 
-    // الدالة المحدثة بدقة لتمييز الزائر، السائق، أو المدير دون فرض حساب المدير افتراضياً
+    // الدالة المعزولة والمحدثة لتعريف الزائر والسائق والمدير وفصل الشركات بدقة
     window.getActiveTenantContext = function() {
-        let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || localStorage.getItem('na2la_visitor_name') || null;
+        let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || null;
         
         let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || localStorage.getItem('user_role') || 'visitor';
 
-        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || 'company_main';
+        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || '';
         
-        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || 'أسطورة الطريق الرئيسية';
+        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || '';
+
+        // إذا لم يكن هناك مستخدم مسجل أو كان دور زائر
+        if (!rawUser || activeRole === 'visitor' || rawUser === 'زائر كريم') {
+            return {
+                activeDriver: 'زائر كريم',
+                activeCompanyId: activeCompanyId || 'guest_company',
+                activeCompanyName: activeCompanyName || 'زائر غير مسجل',
+                activeRole: 'visitor'
+            };
+        }
 
         let activeDriver = rawUser;
-        if (!activeDriver) {
-            activeDriver = "زائر كريم";
-            activeRole = "visitor";
-        }
-
         if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole.includes('مدير')) {
             activeRole = "admin";
+            if (!activeCompanyId) activeCompanyId = 'company_main';
+            if (!activeCompanyName) activeCompanyName = 'أسطورة الطريق الرئيسية';
         } else if (activeDriver.includes('سائق') || activeRole.includes('driver')) {
             activeRole = "driver";
-        }
-
-        if (!activeCompanyId || activeCompanyId === 'main') {
-            activeCompanyId = 'company_main';
-            activeCompanyName = 'أسطورة الطريق الرئيسية';
         }
 
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
@@ -337,58 +338,58 @@
                 const db = firebase.firestore();
                 let tenant = getActiveTenantContext();
                 
+                // جلب السائقين للشركة الحالية فقط
                 try {
-                    const driversSnap = await db.collection('drivers').where('companyId', 'in', [tenant.activeCompanyId, 'company_main', '']).get();
+                    const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
+                    } else if (tenant.activeCompanyId === 'company_main') {
                         const allDrivers = await db.collection('drivers').get();
                         realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseDrivers = [];
                     }
                 } catch(e) {
-                    try {
-                        const allDrivers = await db.collection('drivers').get();
-                        realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } catch(err) { realFirebaseDrivers = []; }
+                    realFirebaseDrivers = [];
                 }
 
+                // جلب الشحنات الخاصة بالشركة الحالية فقط وعدم خلط شركات أخرى
                 try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', 'in', [tenant.activeCompanyId, 'company_main', '']).get();
+                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!shipmentsSnap.empty) {
                         realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
+                    } else if (tenant.activeCompanyId === 'company_main') {
                         const allShipments = await db.collection('shipments').get();
                         realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseShipments = [];
                     }
                 } catch(e) {
-                    try {
-                        const allShipments = await db.collection('shipments').get();
-                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } catch(err) { realFirebaseShipments = []; }
+                    realFirebaseShipments = [];
                 }
 
+                // جلب الفواتير الآجلة والمجمعة للشركة الحالية فقط
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', 'in', [tenant.activeCompanyId, 'company_main', '']).get();
+                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!invoicesSnap.empty) {
                         realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
+                    } else if (tenant.activeCompanyId === 'company_main') {
                         const allInvoices = await db.collection('deferredInvoices').get();
                         realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseDeferredInvoices = [];
                     }
                 } catch(e) {
-                    try {
-                        const allInvoices = await db.collection('deferredInvoices').get();
-                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } catch(err) { realFirebaseDeferredInvoices = []; }
+                    realFirebaseDeferredInvoices = [];
                 }
 
+                // جلب بيانات تطبيق الشركة
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
                     if (appDataSnap.exists) {
                         realFirebaseAppData = appDataSnap.data() || {};
                     } else {
-                        const mainAppData = await db.collection('appData').doc('company_main').get();
-                        realFirebaseAppData = mainAppData.exists ? mainAppData.data() : {};
+                        realFirebaseAppData = {};
                     }
                 } catch(e) {}
             }
@@ -397,33 +398,15 @@
         let tenantContext = getActiveTenantContext();
         let localInvoices = [];
         try {
-            let invKeys = [
-                `deferredInvoices_${tenantContext.activeCompanyId}`, 
-                'deferredInvoices', 
-                'invoices', 
-                'na2la_deferred_invoices', 
-                'na2la_invoices',
-                'consolidated_invoices'
-            ];
+            let invKeys = [`deferredInvoices_${tenantContext.activeCompanyId}`, 'deferredInvoices'];
             for (let key of invKeys) {
                 let localData = JSON.parse(localStorage.getItem(key) || '[]');
                 if (Array.isArray(localData) && localData.length > 0) {
                     localInvoices = localData;
                     break;
-                } else if (localData && Array.isArray(localData.deferredInvoices)) {
-                    localInvoices = localData.deferredInvoices;
-                    break;
                 }
             }
         } catch(e) {}
-
-        if (window.Na2laApp && Array.isArray(window.Na2laApp.deferredInvoices)) {
-            window.Na2laApp.deferredInvoices.forEach(inv => {
-                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                    realFirebaseDeferredInvoices.push(inv);
-                }
-            });
-        }
 
         if (localInvoices.length > 0) {
             localInvoices.forEach(inv => {
@@ -437,7 +420,7 @@
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
-            planName: realFirebaseAppData.subPlan || realFirebaseAppData.planName || 'الباقة الترويجية / الاحترافية (Lifetime)',
+            planName: realFirebaseAppData.subPlan || realFirebaseAppData.planName || 'الباقة الاحترافية (Lifetime)',
             expiryDate: realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || '2026-12-31',
             status: realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || 'active ✅ (نشط)',
             companyName: tenant.activeCompanyName
@@ -461,6 +444,7 @@
 
     window.updateDriverLiveLocation = async function(lat, lng) {
         let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') return;
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
@@ -479,16 +463,17 @@
 
     window.getCompanyActiveFleet = async function() {
         let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') return [];
         let fleet = [];
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                const snap = await db.collection('drivers').where('companyId', 'in', [tenant.activeCompanyId, 'company_main']).get();
+                const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                 fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             }
         } catch(e) {}
         if (fleet.length === 0 && realFirebaseDrivers.length > 0) {
-            fleet = realFirebaseDrivers;
+            fleet = realFirebaseDrivers.filter(d => !d.companyId || d.companyId === tenant.activeCompanyId);
         }
         return fleet;
     };
@@ -515,6 +500,10 @@
 
     window.exportFinancialReportPDF = async function() {
         let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') {
+            alert("عذراً، هذه الميزة مخصصة لحسابات الشركات المسجلة فقط.");
+            return;
+        }
         let report = await getCompanyFinancialReport();
         let printWindow = window.open('', '_blank');
         printWindow.document.write(`
@@ -565,6 +554,7 @@
 
     window.printConsolidatedInvoice = function(invoiceId) {
         let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') return;
         let invoices = realFirebaseDeferredInvoices.filter(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
         let invoice = invoices.length > 0 ? invoices[0] : null;
 
@@ -628,7 +618,7 @@
 
     window.syncPlatformUserData = function() {
         let tenant = getActiveTenantContext();
-        let isManager = (tenant.activeRole === 'admin' || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير'));
+        let isManager = (tenant.activeRole === 'admin');
 
         let badgeEl = document.getElementById('botUserRoleBadge');
         if (badgeEl) badgeEl.innerText = `🤖 ${tenant.activeDriver} (${tenant.activeCompanyName})`;
@@ -647,10 +637,15 @@
         return tenant;
     };
 
+    // حجب شحنات الشركات تماماً عن الزائر أو غير المسجلين (عدم عرض شحنات المدير أو الشركات للزائر)
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
-        let allShipments = [];
+        
+        if (tenant.activeRole === 'visitor') {
+            return []; // الزائر أو غير المسجل يرى 0 شحنات تماماً ولا يتم عرض أي شحنات خاصة بالمدير أو الشركات خارجه
+        }
 
+        let allShipments = [];
         if (realFirebaseShipments.length > 0) {
             allShipments = realFirebaseShipments;
         } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
@@ -659,7 +654,7 @@
             allShipments = window.shipments;
         } else {
             try {
-                let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments', 'na2la_shipments', 'appData'];
+                let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments'];
                 for (let key of localKeys) {
                     let localData = JSON.parse(localStorage.getItem(key) || '[]');
                     if (Array.isArray(localData) && localData.length > 0) {
@@ -671,16 +666,17 @@
             } catch(e) {}
         }
 
-        let companyFiltered = allShipments.filter(s => !s.companyId || s.companyId === tenant.activeCompanyId || s.companyId === 'company_main' || s.companyName === tenant.activeCompanyName);
+        // فصل الشركات بدقة صارمة عبر مطابقة companyId
+        let companyFiltered = allShipments.filter(s => {
+            let sCompanyId = s.companyId || 'company_main';
+            return sCompanyId === tenant.activeCompanyId;
+        });
 
         if (tenant.activeRole === 'admin') {
-            return companyFiltered;
+            return companyFiltered; // المدير يرى شحنات شركته فقط
         }
 
-        if (tenant.activeRole === 'visitor') {
-            return companyFiltered.slice(0, 3);
-        }
-
+        // السائق يرى شحناته المسندة إليه فقط داخل شركته
         return companyFiltered.filter(s => {
             let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
             return matchesUser;
@@ -697,23 +693,30 @@
 
     window.getCompanyFinancials = function() {
         let tenant = getActiveTenantContext();
-        let rawTreasury = realFirebaseAppData.treasury || window.currentTreasury || window.Na2laApp?.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || localStorage.getItem('treasury') || localStorage.getItem('current_treasury') || '0 ج.م';
-        let rawExpenses = realFirebaseAppData.expenses || window.currentExpenses || window.Na2laApp?.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || localStorage.getItem('expenses') || localStorage.getItem('current_expenses') || '0 ج.م';
+        if (tenant.activeRole === 'visitor') {
+            return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
+        }
+        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0 ج.م';
+        let rawExpenses = realFirebaseAppData.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || '0 ج.م';
         
         let treasuryBalance = parseNumericCurrency(rawTreasury);
         let expensesTotal = parseNumericCurrency(rawExpenses);
         
         let shipments = getIsolatedUserShipments();
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || inv.companyId === 'company_main');
-        let invoicesCount = companyInvoices.length > 0 ? companyInvoices.length : ((window.Na2laApp?.deferredInvoices) ? window.Na2laApp.deferredInvoices.length : 0);
+        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
         
-        return { treasuryBalance, expensesTotal, invoicesCount, shipmentsCount: shipments.length };
+        return { treasuryBalance, expensesTotal, invoicesCount: companyInvoices.length, shipmentsCount: shipments.length };
     };
 
     window.updateSyncButtonBadge = function() {
-        const syncedShipments = getIsolatedUserShipments();
+        let tenant = getActiveTenantContext();
         const badgeEl = document.getElementById('btn-sync-badge');
         if (badgeEl) {
+            if (tenant.activeRole === 'visitor') {
+                badgeEl.style.display = 'none';
+                return;
+            }
+            const syncedShipments = getIsolatedUserShipments();
             badgeEl.innerText = syncedShipments.length;
             badgeEl.style.display = syncedShipments.length > 0 ? 'inline-block' : 'none';
         }
@@ -734,6 +737,13 @@
         if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
 
         userTitleSpan.innerText = `👤 ${tenant.activeDriver}`;
+        
+        if (tenant.activeRole === 'visitor') {
+            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: var(--warning-color);">أنت تصفح كزائر كريم. سجل الدخول لحسابك لاستعراض الشحنات.</div>`;
+            dropdown.style.display = 'block';
+            return;
+        }
+
         const syncedShipments = getIsolatedUserShipments();
 
         if (syncedShipments.length === 0) {
@@ -756,13 +766,18 @@
 
     window.openConnectedAccountHub = function() {
         let tenant = getActiveTenantContext();
-        if (typeof viewingProfileName !== 'undefined') viewingProfileName = tenant.activeDriver;
+        if (tenant.activeRole === 'visitor') {
+            alert("أنت تصفح كزائر غير مسجل حالياً. يرجى تسجيل الدخول لحسابك المعتمد.");
+            return;
+        }
         if (typeof switchTab === 'function') switchTab('account-tab');
         const syncedShipments = getIsolatedUserShipments();
-        alert(`👤 الحساب الحالي: ${tenant.activeDriver} (${tenant.activeRole === 'visitor' ? 'زائر' : (tenant.activeRole === 'admin' ? 'مدير' : 'سائق')})\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات: ${syncedShipments.length}\n✨ الحساب متزامن ومفعل بنجاح.`);
+        alert(`👤 الحساب الحالي: ${tenant.activeDriver} (${tenant.activeRole === 'admin' ? 'مدير شركة' : 'سائق'})\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات: ${syncedShipments.length}\n✨ الحساب متزامن ومفعل بنجاح.`);
     };
 
     window.toggleDutyStatus = function() {
+        let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') return;
         let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
         let newStatus = currentStatus === 'active' ? 'offline' : 'active';
         localStorage.setItem('driver_duty_status', newStatus);
@@ -870,6 +885,11 @@
 
     window.handleScaleTicketUpload = function(input) {
         if (input.files && input.files[0]) {
+            let tenant = getActiveTenantContext();
+            if (tenant.activeRole === 'visitor') {
+                alert("يرجى تسجيل الدخول بحسابك أولاً لرفع وتحليل بونات الميزان.");
+                return;
+            }
             let file = input.files[0], reader = new FileReader();
             reader.onload = function(e) {
                 let container = document.getElementById('na2laBotMessages');
@@ -909,7 +929,7 @@
 
     window.syncAndSearchPhoneContacts = async function(searchQuery = '') {
         let tenant = getActiveTenantContext();
-        let contactsKey = `na2la_phone_contacts_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let contactsKey = `na2la_phone_contacts_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         let savedContacts = JSON.parse(localStorage.getItem(contactsKey) || '[]');
 
         if ('contacts' in navigator && 'select' in navigator.contacts && !searchQuery) {
@@ -932,7 +952,7 @@
                 { name: "محطة وقود الطريق الصحراوي", phone: "01012345678" },
                 { name: "ورشة صيانة التريلات المركزية", phone: "01198765432" },
                 { name: "إدارة شركة " + tenant.activeCompanyName, phone: "01233344455" },
-                { name: "العميل الرئيسي - توريدات", phone: "01599887766" }
+                { name: "الدعم الفني لمنصة نقلة", phone: "01599887766" }
             ];
             localStorage.setItem(contactsKey, JSON.stringify(savedContacts));
         }
@@ -960,9 +980,10 @@
         return html;
     };
 
+    // قفل وحفظ آخر محادثة للمستخدم بشكل منفصل ومستقل تماماً لكل حساب
     window.saveChatHistory = function(sender, htmlContent) {
-        tenant = getActiveTenantContext();
-        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
         history.push({ sender, htmlContent, timestamp: new Date().toISOString() });
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -972,13 +993,17 @@
     };
 
     window.loadChatHistory = function() {
-        tenant = getActiveTenantContext();
-        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'visitor' ? 'زائر' : 'حساب معتمد'}) في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة بياناتك بنجاح.</div>`;
+        let welcomeText = tenant.activeRole === 'visitor' 
+            ? `مرحباً بك يا <b>زائر كريم</b> في منصة أسطورة الطريق.<br>- أنت تصفح المنصة كزائر غير مسجل. يرجى تسجيل الدخول بحسابك المعتمد لاستعراض الشحنات والبيانات الخاصة بشركتك.`
+            : `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'admin' ? 'مدير شركة' : 'سائق'}) في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومزامنة بياناتك بنجاح وعزلها عن باقي الشركات.`;
+
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${welcomeText}</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -991,12 +1016,12 @@
     };
 
     window.clearBotChat = function() {
-        tenant = getActiveTenantContext();
-        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         localStorage.removeItem(storageKey);
         let msgContainer = document.getElementById('na2laBotMessages');
         if (msgContainer) {
-            msgContainer.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color); color: var(--text-color);">🧹 تمت تصفية سجل المحادثة الخاص بحسابك (${tenant.activeDriver}) بنجاح.</div>`;
+            msgContainer.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color); color: var(--text-color);">🧹 تمت تصفية وقفل سجل المحادثة الخاص بحسابك (${tenant.activeDriver}) بنجاح.</div>`;
         }
     };
 
@@ -1136,7 +1161,9 @@
         }
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
-            if (userShipments.length === 0) {
+            if (tenant.activeRole === 'visitor') {
+                botReply = `📦 <b>عذراً، أنت تصفح كزائر كريم غير مسجل:</b><br>- تم حجب شحنات الشركات والمدير عن الزوار لحماية الخصوصية. يرجى تسجيل الدخول بحسابك المعتمد في منصة نقلة لاستعراض شحناتك الخاصة.`;
+            } else if (userShipments.length === 0) {
                 botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك (${tenant.activeDriver}) في شركة (${tenant.activeCompanyName}).`;
             } else {
                 botReply = `📦 لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة لحسابك ومعزولة بدقة:<br>`;
@@ -1145,42 +1172,62 @@
         }
         else if (contextualText.includes('الفواتير') || contextualText.includes('الفواتير المجمعة') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
             window.lastBotContext = 'الفواتير';
-            let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || inv.companyId === 'company_main');
-            botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                       `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
-                       `- تم جلب وعزل الفواتير المرتبطة بالشركة بنجاح.`;
+            if (tenant.activeRole === 'visitor') {
+                botReply = `🧾 قسم الفواتير مخصص للعملاء والسائقين ومديري الشركات المسجلين فقط.`;
+            } else {
+                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+                botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                           `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
+                           `- تم جلب وعزل الفواتير المرتبطة بشركتك بنجاح.`;
+            }
         }
         else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
             window.lastBotContext = 'الخزنة';
-            let report = await getCompanyFinancialReport();
-            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
-                       `<div class="bot-table-container"><table class="bot-custom-table">` +
-                       `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
-                       `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
-                       `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
-                       `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
-                       `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
-                       `</table></div><br>` +
-                       `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
+            if (tenant.activeRole === 'visitor') {
+                botReply = `💰 عذراً، تقارير الخزنة والمالية محجوبة عن الزوار وغير المسجلين. يرجى تسجيل الدخول.`;
+            } else {
+                let report = await getCompanyFinancialReport();
+                botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
+                           `<div class="bot-table-container"><table class="bot-custom-table">` +
+                           `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
+                           `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
+                           `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
+                           `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
+                           `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
+                           `</table></div><br>` +
+                           `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
+            }
         }
         else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
             window.lastBotContext = 'المصروفات';
-            botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                       `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
-                       `- يتم تحديث السجلات ومزامنتها لحظياً.`;
+            if (tenant.activeRole === 'visitor') {
+                botReply = `⛽ هذه الخدمة مخصصة للحسابات المسجلة.`;
+            } else {
+                botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
+                           `- يتم تحديث السجلات ومزامنتها لحظياً.`;
+            }
         }
         else if (contextualText.includes('إحصائيات شركتي') || contextualText.includes('الأسطول') || contextualText.includes('السائقون') || contextualText.includes('المركبات')) {
             window.lastBotContext = 'الأسطول';
-            let activeFleet = await getCompanyActiveFleet();
-            botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
-                       `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
-                       `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
-                       `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+            if (tenant.activeRole === 'visitor') {
+                botReply = `📊 إحصائيات الأسطول محجوبة عن الزوار.`;
+            } else {
+                let activeFleet = await getCompanyActiveFleet();
+                botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
+                           `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
+                           `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
+                           `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+            }
         }
         else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
             window.lastBotContext = 'طوارئ';
-            botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
-                       `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
+            if (tenant.activeRole === 'visitor') {
+                botReply = `🚨 يرجى تسجيل الدخول للاستفادة من خدمة طوارئ SOS.`;
+            } else {
+                botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
+                           `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
+            }
         }
         else if (contextualText.includes('نصيحة') || contextualText.includes('إرشادات القيادة') || contextualText.includes('نصائح الطرق')) {
             window.lastBotContext = 'نصيحة';
@@ -1204,13 +1251,13 @@
         else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
             window.lastBotContext = 'خدمات المنصة';
             botReply = `🌐 <b>عن منصة أسطورة الطريق (نقلة):</b><br>` +
-                       `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وعزل حسابات الشركات والمستخدمين.<br>` +
+                       `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وعزل حسابات الشركات والمستخدمين تماماً.<br>` +
                        `- توفر مزامنة تامة لجهات الاتصال، تتبع GPS لحظي، وبوت ذكاء اصطناعي متكامل مرتبط بمحركات Google.`;
         }
         else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
             window.lastBotContext = 'المساعدة';
             botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini):</b><br>` +
-                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض السجلات المعزولة.<br>` +
+                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض السجلات المعزولة الخاصة بشركتك.<br>` +
                        `- اكتب <b>"جهات الاتصال"</b> للبحث ومزامنة جهات الاتصال الخاصة بحسابك.<br>` +
                        `- اطلب <b>أي معلومة عامة في أي مجال</b> ليقوم بوت Gemini بجلب إجابات Google وويكيبيديا فوراً.<br>` +
                        `- ارفع صور بونات الميزان (📎) لتحليل الأوزان تلقائياً (OCR).`;
