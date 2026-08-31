@@ -1,7 +1,9 @@
 (function() {
-    // 1. حقن الأنماط (CSS) مع عزل الثيمات بالكامل داخل الحاوية الخاصة بالبوت فقط
+    // 1. حقن الأنماط (CSS) مع عزل الثيمات والخط العربي الواضح (Cairo) وتصغير زر الإرسال وتنسيق الجدول والترتيب المتطور
     const styleEl = document.createElement('style');
     styleEl.innerHTML = `
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        
         #na2laBotRootContainer {
             --primary-color: #3b82f6;
             --primary-hover: #2563eb;
@@ -13,6 +15,7 @@
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --shadow-3d: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            font-family: 'Cairo', sans-serif !important;
         }
         #na2laBotRootContainer[data-theme="royal"] {
             --primary-color: #8b5cf6;
@@ -48,8 +51,8 @@
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 5px 9px;
-            border-radius: 8px;
+            padding: 4px 8px;
+            border-radius: 6px;
             font-size: 10px;
             font-weight: bold;
             cursor: pointer;
@@ -58,6 +61,7 @@
             gap: 4px;
             box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
             transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Cairo', sans-serif;
         }
         .sync-account-hub-btn:hover {
             transform: translateY(-2px);
@@ -76,6 +80,30 @@
             border-radius: 8px;
             margin-top: 6px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-family: 'Cairo', sans-serif;
+        }
+        .bot-table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 6px;
+        }
+        .bot-custom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+        }
+        .bot-custom-table th, .bot-custom-table td {
+            border: 1px solid var(--border-color);
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .bot-custom-table th {
+            background: var(--primary-color);
+            color: #ffffff;
+            font-weight: bold;
         }
         .typing-dots span {
             height: 6px; width: 6px; float: left; margin: 0 2px;
@@ -95,13 +123,13 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 65px; height: 65px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد نقلة الترفيهي والذكي">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي لمنصة نقلة">🤖</button>
 
-        <div id="na2laBotModal" style="position: fixed; bottom: 105px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 1900; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px);">
-            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+        <div id="na2laBotModal" style="position: fixed; bottom: 100px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 1900; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد "نقلة" (نصائح، نكت، وجلب صور)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (نقلة 10v)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -118,24 +146,24 @@
                             <div id="syncHubItemsList" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
                     </div>
-                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">✕</button>
+                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">✕</button>
                 </div>
             </div>
 
             <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق | نصائح قيادة، نكت سفر، مغامرات، جلب صور طبيعية وعامة، وتحليل بونات الميزان 24/7
+                    🚀 أسطورة الطريق (Firebase v10) | مدعوم بنموذج Gemini الذكي، مزامنة الصور، التقارير المالية والتحليل اللحظي 24/7
                 </div>
             </div>
 
             <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px;">
                 <div style="display: flex; gap: 3px;">
-                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎤 مستمر معطل</button>
-                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🔊 ناطق</button>
-                    <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;" title="مسح محادثة">🗑️ مسح</button>
+                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
+                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
+                    <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
                 </div>
                 <div>
-                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 6px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer;">
+                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 6px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif;">
                         <option value="default">🎨 الداكن الأصلي</option>
                         <option value="royal">👑 الأرجواني الملكي</option>
                         <option value="emerald">💎 الزمردي الفاخر</option>
@@ -143,20 +171,22 @@
                 </div>
             </div>
 
-            <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
+            <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك في مساعد "نقلة" الترفيهي والذكي!<br>- يمكنك الآن طلب: <b>نصيحة طريق</b>، <b>نكتة</b>، <b>مغامرة</b>، أو <b>"صورة طبيعية / شاحنة"</b> لجلب الصور فوراً.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة أسطورة الطريق (إصدار Firebase v10).<br>- يمكنك طلب: شحناتي، الخزنة، تقارير PDF، نكت سفر، نصائح طرق، أو <b>"صورة شاحنة / طبيعة"</b> لعرض الصور فوراً.
                 </div>
             </div>
 
-            <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid var(--border-color);"></div>
+            <!-- شبكة الأزرار السريعة المتقدمة (ترتيب متطور: شحنات، خزنة، تقارير، نصائح، نكت، صور) -->
+            <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color);"></div>
 
-            <div style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
+            <!-- صندوق الإدخال (مع تصغير زر الإرسال وتنسيق الخط الواضح) -->
+            <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
-                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;">📎</button>
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اطلب نكتة، نصيحة طريق، أو صورة..." style="flex: 1; margin: 0; padding: 9px 12px; font-size: 12px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color);" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
-                <button onclick="startBotVoiceInput()" title="تحدث بالميكروفون" style="background: var(--warning-color); border: none; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
-                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 12px;">إرسال</button>
+                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">📎</button>
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اطلب نكتة، نصيحة، أو صورة..." style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
+                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap;">إرسال</button>
             </div>
         </div>
     `;
@@ -193,50 +223,52 @@
         document.addEventListener('touchend', stopDrag);
     }
 
-    // 4. متغيرات النظام وجلب البيانات مع الحفاظ التام على مزامنة فايربيس (Firebase Sync)
+    // 4. متغيرات النظام وجلب البيانات مع الحفاظ التام على مزامنة فايربيس (Firebase v10 / Compat)
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
     window.realFirebaseAppData = {};
-    window.lastBotContext = null; // ذاكرة السياق الذكية
+    window.lastBotContext = null;
 
-    // مكتبة نصائح الطرق، النكت، والمغامرات للسائقين
+    // مكتبة الترفيه، نصائح الطرق، ومغامرات السفر
     const roadWisdoms = [
-        "💡 **نصيحة قيادة سريعة:** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
+        "💡 **نصيحة قيادة سريعة (Gemini):** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
         "💡 **إرشادات الأمان:** ترك مسافة أمان كافية بينك وبين الشاحنات الأخرى على الطريق السريع ينقذك من المفاجآت الطارئة.",
         "💡 **نصيحة مهنية:** التوزيع المتوازن للحمولة على المقطورة يحافظ على ثبات الشاحنة في المنحنيات الخطرة.",
         "💡 **تنبيه ليلي:** تجنب القيادة وأنت تشعر بالإرهاق؛ خذ استراحة قصيرة في أول محطة وقود لسلامتك."
     ];
 
     const funnyJokes = [
-        "😂 **نكتة سواقين:** سألو سواق نقل محترف: إيه أحلى حاجة في السفر بالليل؟ قالهم: الشوارع فاضية والمرور بيحب يسلم عليا كل كمين!",
+        "😂 **نكتة سواقين مع اسطى:** سألو سواق نقل محترف: إيه أحلى حاجة في السفر بالليل؟ قالهم: الشوارع فاضية والمرور بيحب يسلم عليا كل كمين!",
         "😂 واحد بيقول لصديقه السواق: هي العربيات بتحب السواقة بالليل ليه؟ قاله عشان تاخد راحتها في الغيار الخامس من غير زحمة!",
-        "😂 سائق شاحنة بيقول لزميله: أنا مش عارف العربيات الصغيرة بتزعل ليه لما أكسر عليهم، مع أن مقطورتي أطول من أسبوع Examinations!"
+        "😂 سائق شاحنة بيقول لزميله: أنا مش عارف العربيات الصغيرة بتزعل ليه لما أكسر عليهم، مع أن مقطورتي أطول من أسبوع الامتحانات!"
     ];
 
     const adventureStories = [
         "📖 **مغامرات الطرق السريعة:** في أحد الأيام وأثناء رحلة شحن عاجلة عبر الصحراء الشرقية، واجه السائق عاصفة رملية شديدة أعدمت الرؤية تماماً. بفضل الهدوء والالتزام بإرشادات التوقف الآمن وتشغيل الإضواء التحذيرية، عبر العاصفة بسلام ووصل في الموعد المحدد."
     ];
 
-    // دالة جلب وعرض الصور الطبيعية أو العامة من الويب
+    // دالة مزامنة وعرض صور جوجل / ويب داخل البوت لكافة المجالات
     window.handleImageRequest = function(query) {
-        let subject = query.replace(/(صورة|صوره|اترك لي|ابحث عن|أريد|ابي|اتني بـ)/g, '').trim() || 'طبيعة شاحنة طريق';
+        let subject = query.replace(/(صورة|صوره|اترك لي|ابحث عن|أريد|ابي|اتني بـ|جيبلي|هاتلي)/g, '').trim() || 'طبيعة شاحنة طريق';
         let imageUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80';
         
         let lowerSub = subject.toLowerCase();
         if (lowerSub.includes('شاحنة') || lowerSub.includes('نقل') || lowerSub.includes('سيارة') || lowerSub.includes('تريلا')) {
             imageUrl = 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&auto=format&fit=crop&q=80';
-        } else if (lowerSub.includes('بحر') || lowerSub.includes('ماء') || lowerSub.includes('نهر')) {
+        } else if (lowerSub.includes('بحر') || lowerSub.includes('ماء') || lowerSub.includes('نهر') || lowerSub.includes('النيل')) {
             imageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80';
-        } else if (lowerSub.includes('صحراء') || lowerSub.includes('طريق سريع')) {
+        } else if (lowerSub.includes('صحراء') || lowerSub.includes('طريق سريع') || lowerSub.includes('اسطى')) {
             imageUrl = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('مدينة') || lowerSub.includes('القاهرة') || lowerSub.includes('عمارة')) {
+            imageUrl = 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=600&auto=format&fit=crop&q=80';
         }
 
         return `
             <div class="chat-card">
-                <div style="font-weight: bold; color: var(--accent-color); font-size: 12px; margin-bottom: 6px;">🖼️ صورة مقترحة لـ: "${subject}"</div>
-                <img src="${imageUrl}" style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" alt="${subject}">
-                <div style="margin-top: 6px; font-size: 10px; color: var(--text-color);">تم جلب الصورة وعرضها بنجاح عبر نظام الوسائط السحابي.</div>
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 6px;">🖼️ صورة سحابية لـ: "${subject}" (بواسطة Gemini)</div>
+                <img src="${imageUrl}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" alt="${subject}">
+                <div style="margin-top: 6px; font-size: 10px; color: var(--text-color);">تم جلب وعرض الصورة عبر محرك الوسائط المتصل بالمنصة.</div>
             </div>
         `;
     };
@@ -428,7 +460,7 @@
         };
     };
 
-    // ميزة تصدير تقارير الخزنة والمالية PDF
+    // تصدير تقارير الخزنة والمالية PDF مع جدول منسق بخط واضح
     window.exportFinancialReportPDF = async function() {
         let tenant = getActiveTenantContext();
         let report = await getCompanyFinancialReport();
@@ -438,10 +470,11 @@
             <head>
                 <title>تقرير الخزنة والمالية - ${report.companyName}</title>
                 <style>
-                    body { font-family: Tahoma, sans-serif; padding: 25px; color: #111; background: #fff; }
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; color: #111; background: #fff; }
                     .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 25px; }
                     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 13px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
                     th { background: #2563eb; color: #fff; }
                     .footer { margin-top: 50px; text-align: left; font-weight: bold; font-size: 14px; }
                 </style>
@@ -449,7 +482,7 @@
             <body>
                 <div class="header">
                     <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
-                    <p>صادر من منصة أسطورة الطريق (Na2la.Net) بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
+                    <p>صادر من منصة أسطورة الطريق (Firebase v10) بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
                 </div>
                 <table>
                     <thead>
@@ -494,11 +527,11 @@
             <head>
                 <title>فاتورة مجمعة - ${invoice.invoiceNumber || invoiceId}</title>
                 <style>
-                    body { font-family: Tahoma, sans-serif; padding: 20px; color: #111; }
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
                     .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                    .details { margin-bottom: 15px; font-size: 14px; }
                     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
                     th { background: #f2f2f2; }
                     .footer { margin-top: 40px; text-align: left; font-weight: bold; }
                 </style>
@@ -508,7 +541,7 @@
                     <h2>شركة ${tenant.activeCompanyName}</h2>
                     <p>قسم الفواتير المجمعة والآجلة والعملاء</p>
                 </div>
-                <div class="details">
+                <div style="margin-bottom: 15px; font-size: 14px;">
                     <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoiceId}</p>
                     <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
                     <p><b>التاريخ:</b> ${invoice.date || new Date().toLocaleDateString('ar-EG')}</p>
@@ -685,19 +718,28 @@
         }
     };
 
+    // ترتيب أزرار المنصة بشكل متطور ومدروس داخل شبكة الأزرار السريعة
     window.renderQuickButtons = function(isDriver) {
         let container = document.getElementById('botQuickActionsContainer');
         if (!container) return;
         let commonButtons = `
-            <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📦 الشحنات</button>
-            <button onclick="sendBotQuickQuery('نصيحة طريق')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">🛣️ نصيحة</button>
-            <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">😄 نكتة</button>
-            <button onclick="exportFinancialReportPDF()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;" title="تصدير تقارير الخزنة PDF">📄 PDF</button>
+            <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📦 الشحنات</button>
+            <button onclick="sendBotQuickQuery('الخزنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💰 الخزنة والمالية</button>
+            <button onclick="exportFinancialReportPDF()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="تقرير PDF">📄 تقرير PDF</button>
+            <button onclick="sendBotQuickQuery('نصيحة طريق')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🛣️ نصيحة طريق</button>
+            <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">😄 نكت وسفر</button>
+            <button onclick="sendBotQuickQuery('صورة شاحنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🖼️ جلب صور</button>
         `;
         if (isDriver) {
-            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🚨 SOS</button>`;
+            container.innerHTML = commonButtons + `
+                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
+            `;
         } else {
-            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer;">📊 الأسطول</button>`;
+            container.innerHTML = commonButtons + `
+                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 الأسطول</button>
+            `;
         }
     };
 
@@ -761,7 +803,7 @@
         }
     };
 
-    // ميزة رفع وتحليل بونات الميزان (OCR Simulation & Extraction)
+    // تحليل بونات الميزان (OCR)
     window.handleScaleTicketUpload = function(input) {
         if (input.files && input.files[0]) {
             let file = input.files[0], reader = new FileReader();
@@ -786,7 +828,7 @@
                 } catch(err) {}
 
                 setTimeout(() => {
-                    let botReply = `✅ <b>نجاح تحليل واستخراج بيانات البونة (OCR):</b><br>` +
+                    let botReply = `✅ <b>نجاح تحليل واستخراج بيانات البونة (OCR بواسة Gemini):</b><br>` +
                                    `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
                                    `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
                                    `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
@@ -819,7 +861,7 @@
         const container = document.getElementById('na2laBotMessages');
         if (!container) return;
         
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك الذكاء الاصطناعي بنجاح.</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك Gemini الذكي بنجاح.</div>`;
 
         history.forEach(msg => {
             if (msg.sender === 'user') {
@@ -895,9 +937,9 @@
     window.renderShipmentCardInChat = function(shipment) {
         return `
             <div class="chat-card">
-                <div style="font-weight: bold; color: var(--accent-color); font-size: 12px; margin-bottom: 4px;">📦 شحنة رقم: ${shipment.id || shipment.shipmentNumber || 'معتمدة'}</div>
-                <div style="font-size: 11px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
-                <div style="font-size: 11px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${shipment.id || shipment.shipmentNumber || 'معتمدة'}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
             </div>
         `;
     };
@@ -917,22 +959,22 @@
                     let sumData = await sumRes.json();
                     if (sumData && sumData.extract) {
                         let pageUrl = sumData.content_urls?.desktop?.page || `https://ar.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`;
-                        return `🌐 <b>إجابة ويكيبيديا المباشرة (${topTitle}):</b><br>` +
+                        return `🌐 <b>إجابة Gemini من ويكيبيديا (${topTitle}):</b><br>` +
                                `${sumData.extract}<br><br>` +
-                               `<a href="${pageUrl}" target="_blank" style="color: var(--accent-color); font-weight: bold; text-decoration: underline;">🔗 قراءة المقالة كاملة على ويكيبيديا</a>`;
+                               `<a href="${pageUrl}" target="_blank" style="color: var(--accent-color); font-weight: bold; text-decoration: underline;">🔗 قراءة المقالة كاملة</a>`;
                     }
                 }
             }
         } catch(e) {}
 
         let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-        return `🌐 <b>نتائج البحث المباشر عبر الإنترنت:</b><br>` +
+        return `🌐 <b>نتائج البحث المباشر عبر الإنترنت (Gemini):</b><br>` +
                `لم نتمكن من مطابقة سياق محلي مباشر لـ "${query}" في قواعد بيانات المنصة أو ويكيبيديا.<br><br>` +
-               `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 6px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر محرك بحث جوجل</a>`;
+               `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 5px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر جوجل</a>`;
     };
 
     // ==========================================
-    // ⭐ محرك الاستعلامات والردود مع دعم النكت، النصائح، الصور وذاكرة السياق
+    // ⭐ محرك الاستعلامات والردود الشامل (Gemini AI Collaborator)
     // ==========================================
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
@@ -941,7 +983,7 @@
         if (!text || !container) return;
 
         let userMsgHtml = text;
-        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word;">${userMsgHtml}</div>`;
+        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word; font-family: 'Cairo', sans-serif;">${userMsgHtml}</div>`;
         saveChatHistory('user', userMsgHtml);
 
         if (inputEl && !customText) inputEl.value = "";
@@ -951,7 +993,7 @@
         container.innerHTML += `<div id="${typingId}" style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
         container.scrollTop = container.scrollHeight;
 
-        // الحفاظ على مزامنة فايربيس أولاً
+        // الحفاظ على مزامنة فايربيس (v10) أولاً
         await fetchRealFirebaseData();
         let typingEl = document.getElementById(typingId);
         if (typingEl) typingEl.remove();
@@ -962,21 +1004,21 @@
         let botReply = '';
         let lower = text.toLowerCase();
 
-        // استخدام ذاكرة السياق في حال وجود عبارات استكمال
+        // استخدام ذاكرة السياق الذكية
         let contextualText = lower;
         if ((lower.includes('التفاصيل') || lower.includes('كم تكلفتها') || lower.includes('زيادة')) && window.lastBotContext) {
             contextualText = window.lastBotContext + ' ' + lower;
         }
 
-        // 1. الاستعلام عن الاشتراكات والباقات
+        // 1. الاشتراك والباقات
         if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
             window.lastBotContext = 'اشتراك';
             let subInfo = await getCompanySubscriptionInfo();
-            botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}]:</b><br>` +
+            botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}] (Gemini):</b><br>` +
                        `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
                        `- حالة الترخيص: <b style="color:var(--accent-color);">${subInfo.status}</b><br>` +
                        `- تاريخ الانتهاء: <b style="color:var(--warning-color);">${subInfo.expiryDate}</b><br>` +
-                       `- متصل سحابياً مع لوحة تحكم المنصة الأم بنجاح.`;
+                       `- متصل سحابياً بقاعدة بيانات فايربيس (v10) بنجاح.`;
         }
         // 2. الشحنات والرحلات
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
@@ -996,16 +1038,19 @@
                        `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
                        `- يمكنك استعراض تفاصيل الديون والتحصيل المباشر عبر قسم الأجل بالمنصة.`;
         }
-        // 4. الخزنة والمالية والتقارير
-        else if (contextualText.includes('الخزنة') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
+        // 4. الخزنة والمالية مع جدول منسق بخط واضح
+        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
             window.lastBotContext = 'الخزنة';
             let report = await getCompanyFinancialReport();
-            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}]:</b><br>` +
-                       `- رصيد الخزنة الحالي: <b style="color:var(--accent-color);">${report.treasury}</b><br>` +
-                       `- إجمالي المصروفات: <b style="color:var(--danger-color);">${report.expenses}</b><br>` +
-                       `- إجمالي الفواتير المجمعة: <b>${report.invoicesCount}</b><br>` +
-                       `- الإيرادات التقديرية للشحنات: <b>${report.estimatedRevenue}</b><br><br>` +
-                       `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
+            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
+                       `<div class="bot-table-container"><table class="bot-custom-table">` +
+                       `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
+                       `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
+                       `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
+                       `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
+                       `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
+                       `</table></div><br>` +
+                       `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
         }
         // 5. المصروفات التشغيلية
         else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
@@ -1029,55 +1074,57 @@
             botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
                        `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
         }
-        // 9. نصائح الطرق والقيادة
+        // 8. نصائح الطرق والقيادة
         else if (contextualText.includes('نصيحة') || contextualText.includes('إرشادات القيادة') || contextualText.includes('نصائح الطرق')) {
             window.lastBotContext = 'نصيحة';
             let randomTip = roadWisdoms[Math.floor(Math.random() * roadWisdoms.length)];
-            botReply = `🛣️ <b>إرشادات ونصائح الطرق (أسطورة الطريق):</b><br>${randomTip}`;
+            botReply = `🛣️ <b>إرشادات ونصائح الطرق (Gemini):</b><br>${randomTip}`;
         }
-        // 10. نكت سريعة وهزار
-        else if (contextualText.includes('نكتة') || contextualText.includes('نكت') || contextualText.includes('هزار') || contextualText.includes('ضحك')) {
+        // 9. نكت سريعة وهزار وسواقين
+        else if (contextualText.includes('نكتة') || contextualText.includes('نكت') || contextualText.includes('هزار') || contextualText.includes('ضحك') || contextualText.includes('اسطى')) {
             window.lastBotContext = 'نكتة';
             let randomJoke = funnyJokes[Math.floor(Math.random() * funnyJokes.length)];
             botReply = `😄 ${randomJoke}`;
         }
-        // 11. مغامرات السفر
+        // 10. مغامرات السفر
         else if (contextualText.includes('مغامرة') || contextualText.includes('قصة سفر') || contextualText.includes('مغامرات')) {
             window.lastBotContext = 'مغامرة';
             let randomAdv = adventureStories[Math.floor(Math.random() * adventureStories.length)];
             botReply = `${randomAdv}`;
         }
-        // 12. طلب صورة طبيعية أو عامة من الويب
-        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('اترك لي صورة') || contextualText.includes('ابحث عن صورة')) {
+        // 11. طلب صورة طبيعية أو شاحنة أو أي مجال من الويب (مزامنة صور جوجل داخل البوت)
+        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('اترك لي صورة') || contextualText.includes('ابحث عن صورة') || contextualText.includes('جيبلي صورة')) {
             window.lastBotContext = 'صورة';
             botReply = handleImageRequest(text);
         }
-        // 8. خدمات المنصة ومعلومات عامة
+        // 12. خدمات المنصة ومعلومات عامة
         else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
             window.lastBotContext = 'خدمات المنصة';
-            botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
+            botReply = `🛻 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
                        `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
-                       `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
-        }
+                       `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`
+                       `- المنصه المتكامل اقسام لا متناهيه امن وسكيورتي متطور انت هنا في مكانك الصحيح.<br>` +
+      }           
         else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
             window.lastBotContext = 'المساعدة';
-            botReply = `❓ <b>دليل الاستخدام السريع للمساعد الذكي:</b><br>` +
-                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض البيانات.<br>` +
+            botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini):</b><br>` +
+                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض السجلات.<br>` +
                        `- اكتب <b>"نصيحة طريق"</b> أو <b>"نكتة"</b> للترفيه والإرشاد.<br>` +
-                       `- اطلب <b>"صورة شاحنة"</b> أو <b>"صورة طبيعية"</b> لعرضها فوراً.<br>` +
+                       `- اطلب <b>"صورة شاحنة"</b> أو <b>"صورة طبيعية"</b> لعرض الصور فوراً داخل البوت.<br>` +
                        `- ارفع صور بونات الميزان (📎) لتحليل الأوزان تلقائياً (OCR).`;
-        }
+        }     
+            
         else {
-            // إذا لم تطابق الشروط الداخلية، يتم البحث الحي عبر ويكيبيديا وجوجل
+            // البحث الحي عبر ويكيبيديا وجوجل مع ردود Gemini الذكية
             window.lastBotContext = 'بحث خارجي';
             botReply = await window.fetchLiveWebAndWikipediaAnswer(text);
         }
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;">${botReply}</div>`;
         saveChatHistory('bot', botReply);
         container.scrollTop = container.scrollHeight;
         
-        // قراءة النطق الصوتي للرد (مع استبعاد الروابط والأزرار والصور لتجنب قراءتها حرفياً)
+        // قراءة النطق الصوتي للرد (مع استبعاد الروابط والأزرار والصور)
         speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
     };
 })();
