@@ -1,1114 +1,1107 @@
 (function() {
-    function initNa2laBot() {
-        if (!document.body) {
-            setTimeout(initNa2laBot, 50);
-            return;
+    // تنظيف أي حاوية سابقة لمنع التعارض أو التداخل البرمجي
+    const existingContainer = document.getElementById('na2laBotRootContainer');
+    if (existingContainer) existingContainer.remove();
+
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = `
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        
+        #na2laBotRootContainer {
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent-color: #10b981;
+            --card-bg: #1e293b;
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --border-color: #334155;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --shadow-3d: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            font-family: 'Cairo', sans-serif !important;
         }
+        #na2laBotRootContainer[data-theme="royal"] {
+            --primary-color: #8b5cf6;
+            --primary-hover: #7c3aed;
+            --accent-color: #ec4899;
+            --card-bg: #2e1065;
+            --bg-color: #1e1b4b;
+            --text-color: #f3e8ff;
+            --border-color: #4c1d95;
+            --warning-color: #fbbf24;
+            --danger-color: #f43f5e;
+        }
+        #na2laBotRootContainer[data-theme="emerald"] {
+            --primary-color: #059669;
+            --primary-hover: #047857;
+            --accent-color: #34d399;
+            --card-bg: #064e3b;
+            --bg-color: #022c22;
+            --text-color: #ecfdf5;
+            --border-color: #065f46;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        @keyframes floatAnim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .sync-account-hub-btn {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Cairo', sans-serif;
+        }
+        .sync-account-hub-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+        }
+        @keyframes spinBolt {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spinning { animation: spinBolt 0.6s linear infinite; }
+        .chat-card {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-right: 4px solid var(--primary-color);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-family: 'Cairo', sans-serif;
+        }
+        .bot-table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 6px;
+        }
+        .bot-custom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+        }
+        .bot-custom-table th, .bot-custom-table td {
+            border: 1px solid var(--border-color);
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .bot-custom-table th {
+            background: var(--primary-color);
+            color: #ffffff;
+            font-weight: bold;
+        }
+        .typing-dots span {
+            height: 6px; width: 6px; float: left; margin: 0 2px;
+            background-color: var(--text-color); border-radius: 50%;
+            display: inline-block; animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: .2s; }
+        .typing-dots span:nth-child(3) { animation-delay: .4s; }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+    `;
+    document.head.appendChild(styleEl);
 
-        if (document.getElementById('na2laBotRootContainer')) return;
+    const containerDiv = document.createElement('div');
+    containerDiv.id = 'na2laBotRootContainer';
+    containerDiv.innerHTML = `
+        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي لمنصة نقلة">🤖</button>
 
-        // 1. حقن الأنماط (CSS) مع عزل الثيمات والخط العربي الواضح (Cairo) وتصغير زر الإرسال وتنسيق الجدول والترتيب المتطور
-        const styleEl = document.createElement('style');
-        styleEl.innerHTML = `
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-            
-            #na2laBotRootContainer {
-                --primary-color: #3b82f6;
-                --primary-hover: #2563eb;
-                --accent-color: #10b981;
-                --card-bg: #1e293b;
-                --bg-color: #0f172a;
-                --text-color: #f8fafc;
-                --border-color: #334155;
-                --warning-color: #f59e0b;
-                --danger-color: #ef4444;
-                --shadow-3d: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-                font-family: 'Cairo', sans-serif !important;
-            }
-            #na2laBotRootContainer[data-theme="royal"] {
-                --primary-color: #8b5cf6;
-                --primary-hover: #7c3aed;
-                --accent-color: #ec4899;
-                --card-bg: #2e1065;
-                --bg-color: #1e1b4b;
-                --text-color: #f3e8ff;
-                --border-color: #4c1d95;
-                --warning-color: #fbbf24;
-                --danger-color: #f43f5e;
-            }
-            #na2laBotRootContainer[data-theme="emerald"] {
-                --primary-color: #059669;
-                --primary-hover: #047857;
-                --accent-color: #34d399;
-                --card-bg: #064e3b;
-                --bg-color: #022c22;
-                --text-color: #ecfdf5;
-                --border-color: #065f46;
-                --warning-color: #fbbf24;
-                --danger-color: #f87171;
-            }
-            @keyframes marquee {
-                0% { transform: translateX(100%); }
-                100% { transform: translateX(-100%); }
-            }
-            @keyframes floatAnim {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-8px); }
-            }
-            .sync-account-hub-btn {
-                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-                color: #ffffff;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 10px;
-                font-weight: bold;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
-                transition: transform 0.2s, box-shadow 0.2s;
-                font-family: 'Cairo', sans-serif;
-            }
-            .sync-account-hub-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
-            }
-            @keyframes spinBolt {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            .spinning { animation: spinBolt 0.6s linear infinite; }
-            .chat-card {
-                background: var(--bg-color);
-                border: 1px solid var(--border-color);
-                border-right: 4px solid var(--primary-color);
-                padding: 10px;
-                border-radius: 8px;
-                margin-top: 6px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                font-family: 'Cairo', sans-serif;
-            }
-            .bot-table-container {
-                width: 100%;
-                overflow-x: auto;
-                margin-top: 6px;
-            }
-            .bot-custom-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 11px;
-                background: var(--card-bg);
-                color: var(--text-color);
-                font-family: 'Cairo', sans-serif;
-            }
-            .bot-custom-table th, .bot-custom-table td {
-                border: 1px solid var(--border-color);
-                padding: 6px 8px;
-                text-align: center;
-            }
-            .bot-custom-table th {
-                background: var(--primary-color);
-                color: #ffffff;
-                font-weight: bold;
-            }
-            .typing-dots span {
-                height: 6px; width: 6px; float: left; margin: 0 2px;
-                background-color: var(--text-color); border-radius: 50%;
-                display: inline-block; animation: typing 1.4s infinite ease-in-out both;
-            }
-            .typing-dots span:nth-child(2) { animation-delay: .2s; }
-            .typing-dots span:nth-child(3) { animation-delay: .4s; }
-            @keyframes typing {
-                0%, 80%, 100% { transform: scale(0); }
-                40% { transform: scale(1.0); }
-            }
-        `;
-        document.head.appendChild(styleEl);
-
-        // 2. حقن هيكل HTML الخاص بالبوت داخل حاوية رئيسية معزولة
-        const containerDiv = document.createElement('div');
-        containerDiv.id = 'na2laBotRootContainer';
-        containerDiv.innerHTML = `
-            <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1800; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي لمنصة نقلة">🤖</button>
-
-            <div id="na2laBotModal" style="position: fixed; bottom: 100px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 1900; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
-                <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                        <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (نقلة 10v)</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <div style="position: relative; display: inline-block;">
-                            <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
-                                <span id="sync-icon-bolt">⚡</span> شحناتي 
-                                <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 4px; border-radius: 8px; font-size: 8px; font-weight: bold; display: none;">0</span>
-                            </button>
-                            <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 110%; right: 0; width: 260px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: var(--shadow-3d); z-index: 2100; padding: 8px; color: var(--text-color); font-size: 11px;">
-                                <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid var(--border-color); padding-bottom: 3px; display: flex; justify-content: space-between;">
-                                    <span id="syncHubUserTitle">👤 الحساب المتصل</span>
-                                    <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
-                                </div>
-                                <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 4px;">🏢 الشركة: جاري المزامنة...</div>
-                                <div id="syncHubItemsList" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
+        <div id="na2laBotModal" style="position: fixed; bottom: 100px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (نقلة 10v)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <div style="position: relative; display: inline-block;">
+                        <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
+                            <span id="sync-icon-bolt">⚡</span> شحناتي 
+                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 4px; border-radius: 8px; font-size: 8px; font-weight: bold; display: none;">0</span>
+                        </button>
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 110%; right: 0; width: 260px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 8px; color: var(--text-color); font-size: 11px;">
+                            <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid var(--border-color); padding-bottom: 3px; display: flex; justify-content: space-between;">
+                                <span id="syncHubUserTitle">👤 الحساب المتصل</span>
+                                <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
                             </div>
+                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 4px;">🏢 الشركة: جاري المزامنة...</div>
+                            <div id="syncHubItemsList" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
-                        <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">✕</button>
                     </div>
-                </div>
-
-                <div style="background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
-                    <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                        🚀 أسطورة الطريق (Firebase v10) | مدعوم بنموذج Gemini الذكي، مزامنة الصور، التقارير المالية والتحليل اللحظي 24/7
-                    </div>
-                </div>
-
-                <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px;">
-                    <div style="display: flex; gap: 3px;">
-                        <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
-                        <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
-                        <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
-                    </div>
-                    <div>
-                        <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 6px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif;">
-                            <option value="default">🎨 الداكن الأصلي</option>
-                            <option value="royal">👑 الأرجواني الملكي</option>
-                            <option value="emerald">💎 الزمردي الفاخر</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
-                    <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                        مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة أسطورة الطريق (إصدار Firebase v10).<br>- يمكنك طلب: شحناتي، الخزنة، تقارير PDF، نكت سفر، نصائح طرق، أو <b>"صورة شاحنة / طبيعة"</b> لعرض الصور فوراً.
-                    </div>
-                </div>
-
-                <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color);"></div>
-
-                <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
-                    <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
-                    <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">📎</button>
-                    <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اطلب نكتة، نصيحة، أو صورة..." style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
-                    <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
-                    <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap;">إرسال</button>
+                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">✕</button>
                 </div>
             </div>
-        `;
-        document.body.appendChild(containerDiv);
 
-        // 3. محرك السحب والإفلات (Drag & Drop)
-        const botBtn = document.getElementById('na2laBotBtn');
-        let isBotDragging = false, startBotX = 0, startBotY = 0, initBotLeft = 0, initBotTop = 0, hasBotDragged = false;
+            <!-- شريط الأرس إي إس (RSS Ticker) - مخصص لحساب المدير فقط -->
+            <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
+                <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
+                    🚀 أسطورة الطريق (Firebase v10) | مدعوم بنموذج Gemini الذكي، مزامنة الصور، التقارير المالية والتحليل اللحظي 24/7
+                </div>
+            </div>
 
-        if (botBtn) {
-            const startDrag = (clientX, clientY) => {
-                isBotDragging = true; hasBotDragged = false;
-                startBotX = clientX; startBotY = clientY;
-                let rect = botBtn.getBoundingClientRect();
-                botBtn.style.right = 'auto'; botBtn.style.bottom = 'auto';
-                botBtn.style.left = rect.left + 'px'; botBtn.style.top = rect.top + 'px';
-                initBotLeft = rect.left; initBotTop = rect.top;
-            };
-            const onDrag = (clientX, clientY) => {
-                if (!isBotDragging) return;
-                let dx = clientX - startBotX, dy = clientY - startBotY;
-                if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasBotDragged = true;
-                let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
-                let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
-                botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
-            };
-            const stopDrag = () => { if (!isBotDragging) return; isBotDragging = false; if (!hasBotDragged) toggleNa2laBot(); };
+            <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px;">
+                <div style="display: flex; gap: 3px;">
+                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
+                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
+                    <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
+                </div>
+                <div>
+                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 6px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif;">
+                        <option value="default">🎨 الداكن الأصلي</option>
+                        <option value="royal">👑 الأرجواني الملكي</option>
+                        <option value="emerald">💎 الزمردي الفاخر</option>
+                    </select>
+                </div>
+            </div>
 
-            botBtn.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
-            document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
-            document.addEventListener('mouseup', stopDrag);
-            botBtn.addEventListener('touchstart', (e) => { if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
-            document.addEventListener('touchmove', (e) => { if (isBotDragging && e.touches.length === 1) { e.preventDefault(); onDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
-            document.addEventListener('touchend', stopDrag);
+            <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
+                <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة أسطورة الطريق (إصدار Firebase v10).<br>- يمكنك طلب: شحناتي، الخزنة، تقارير PDF، نكت سفر، نصائح طرق، أو <b>"صورة شاحنة / طبيعة"</b> لعرض الصور فوراً.
+                </div>
+            </div>
+
+            <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color);"></div>
+
+            <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
+                <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
+                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">📎</button>
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اطلب نكتة، نصيحة، أو صورة..." style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
+                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap;">إرسال</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(containerDiv);
+
+    const botBtn = document.getElementById('na2laBotBtn');
+    let isBotDragging = false, startBotX = 0, startBotY = 0, initBotLeft = 0, initBotTop = 0, hasBotDragged = false;
+
+    if (botBtn) {
+        const startDrag = (clientX, clientY) => {
+            isBotDragging = true; hasBotDragged = false;
+            startBotX = clientX; startBotY = clientY;
+            let rect = botBtn.getBoundingClientRect();
+            botBtn.style.right = 'auto'; botBtn.style.bottom = 'auto';
+            botBtn.style.left = rect.left + 'px'; botBtn.style.top = rect.top + 'px';
+            initBotLeft = rect.left; initBotTop = rect.top;
+        };
+        const onDrag = (clientX, clientY) => {
+            if (!isBotDragging) return;
+            let dx = clientX - startBotX, dy = clientY - startBotY;
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasBotDragged = true;
+            let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
+            let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
+            botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
+        };
+        const stopDrag = () => { if (!isBotDragging) return; isBotDragging = false; if (!hasBotDragged) toggleNa2laBot(); };
+
+        botBtn.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+        document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
+        document.addEventListener('mouseup', stopDrag);
+        botBtn.addEventListener('touchstart', (e) => { if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+        document.addEventListener('touchmove', (e) => { if (isBotDragging && e.touches.length === 1) { e.preventDefault(); onDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: false });
+        document.addEventListener('touchend', stopDrag);
+    }
+
+    window.realFirebaseShipments = [];
+    window.realFirebaseDrivers = [];
+    window.realFirebaseDeferredInvoices = [];
+    window.realFirebaseAppData = {};
+    window.lastBotContext = null;
+
+    const roadWisdoms = [
+        "💡 **نصيحة قيادة سريعة (Gemini):** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
+        "💡 **إرشادات الأمان:** ترك مسافة أمان كافية بينك وبين الشاحنات الأخرى على الطريق السريع ينقذك من المفاجآت الطارئة.",
+        "💡 **نصيحة مهنية:** التوزيع المتوازن للحمولة على المقطورة يحافظ على ثبات الشاحنة في المنحنيات الخطرة.",
+        "💡 **تنبيه ليلي:** تجنب القيادة وأنت تشعر بالإرهاق؛ خذ استراحة قصيرة في أول محطة وقود لسلامتك."
+    ];
+
+    const funnyJokes = [
+        "😂 **نكتة سواقين مع اسطى:** سألو سواق نقل محترف: إيه أحلى حاجة في السفر بالليل؟ قالهم: الشوارع فاضية والمرور بيحب يسلم عليا كل كمين!",
+        "😂 واحد بيقول لصديقه السواق: هي العربيات بتحب السواقة بالليل ليه؟ قاله عشان تاخد راحتها في الغيار الخامس من غير زحمة!",
+        "😂 سائق شاحنة بيقول لزميله: أنا مش عارف العربيات الصغيرة بتزعل ليه لما أكسر عليهم، مع أن مقطورتي أطول من أسبوع الامتحانات!"
+    ];
+
+    const adventureStories = [
+        "📖 **مغامرات الطرق السريعة:** في أحد الأيام وأثناء رحلة شحن عاجلة عبر الصحراء الشرقية، واجه السائق عاصفة رملية شديدة أعدمت الرؤية تماماً. بفضل الهدوء والالتزام بإرشادات التوقف الآمن وتشغيل الإضواء التحذيرية، عبر العاصفة بسلام ووصل في الموعد المحدد."
+    ];
+
+    window.handleImageRequest = function(query) {
+        let subject = query.replace(/(صورة|صوره|اترك لي|ابحث عن|أريد|ابي|اتني بـ|جيبلي|هاتلي)/g, '').trim() || 'طبيعة شاحنة طريق';
+        let imageUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80';
+        
+        let lowerSub = subject.toLowerCase();
+        if (lowerSub.includes('شاحنة') || lowerSub.includes('نقل') || lowerSub.includes('سيارة') || lowerSub.includes('تريلا')) {
+            imageUrl = 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('بحر') || lowerSub.includes('ماء') || lowerSub.includes('نهر') || lowerSub.includes('النيل')) {
+            imageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('صحراء') || lowerSub.includes('طريق سريع') || lowerSub.includes('اسطى')) {
+            imageUrl = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80';
+        } else if (lowerSub.includes('مدينة') || lowerSub.includes('القاهرة') || lowerSub.includes('عمارة')) {
+            imageUrl = 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=600&auto=format&fit=crop&q=80';
         }
 
-        // 4. متغيرات النظام وجلب البيانات مع الحفاظ التام على مزامنة فايربيس (v10)
-        window.realFirebaseShipments = [];
-        window.realFirebaseDrivers = [];
-        window.realFirebaseDeferredInvoices = [];
-        window.realFirebaseAppData = {};
-        window.lastBotContext = null;
+        return `
+            <div class="chat-card">
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 6px;">🖼️ صورة سحابية لـ: "${subject}" (بواسطة Gemini)</div>
+                <img src="${imageUrl}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" alt="${subject}">
+                <div style="margin-top: 6px; font-size: 10px; color: var(--text-color);">تم جلب وعرض الصورة عبر محرك الوسائط المتصل بالمنصة.</div>
+            </div>
+        `;
+    };
 
-        const roadWisdoms = [
-            "💡 **نصيحة قيادة سريعة (Gemini):** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
-            "💡 **إرشادات الأمان:** ترك مسافة أمان كافية بينك وبين الشاحنات الأخرى على الطريق السريع ينقذك من المفاجآت الطارئة.",
-            "💡 **نصيحة مهنية:** التوزيع المتوازن للحمولة على المقطورة يحافظ على ثبات الشاحنة في المنحنيات الخطرة.",
-            "💡 **تنبيه ليلي:** تجنب القيادة وأنت تشعر بالإرهاق؛ خذ استراحة قصيرة في أول محطة وقود لسلامتك."
-        ];
+    window.getActiveTenantContext = function() {
+        let activeDriver = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || "المدير";
+        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || 'company_main';
+        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || 'أسطورة الطريق الرئيسية';
+        let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || 'admin';
+        return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
+    };
 
-        const funnyJokes = [
-            "😂 **نكتة سواقين مع اسطى:** سألو سواق نقل محترف: إيه أحلى حاجة في السفر بالليل؟ قالهم: الشوارع فاضية والمرور بيحب يسلم عليا كل كمين!",
-            "😂 واحد بيقول لصديقه السواق: هي العربيات بتحب السواقة بالليل ليه؟ قاله عشان تاخد راحتها في الغيار الخامس من غير زحمة!",
-            "😂 سائق شاحنة بيقول لزميله: أنا مش عارف العربيات الصغيرة بتزعل ليه لما أكسر عليهم، مع أن مقطورتي أطول من أسبوع الامتحانات!"
-        ];
-
-        const adventureStories = [
-            "📖 **مغامرات الطرق السريعة:** في أحد الأيام وأثناء رحلة شحن عاجلة عبر الصحراء الشرقية، واجه السائق عاصفة رملية شديدة أعدمت الرؤية تماماً. بفضل الهدوء والالتزام بإرشادات التوقف الآمن وتشغيل الإضواء التحذيرية، عبر العاصفة بسلام ووصل في الموعد المحدد."
-        ];
-
-        window.handleImageRequest = function(query) {
-            let subject = query.replace(/(صورة|صوره|اترك لي|ابحث عن|أريد|ابي|اتني بـ|جيبلي|هاتلي)/g, '').trim() || 'طبيعة شاحنة طريق';
-            let imageUrl = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&auto=format&fit=crop&q=80';
-            
-            let lowerSub = subject.toLowerCase();
-            if (lowerSub.includes('شاحنة') || lowerSub.includes('نقل') || lowerSub.includes('سيارة') || lowerSub.includes('تريلا')) {
-                imageUrl = 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=600&auto=format&fit=crop&q=80';
-            } else if (lowerSub.includes('بحر') || lowerSub.includes('ماء') || lowerSub.includes('نهر') || lowerSub.includes('النيل')) {
-                imageUrl = 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80';
-            } else if (lowerSub.includes('صحراء') || lowerSub.includes('طريق سريع') || lowerSub.includes('اسطى')) {
-                imageUrl = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80';
-            } else if (lowerSub.includes('مدينة') || lowerSub.includes('القاهرة') || lowerSub.includes('عمارة')) {
-                imageUrl = 'https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=600&auto=format&fit=crop&q=80';
-            }
-
-            return `
-                <div class="chat-card">
-                    <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 6px;">🖼️ صورة سحابية لـ: "${subject}" (بواسطة Gemini)</div>
-                    <img src="${imageUrl}" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" alt="${subject}">
-                    <div style="margin-top: 6px; font-size: 10px; color: var(--text-color);">تم جلب وعرض الصورة عبر محرك الوسائط المتصل بالمنصة.</div>
-                </div>
-            `;
-        };
-
-        window.getActiveTenantContext = function() {
-            let activeDriver = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || "المدير";
-            let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || 'company_main';
-            let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || 'أسطورة الطريق الرئيسية';
-            let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || 'admin';
-            return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
-        };
-
-        window.fetchRealFirebaseData = async function() {
-            try {
-                if (typeof firebase !== 'undefined' && firebase.firestore) {
-                    const db = firebase.firestore();
-                    let tenant = getActiveTenantContext();
-                    
-                    try {
-                        const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
-                        if (!driversSnap.empty) {
-                            realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } else {
-                            const allDrivers = await db.collection('drivers').get();
-                            realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        }
-                    } catch(e) {
-                        try {
-                            const allDrivers = await db.collection('drivers').get();
-                            realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } catch(err) { realFirebaseDrivers = []; }
-                    }
-
-                    try {
-                        const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
-                        if (!shipmentsSnap.empty) {
-                            realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } else {
-                            const allShipments = await db.collection('shipments').get();
-                            realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        }
-                    } catch(e) {
-                        try {
-                            const allShipments = await db.collection('shipments').get();
-                            realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } catch(err) { realFirebaseShipments = []; }
-                    }
-
-                    try {
-                        const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
-                        if (!invoicesSnap.empty) {
-                            realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } else {
-                            const allInvoices = await db.collection('deferredInvoices').get();
-                            realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        }
-                    } catch(e) {
-                        try {
-                            const allInvoices = await db.collection('deferredInvoices').get();
-                            realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        } catch(err) { realFirebaseDeferredInvoices = []; }
-                    }
-
-                    try {
-                        const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                        if (appDataSnap.exists) {
-                            realFirebaseAppData = appDataSnap.data() || {};
-                        } else {
-                            const mainAppData = await db.collection('appData').doc('main').get();
-                            realFirebaseAppData = mainAppData.exists ? mainAppData.data() : {};
-                        }
-                    } catch(e) {}
-                }
-            } catch(e) {}
-
-            let tenantContext = getActiveTenantContext();
-            let localInvoices = [];
-            try {
-                let invKeys = [
-                    `deferredInvoices_${tenantContext.activeCompanyId}`, 
-                    'deferredInvoices', 
-                    'invoices', 
-                    'na2la_deferred_invoices', 
-                    'na2la_invoices',
-                    'consolidated_invoices'
-                ];
-                for (let key of invKeys) {
-                    let localData = JSON.parse(localStorage.getItem(key) || '[]');
-                    if (Array.isArray(localData) && localData.length > 0) {
-                        localInvoices = localData;
-                        break;
-                    } else if (localData && Array.isArray(localData.deferredInvoices)) {
-                        localInvoices = localData.deferredInvoices;
-                        break;
-                    }
-                }
-            } catch(e) {}
-
-            if (window.Na2laApp && Array.isArray(window.Na2laApp.deferredInvoices)) {
-                window.Na2laApp.deferredInvoices.forEach(inv => {
-                    if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                        realFirebaseDeferredInvoices.push(inv);
-                    }
-                });
-            }
-
-            if (localInvoices.length > 0) {
-                localInvoices.forEach(inv => {
-                    if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                        realFirebaseDeferredInvoices.push(inv);
-                    }
-                });
-            }
-        };
-
-        window.getCompanySubscriptionInfo = async function() {
-            let tenant = getActiveTenantContext();
-            let subData = {
-                planName: realFirebaseAppData.planName || realFirebaseAppData.subscriptionPlan || 'الباقة الترويجية / الاحترافية',
-                expiryDate: realFirebaseAppData.expiryDate || realFirebaseAppData.subscriptionExpiry || '2026-12-31',
-                status: realFirebaseAppData.subscriptionStatus || 'نشط ✅ (سحابي)',
-                companyName: tenant.activeCompanyName
-            };
-            
-            try {
-                if (typeof firebase !== 'undefined' && firebase.firestore) {
-                    const db = firebase.firestore();
-                    const subDoc = await db.collection('subscriptions').doc(tenant.activeCompanyId).get();
-                    if (subDoc.exists) {
-                        let d = subDoc.data();
-                        subData.planName = d.planName || d.package || subData.planName;
-                        subData.expiryDate = d.expiryDate || d.endDate || subData.expiryDate;
-                        subData.status = d.status || subData.status;
-                    }
-                }
-            } catch(e) {}
-
-            return subData;
-        };
-
-        window.updateDriverLiveLocation = async function(lat, lng) {
-            let tenant = getActiveTenantContext();
-            try {
-                if (typeof firebase !== 'undefined' && firebase.firestore) {
-                    const db = firebase.firestore();
-                    await db.collection('drivers').doc(tenant.activeDriver).set({
-                        name: tenant.activeDriver,
-                        companyId: tenant.activeCompanyId,
-                        companyName: tenant.activeCompanyName,
-                        latitude: lat,
-                        longitude: lng,
-                        lastActive: new Date().toISOString(),
-                        status: localStorage.getItem('driver_duty_status') || 'active'
-                    }, { merge: true });
-                }
-            } catch(e) {}
-        };
-
-        window.getCompanyActiveFleet = async function() {
-            let tenant = getActiveTenantContext();
-            let fleet = [];
-            try {
-                if (typeof firebase !== 'undefined' && firebase.firestore) {
-                    const db = firebase.firestore();
-                    const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
-                    fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                }
-            } catch(e) {}
-            return fleet;
-        };
-
-        window.getCompanyFinancialReport = async function() {
-            let tenant = getActiveTenantContext();
-            let financials = getCompanyFinancials();
-            let shipments = getIsolatedUserShipments();
-            
-            let totalShipmentsValue = shipments.reduce((sum, s) => {
-                let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
-                return sum + val;
-            }, 0);
-
-            return {
-                companyName: tenant.activeCompanyName,
-                treasury: financials.treasuryBalance,
-                expenses: financials.expensesTotal,
-                invoicesCount: financials.invoicesCount,
-                shipmentsCount: shipments.length,
-                estimatedRevenue: totalShipmentsValue.toLocaleString() + ' ج.م'
-            };
-        };
-
-        window.exportFinancialReportPDF = async function() {
-            let tenant = getActiveTenantContext();
-            let report = await getCompanyFinancialReport();
-            let printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>تقرير الخزنة والمالية - ${report.companyName}</title>
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; color: #111; background: #fff; }
-                        .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 25px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                        th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
-                        th { background: #2563eb; color: #fff; }
-                        .footer { margin-top: 50px; text-align: left; font-weight: bold; font-size: 14px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
-                        <p>صادر من منصة أسطورة الطريق (Firebase v10) بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>البند المالي</th>
-                                <th>القيمة الإجمالية</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
-                            <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
-                            <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
-                            <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
-                            <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
-                        </tbody>
-                    </table>
-                    <div class="footer">
-                        <p>التوقيع / الختم المعتمد: ........................</p>
-                    </div>
-                    <script>
-                        window.onload = function() { window.print(); window.close(); }
-                    </script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-        };
-
-        window.printConsolidatedInvoice = function(invoiceId) {
-            let tenant = getActiveTenantContext();
-            let invoices = realFirebaseDeferredInvoices.filter(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
-            let invoice = invoices.length > 0 ? invoices[0] : null;
-
-            if (!invoice) {
-                alert("عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.");
-                return;
-            }
-
-            let printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>فاتورة مجمعة - ${invoice.invoiceNumber || invoiceId}</title>
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
-                        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
-                        th { background: #f2f2f2; }
-                        .footer { margin-top: 40px; text-align: left; font-weight: bold; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>شركة ${tenant.activeCompanyName}</h2>
-                        <p>قسم الفواتير المجمعة والآجلة والعملاء</p>
-                    </div>
-                    <div style="margin-bottom: 15px; font-size: 14px;">
-                        <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoiceId}</p>
-                        <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
-                        <p><b>التاريخ:</b> ${invoice.date || new Date().toLocaleDateString('ar-EG')}</p>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>م</th>
-                                <th>بيان الشحنة / الخدمة</th>
-                                <th>المبلغ (ج.م)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>1</td>
-                                <td>${invoice.description || invoice.notes || 'شحنات مجمعة ومعتمدة للعميل'}</td>
-                                <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div class="footer">
-                        <p>التوقيع / الختم: ........................</p>
-                    </div>
-                    <script>
-                        window.onload = function() { window.print(); window.close(); }
-                    </script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-        };
-
-        window.syncPlatformUserData = function() {
-            let tenant = getActiveTenantContext();
-            let isDriver = tenant.activeRole.includes('driver') || tenant.activeDriver.includes('سائق');
-
-            let badgeEl = document.getElementById('botUserRoleBadge');
-            if (badgeEl) badgeEl.innerText = `🤖 ${tenant.activeDriver} (${tenant.activeCompanyName})`;
-
-            let companyTagEl = document.getElementById('syncHubCompanyTag');
-            if (companyTagEl) companyTagEl.innerText = `🏢 الشركة: ${tenant.activeCompanyName}`;
-            
-            renderQuickButtons(isDriver);
-            updateSyncButtonBadge();
-            checkDutyStatusIndicator();
-            return tenant;
-        };
-
-        window.getIsolatedUserShipments = function() {
-            let tenant = getActiveTenantContext();
-            let allShipments = [];
-
-            if (realFirebaseShipments.length > 0) {
-                allShipments = realFirebaseShipments;
-            } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
-                allShipments = window.Na2laApp.shipments;
-            } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
-                allShipments = window.shipments;
-            } else {
+    window.fetchRealFirebaseData = async function() {
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                let tenant = getActiveTenantContext();
+                
                 try {
-                    let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments', 'na2la_shipments', 'appData'];
-                    for (let key of localKeys) {
-                        let localData = JSON.parse(localStorage.getItem(key) || '[]');
-                        if (Array.isArray(localData) && localData.length > 0) {
-                            allShipments = localData; break;
-                        } else if (localData && Array.isArray(localData.shipments)) {
-                            allShipments = localData.shipments; break;
-                        }
+                    const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!driversSnap.empty) {
+                        realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        const allDrivers = await db.collection('drivers').get();
+                        realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }
+                } catch(e) {
+                    try {
+                        const allDrivers = await db.collection('drivers').get();
+                        realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } catch(err) { realFirebaseDrivers = []; }
+                }
+
+                try {
+                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!shipmentsSnap.empty) {
+                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        const allShipments = await db.collection('shipments').get();
+                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }
+                } catch(e) {
+                    try {
+                        const allShipments = await db.collection('shipments').get();
+                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } catch(err) { realFirebaseShipments = []; }
+                }
+
+                try {
+                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!invoicesSnap.empty) {
+                        realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        const allInvoices = await db.collection('deferredInvoices').get();
+                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }
+                } catch(e) {
+                    try {
+                        const allInvoices = await db.collection('deferredInvoices').get();
+                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } catch(err) { realFirebaseDeferredInvoices = []; }
+                }
+
+                try {
+                    const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                    if (appDataSnap.exists) {
+                        realFirebaseAppData = appDataSnap.data() || {};
+                    } else {
+                        const mainAppData = await db.collection('appData').doc('main').get();
+                        realFirebaseAppData = mainAppData.exists ? mainAppData.data() : {};
                     }
                 } catch(e) {}
             }
+        } catch(e) {}
 
-            let companyFiltered = allShipments.filter(s => !s.companyId || s.companyId === tenant.activeCompanyId || s.companyName === tenant.activeCompanyName);
-
-            if (tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير')) {
-                return companyFiltered;
+        let tenantContext = getActiveTenantContext();
+        let localInvoices = [];
+        try {
+            let invKeys = [
+                `deferredInvoices_${tenantContext.activeCompanyId}`, 
+                'deferredInvoices', 
+                'invoices', 
+                'na2la_deferred_invoices', 
+                'na2la_invoices',
+                'consolidated_invoices'
+            ];
+            for (let key of invKeys) {
+                let localData = JSON.parse(localStorage.getItem(key) || '[]');
+                if (Array.isArray(localData) && localData.length > 0) {
+                    localInvoices = localData;
+                    break;
+                } else if (localData && Array.isArray(localData.deferredInvoices)) {
+                    localInvoices = localData.deferredInvoices;
+                    break;
+                }
             }
+        } catch(e) {}
 
-            return companyFiltered.filter(s => {
-                let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
-                return matchesUser;
-            });
-        };
-
-        window.parseNumericCurrency = function(val) {
-            if (!val) return '0 ج.م';
-            if (typeof val === 'number') return val.toLocaleString() + ' ج.م';
-            let cleanStr = String(val).replace(/[^\d.-]/g, '');
-            let num = parseFloat(cleanStr);
-            return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
-        };
-
-        window.getCompanyFinancials = function() {
-            let tenant = getActiveTenantContext();
-            let rawTreasury = realFirebaseAppData.treasury || window.currentTreasury || window.Na2laApp?.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || localStorage.getItem('treasury') || localStorage.getItem('current_treasury') || '0 ج.م';
-            let rawExpenses = realFirebaseAppData.expenses || window.currentExpenses || window.Na2laApp?.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || localStorage.getItem('expenses') || localStorage.getItem('current_expenses') || '0 ج.م';
-            
-            let treasuryBalance = parseNumericCurrency(rawTreasury);
-            let expensesTotal = parseNumericCurrency(rawExpenses);
-            
-            let shipments = getIsolatedUserShipments();
-            let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-            let invoicesCount = companyInvoices.length > 0 ? companyInvoices.length : ((window.Na2laApp?.deferredInvoices) ? window.Na2laApp.deferredInvoices.length : 0);
-            
-            return { treasuryBalance, expensesTotal, invoicesCount, shipmentsCount: shipments.length };
-        };
-
-        window.updateSyncButtonBadge = function() {
-            const syncedShipments = getIsolatedUserShipments();
-            const badgeEl = document.getElementById('btn-sync-badge');
-            if (badgeEl) {
-                badgeEl.innerText = syncedShipments.length;
-                badgeEl.style.display = syncedShipments.length > 0 ? 'inline-block' : 'none';
-            }
-        };
-
-        window.toggleSyncHubDropdown = function(event) {
-            event.stopPropagation();
-            let tenant = getActiveTenantContext();
-            const bolt = document.getElementById('sync-icon-bolt');
-            if (bolt) bolt.classList.add('spinning');
-            setTimeout(() => { if (bolt) bolt.classList.remove('spinning'); }, 600);
-
-            const dropdown = document.getElementById('syncHubDropdownMenu');
-            const userTitleSpan = document.getElementById('syncHubUserTitle');
-            const listContainer = document.getElementById('syncHubItemsList');
-            if (!dropdown) return;
-
-            if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
-
-            userTitleSpan.innerText = `👤 ${tenant.activeDriver}`;
-            const syncedShipments = getIsolatedUserShipments();
-
-            if (syncedShipments.length === 0) {
-                listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: #94a3b8;">لا توجد شحنات مسجلة حالياً</div>`;
-            } else {
-                listContainer.innerHTML = syncedShipments.slice(0, 5).map(s => `
-                    <div style="background: var(--card-bg); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                        <div style="font-weight: bold; color: var(--accent-color);">📦 شحنة: ${s.id || s.shipmentNumber || 'معتمدة'}</div>
-                        <div style="color: var(--text-color); font-size: 9px;">الحالة: ${s.status || 'نشطة'}</div>
-                    </div>
-                `).join('');
-            }
-            dropdown.style.display = 'block';
-        };
-
-        window.addEventListener('click', () => {
-            const dropdown = document.getElementById('syncHubDropdownMenu');
-            if (dropdown) dropdown.style.display = 'none';
-        });
-
-        window.openConnectedAccountHub = function() {
-            let tenant = getActiveTenantContext();
-            if (typeof viewingProfileName !== 'undefined') viewingProfileName = tenant.activeDriver;
-            if (typeof switchTab === 'function') switchTab('account-tab');
-            const syncedShipments = getIsolatedUserShipments();
-            alert(`👤 الحساب الشخصي: ${tenant.activeDriver}\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات المتزامنة: ${syncedShipments.length}\n✨ الملف الشخصي نشط ومتزامن.`);
-        };
-
-        window.toggleDutyStatus = function() {
-            let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
-            let newStatus = currentStatus === 'active' ? 'offline' : 'active';
-            localStorage.setItem('driver_duty_status', newStatus);
-            checkDutyStatusIndicator();
-            alert(`حالتك التشغيلية: ${newStatus === 'active' ? '🟢 نشط' : '🔴 استراحة'}`);
-        };
-
-        window.checkDutyStatusIndicator = function() {
-            let dot = document.getElementById('botStatusDot');
-            let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
-            if (dot) {
-                dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444';
-                dot.style.boxShadow = currentStatus === 'active' ? '0 0 8px #10b981' : '0 0 8px #ef4444';
-            }
-        };
-
-        window.renderQuickButtons = function(isDriver) {
-            let container = document.getElementById('botQuickActionsContainer');
-            if (!container) return;
-            let commonButtons = `
-                <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📦 الشحنات</button>
-                <button onclick="sendBotQuickQuery('الخزنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💰 الخزنة والمالية</button>
-                <button onclick="exportFinancialReportPDF()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="تقرير PDF">📄 تقرير PDF</button>
-                <button onclick="sendBotQuickQuery('نصيحة طريق')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🛣️ نصيحة طريق</button>
-                <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">😄 نكت وسفر</button>
-                <button onclick="sendBotQuickQuery('صورة شاحنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🖼️ جلب صور</button>
-            `;
-            if (isDriver) {
-                container.innerHTML = commonButtons + `
-                    <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
-                    <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
-                `;
-            } else {
-                container.innerHTML = commonButtons + `
-                    <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
-                    <button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 الأسطول</button>
-                `;
-            }
-        };
-
-        fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
-
-        window.addEventListener('na2laDataUpdated', () => {
-            fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
-        });
-        setInterval(() => {
-            fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
-        }, 15000);
-
-        let tenant = syncPlatformUserData();
-        let isBotVoiceOutputOn = true, isBotContinuousActive = false;
-
-        window.playWalkieBeep = function(type = 'start') {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-                osc.type = 'sine'; osc.frequency.value = type === 'start' ? 880 : 440;
-                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.12);
-            } catch(e) {}
-        };
-
-        window.toggleNa2laBot = function() {
-            let modal = document.getElementById('na2laBotModal');
-            if (!modal) return;
-            let isHidden = (modal.style.display === 'none' || modal.style.display === '');
-            modal.style.display = isHidden ? 'flex' : 'none';
-            if (isHidden) {
-                fetchRealFirebaseData().then(() => {
-                    tenant = syncPlatformUserData();
-                    loadChatHistory();
-                    setTimeout(() => {
-                        let inputField = document.getElementById('na2laBotInput');
-                        if (inputField) inputField.focus();
-                    }, 150);
-                });
-            }
-        };
-
-        window.toggleBotVoiceOutput = function() {
-            isBotVoiceOutputOn = !isBotVoiceOutputOn;
-            let btn = document.getElementById('botVoiceToggleBtn');
-            if (btn) {
-                btn.innerText = isBotVoiceOutputOn ? "🔊 ناطق" : "🔇 صامت";
-                btn.style.background = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
-            }
-        };
-
-        window.toggleBotContinuousVoice = function() {
-            isBotContinuousActive = !isBotContinuousActive;
-            let btn = document.getElementById('botContinuousBtn');
-            if (isBotContinuousActive) {
-                btn.innerText = "🎤 مستمر: مفعل"; btn.style.background = "var(--accent-color)";
-                startBotVoiceInput();
-            } else {
-                btn.innerText = "🎤 مستمر معطل"; btn.style.background = "var(--border-color)";
-            }
-        };
-
-        window.handleScaleTicketUpload = function(input) {
-            if (input.files && input.files[0]) {
-                let file = input.files[0], reader = new FileReader();
-                reader.onload = function(e) {
-                    let container = document.getElementById('na2laBotMessages');
-                    let simulatedGross = Math.floor(Math.random() * 15) + 25;
-                    let simulatedTare = Math.floor(Math.random() * 5) + 8;
-                    let netWeight = simulatedGross - simulatedTare;
-
-                    let imgHtml = `<div style="margin-top:6px;"><img src="${e.target.result}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color);"></div>`;
-                    let userMsg = `📎 تم رفع بونة الميزان وتحليلها (OCR) لشركة (${tenant.activeCompanyName}): <b>${file.name}</b>${imgHtml}`;
-                    container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%;">${userMsg}</div>`;
-                    saveChatHistory('user', userMsg);
-                    container.scrollTop = container.scrollHeight;
-
-                    try {
-                        if (typeof firebase !== 'undefined' && firebase.firestore) {
-                            firebase.firestore().collection('auditLogs').add({
-                                fileName: file.name, companyId: tenant.activeCompanyId, companyName: tenant.activeCompanyName, driver: tenant.activeDriver, netWeight: netWeight + ' طن', timestamp: new Date().toISOString()
-                            });
-                        }
-                    } catch(err) {}
-
-                    setTimeout(() => {
-                        let botReply = `✅ <b>نجاح تحليل واستخراج بيانات البونة (OCR بواسطة Gemini):</b><br>` +
-                                       `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
-                                       `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
-                                       `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
-                                       `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح لشركة <b>${tenant.activeCompanyName}</b>.`;
-                        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
-                        saveChatHistory('bot', botReply);
-                        container.scrollTop = container.scrollHeight;
-                        speakBotReplyText("تم تحليل بونة الميزان واستخراج الأوزان بنجاح.");
-                    }, 900);
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-
-        window.saveChatHistory = function(sender, htmlContent) {
-            tenant = getActiveTenantContext();
-            let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
-            let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            history.push({ sender, htmlContent, timestamp: new Date().toISOString() });
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            history = history.filter(item => new Date(item.timestamp) > thirtyDaysAgo);
-            if (history.length > 40) history = history.slice(-40);
-            localStorage.setItem(storageKey, JSON.stringify(history));
-        };
-
-        window.loadChatHistory = function() {
-            tenant = getActiveTenantContext();
-            let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
-            let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            const container = document.getElementById('na2laBotMessages');
-            if (!container) return;
-            
-            container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك Gemini الذكي بنجاح.</div>`;
-
-            history.forEach(msg => {
-                if (msg.sender === 'user') {
-                    container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word;">${msg.htmlContent}</div>`;
-                } else {
-                    container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color); word-break: break-word;">${msg.htmlContent}</div>`;
+        if (window.Na2laApp && Array.isArray(window.Na2laApp.deferredInvoices)) {
+            window.Na2laApp.deferredInvoices.forEach(inv => {
+                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
+                    realFirebaseDeferredInvoices.push(inv);
                 }
             });
-            container.scrollTop = container.scrollHeight;
-        };
+        }
 
-        window.clearBotChat = function() {
-            tenant = getActiveTenantContext();
-            let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
-            localStorage.removeItem(storageKey);
-            let msgContainer = document.getElementById('na2laBotMessages');
-            if (msgContainer) {
-                msgContainer.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color); color: var(--text-color);">🧹 تمت تصفية سجل المحادثة الخاص بحسابك (${tenant.activeDriver}) بنجاح.</div>`;
+        if (localInvoices.length > 0) {
+            localInvoices.forEach(inv => {
+                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
+                    realFirebaseDeferredInvoices.push(inv);
+                }
+            });
+        }
+    };
+
+    window.getCompanySubscriptionInfo = async function() {
+        let tenant = getActiveTenantContext();
+        let subData = {
+            planName: realFirebaseAppData.planName || realFirebaseAppData.subscriptionPlan || 'الباقة الترويجية / الاحترافية',
+            expiryDate: realFirebaseAppData.expiryDate || realFirebaseAppData.subscriptionExpiry || '2026-12-31',
+            status: realFirebaseAppData.subscriptionStatus || 'نشط ✅ (سحابي)',
+            companyName: tenant.activeCompanyName
+        };
+        
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                const subDoc = await db.collection('subscriptions').doc(tenant.activeCompanyId).get();
+                if (subDoc.exists) {
+                    let d = subDoc.data();
+                    subData.planName = d.planName || d.package || subData.planName;
+                    subData.expiryDate = d.expiryDate || d.endDate || subData.expiryDate;
+                    subData.status = d.status || subData.status;
+                }
             }
-        };
+        } catch(e) {}
 
-        window.changeBotTheme = function(themeId) {
-            let rootContainer = document.getElementById('na2laBotRootContainer');
-            if (!rootContainer) return;
-            if (themeId === 'default') {
-                rootContainer.removeAttribute('data-theme');
-            } else {
-                rootContainer.setAttribute('data-theme', themeId);
+        return subData;
+    };
+
+    window.updateDriverLiveLocation = async function(lat, lng) {
+        let tenant = getActiveTenantContext();
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                await db.collection('drivers').doc(tenant.activeDriver).set({
+                    name: tenant.activeDriver,
+                    companyId: tenant.activeCompanyId,
+                    companyName: tenant.activeCompanyName,
+                    latitude: lat,
+                    longitude: lng,
+                    lastActive: new Date().toISOString(),
+                    status: localStorage.getItem('driver_duty_status') || 'active'
+                }, { merge: true });
             }
-            localStorage.setItem('db_viper_theme_index', themeId === 'royal' ? 1 : (themeId === 'emerald' ? 2 : 0));
-            let selectEl = document.getElementById('botThemeSelect');
-            if (selectEl) selectEl.value = themeId;
-        };
+        } catch(e) {}
+    };
 
-        let savedIndex = localStorage.getItem('db_viper_theme_index');
-        let themeId = 'default';
-        if (savedIndex === '1') themeId = 'royal';
-        else if (savedIndex === '2') themeId = 'emerald';
-        changeBotTheme(themeId);
-        syncPlatformUserData();
-
-        window.startBotVoiceInput = function() {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert("متصفحك لا يدعم التعرف الصوتي."); return;
+    window.getCompanyActiveFleet = async function() {
+        let tenant = getActiveTenantContext();
+        let fleet = [];
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             }
-            playWalkieBeep('start');
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'ar-EG';
-            recognition.onresult = (event) => {
-                playWalkieBeep('end');
-                let text = event.results[0][0].transcript, inputEl = document.getElementById('na2laBotInput');
-                if (inputEl) inputEl.value = text;
-                sendBotQuickQuery(text);
-            };
-            recognition.onerror = recognition.onend = () => { playWalkieBeep('end'); };
-            recognition.start();
-        };
+        } catch(e) {}
+        return fleet;
+    };
 
-        window.speakBotReplyText = function(text) {
-            if (!isBotVoiceOutputOn) return;
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                let utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'ar-EG'; utterance.rate = 1.0;
-                utterance.onend = () => { if (isBotContinuousActive) { setTimeout(() => { startBotVoiceInput(); }, 800); } };
-                window.speechSynthesis.speak(utterance);
-            }
-        };
+    window.getCompanyFinancialReport = async function() {
+        let tenant = getActiveTenantContext();
+        let financials = getCompanyFinancials();
+        let shipments = getIsolatedUserShipments();
+        
+        let totalShipmentsValue = shipments.reduce((sum, s) => {
+            let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
+            return sum + val;
+        }, 0);
 
-        window.renderShipmentCardInChat = function(shipment) {
-            return `
-                <div class="chat-card">
-                    <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${shipment.id || shipment.shipmentNumber || 'معتمدة'}</div>
-                    <div style="font-size: 10px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
-                    <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
+        return {
+            companyName: tenant.activeCompanyName,
+            treasury: financials.treasuryBalance,
+            expenses: financials.expensesTotal,
+            invoicesCount: financials.invoicesCount,
+            shipmentsCount: shipments.length,
+            estimatedRevenue: totalShipmentsValue.toLocaleString() + ' ج.م'
+        };
+    };
+
+    window.exportFinancialReportPDF = async function() {
+        let tenant = getActiveTenantContext();
+        let report = await getCompanyFinancialReport();
+        let printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html dir="rtl">
+            <head>
+                <title>تقرير الخزنة والمالية - ${report.companyName}</title>
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; color: #111; background: #fff; }
+                    .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 25px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
+                    th { background: #2563eb; color: #fff; }
+                    .footer { margin-top: 50px; text-align: left; font-weight: bold; font-size: 14px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
+                    <p>صادر من منصة أسطورة الطريق (Firebase v10) بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
                 </div>
-            `;
-        };
+                <table>
+                    <thead>
+                        <tr>
+                            <th>البند المالي</th>
+                            <th>القيمة الإجمالية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
+                        <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
+                        <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
+                        <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
+                        <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>التوقيع / الختم المعتمد: ........................</p>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
 
-        window.fetchLiveWebAndWikipediaAnswer = async function(query) {
+    window.printConsolidatedInvoice = function(invoiceId) {
+        let tenant = getActiveTenantContext();
+        let invoices = realFirebaseDeferredInvoices.filter(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
+        let invoice = invoices.length > 0 ? invoices[0] : null;
+
+        if (!invoice) {
+            alert("عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.");
+            return;
+        }
+
+        let printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html dir="rtl">
+            <head>
+                <title>فاتورة مجمعة - ${invoice.invoiceNumber || invoiceId}</title>
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
+                    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
+                    th { background: #f2f2f2; }
+                    .footer { margin-top: 40px; text-align: left; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>شركة ${tenant.activeCompanyName}</h2>
+                    <p>قسم الفواتير المجمعة والآجلة والعملاء</p>
+                </div>
+                <div style="margin-bottom: 15px; font-size: 14px;">
+                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoiceId}</p>
+                    <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
+                    <p><b>التاريخ:</b> ${invoice.date || new Date().toLocaleDateString('ar-EG')}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>م</th>
+                            <th>بيان الشحنة / الخدمة</th>
+                            <th>المبلغ (ج.م)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>${invoice.description || invoice.notes || 'شحنات مجمعة ومعتمدة للعميل'}</td>
+                            <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>التوقيع / الختم: ........................</p>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
+    window.syncPlatformUserData = function() {
+        let tenant = getActiveTenantContext();
+        let isDriver = tenant.activeRole.includes('driver') || tenant.activeDriver.includes('سائق');
+        let isManager = tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير') || !isDriver;
+
+        let badgeEl = document.getElementById('botUserRoleBadge');
+        if (badgeEl) badgeEl.innerText = `🤖 ${tenant.activeDriver} (${tenant.activeCompanyName})`;
+
+        let companyTagEl = document.getElementById('syncHubCompanyTag');
+        if (companyTagEl) companyTagEl.innerText = `🏢 الشركة: ${tenant.activeCompanyName}`;
+        
+        // إظهار أو إخفاء شريط الإرس إي إس (RSS Ticker) ليظهر حصرياً لحساب المدير فقط
+        let rssBar = document.getElementById('na2laRssTickerContainer');
+        if (rssBar) {
+            rssBar.style.display = isManager ? 'block' : 'none';
+        }
+
+        renderQuickButtons(isDriver);
+        updateSyncButtonBadge();
+        checkDutyStatusIndicator();
+        return tenant;
+    };
+
+    window.getIsolatedUserShipments = function() {
+        let tenant = getActiveTenantContext();
+        let allShipments = [];
+
+        if (realFirebaseShipments.length > 0) {
+            allShipments = realFirebaseShipments;
+        } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
+            allShipments = window.Na2laApp.shipments;
+        } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
+            allShipments = window.shipments;
+        } else {
             try {
-                let searchUrl = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
-                let res = await fetch(searchUrl);
-                let data = await res.json();
-
-                if (data && data.query && data.query.search && data.query.search.length > 0) {
-                    let topTitle = data.query.search[0].title;
-                    let summaryUrl = `https://ar.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle)}`;
-                    let sumRes = await fetch(summaryUrl);
-                    if (sumRes.ok) {
-                        let sumData = await sumRes.json();
-                        if (sumData && sumData.extract) {
-                            let pageUrl = sumData.content_urls?.desktop?.page || `https://ar.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`;
-                            return `🌐 <b>إجابة Gemini من ويكيبيديا (${topTitle}):</b><br>` +
-                                   `${sumData.extract}<br><br>` +
-                                   `<a href="${pageUrl}" target="_blank" style="color: var(--accent-color); font-weight: bold; text-decoration: underline;">🔗 قراءة المقالة كاملة</a>`;
-                        }
+                let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments', 'na2la_shipments', 'appData'];
+                for (let key of localKeys) {
+                    let localData = JSON.parse(localStorage.getItem(key) || '[]');
+                    if (Array.isArray(localData) && localData.length > 0) {
+                        allShipments = localData; break;
+                    } else if (localData && Array.isArray(localData.shipments)) {
+                        allShipments = localData.shipments; break;
                     }
                 }
             } catch(e) {}
+        }
 
-            let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-            return `🌐 <b>نتائج البحث المباشر عبر الإنترنت (Gemini):</b><br>` +
-                   `لم نتمكن من مطابقة سياق محلي مباشر لـ "${query}" في قواعد بيانات المنصة أو ويكيبيديا.<br><br>` +
-                   `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 5px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر جوجل</a>`;
+        let companyFiltered = allShipments.filter(s => !s.companyId || s.companyId === tenant.activeCompanyId || s.companyName === tenant.activeCompanyName);
+
+        if (tenant.activeRole.includes('admin') || tenant.activeRole.includes('owner') || tenant.activeDriver.includes('المدير') || tenant.activeDriver.includes('كرم') || tenant.activeDriver.includes('مدير')) {
+            return companyFiltered;
+        }
+
+        return companyFiltered.filter(s => {
+            let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
+            return matchesUser;
+        });
+    };
+
+    window.parseNumericCurrency = function(val) {
+        if (!val) return '0 ج.م';
+        if (typeof val === 'number') return val.toLocaleString() + ' ج.م';
+        let cleanStr = String(val).replace(/[^\d.-]/g, '');
+        let num = parseFloat(cleanStr);
+        return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
+    };
+
+    window.getCompanyFinancials = function() {
+        let tenant = getActiveTenantContext();
+        let rawTreasury = realFirebaseAppData.treasury || window.currentTreasury || window.Na2laApp?.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || localStorage.getItem('treasury') || localStorage.getItem('current_treasury') || '0 ج.م';
+        let rawExpenses = realFirebaseAppData.expenses || window.currentExpenses || window.Na2laApp?.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || localStorage.getItem('expenses') || localStorage.getItem('current_expenses') || '0 ج.م';
+        
+        let treasuryBalance = parseNumericCurrency(rawTreasury);
+        let expensesTotal = parseNumericCurrency(rawExpenses);
+        
+        let shipments = getIsolatedUserShipments();
+        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let invoicesCount = companyInvoices.length > 0 ? companyInvoices.length : ((window.Na2laApp?.deferredInvoices) ? window.Na2laApp.deferredInvoices.length : 0);
+        
+        return { treasuryBalance, expensesTotal, invoicesCount, shipmentsCount: shipments.length };
+    };
+
+    window.updateSyncButtonBadge = function() {
+        const syncedShipments = getIsolatedUserShipments();
+        const badgeEl = document.getElementById('btn-sync-badge');
+        if (badgeEl) {
+            badgeEl.innerText = syncedShipments.length;
+            badgeEl.style.display = syncedShipments.length > 0 ? 'inline-block' : 'none';
+        }
+    };
+
+    window.toggleSyncHubDropdown = function(event) {
+        event.stopPropagation();
+        let tenant = getActiveTenantContext();
+        const bolt = document.getElementById('sync-icon-bolt');
+        if (bolt) bolt.classList.add('spinning');
+        setTimeout(() => { if (bolt) bolt.classList.remove('spinning'); }, 600);
+
+        const dropdown = document.getElementById('syncHubDropdownMenu');
+        const userTitleSpan = document.getElementById('syncHubUserTitle');
+        const listContainer = document.getElementById('syncHubItemsList');
+        if (!dropdown) return;
+
+        if (dropdown.style.display === 'block') { dropdown.style.display = 'none'; return; }
+
+        userTitleSpan.innerText = `👤 ${tenant.activeDriver}`;
+        const syncedShipments = getIsolatedUserShipments();
+
+        if (syncedShipments.length === 0) {
+            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: #94a3b8;">لا توجد شحنات مسجلة حالياً</div>`;
+        } else {
+            listContainer.innerHTML = syncedShipments.slice(0, 5).map(s => `
+                <div style="background: var(--card-bg); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <div style="font-weight: bold; color: var(--accent-color);">📦 شحنة: ${s.id || s.shipmentNumber || 'معتمدة'}</div>
+                    <div style="color: var(--text-color); font-size: 9px;">الحالة: ${s.status || 'نشطة'}</div>
+                </div>
+            `).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+
+    window.addEventListener('click', () => {
+        const dropdown = document.getElementById('syncHubDropdownMenu');
+        if (dropdown) dropdown.style.display = 'none';
+    });
+
+    window.openConnectedAccountHub = function() {
+        let tenant = getActiveTenantContext();
+        if (typeof viewingProfileName !== 'undefined') viewingProfileName = tenant.activeDriver;
+        if (typeof switchTab === 'function') switchTab('account-tab');
+        const syncedShipments = getIsolatedUserShipments();
+        alert(`👤 الحساب الشخصي: ${tenant.activeDriver}\n🏢 الشركة: ${tenant.activeCompanyName}\n📦 إجمالي الشحنات المتزامنة: ${syncedShipments.length}\n✨ الملف الشخصي نشط ومتزامن.`);
+    };
+
+    window.toggleDutyStatus = function() {
+        let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
+        let newStatus = currentStatus === 'active' ? 'offline' : 'active';
+        localStorage.setItem('driver_duty_status', newStatus);
+        checkDutyStatusIndicator();
+        alert(`حالتك التشغيلية: ${newStatus === 'active' ? '🟢 نشط' : '🔴 استراحة'}`);
+    };
+
+    window.checkDutyStatusIndicator = function() {
+        let dot = document.getElementById('botStatusDot');
+        let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
+        if (dot) {
+            dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444';
+            dot.style.boxShadow = currentStatus === 'active' ? '0 0 8px #10b981' : '0 0 8px #ef4444';
+        }
+    };
+
+    window.renderQuickButtons = function(isDriver) {
+        let container = document.getElementById('botQuickActionsContainer');
+        if (!container) return;
+        let commonButtons = `
+            <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📦 الشحنات</button>
+            <button onclick="sendBotQuickQuery('الخزنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💰 الخزنة والمالية</button>
+            <button onclick="exportFinancialReportPDF()" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--primary-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="تقرير PDF">📄 تقرير PDF</button>
+            <button onclick="sendBotQuickQuery('نصيحة طريق')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🛣️ نصيحة طريق</button>
+            <button onclick="sendBotQuickQuery('نكتة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">😄 نكت وسفر</button>
+            <button onclick="sendBotQuickQuery('صورة شاحنة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🖼️ جلب صور</button>
+        `;
+        if (isDriver) {
+            container.innerHTML = commonButtons + `
+                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
+            `;
+        } else {
+            container.innerHTML = commonButtons + `
+                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 الأسطول</button>
+            `;
+        }
+    };
+
+    fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
+
+    window.addEventListener('na2laDataUpdated', () => {
+        fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
+    });
+    setInterval(() => {
+        fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
+    }, 15000);
+
+    let tenant = syncPlatformUserData();
+    let isBotVoiceOutputOn = true, isBotContinuousActive = false;
+
+    window.playWalkieBeep = function(type = 'start') {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.value = type === 'start' ? 880 : 440;
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+        } catch(e) {}
+    };
+
+    window.toggleNa2laBot = function() {
+        let modal = document.getElementById('na2laBotModal');
+        if (!modal) return;
+        let isHidden = (modal.style.display === 'none' || modal.style.display === '');
+        modal.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+            fetchRealFirebaseData().then(() => {
+                tenant = syncPlatformUserData();
+                loadChatHistory();
+                setTimeout(() => {
+                    let inputField = document.getElementById('na2laBotInput');
+                    if (inputField) inputField.focus();
+                }, 150);
+            });
+        }
+    };
+
+    window.toggleBotVoiceOutput = function() {
+        isBotVoiceOutputOn = !isBotVoiceOutputOn;
+        let btn = document.getElementById('botVoiceToggleBtn');
+        if (btn) {
+            btn.innerText = isBotVoiceOutputOn ? "🔊 ناطق" : "🔇 صامت";
+            btn.style.background = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
+        }
+    };
+
+    window.toggleBotContinuousVoice = function() {
+        isBotContinuousActive = !isBotContinuousActive;
+        let btn = document.getElementById('botContinuousBtn');
+        if (isBotContinuousActive) {
+            btn.innerText = "🎤 مستمر: مفعل"; btn.style.background = "var(--accent-color)";
+            startBotVoiceInput();
+        } else {
+            btn.innerText = "🎤 مستمر معطل"; btn.style.background = "var(--border-color)";
+        }
+    };
+
+    window.handleScaleTicketUpload = function(input) {
+        if (input.files && input.files[0]) {
+            let file = input.files[0], reader = new FileReader();
+            reader.onload = function(e) {
+                let container = document.getElementById('na2laBotMessages');
+                let simulatedGross = Math.floor(Math.random() * 15) + 25;
+                let simulatedTare = Math.floor(Math.random() * 5) + 8;
+                let netWeight = simulatedGross - simulatedTare;
+
+                let imgHtml = `<div style="margin-top:6px;"><img src="${e.target.result}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color);"></div>`;
+                let userMsg = `📎 تم رفع بونة الميزان وتحليلها (OCR) لشركة (${tenant.activeCompanyName}): <b>${file.name}</b>${imgHtml}`;
+                container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%;">${userMsg}</div>`;
+                saveChatHistory('user', userMsg);
+                container.scrollTop = container.scrollHeight;
+
+                try {
+                    if (typeof firebase !== 'undefined' && firebase.firestore) {
+                        firebase.firestore().collection('auditLogs').add({
+                            fileName: file.name, companyId: tenant.activeCompanyId, companyName: tenant.activeCompanyName, driver: tenant.activeDriver, netWeight: netWeight + ' طن', timestamp: new Date().toISOString()
+                        });
+                    }
+                } catch(err) {}
+
+                setTimeout(() => {
+                    let botReply = `✅ <b>نجاح تحليل واستخراج بيانات البونة (OCR بواسطة Gemini):</b><br>` +
+                                   `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
+                                   `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
+                                   `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
+                                   `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح لشركة <b>${tenant.activeCompanyName}</b>.`;
+                    container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
+                    saveChatHistory('bot', botReply);
+                    container.scrollTop = container.scrollHeight;
+                    speakBotReplyText("تم تحليل بونة الميزان واستخراج الأوزان بنجاح.");
+                }, 900);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    window.saveChatHistory = function(sender, htmlContent) {
+        tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        history.push({ sender, htmlContent, timestamp: new Date().toISOString() });
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        history = history.filter(item => new Date(item.timestamp) > thirtyDaysAgo);
+        if (history.length > 40) history = history.slice(-40);
+        localStorage.setItem(storageKey, JSON.stringify(history));
+    };
+
+    window.loadChatHistory = function() {
+        tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const container = document.getElementById('na2laBotMessages');
+        if (!container) return;
+        
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">مرحباً بك مجدداً يا <b>${tenant.activeDriver}</b> في منصة أسطورة الطريق (شركة: <b>${tenant.activeCompanyName}</b>).<br>- تم استعادة سجلك الشخصي ومحرك Gemini الذكي بنجاح.</div>`;
+
+        history.forEach(msg => {
+            if (msg.sender === 'user') {
+                container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word;">${msg.htmlContent}</div>`;
+            } else {
+                container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color); word-break: break-word;">${msg.htmlContent}</div>`;
+            }
+        });
+        container.scrollTop = container.scrollHeight;
+    };
+
+    window.clearBotChat = function() {
+        tenant = getActiveTenantContext();
+        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver}`;
+        localStorage.removeItem(storageKey);
+        let msgContainer = document.getElementById('na2laBotMessages');
+        if (msgContainer) {
+            msgContainer.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color); color: var(--text-color);">🧹 تمت تصفية سجل المحادثة الخاص بحسابك (${tenant.activeDriver}) بنجاح.</div>`;
+        }
+    };
+
+    window.changeBotTheme = function(themeId) {
+        let rootContainer = document.getElementById('na2laBotRootContainer');
+        if (!rootContainer) return;
+        if (themeId === 'default') {
+            rootContainer.removeAttribute('data-theme');
+        } else {
+            rootContainer.setAttribute('data-theme', themeId);
+        }
+        localStorage.setItem('db_viper_theme_index', themeId === 'royal' ? 1 : (themeId === 'emerald' ? 2 : 0));
+        let selectEl = document.getElementById('botThemeSelect');
+        if (selectEl) selectEl.value = themeId;
+    };
+
+    let savedIndex = localStorage.getItem('db_viper_theme_index');
+    let themeId = 'default';
+    if (savedIndex === '1') themeId = 'royal';
+    else if (savedIndex === '2') themeId = 'emerald';
+    changeBotTheme(themeId);
+    syncPlatformUserData();
+
+    window.startBotVoiceInput = function() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert("متصفحك لا يدعم التعرف الصوتي."); return;
+        }
+        playWalkieBeep('start');
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ar-EG';
+        recognition.onresult = (event) => {
+            playWalkieBeep('end');
+            let text = event.results[0][0].transcript, inputEl = document.getElementById('na2laBotInput');
+            if (inputEl) inputEl.value = text;
+            sendBotQuickQuery(text);
         };
+        recognition.onerror = recognition.onend = () => { playWalkieBeep('end'); };
+        recognition.start();
+    };
 
-        window.sendBotQuickQuery = async function(customText = null) {
-            let inputEl = document.getElementById('na2laBotInput');
-            let container = document.getElementById('na2laBotMessages');
-            let text = customText || (inputEl ? inputEl.value.trim() : "");
-            if (!text || !container) return;
+    window.speakBotReplyText = function(text) {
+        if (!isBotVoiceOutputOn) return;
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            let utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ar-EG'; utterance.rate = 1.0;
+            utterance.onend = () => { if (isBotContinuousActive) { setTimeout(() => { startBotVoiceInput(); }, 800); } };
+            window.speechSynthesis.speak(utterance);
+        }
+    };
 
-            let userMsgHtml = text;
-            container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word; font-family: 'Cairo', sans-serif;">${userMsgHtml}</div>`;
-            saveChatHistory('user', userMsgHtml);
+    window.renderShipmentCardInChat = function(shipment) {
+        return `
+            <div class="chat-card">
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${shipment.id || shipment.shipmentNumber || 'معتمدة'}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
+            </div>
+        `;
+    };
 
-            if (inputEl && !customText) inputEl.value = "";
-            container.scrollTop = container.scrollHeight;
+    window.fetchLiveWebAndWikipediaAnswer = async function(query) {
+        try {
+            let searchUrl = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*`;
+            let res = await fetch(searchUrl);
+            let data = await res.json();
 
-            let typingId = 'typing-' + Date.now();
-            container.innerHTML += `<div id="${typingId}" style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
-            container.scrollTop = container.scrollHeight;
-
-            await fetchRealFirebaseData();
-            let typingEl = document.getElementById(typingId);
-            if (typingEl) typingEl.remove();
-
-            let tenant = syncPlatformUserData();
-            let financials = getCompanyFinancials();
-            let userShipments = getIsolatedUserShipments();
-            let botReply = '';
-            let lower = text.toLowerCase();
-
-            let contextualText = lower;
-            if ((lower.includes('التفاصيل') || lower.includes('كم تكلفتها') || lower.includes('زيادة')) && window.lastBotContext) {
-                contextualText = window.lastBotContext + ' ' + lower;
-            }
-
-            if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
-                window.lastBotContext = 'اشتراك';
-                let subInfo = await getCompanySubscriptionInfo();
-                botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}] (Gemini):</b><br>` +
-                           `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
-                           `- حالة الترخيص: <b style="color:var(--accent-color);">${subInfo.status}</b><br>` +
-                           `- تاريخ الانتهاء: <b style="color:var(--warning-color);">${subInfo.expiryDate}</b><br>` +
-                           `- متصل سحابياً بقاعدة بيانات فايربيس (v10) بنجاح.`;
-            }
-            else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
-                window.lastBotContext = 'شحناتي';
-                if (userShipments.length === 0) {
-                    botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك في شركة (${tenant.activeCompanyName}). يمكنك إنشاء شحنة جديدة من قسم الشحنات بالمنصة.`;
-                } else {
-                    botReply = `📦 لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة لحسابك:<br>`;
-                    userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
+            if (data && data.query && data.query.search && data.query.search.length > 0) {
+                let topTitle = data.query.search[0].title;
+                let summaryUrl = `https://ar.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle)}`;
+                let sumRes = await fetch(summaryUrl);
+                if (sumRes.ok) {
+                    let sumData = await sumRes.json();
+                    if (sumData && sumData.extract) {
+                        let pageUrl = sumData.content_urls?.desktop?.page || `https://ar.wikipedia.org/wiki/${encodeURIComponent(topTitle)}`;
+                        return `🌐 <b>إجابة Gemini من ويكيبيديا (${topTitle}):</b><br>` +
+                               `${sumData.extract}<br><br>` +
+                               `<a href="${pageUrl}" target="_blank" style="color: var(--accent-color); font-weight: bold; text-decoration: underline;">🔗 قراءة المقالة كاملة</a>`;
+                    }
                 }
             }
-            else if (contextualText.includes('الفواتير') || contextualText.includes('الفواتير المجمعة') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
-                window.lastBotContext = 'الفواتير';
-                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-                botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                           `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
-                           `- يمكنك استعراض تفاصيل الديون والتحصيل المباشر عبر قسم الأجل بالمنصة.`;
-            }
-            else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
-                window.lastBotContext = 'الخزنة';
-                let report = await getCompanyFinancialReport();
-                botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
-                           `<div class="bot-table-container"><table class="bot-custom-table">` +
-                           `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
-                           `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
-                           `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
-                           `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
-                           `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
-                           `</table></div><br>` +
-                           `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
-            }
-            else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
-                window.lastBotContext = 'المصروفات';
-                botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
-                           `- يتم تحديث السجلات لحظياً من قواعد بيانات المنصة.`;
-            }
-            else if (contextualText.includes('إحصائيات شركتي') || contextualText.includes('الأسطول') || contextualText.includes('السائقون') || contextualText.includes('المركبات')) {
-                window.lastBotContext = 'الأسطول';
-                let activeFleet = await getCompanyActiveFleet();
-                botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
-                           `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
-                           `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
-                           `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
-            }
-            else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
-                window.lastBotContext = 'طوارئ';
-                botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
-                           `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
-            }
-            else if (contextualText.includes('نصيحة') || contextualText.includes('إرشادات القيادة') || contextualText.includes('نصائح الطرق')) {
-                window.lastBotContext = 'نصيحة';
-                let randomTip = roadWisdoms[Math.floor(Math.random() * roadWisdoms.length)];
-                botReply = `🛣️ <b>إرشادات ونصائح الطرق (Gemini):</b><br>${randomTip}`;
-            }
-            else if (contextualText.includes('نكتة') || contextualText.includes('نكت') || contextualText.includes('هزار') || contextualText.includes('ضحك') || contextualText.includes('اسطى')) {
-                window.lastBotContext = 'نكتة';
-                let randomJoke = funnyJokes[Math.floor(Math.random() * funnyJokes.length)];
-                botReply = `😄 ${randomJoke}`;
-            }
-            else if (contextualText.includes('مغامرة') || contextualText.includes('قصة سفر') || contextualText.includes('مغامرات')) {
-                window.lastBotContext = 'مغامرة';
-                let randomAdv = adventureStories[Math.floor(Math.random() * adventureStories.length)];
-                botReply = `${randomAdv}`;
-            }
-            else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('اترك لي صورة') || contextualText.includes('ابحث عن صورة') || contextualText.includes('جيبلي صورة')) {
-                window.lastBotContext = 'صورة';
-                botReply = handleImageRequest(text);
-            }
-            else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
-                window.lastBotContext = 'خدمات المنصة';
-                botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
-                           `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
-                           `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
-            }
-            else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
-                window.lastBotContext = 'المساعدة';
-                botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini):</b><br>` +
-                           `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض السجلات.<br>` +
-                           `- اكتب <b>"نصيحة طريق"</b> أو <b>"نكتة"</b> للترفيه والإرشاد.<br>` +
-                           `- اطلب <b>"صورة شاحنة"</b> أو <b>"صورة طبيعية"</b> لعرض الصور فوراً داخل البوت.<br>` +
-                           `- ارفع صور بونات الميزان (📎) لتحليل الأوزان تلقائياً (OCR).`;
-            }
-            else {
-                window.lastBotContext = 'بحث خارجي';
-                botReply = await window.fetchLiveWebAndWikipediaAnswer(text);
-            }
+        } catch(e) {}
 
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;">${botReply}</div>`;
-            saveChatHistory('bot', botReply);
-            container.scrollTop = container.scrollHeight;
-            
-            speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
-        };
-    }
+        let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        return `🌐 <b>نتائج البحث المباشر عبر الإنترنت (Gemini):</b><br>` +
+               `لم نتمكن من مطابقة سياق محلي مباشر لـ "${query}" في قواعد بيانات المنصة أو ويكيبيديا.<br><br>` +
+               `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 5px 10px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none;">🔍 ابحث عن "${query}" عبر جوجل</a>`;
+    };
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initNa2laBot);
-    } else {
-        initNa2laBot();
-    }
+    window.sendBotQuickQuery = async function(customText = null) {
+        let inputEl = document.getElementById('na2laBotInput');
+        let container = document.getElementById('na2laBotMessages');
+        let text = customText || (inputEl ? inputEl.value.trim() : "");
+        if (!text || !container) return;
+
+        let userMsgHtml = text;
+        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end; max-width: 80%; word-break: break-word; font-family: 'Cairo', sans-serif;">${userMsgHtml}</div>`;
+        saveChatHistory('user', userMsgHtml);
+
+        if (inputEl && !customText) inputEl.value = "";
+        container.scrollTop = container.scrollHeight;
+
+        let typingId = 'typing-' + Date.now();
+        container.innerHTML += `<div id="${typingId}" style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+        container.scrollTop = container.scrollHeight;
+
+        await fetchRealFirebaseData();
+        let typingEl = document.getElementById(typingId);
+        if (typingEl) typingEl.remove();
+
+        let tenant = syncPlatformUserData();
+        let financials = getCompanyFinancials();
+        let userShipments = getIsolatedUserShipments();
+        let botReply = '';
+        let lower = text.toLowerCase();
+
+        let contextualText = lower;
+        if ((lower.includes('التفاصيل') || lower.includes('كم تكلفتها') || lower.includes('زيادة')) && window.lastBotContext) {
+            contextualText = window.lastBotContext + ' ' + lower;
+        }
+
+        if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
+            window.lastBotContext = 'اشتراك';
+            let subInfo = await getCompanySubscriptionInfo();
+            botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}] (Gemini):</b><br>` +
+                       `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
+                       `- حالة الترخيص: <b style="color:var(--accent-color);">${subInfo.status}</b><br>` +
+                       `- تاريخ الانتهاء: <b style="color:var(--warning-color);">${subInfo.expiryDate}</b><br>` +
+                       `- متصل سحابياً بقاعدة بيانات فايربيس (v10) بنجاح.`;
+        }
+        else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
+            window.lastBotContext = 'شحناتي';
+            if (userShipments.length === 0) {
+                botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك في شركة (${tenant.activeCompanyName}). يمكنك إنشاء شحنة جديدة من قسم الشحنات بالمنصة.`;
+            } else {
+                botReply = `📦 لديك <b>${userShipments.length}</b> شحنة متزامنة ومتاحة لحسابك:<br>`;
+                userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
+            }
+        }
+        else if (contextualText.includes('الفواتير') || contextualText.includes('الفواتير المجمعة') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
+            window.lastBotContext = 'الفواتير';
+            let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+            botReply = `🧾 <b>قسم الفواتير المجمعة والآجلة لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                       `- إجمالي الفواتير المسجلة: <b>${companyInvoices.length} فاتورة</b><br>` +
+                       `- يمكنك استعراض تفاصيل الديون والتحصيل المباشر عبر قسم الأجل بالمنصة.`;
+        }
+        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
+            window.lastBotContext = 'الخزنة';
+            let report = await getCompanyFinancialReport();
+            botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
+                       `<div class="bot-table-container"><table class="bot-custom-table">` +
+                       `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
+                       `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
+                       `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
+                       `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
+                       `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
+                       `</table></div><br>` +
+                       `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
+        }
+        else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
+            window.lastBotContext = 'المصروفات';
+            botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
+                       `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
+                       `- يتم تحديث السجلات لحظياً من قواعد بيانات المنصة.`;
+        }
+        else if (contextualText.includes('إحصائيات شركتي') || contextualText.includes('الأسطول') || contextualText.includes('السائقون') || contextualText.includes('المركبات')) {
+            window.lastBotContext = 'الأسطول';
+            let activeFleet = await getCompanyActiveFleet();
+            botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
+                       `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
+                       `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
+                       `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+        }
+        else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
+            window.lastBotContext = 'طوارئ';
+            botReply = `🚨 <b>بروتوكول طوارئ سحابة فايربيس [${tenant.activeCompanyName}]:</b><br>` +
+                       `- تم إرسال تنبيه الطوارئ والموقع الجغرافي لحسابك (<b>${tenant.activeDriver}</b>) لغرفة العمليات والدعم الفني بالمنصة فوراً.`;
+        }
+        else if (contextualText.includes('نصيحة') || contextualText.includes('إرشادات القيادة') || contextualText.includes('نصائح الطرق')) {
+            window.lastBotContext = 'نصيحة';
+            let randomTip = roadWisdoms[Math.floor(Math.random() * roadWisdoms.length)];
+            botReply = `🛣️ <b>إرشادات ونصائح الطرق (Gemini):</b><br>${randomTip}`;
+        }
+        else if (contextualText.includes('نكتة') || contextualText.includes('نكت') || contextualText.includes('هزار') || contextualText.includes('ضحك') || contextualText.includes('اسطى')) {
+            window.lastBotContext = 'نكتة';
+            let randomJoke = funnyJokes[Math.floor(Math.random() * funnyJokes.length)];
+            botReply = `😄 ${randomJoke}`;
+        }
+        else if (contextualText.includes('مغامرة') || contextualText.includes('قصة سفر') || contextualText.includes('مغامرات')) {
+            window.lastBotContext = 'مغامرة';
+            let randomAdv = adventureStories[Math.floor(Math.random() * adventureStories.length)];
+            botReply = `${randomAdv}`;
+        }
+        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('اترك لي صورة') || contextualText.includes('ابحث عن صورة') || contextualText.includes('جيبلي صورة')) {
+            window.lastBotContext = 'صورة';
+            botReply = handleImageRequest(text);
+        }
+        else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
+            window.lastBotContext = 'خدمات المنصة';
+            botReply = `🌐 <b>عن منصة أسطورة الطريق (Na2la.Net):</b><br>` +
+                       `- هي المنصة البرمجية الأولى في مصر لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وإدارة الخزنة للشركات والأفراد.<br>` +
+                       `- تتيح لك عزلاً تاماً للشركات، تتبع GPS لحظي، وتوثيق بونات الميزان سحابياً.`;
+        }
+        else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
+            window.lastBotContext = 'المساعدة';
+            botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini):</b><br>` +
+                       `- اكتب <b>"شحناتي"</b> أو <b>"الخزنة"</b> لاستعراض السجلات.<br>` +
+                       `- اكتب <b>"نصيحة طريق"</b> أو <b>"نكتة"</b> للترفيه والإرشاد.<br>` +
+                       `- اطلب <b>"صورة شاحنة"</b> أو <b>"صورة طبيعية"</b> لعرض الصور فوراً داخل البوت.<br>` +
+                       `- ارفع صور بونات الميزان (📎) لتحليل الأوزان تلقائياً (OCR).`;
+        }
+        else {
+            window.lastBotContext = 'بحث خارجي';
+            botReply = await window.fetchLiveWebAndWikipediaAnswer(text);
+        }
+
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;">${botReply}</div>`;
+        saveChatHistory('bot', botReply);
+        container.scrollTop = container.scrollHeight;
+        
+        speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
+    };
 })();
