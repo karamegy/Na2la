@@ -1,4 +1,15 @@
 (function() {
+    if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+        firebase.initializeApp({
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            authDomain: "n2la-642d3.firebaseapp.com",
+            projectId: "n2la-642d3",
+            storageBucket: "n2la-642d3.firebasestorage.app",
+            messagingSenderId: "1085749997466",
+            appId: "1:1085749997466:web:13e5535dc6d2312397d423"
+        });
+    }
+
     // تنظيف أي حاوية سابقة لمنع التعارض أو التداخل البرمجي
     const existingContainer = document.getElementById('na2laBotRootContainer');
     if (existingContainer) existingContainer.remove();
@@ -292,7 +303,6 @@
 
     // الدالة المحدثة بدقة لتمييز الزائر، السائق، أو المدير دون فرض حساب المدير افتراضياً
     window.getActiveTenantContext = function() {
-        // التحقق من الحساب النشط أو الزائر من التخزين المحلي أو متغيرات النافذة
         let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || localStorage.getItem('na2la_visitor_name') || null;
         
         let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || localStorage.getItem('user_role') || 'visitor';
@@ -303,12 +313,10 @@
 
         let activeDriver = rawUser;
         if (!activeDriver) {
-            // إذا كان زائراً جديداً ولم يتم تسجيل دخوله بعد
             activeDriver = "زائر كريم";
             activeRole = "visitor";
         }
 
-        // إذا كان اسم المستخدم هو "المدير" أو لديه صلاحيات الإدارة
         if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole.includes('مدير')) {
             activeRole = "admin";
         } else if (activeDriver.includes('سائق') || activeRole.includes('driver')) {
@@ -665,17 +673,14 @@
 
         let companyFiltered = allShipments.filter(s => !s.companyId || s.companyId === tenant.activeCompanyId || s.companyId === 'company_main' || s.companyName === tenant.activeCompanyName);
 
-        // إذا كان مدير النظام، يعرض كافة شحنات الشركة
         if (tenant.activeRole === 'admin') {
             return companyFiltered;
         }
 
-        // إذا كان زائراً، يعرض شحنات عامة تجريبية أو رسالة ترحيبية
         if (tenant.activeRole === 'visitor') {
             return companyFiltered.slice(0, 3);
         }
 
-        // للسائقين، عرض الشحنات المخصصة لهم فقط
         return companyFiltered.filter(s => {
             let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
             return matchesUser;
