@@ -162,7 +162,6 @@
                 </div>
             </div>
 
-            <!-- شريط الأرس إي إس (RSS Ticker) - مخصص لحساب المدير فقط -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
                     🚀 أسطورة الطريق (عزل تام للشركات والمستخدمين) | مزامنة الحسابات، حجب شحنات الزوار، وربط ذكاء Google Gemini 24/7
@@ -336,12 +335,9 @@
                 let tenant = getActiveTenantContext();
                 
                 try {
-                    const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                    const driversSnap = await db.collection('drivers').get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allDrivers = await db.collection('drivers').get();
-                        realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
                         realFirebaseDrivers = [];
                     }
@@ -410,84 +406,63 @@
         }
     };
 
+    // دالة جلب بيانات الاشتراك المتوافقة تماماً مع قسم التقارير ومجموعة drivers في فايربيس
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
-            planName: 'الباقة الاحترافية (Lifetime)',
+            planName: 'اشتراك شهري',
             expiryDate: '2026-12-31',
             status: 'active ✅ (نشط)',
             companyName: tenant.activeCompanyName
         };
-        
-        try {
-            let localSubKeys = [`company_sub_${tenant.activeCompanyId}`, 'company_subscription', 'subscription_info', 'app_subscription'];
-            for (let k of localSubKeys) {
-                let localData = JSON.parse(localStorage.getItem(k) || '{}');
-                if (localData && (localData.plan || localData.package || localData.expiry || localData.subExpiry || localData.expiryDate)) {
-                    subData.planName = localData.subPlan || localData.planName || localData.package || localData.plan || subData.planName;
-                    subData.expiryDate = localData.subExpiry || localData.expiryDate || localData.expiry || localData.endDate || localData.expiresAt || subData.expiryDate;
-                    subData.status = localData.subStatus || localData.subscriptionStatus || localData.status || subData.status;
-                    return subData;
-                }
-            }
 
-            let globalCompanyKeys = ['companies', 'na2la_companies', 'saved_companies', 'app_companies_list'];
-            for (let gk of globalCompanyKeys) {
-                let compList = JSON.parse(localStorage.getItem(gk) || '[]');
-                if (Array.isArray(compList) && compList.length > 0) {
-                    let matchedComp = compList.find(c => 
-                        (c.id && c.id === tenant.activeCompanyId) || 
-                        (c.companyId && c.companyId === tenant.activeCompanyId) ||
-                        (c.name && c.name.trim() === tenant.activeCompanyName.trim()) ||
-                        (c.admin && c.admin === tenant.activeDriver)
-                    );
-                    if (matchedComp) {
-                        subData.planName = matchedComp.package || matchedComp.plan || matchedComp.subPlan || subData.planName;
-                        subData.expiryDate = matchedComp.expiry || matchedComp.expiryDate || matchedComp.subExpiry || matchedComp.endDate || subData.expiryDate;
-                        subData.status = matchedComp.status || matchedComp.subStatus || subData.status;
-                        subData.companyName = matchedComp.name || tenant.activeCompanyName;
+        // 1. التحقق من realFirebaseDrivers (المطابقة مع مجموعة drivers تماماً مثل قسم التقارير)
+        let matchedDriver = realFirebaseDrivers.find(d => 
+            (d.name && d.name.trim() === tenant.activeDriver.trim()) || 
+            (d.companyId && d.companyId === tenant.activeCompanyId) ||
+            (d.role === 'admin' && (d.companyId === tenant.activeCompanyId || !d.companyId))
+        );
+
+        if (matchedDriver && (matchedDriver.subPlan || matchedDriver.subExpiry || matchedDriver.subStatus)) {
+            subData.planName = matchedDriver.subPlan || matchedDriver.plan || subData.planName;
+            subData.expiryDate = matchedDriver.subExpiry || matchedDriver.expiryDate || subData.expiryDate;
+            let st = matchedDriver.subStatus || 'active';
+            subData.status = st === 'active' ? 'active ✅ (نشط)' : 'منتهي ⚠️';
+            subData.companyName = matchedDriver.companyName || matchedDriver.name || tenant.activeCompanyName;
+            return subData;
+        }
+
+        // 2. الاستعلام المباشر من مجموعة drivers في فايربيس (مطابق لقسم التقارير)
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                let drvSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                if (!drvSnap.empty) {
+                    let dDoc = drvSnap.docs[0].data();
+                    if (dDoc.subPlan || dDoc.subExpiry) {
+                        subData.planName = dDoc.subPlan || subData.planName;
+                        subData.expiryDate = dDoc.subExpiry || subData.expiryDate;
+                        subData.status = (dDoc.subStatus === 'active') ? 'active ✅ (نشط)' : 'منتهي ⚠️';
+                        subData.companyName = dDoc.companyName || tenant.activeCompanyName;
                         return subData;
                     }
                 }
             }
         } catch(e) {}
 
-        if (realFirebaseAppData && (realFirebaseAppData.package || realFirebaseAppData.expiry || realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate)) {
-            subData.planName = realFirebaseAppData.subPlan || realFirebaseAppData.planName || realFirebaseAppData.package || realFirebaseAppData.plan || subData.planName;
-            subData.expiryDate = realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || realFirebaseAppData.expiry || realFirebaseAppData.endDate || realFirebaseAppData.expiresAt || subData.expiryDate;
-            subData.status = realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || realFirebaseAppData.status || subData.status;
-        }
-
+        // 3. البحث الاحتياطي في LocalStorage أو الـ appData
         try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                let subDoc = null;
-                
-                try {
-                    let querySnap = await db.collection('companies').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
-                    if (!querySnap.empty) subDoc = querySnap.docs[0];
-                    else {
-                        let nameSnap = await db.collection('companies').where('name', '==', tenant.activeCompanyName).limit(1).get();
-                        if (!nameSnap.empty) subDoc = nameSnap.docs[0];
-                    }
-                } catch(e) {}
-
-                if (!subDoc) {
-                    try {
-                        let appSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                        if (appSnap.exists) subDoc = appSnap;
-                    } catch(e) {}
-                }
-
-                if (subDoc && (subDoc.exists || subDoc.data)) {
-                    let d = typeof subDoc.data === 'function' ? subDoc.data() : subDoc;
-                    subData.planName = d.subPlan || d.planName || d.package || d.plan || subData.planName;
-                    subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || d.endDate || d.expiresAt || subData.expiryDate;
-                    subData.status = d.subStatus || d.subscriptionStatus || d.status || subData.status;
-                    subData.companyName = d.name || tenant.activeCompanyName;
+            let localSubKeys = [`company_sub_${tenant.activeCompanyId}`, 'company_subscription', 'subscription_info'];
+            for (let k of localSubKeys) {
+                let localData = JSON.parse(localStorage.getItem(k) || '{}');
+                if (localData && (localData.plan || localData.subPlan || localData.subExpiry || localData.expiryDate)) {
+                    subData.planName = localData.subPlan || localData.planName || localData.package || subData.planName;
+                    subData.expiryDate = localData.subExpiry || localData.expiryDate || localData.endDate || subData.expiryDate;
+                    subData.status = localData.subStatus === 'active' ? 'active ✅ (نشط)' : 'منتهي ⚠️';
+                    return subData;
                 }
             }
-        } catch(err) {}
+        } catch(e) {}
 
         return subData;
     };
