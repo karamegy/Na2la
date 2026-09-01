@@ -103,14 +103,14 @@
         .bot-custom-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
+            font-size: 10px;
             background: var(--card-bg);
             color: var(--text-color);
             font-family: 'Cairo', sans-serif;
         }
         .bot-custom-table th, .bot-custom-table td {
             border: 1px solid var(--border-color);
-            padding: 6px 8px;
+            padding: 5px 6px;
             text-align: center;
         }
         .bot-custom-table th {
@@ -191,12 +191,19 @@
 
             <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color);"></div>
 
-            <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center;">
+            <!-- شريط الكتابة المدخل والإرسال المعدل بدقة -->
+            <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center; position: relative;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
-                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">📎</button>
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، ابحث في جهات الاتصال، أو اطلب معلومة..." style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
-                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
-                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap;">إرسال</button>
+                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; min-width: 34px; border-radius: 50%; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;">📎</button>
+                
+                <div style="position: relative; flex: 1; display: flex; align-items: center;">
+                    <span style="position: absolute; right: 10px; color: var(--primary-color); font-size: 12px; pointer-events: none;">✍️</span>
+                    <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، ابحث..." style="width: 100%; margin: 0; padding: 7px 28px 7px 10px; font-size: 11px; border-radius: 20px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                </div>
+
+                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; min-width: 34px; border-radius: 50%; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
+                
+                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap; width: auto; min-width: 50px;">إرسال</button>
             </div>
         </div>
     `;
@@ -254,6 +261,10 @@
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
+    window.realFirebaseConsolidatedInvoices = [];
+    window.realFirebaseTreasury = [];
+    window.realFirebaseExpenses = [];
+    window.realFirebaseCustomers = [];
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
 
@@ -336,74 +347,45 @@
                 
                 try {
                     const driversSnap = await db.collection('drivers').get();
-                    if (!driversSnap.empty) {
-                        realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseDrivers = [];
-                    }
-                } catch(e) {
-                    realFirebaseDrivers = [];
-                }
+                    realFirebaseDrivers = driversSnap.empty ? [] : driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseDrivers = []; }
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
-                    if (!shipmentsSnap.empty) {
-                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allShipments = await db.collection('shipments').get();
-                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseShipments = [];
-                    }
-                } catch(e) {
-                    realFirebaseShipments = [];
-                }
+                    const shipmentsSnap = await db.collection('shipments').get();
+                    realFirebaseShipments = shipmentsSnap.empty ? [] : shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseShipments = []; }
 
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
-                    if (!invoicesSnap.empty) {
-                        realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allInvoices = await db.collection('deferredInvoices').get();
-                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseDeferredInvoices = [];
-                    }
-                } catch(e) {
-                    realFirebaseDeferredInvoices = [];
-                }
+                    const invoicesSnap = await db.collection('deferredInvoices').get();
+                    realFirebaseDeferredInvoices = invoicesSnap.empty ? [] : invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseDeferredInvoices = []; }
+
+                try {
+                    const conInvoicesSnap = await db.collection('consolidatedInvoices').get();
+                    realFirebaseConsolidatedInvoices = conInvoicesSnap.empty ? [] : conInvoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseConsolidatedInvoices = []; }
+
+                try {
+                    const treasurySnap = await db.collection('treasury').get();
+                    realFirebaseTreasury = treasurySnap.empty ? [] : treasurySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseTreasury = []; }
+
+                try {
+                    const expensesSnap = await db.collection('expenses').get();
+                    realFirebaseExpenses = expensesSnap.empty ? [] : expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseExpenses = []; }
+
+                try {
+                    const customersSnap = await db.collection('customers').get();
+                    realFirebaseCustomers = customersSnap.empty ? [] : customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch(e) { realFirebaseCustomers = []; }
 
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                    if (appDataSnap.exists) {
-                        realFirebaseAppData = appDataSnap.data() || {};
-                    } else {
-                        realFirebaseAppData = {};
-                    }
+                    realFirebaseAppData = appDataSnap.exists ? appDataSnap.data() || {} : {};
                 } catch(e) {}
             }
         } catch(e) {}
-
-        let tenantContext = getActiveTenantContext();
-        let localInvoices = [];
-        try {
-            let invKeys = [`deferredInvoices_${tenantContext.activeCompanyId}`, 'deferredInvoices'];
-            for (let key of invKeys) {
-                let localData = JSON.parse(localStorage.getItem(key) || '[]');
-                if (Array.isArray(localData) && localData.length > 0) {
-                    localInvoices = localData;
-                    break;
-                }
-            }
-        } catch(e) {}
-
-        if (localInvoices.length > 0) {
-            localInvoices.forEach(inv => {
-                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                    realFirebaseDeferredInvoices.push(inv);
-                }
-            });
-        }
     };
 
     window.getCompanySubscriptionInfo = async function() {
@@ -510,23 +492,86 @@
         return fleet;
     };
 
-    window.getCompanyFinancialReport = async function() {
+    /* الحساب المالي المباشر والدقيق للشحنات، الخزينة، الديون، وصافي الأرباح بالربط التام مع index.html */
+    window.getCompanyFinancials = function() {
         let tenant = getActiveTenantContext();
-        let financials = getCompanyFinancials();
-        let shipments = getIsolatedUserShipments();
+        if (tenant.activeRole === 'visitor') {
+            return {
+                shipmentsCount: 0,
+                revenue: '0 ج.م',
+                expenses: '0 ج.م',
+                netProfit: '0 ج.م',
+                treasuryBalance: '0 ج.م',
+                debtsTotal: '0 ج.م',
+                consolidatedCount: 0,
+                consolidatedTotal: '0 ج.م'
+            };
+        }
+
+        let appData = window.appData || {};
+        let shipments = (appData.shipments && appData.shipments.length > 0) ? appData.shipments : realFirebaseShipments;
+        let expenses = (appData.expenses && appData.expenses.length > 0) ? appData.expenses : realFirebaseExpenses;
+        let treasury = (appData.treasury && appData.treasury.length > 0) ? appData.treasury : realFirebaseTreasury;
+        let deferredInvoices = (appData.deferredInvoices && appData.deferredInvoices.length > 0) ? appData.deferredInvoices : realFirebaseDeferredInvoices;
+        let consolidatedInvoices = (appData.consolidatedInvoices && appData.consolidatedInvoices.length > 0) ? appData.consolidatedInvoices : realFirebaseConsolidatedInvoices;
+        let customers = (appData.customers && appData.customers.length > 0) ? appData.customers : realFirebaseCustomers;
+
+        let filterComp = (arr) => {
+            if (!arr || !Array.isArray(arr)) return [];
+            if (tenant.activeDriver === 'المدير' || (tenant.activeRole === 'admin' && (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main'))) {
+                return arr;
+            }
+            return arr.filter(item => !item.companyId || item.companyId === tenant.activeCompanyId || (item.companyId && item.companyId.toLowerCase() === tenant.activeCompanyId.toLowerCase()));
+        };
+
+        let fShipments = filterComp(shipments);
+        if (tenant.activeRole === 'driver') {
+            fShipments = fShipments.filter(s => s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver);
+        }
+        let fExpenses = filterComp(expenses);
+        let fTreasury = filterComp(treasury);
+        let fDeferred = filterComp(deferredInvoices);
+        let fConsolidated = filterComp(consolidatedInvoices);
+        let fCustomers = filterComp(customers);
+
+        let shipmentsCount = fShipments.length;
+        let revNum = fShipments.reduce((sum, s) => sum + Number(s.price || s.cost || 0), 0);
+        let expNum = fExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        let netNum = revNum - expNum;
+        let cashNum = fTreasury.reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
         
-        let totalShipmentsValue = shipments.reduce((sum, s) => {
-            let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
-            return sum + val;
-        }, 0);
+        let defNum = fDeferred.reduce((sum, inv) => inv.status !== 'paid' ? sum + Number(inv.remainingAmount || inv.totalAmount || 0) : sum, 0);
+        let custDebtNum = fCustomers.reduce((sum, c) => sum + Number(c.debt || 0), 0);
+        let debtsNum = defNum + custDebtNum;
+
+        let conCount = fConsolidated.length;
+        let conTotalNum = fConsolidated.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
 
         return {
+            shipmentsCount: shipmentsCount,
+            revenue: revNum.toLocaleString() + ' ج.م',
+            expenses: expNum.toLocaleString() + ' ج.م',
+            netProfit: netNum.toLocaleString() + ' ج.م',
+            treasuryBalance: cashNum.toLocaleString() + ' ج.م',
+            debtsTotal: debtsNum.toLocaleString() + ' ج.م',
+            consolidatedCount: conCount,
+            consolidatedTotal: conTotalNum.toLocaleString() + ' ج.م'
+        };
+    };
+
+    window.getCompanyFinancialReport = async function() {
+        let tenant = getActiveTenantContext();
+        let fin = getCompanyFinancials();
+        return {
             companyName: tenant.activeCompanyName,
-            treasury: financials.treasuryBalance,
-            expenses: financials.expensesTotal,
-            invoicesCount: financials.invoicesCount,
-            shipmentsCount: shipments.length,
-            estimatedRevenue: totalShipmentsValue.toLocaleString() + ' ج.م'
+            shipmentsCount: fin.shipmentsCount,
+            revenue: fin.revenue,
+            expenses: fin.expenses,
+            netProfit: fin.netProfit,
+            treasury: fin.treasuryBalance,
+            debtsTotal: fin.debtsTotal,
+            consolidatedCount: fin.consolidatedCount,
+            consolidatedTotal: fin.consolidatedTotal
         };
     };
 
@@ -561,15 +606,17 @@
                     <thead>
                         <tr>
                             <th>البند المالي</th>
-                            <th>القيمة الإجمالية</th>
+                            <th>القيمة الإجمالية المعتمدة</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
+                        <tr><td><b>إجمالي عدد الشحنات</b></td><td>${report.shipmentsCount} شحنة</td></tr>
+                        <tr><td><b>الإيرادات الإجمالية الكلية</b></td><td style="color:#2563eb; font-weight:bold;">${report.revenue}</td></tr>
                         <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
-                        <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
-                        <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
-                        <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
+                        <tr><td><b>صافي الأرباح المسجلة</b></td><td style="color:#8b5cf6; font-weight:bold;">${report.netProfit}</td></tr>
+                        <tr><td><b>رصيد الخزينة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
+                        <tr><td><b>الديون والآجل المستحق</b></td><td style="color:#d97706; font-weight:bold;">${report.debtsTotal}</td></tr>
+                        <tr><td><b>الفواتير المجمعة الصادرة</b></td><td>${report.consolidatedCount} فاتورة (بقيمة ${report.consolidatedTotal})</td></tr>
                     </tbody>
                 </table>
                 <div class="footer">
@@ -677,29 +724,14 @@
         }
 
         let allShipments = [];
-        if (realFirebaseShipments.length > 0) {
-            allShipments = realFirebaseShipments;
-        } else if (window.appData && Array.isArray(window.appData.shipments)) {
+        if (window.appData && Array.isArray(window.appData.shipments) && window.appData.shipments.length > 0) {
             allShipments = window.appData.shipments;
-        } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
-            allShipments = window.Na2laApp.shipments;
-        } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
-            allShipments = window.shipments;
-        } else {
-            try {
-                let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments'];
-                for (let key of localKeys) {
-                    let localData = JSON.parse(localStorage.getItem(key) || '[]');
-                    if (Array.isArray(localData) && localData.length > 0) {
-                        allShipments = localData; break;
-                    } else if (localData && Array.isArray(localData.shipments)) {
-                        allShipments = localData.shipments; break;
-                    }
-                }
-            } catch(e) {}
+        } else if (realFirebaseShipments.length > 0) {
+            allShipments = realFirebaseShipments;
         }
 
         let companyFiltered = allShipments.filter(s => {
+            if (tenant.activeDriver === 'المدير' || (tenant.activeRole === 'admin' && tenant.activeCompanyId === 'company_main')) return true;
             let sCompanyId = s.companyId || 'company_main';
             return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
         });
@@ -709,34 +741,8 @@
         }
 
         return companyFiltered.filter(s => {
-            let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
-            return matchesUser;
+            return (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
         });
-    };
-
-    window.parseNumericCurrency = function(val) {
-        if (!val) return '0 ج.م';
-        if (typeof val === 'number') return val.toLocaleString() + ' ج.م';
-        let cleanStr = String(val).replace(/[^\d.-]/g, '');
-        let num = parseFloat(cleanStr);
-        return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
-    };
-
-    window.getCompanyFinancials = function() {
-        let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') {
-            return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
-        }
-        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0 ج.م';
-        let rawExpenses = realFirebaseAppData.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || '0 ج.م';
-        
-        let treasuryBalance = parseNumericCurrency(rawTreasury);
-        let expensesTotal = parseNumericCurrency(rawExpenses);
-        
-        let shipments = getIsolatedUserShipments();
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-        
-        return { treasuryBalance, expensesTotal, invoicesCount: companyInvoices.length, shipmentsCount: shipments.length };
     };
 
     window.updateSyncButtonBadge = function() {
@@ -782,8 +788,8 @@
         } else {
             listContainer.innerHTML = syncedShipments.slice(0, 5).map(s => `
                 <div style="background: var(--card-bg); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <div style="font-weight: bold; color: var(--accent-color);">📦 شحنة: ${s.id || s.shipmentNumber || 'معتمدة'}</div>
-                    <div style="color: var(--text-color); font-size: 9px;">الحالة: ${s.status || 'نشطة'}</div>
+                    <div style="font-weight: bold; color: var(--accent-color);">📦 شحنة: ${s.id || s.item || 'معتمدة'}</div>
+                    <div style="color: var(--text-color); font-size: 9px;">الحالة: ${s.status || 'نشطة'} | الأجرة: ${s.price || 0} ج.م</div>
                 </div>
             `).join('');
         }
@@ -1124,11 +1130,11 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                let querySnap = await db.collection('shipments').where('shipmentNumber', '==', shipmentId).get();
+                let querySnap = await db.collection('shipments').where('id', '==', String(shipmentId)).get();
                 if (!querySnap.empty) {
                     await querySnap.docs[0].ref.update({ status: newStatus });
                 } else {
-                    await db.collection('shipments').doc(shipmentId).update({ status: newStatus }).catch(async () => {});
+                    await db.collection('shipments').doc(String(shipmentId)).update({ status: newStatus }).catch(async () => {});
                 }
             }
             alert(`تم تحديث حالة الشحنة (${shipmentId}) إلى: ${newStatus} بنجاح.`);
@@ -1143,12 +1149,12 @@
         let sId = shipment.id || shipment.shipmentNumber || 'معتمدة';
         return `
             <div class="chat-card">
-                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${sId}</div>
-                <div style="font-size: 10px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
-                <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: #${sId}</div>
+                <div style="font-size: 10px; color: var(--text-color);">العميل: ${shipment.name || '-'} | الحمولة: ${shipment.item || '-'}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الأجرة: ${shipment.price || 0} ج.م | الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'في الانتظار'}</span></div>
                 <div style="margin-top: 6px; display: flex; gap: 4px;">
                     <button onclick="updateShipmentStatusFromChat('${sId}', 'في الطريق')" style="background:var(--primary-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">🚚 في الطريق</button>
-                    <button onclick="updateShipmentStatusFromChat('${sId}', 'تم التسليم')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ تم التسليم</button>
+                    <button onclick="updateShipmentStatusFromChat('${sId}', 'مكتملة')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ مكتملة</button>
                 </div>
             </div>
         `;
@@ -1205,7 +1211,7 @@
         if (typingEl) typingEl.remove();
 
         let tenant = syncPlatformUserData();
-        let financials = getCompanyFinancials();
+        let fin = getCompanyFinancials();
         let userShipments = getIsolatedUserShipments();
         let botReply = '';
         let lower = text.toLowerCase();
@@ -1225,19 +1231,21 @@
                 botReply = `⚠️ عذراً، لا يمكنك تسجيل المصروفات كزائر غير مسجل.`;
             } else {
                 try {
-                    let currentExp = parseFloat(localStorage.getItem(`expenses_val_${tenant.activeCompanyId}`) || '0') + parseFloat(amount);
-                    localStorage.setItem(`expenses_val_${tenant.activeCompanyId}`, currentExp);
-                    localStorage.setItem(`expenses_total_${tenant.activeCompanyId}`, currentExp + ' ج.م');
+                    let newExpObj = {
+                        id: String(Date.now()),
+                        amount: parseFloat(amount),
+                        title: description,
+                        companyId: tenant.activeCompanyId,
+                        companyName: tenant.activeCompanyName,
+                        driver: tenant.activeDriver,
+                        date: new Date().toLocaleDateString('ar-EG')
+                    };
                     
                     if (typeof firebase !== 'undefined' && firebase.firestore) {
-                        await firebase.firestore().collection('expenses').add({
-                            amount: parseFloat(amount),
-                            description: description,
-                            companyId: tenant.activeCompanyId,
-                            companyName: tenant.activeCompanyName,
-                            driver: tenant.activeDriver,
-                            timestamp: new Date().toISOString()
-                        });
+                        await firebase.firestore().collection('expenses').doc(newExpObj.id).set(newExpObj);
+                    }
+                    if (window.appData && Array.isArray(window.appData.expenses)) {
+                        window.appData.expenses.push(newExpObj);
                     }
                     botReply = `✅ <b>تم تسجيل المصروف بنجاح (Gemini NLP):</b><br>- المبلغ: <b>${amount} ج.م</b><br>- البيان: <b>${description}</b><br>- تم تحديث الخزنة والمصروفات لشركة [${tenant.activeCompanyName}] سحابياً.`;
                 } catch(err) {
@@ -1287,36 +1295,31 @@
                 userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
             }
         }
-        else if (contextualText.includes('الفواتير') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
-            window.lastBotContext = 'الفواتير';
+        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('إيرادات') || contextualText.includes('إرادات') || contextualText.includes('ديون') || contextualText.includes('آجل') || contextualText.includes('فواتير') || contextualText.includes('مجمعة')) {
+            window.lastBotContext = 'الخزنة والمالية الشاملة';
             if (tenant.activeRole === 'visitor') {
-                botReply = `🧾 قسم الفواتير مخصص للعملاء والسائقين ومديري الشركات المسجلين فقط.`;
+                botReply = `💰 عذراً، تقارير الخزنة والمالية محجوبة عن الزوار وغير المسجلين. يرجى تسجيل الدخول.`;
             } else {
-                let searchTerm = text.replace(/(ابحث عن|بحث|فاتورة|فواتير|مجمعة|آجل)/g, '').trim();
-                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-                
-                if (searchTerm) {
-                    companyInvoices = companyInvoices.filter(inv => 
-                        String(inv.invoiceNumber || '').includes(searchTerm) ||
-                        String(inv.clientName || inv.customer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        String(inv.description || '').toLowerCase().includes(searchTerm.toLowerCase())
-                    );
-                }
-
-                if (companyInvoices.length === 0) {
-                    botReply = `🧾 <b>الفواتير المجمعة لشركة [${tenant.activeCompanyName}]:</b><br><i>لا توجد فواتير مطابقة لـ "${searchTerm || 'الكل'}".</i>`;
-                } else {
-                    botReply = `🧾 <b>نتائج الفواتير لشركتك (${companyInvoices.length} فاتورة):</b><br>` +
-                               `<div class="bot-table-container"><table class="bot-custom-table">` +
-                               `<tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>إجراء</th></tr>`;
-                    companyInvoices.slice(0, 5).forEach(inv => {
-                        let invNum = inv.invoiceNumber || inv.id || 'فاتورة';
-                        let client = inv.clientName || inv.customer || 'عميل عام';
-                        let amt = inv.totalAmount || inv.amount || '0';
-                        botReply += `<tr><td><b>${invNum}</b></td><td>${client}</td><td>${amt} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;">📄 طباعة PDF</button></td></tr>`;
-                    });
-                    botReply += `</table></div>`;
-                }
+                botReply = `
+                    <div class="chat-card" style="border-right-color: var(--accent-color);">
+                        <div style="font-weight: bold; color: var(--accent-color); font-size: 12px; margin-bottom: 6px;">💰 التقرير المالي الشامل والمطابق لشركة [${tenant.activeCompanyName}]</div>
+                        <div class="bot-table-container">
+                            <table class="bot-custom-table">
+                                <tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>
+                                <tr><td><b>📦 عدد الشحنات</b></td><td><b>${fin.shipmentsCount} شحنة</b></td></tr>
+                                <tr><td><b>💰 الإيرادات الكلية</b></td><td style="color:#38bdf8; font-weight:bold;">${fin.revenue}</td></tr>
+                                <tr><td><b>⛽ المصروفات التشغيلية</b></td><td style="color:#ef4444; font-weight:bold;">${fin.expenses}</td></tr>
+                                <tr><td><b>📈 صافي الأرباح</b></td><td style="color:#8b5cf6; font-weight:bold;">${fin.netProfit}</td></tr>
+                                <tr><td><b>💵 رصيد الخزينة الحالي</b></td><td style="color:#10b981; font-weight:bold;">${fin.treasuryBalance}</td></tr>
+                                <tr><td><b>⏳ الديون والأجل المستحق</b></td><td style="color:#f59e0b; font-weight:bold;">${fin.debtsTotal}</td></tr>
+                                <tr><td><b>📑 الفواتير المجمعة</b></td><td><b>${fin.consolidatedCount} فاتورة (بقيمة ${fin.consolidatedTotal})</b></td></tr>
+                            </table>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 10px; font-family: 'Cairo', sans-serif;">📄 تصدير وطباعة تقرير الخزنة PDF</button>
+                        </div>
+                    </div>
+                `;
             }
         }
         else if (contextualText.includes('موقع') || contextualText.includes('موقعي') || contextualText.includes('خريطة') || contextualText.includes('أين')) {
@@ -1335,30 +1338,13 @@
                            `<a href="${mapsUrl}" target="_blank" style="background:var(--accent-color); color:#fff; padding:6px 12px; border-radius:6px; display:inline-block; font-weight:bold; text-decoration:none;">🗺️ فتح الموقع المباشر على خرائط جوجل</a>`;
             }
         }
-        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
-            window.lastBotContext = 'الخزنة';
-            if (tenant.activeRole === 'visitor') {
-                botReply = `💰 عذراً، تقارير الخزنة والمالية محجوبة عن الزوار وغير المسجلين. يرجى تسجيل الدخول.`;
-            } else {
-                let report = await getCompanyFinancialReport();
-                botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
-                           `<div class="bot-table-container"><table class="bot-custom-table">` +
-                           `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
-                           `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
-                           `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
-                           `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
-                           `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
-                           `</table></div><br>` +
-                           `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
-            }
-        }
         else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
             window.lastBotContext = 'المصروفات';
             if (tenant.activeRole === 'visitor') {
                 botReply = `⛽ هذه الخدمة مخصصة للحسابات المسجلة.`;
             } else {
                 botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
+                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${fin.expenses}</b><br>` +
                            `- يمكنك تسجيل مصروف جديد مباشرة بكتابة: <i>"صرفت 150 جنيه بنزين"</i>.`;
             }
         }
@@ -1370,8 +1356,8 @@
                 let activeFleet = await getCompanyActiveFleet();
                 botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
                            `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
-                           `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
-                           `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+                           `- إجمالي شحنات الشركة: <b>${fin.shipmentsCount}</b><br>` +
+                           `- رصيد الخزينة: <b style="color:var(--accent-color);">${fin.treasuryBalance}</b>`;
             }
         }
         else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
