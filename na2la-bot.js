@@ -10,7 +10,6 @@
         });
     }
 
-    // تنظيف أي حاوية سابقة لمنع التعارض أو التداخل البرمجي
     const existingContainer = document.getElementById('na2laBotRootContainer');
     if (existingContainer) existingContainer.remove();
 
@@ -411,6 +410,7 @@
         }
     };
 
+    // المزامنة الشاملة للاشتراكات لكل حساب والبحث في مصفوفة الشركات العامة في SaaS Hub
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
@@ -428,7 +428,27 @@
                     subData.planName = localData.subPlan || localData.planName || localData.package || localData.plan || subData.planName;
                     subData.expiryDate = localData.subExpiry || localData.expiryDate || localData.expiry || localData.endDate || localData.expiresAt || subData.expiryDate;
                     subData.status = localData.subStatus || localData.subscriptionStatus || localData.status || subData.status;
-                    break;
+                    return subData;
+                }
+            }
+
+            let globalCompanyKeys = ['companies', 'na2la_companies', 'saved_companies', 'app_companies_list'];
+            for (let gk of globalCompanyKeys) {
+                let compList = JSON.parse(localStorage.getItem(gk) || '[]');
+                if (Array.isArray(compList) && compList.length > 0) {
+                    let matchedComp = compList.find(c => 
+                        (c.id && c.id === tenant.activeCompanyId) || 
+                        (c.companyId && c.companyId === tenant.activeCompanyId) ||
+                        (c.name && c.name.trim() === tenant.activeCompanyName.trim()) ||
+                        (c.admin && c.admin === tenant.activeDriver)
+                    );
+                    if (matchedComp) {
+                        subData.planName = matchedComp.package || matchedComp.plan || matchedComp.subPlan || subData.planName;
+                        subData.expiryDate = matchedComp.expiry || matchedComp.expiryDate || matchedComp.subExpiry || matchedComp.endDate || subData.expiryDate;
+                        subData.status = matchedComp.status || matchedComp.subStatus || subData.status;
+                        subData.companyName = matchedComp.name || tenant.activeCompanyName;
+                        return subData;
+                    }
                 }
             }
         } catch(e) {}
@@ -445,17 +465,18 @@
                 let subDoc = null;
                 
                 try {
-                    subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                    if (!subDoc.exists) {
-                        let querySnap = await db.collection('appData').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
-                        if (!querySnap.empty) subDoc = querySnap.docs[0];
+                    let querySnap = await db.collection('companies').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
+                    if (!querySnap.empty) subDoc = querySnap.docs[0];
+                    else {
+                        let nameSnap = await db.collection('companies').where('name', '==', tenant.activeCompanyName).limit(1).get();
+                        if (!nameSnap.empty) subDoc = nameSnap.docs[0];
                     }
                 } catch(e) {}
 
-                if (!subDoc || !subDoc.exists) {
+                if (!subDoc) {
                     try {
-                        let querySnap = await db.collection('companies').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
-                        if (!querySnap.empty) subDoc = querySnap.docs[0];
+                        let appSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                        if (appSnap.exists) subDoc = appSnap;
                     } catch(e) {}
                 }
 
@@ -464,6 +485,7 @@
                     subData.planName = d.subPlan || d.planName || d.package || d.plan || subData.planName;
                     subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || d.endDate || d.expiresAt || subData.expiryDate;
                     subData.status = d.subStatus || d.subscriptionStatus || d.status || subData.status;
+                    subData.companyName = d.name || tenant.activeCompanyName;
                 }
             }
         } catch(err) {}
