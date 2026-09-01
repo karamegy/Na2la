@@ -406,7 +406,7 @@
         }
     };
 
-    // دالة جلب بيانات الاشتراك المتوافقة تماماً مع قسم معلومات صلاحية اشتراك شركتك ومجموعة drivers
+    // دالة جلب بيانات الاشتراك المُحسنة والمصححة لكل حساب وشركة بدقة من مجموعة drivers في فايربيس
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
@@ -418,15 +418,54 @@
             expiryDate: '2026-09-28'
         };
 
-        // 1. التحقق من realFirebaseDrivers
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+
+                // 1. البحث المباشر عن مستند السائق/المدير بالاسم النشط في مجموعة drivers
+                if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم') {
+                    try {
+                        let userDoc = await db.collection('drivers').doc(tenant.activeDriver).get();
+                        if (userDoc.exists) {
+                            let d = userDoc.data();
+                            subData.companyName = d.companyName || d.title || tenant.activeCompanyName;
+                            subData.adminName = d.name || tenant.activeDriver;
+                            subData.phone = d.phone || d.mobile || 'غير متوفر';
+                            subData.planName = d.subPlan || d.plan || d.package || 'monthly';
+                            let st = d.subStatus || d.status || 'active';
+                            subData.status = (st === 'active' || st.includes('نشط')) ? 'نشط ✅' : 'منتهي ⚠️';
+                            subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || '2026-09-28';
+                            return subData;
+                        }
+                    } catch(err) {}
+                }
+
+                // 2. الاستعلام عبر companyId في مجموعة drivers
+                try {
+                    let querySnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!querySnap.empty) {
+                        let d = querySnap.docs[0].data();
+                        subData.companyName = d.companyName || d.title || tenant.activeCompanyName;
+                        subData.adminName = d.admin || d.manager || d.name || tenant.activeDriver;
+                        subData.phone = d.phone || d.mobile || 'غير متوفر';
+                        subData.planName = d.subPlan || d.plan || d.package || 'monthly';
+                        let st = d.subStatus || d.status || 'active';
+                        subData.status = (st === 'active' || st.includes('نشط')) ? 'نشط ✅' : 'منتهي ⚠️';
+                        subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || '2026-09-28';
+                        return subData;
+                    }
+                } catch(err) {}
+            }
+        } catch(e) {}
+
+        // 3. التحقق الاحتياطي من realFirebaseDrivers المحملة مسبقاً
         let matchedDriver = realFirebaseDrivers.find(d => 
-            (d.name && d.name.trim() === tenant.activeDriver.trim()) || 
-            (d.companyId && d.companyId === tenant.activeCompanyId) ||
-            (d.role === 'admin' && (d.companyId === tenant.activeCompanyId || !d.companyId))
+            (d.name && d.name.trim().toLowerCase() === tenant.activeDriver.toLowerCase()) || 
+            (d.companyId && d.companyId === tenant.activeCompanyId)
         );
 
         if (matchedDriver) {
-            subData.companyName = matchedDriver.companyName || matchedDriver.name || tenant.activeCompanyName;
+            subData.companyName = matchedDriver.companyName || matchedDriver.title || tenant.activeCompanyName;
             subData.adminName = matchedDriver.admin || matchedDriver.manager || matchedDriver.name || tenant.activeDriver;
             subData.phone = matchedDriver.phone || matchedDriver.mobile || 'غير متوفر';
             subData.planName = matchedDriver.subPlan || matchedDriver.plan || matchedDriver.package || 'monthly';
@@ -435,24 +474,6 @@
             subData.expiryDate = matchedDriver.subExpiry || matchedDriver.expiryDate || matchedDriver.expiry || '2026-09-28';
             return subData;
         }
-
-        // 2. الاستعلام المباشر من مجموعة drivers في فايربيس
-        try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                let drvSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
-                if (!drvSnap.empty) {
-                    let dDoc = drvSnap.docs[0].data();
-                    subData.companyName = dDoc.companyName || tenant.activeCompanyName;
-                    subData.adminName = dDoc.admin || dDoc.name || tenant.activeDriver;
-                    subData.phone = dDoc.phone || dDoc.mobile || 'غير متوفر';
-                    subData.planName = dDoc.subPlan || dDoc.plan || 'monthly';
-                    subData.status = (dDoc.subStatus === 'active') ? 'نشط ✅' : 'نشط ✅';
-                    subData.expiryDate = dDoc.subExpiry || dDoc.expiryDate || '2026-09-28';
-                    return subData;
-                }
-            }
-        } catch(e) {}
 
         return subData;
     };
