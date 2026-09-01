@@ -624,6 +624,14 @@
             </div>
         </div>
 
+        <!-- صندوق شحنات وحمولات الحساب (معزولة بدقة للشركات والسائقين) -->
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 15px;">
+            <h3 style="color: var(--accent); font-size: 14px; margin-bottom: 10px; font-weight: bold;">📦 شحنات وحمولات حسابي (معزولة لشركتك بدقة)</h3>
+            <div id="profile-user-shipments-container" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- يتم تعبئتها برمجياً -->
+            </div>
+        </div>
+
         <div class="card" style="border: 2px solid var(--success);" id="profile-wall-posting-card">
             <h3 style="color: var(--success);" id="profile-wall-heading">✍️ حائط النشر الحر على البروفايل</h3>
             <textarea id="profile-wall-text" placeholder="اكتب تحديثاً، حالة طريق، أو ملاحظة على هذا البروفايل..." style="height: 65px; resize: none;"></textarea>
@@ -1923,7 +1931,6 @@
             });
         }
 
-        // دالة لجلب أحدث رتبة مباشرة من Firebase وتحديثها لتجنب مشاكل التخزين المحلي الكاش القديم
         async function verifyAndUpdateUserRole(driverName) {
             if (!driverName) return;
             try {
@@ -1969,7 +1976,6 @@
                 loggedInDriverName = savedName;
                 currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
                 
-                // جلب أحدث رتبة من فايرستور لضمان عدم حدوث خطأ الصلاحيات القديمة
                 await verifyAndUpdateUserRole(loggedInDriverName);
 
                 setupNavigation();
@@ -2955,10 +2961,45 @@
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
             document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
             
-            let myShipmentsCount = (appData.shipments || []).filter(s => s.assignedDriver === drv.name).length;
+            let myShipmentsCount = (appData.shipments || []).filter(s => s.assignedDriver === drv.name || s.name === drv.name).length;
             document.getElementById('gplus-stat-shipments').innerText = myShipmentsCount;
             document.getElementById('gplus-stat-role').innerText = drv.role || 'سائق';
             document.getElementById('gplus-stat-status').innerText = drv.status || 'متاح';
+
+            // تعبئة وعرض شحنات وحمولات الحساب المعزولة بدقة في البروفايل
+            const profileShipmentsContainer = document.getElementById('profile-user-shipments-container');
+            if (profileShipmentsContainer) {
+                profileShipmentsContainer.innerHTML = '';
+                let allShipments = appData.shipments || [];
+                let userShipments = allShipments.filter(s => 
+                    (drv.name && s.assignedDriver === drv.name) || 
+                    (drv.name && s.name === drv.name) ||
+                    (drv.name && s.driver === drv.name)
+                );
+
+                if (userShipments.length === 0) {
+                    profileShipmentsContainer.innerHTML = `<p style="font-size: 11px; opacity: 0.8; text-align: center; padding: 10px;">لا توجد شحنات أو حمولات مسجلة لهذا الحساب حالياً.</p>`;
+                } else {
+                    userShipments.forEach(s => {
+                        let isDelivered = s.status === 'مكتملة' || s.status === 'delivered';
+                        let badgeClass = isDelivered ? 'bg-delivered' : 'bg-pending';
+                        let badgeBg = isDelivered ? 'var(--success, #10b981)' : 'var(--warning, #f59e0b)';
+                        
+                        let div = document.createElement('div');
+                        div.style.cssText = 'background: var(--bg); border: 1px solid var(--border-color); padding: 10px; border-radius: 8px;';
+                        div.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <strong style="color: var(--accent); font-size: 12px;">📦 شحنة رقم: #${s.id || '---'}</strong>
+                                <span class="badge ${badgeClass}" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: #fff;">${s.status || 'قيد التنفيذ'}</span>
+                            </div>
+                            <p style="font-size: 11px; margin: 0 0 4px 0;"><strong>العميل / المرسل:</strong> ${s.name || s.client || '-'}</p>
+                            <p style="font-size: 11px; margin: 0 0 4px 0;"><strong>الحمولة:</strong> ${s.item || s.cargo || '-'}</p>
+                            <p style="font-size: 11px; margin: 0; color: var(--success); font-weight: bold;">الإجمالي: ${s.price || 0} ج.م</p>
+                        `;
+                        profileShipmentsContainer.appendChild(div);
+                    });
+                }
+            }
 
             const backBtn = document.getElementById('gplus-back-to-myprofile-btn');
             const editSettingsCard = document.getElementById('my-profile-edit-settings-card');
@@ -3984,7 +4025,7 @@
             }
         }
 
-        function renderCRUDTable(forceSection) {
+    function renderCRUDTable(forceSection) {
             const section = forceSection || document.getElementById('crud-section-select').value;
             const headersRow = document.getElementById('crud-table-headers');
             const tbody = document.getElementById('crud-table-body');
