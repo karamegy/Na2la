@@ -300,13 +300,13 @@
     };
 
     window.getActiveTenantContext = function() {
-        let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || null;
+        let rawUser = window.loggedInDriverName || window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || null;
         
         let activeRole = window.currentUserRole || window.currentUser?.role || localStorage.getItem('current_user_role') || localStorage.getItem('na2la_user_role') || localStorage.getItem('user_role') || 'visitor';
 
-        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || '';
+        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || localStorage.getItem('current_company_id') || localStorage.getItem('na2la_current_company_id') || 'company_main';
         
-        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || '';
+        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || 'أسطورة الطريق الرئيسية';
 
         if (!rawUser || activeRole === 'visitor' || rawUser === 'زائر كريم') {
             return {
@@ -339,7 +339,7 @@
                     const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main') {
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
                         const allDrivers = await db.collection('drivers').get();
                         realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
@@ -353,7 +353,7 @@
                     const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!shipmentsSnap.empty) {
                         realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main') {
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
                         const allShipments = await db.collection('shipments').get();
                         realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
@@ -367,7 +367,7 @@
                     const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!invoicesSnap.empty) {
                         realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main') {
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
                         const allInvoices = await db.collection('deferredInvoices').get();
                         realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
@@ -410,7 +410,6 @@
         }
     };
 
-    // المزامنة الشاملة للاشتراكات لكل حساب والبحث في مصفوفة الشركات العامة في SaaS Hub
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
@@ -698,6 +697,8 @@
         let allShipments = [];
         if (realFirebaseShipments.length > 0) {
             allShipments = realFirebaseShipments;
+        } else if (window.appData && Array.isArray(window.appData.shipments)) {
+            allShipments = window.appData.shipments;
         } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
             allShipments = window.Na2laApp.shipments;
         } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
@@ -718,7 +719,7 @@
 
         let companyFiltered = allShipments.filter(s => {
             let sCompanyId = s.companyId || 'company_main';
-            return sCompanyId === tenant.activeCompanyId;
+            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
         });
 
         if (tenant.activeRole === 'admin') {
