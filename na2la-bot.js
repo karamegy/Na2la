@@ -300,7 +300,6 @@
         `;
     };
 
-    // الدالة المعزولة والمحدثة لتعريف الزائر والسائق والمدير وفصل الشركات بدقة
     window.getActiveTenantContext = function() {
         let rawUser = window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || null;
         
@@ -310,7 +309,6 @@
         
         let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || localStorage.getItem('current_company_name') || localStorage.getItem('na2la_current_company_name') || '';
 
-        // إذا لم يكن هناك مستخدم مسجل أو كان دور زائر
         if (!rawUser || activeRole === 'visitor' || rawUser === 'زائر كريم') {
             return {
                 activeDriver: 'زائر كريم',
@@ -338,7 +336,6 @@
                 const db = firebase.firestore();
                 let tenant = getActiveTenantContext();
                 
-                // جلب السائقين للشركة الحالية فقط
                 try {
                     const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!driversSnap.empty) {
@@ -353,7 +350,6 @@
                     realFirebaseDrivers = [];
                 }
 
-                // جلب الشحنات الخاصة بالشركة الحالية فقط وعدم خلط شركات أخرى
                 try {
                     const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!shipmentsSnap.empty) {
@@ -368,7 +364,6 @@
                     realFirebaseShipments = [];
                 }
 
-                // جلب الفواتير الآجلة والمجمعة للشركة الحالية فقط
                 try {
                     const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!invoicesSnap.empty) {
@@ -383,7 +378,6 @@
                     realFirebaseDeferredInvoices = [];
                 }
 
-                // جلب بيانات تطبيق الشركة
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
                     if (appDataSnap.exists) {
@@ -420,21 +414,21 @@
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
-            planName: realFirebaseAppData.subPlan || realFirebaseAppData.planName || 'الباقة الاحترافية (Lifetime)',
-            expiryDate: realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || '2026-12-31',
-            status: realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || 'active ✅ (نشط)',
+            planName: realFirebaseAppData.subPlan || realFirebaseAppData.planName || realFirebaseAppData.package || 'الباقة الاحترافية (Lifetime)',
+            expiryDate: realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || realFirebaseAppData.expiry || '2026-12-31',
+            status: realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || realFirebaseAppData.status || 'active ✅ (نشط)',
             companyName: tenant.activeCompanyName
         };
         
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                const subDoc = await db.collection('subscriptions').doc(tenant.activeCompanyId).get();
+                const subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
                 if (subDoc.exists) {
                     let d = subDoc.data();
-                    subData.planName = d.subPlan || d.planName || subData.planName;
-                    subData.expiryDate = d.subExpiry || d.expiryDate || subData.expiryDate;
-                    subData.status = d.subStatus || d.status || subData.status;
+                    subData.planName = d.subPlan || d.planName || d.package || subData.planName;
+                    subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || subData.expiryDate;
+                    subData.status = d.subStatus || d.status || d.status || subData.status;
                 }
             }
         } catch(e) {}
@@ -637,12 +631,11 @@
         return tenant;
     };
 
-    // حجب شحنات الشركات تماماً عن الزائر أو غير المسجلين (عدم عرض شحنات المدير أو الشركات للزائر)
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         
         if (tenant.activeRole === 'visitor') {
-            return []; // الزائر أو غير المسجل يرى 0 شحنات تماماً ولا يتم عرض أي شحنات خاصة بالمدير أو الشركات خارجه
+            return [];
         }
 
         let allShipments = [];
@@ -666,17 +659,15 @@
             } catch(e) {}
         }
 
-        // فصل الشركات بدقة صارمة عبر مطابقة companyId
         let companyFiltered = allShipments.filter(s => {
             let sCompanyId = s.companyId || 'company_main';
             return sCompanyId === tenant.activeCompanyId;
         });
 
         if (tenant.activeRole === 'admin') {
-            return companyFiltered; // المدير يرى شحنات شركته فقط
+            return companyFiltered;
         }
 
-        // السائق يرى شحناته المسندة إليه فقط داخل شركته
         return companyFiltered.filter(s => {
             let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver || s.clientId === tenant.activeDriver);
             return matchesUser;
@@ -980,7 +971,6 @@
         return html;
     };
 
-    // قفل وحفظ آخر محادثة للمستخدم بشكل منفصل ومستقل تماماً لكل حساب
     window.saveChatHistory = function(sender, htmlContent) {
         let tenant = getActiveTenantContext();
         let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
