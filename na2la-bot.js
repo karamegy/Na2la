@@ -411,37 +411,68 @@
         }
     };
 
-    // التحديث المحسّن لدالة جلب بيانات الاشتراك مع معالجة المرونة في المعرفات والبحث البديل
+    // التحديث الشامل لدالة جلب تفاصيل وتواريخ الاشتراك لضمان مزامنتها بدقة مطابقة لقسم الاشتراكات (SaaS Hub)
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
-            planName: realFirebaseAppData.subPlan || realFirebaseAppData.planName || realFirebaseAppData.package || 'الباقة الاحترافية (Lifetime)',
-            expiryDate: realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || realFirebaseAppData.expiry || '2026-12-31',
-            status: realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || realFirebaseAppData.status || 'active ✅ (نشط)',
+            planName: 'الباقة الاحترافية (Lifetime)',
+            expiryDate: '2026-12-31',
+            status: 'active ✅ (نشط)',
             companyName: tenant.activeCompanyName
         };
         
+        // التحقق أولاً من التخزين المحلي (LocalStorage) المحدث بواسطة قسم الاشتراكات في التطبيق
+        try {
+            let localSubKeys = [`company_sub_${tenant.activeCompanyId}`, 'company_subscription', 'subscription_info', 'app_subscription'];
+            for (let k of localSubKeys) {
+                let localData = JSON.parse(localStorage.getItem(k) || '{}');
+                if (localData && (localData.plan || localData.package || localData.expiry || localData.subExpiry || localData.expiryDate)) {
+                    subData.planName = localData.subPlan || localData.planName || localData.package || localData.plan || subData.planName;
+                    subData.expiryDate = localData.subExpiry || localData.expiryDate || localData.expiry || localData.endDate || localData.expiresAt || subData.expiryDate;
+                    subData.status = localData.subStatus || localData.subscriptionStatus || localData.status || subData.status;
+                    break;
+                }
+            }
+        } catch(e) {}
+
+        // الدمج مع البيانات المحملة مسبقاً من appData
+        if (realFirebaseAppData && (realFirebaseAppData.package || realFirebaseAppData.expiry || realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate)) {
+            subData.planName = realFirebaseAppData.subPlan || realFirebaseAppData.planName || realFirebaseAppData.package || realFirebaseAppData.plan || subData.planName;
+            subData.expiryDate = realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || realFirebaseAppData.expiry || realFirebaseAppData.endDate || realFirebaseAppData.expiresAt || subData.expiryDate;
+            subData.status = realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || realFirebaseAppData.status || subData.status;
+        }
+
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                let subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                let subDoc = null;
                 
-                if (!subDoc.exists && tenant.activeCompanyId) {
-                    const querySnap = await db.collection('appData').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
-                    if (!querySnap.empty) {
-                        subDoc = querySnap.docs[0];
+                // البحث في مجموعة appData
+                try {
+                    subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                    if (!subDoc.exists) {
+                        let querySnap = await db.collection('appData').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
+                        if (!querySnap.empty) subDoc = querySnap.docs[0];
                     }
+                } catch(e) {}
+
+                // إذا لم يتم العثور عليها، البحث في مجموعات الشركات أو إدارة الاشتراكات (SaaS Hub)
+                if (!subDoc || !subDoc.exists) {
+                    try {
+                        let querySnap = await db.collection('companies').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
+                        if (!querySnap.empty) subDoc = querySnap.docs[0];
+                    } catch(e) {}
                 }
 
-                if (subDoc && subDoc.exists) {
-                    let d = subDoc.data ? subDoc.data() : subDoc;
-                    subData.planName = d.subPlan || d.planName || d.package || subData.planName;
-                    subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || subData.expiryDate;
-                    subData.status = d.subStatus || d.status || subData.status;
+                if (subDoc && (subDoc.exists || subDoc.data)) {
+                    let d = typeof subDoc.data === 'function' ? subDoc.data() : subDoc;
+                    subData.planName = d.subPlan || d.planName || d.package || d.plan || subData.planName;
+                    subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || d.endDate || d.expiresAt || subData.expiryDate;
+                    subData.status = d.subStatus || d.subscriptionStatus || d.status || subData.status;
                 }
             }
         } catch(err) {
-            console.error("خطأ في جلب بيانات الاشتراك:", err);
+            console.error("خطأ في جلب بيانات وتواريخ الاشتراك:", err);
         }
 
         return subData;
