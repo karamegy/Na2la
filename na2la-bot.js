@@ -472,6 +472,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
+    /* جلب البيانات السحابية والصحيحة تماماً للشحنات */
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -623,6 +624,7 @@
         return fleet;
     };
 
+    /* تصفية وجلب شحنات الشركة السليمة والمعزولة */
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         
@@ -943,7 +945,7 @@
         if (!container) return;
         let commonButtons = `
             <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📦 الشحنات</button>
-            <button onclick="sendBotQuickQuery('تجديد الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 تجديد الاشتراك</button>
+            <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 كارت الاشتراك</button>
             <button onclick="sendBotQuickQuery('اختبار القيادة')" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎓 اختبار القيادة</button>
             <button onclick="exportChatArchiveData()" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📤 تصدير الأرشيف</button>
             <button onclick="sendBotQuickQuery('رسم شاحنة')" style="background: var(--card-bg); border: 1px solid #f472b6; color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎨 رسم وسائط</button>
@@ -1266,115 +1268,13 @@
         `;
     };
 
+    /* إزالة دالة المزامنة والربط بـ ويكيبيديا نهائياً وتوجيه الاستفسارات العامة عبر جوجل فقط */
     window.fetchLiveWebAndWikipediaAnswer = async function(query) {
         let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
         return `🌐 <b>نتائج الاستعلام والتصفح المباشر (Gemini Pro):</b><br>` +
                `بناءً على سؤالك حول "${query}":<br>` +
                `يمكنك استعراض أحدث النتائج والموضوعات المرتبطة مباشرة عبر محرك البحث جوجل.<br><br>` +
                `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 6px 12px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none; font-size: 11px;">🔍 البحث عن "${query}" عبر جوجل</a>`;
-    };
-
-    // --- الدوال الخاصة بنافذة تجديد الاشتراك وتعبئة البيانات بالصورة الثانية ---
-    window.openSubscriptionRenewalModal = function() {
-        let existingModal = document.getElementById('subRenewalModalOverlay');
-        if (existingModal) existingModal.remove();
-
-        let modalHtml = `
-            <div id="subRenewalModalOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2147483647; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); font-family: 'Cairo', sans-serif;">
-                <div style="background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); width: 400px; max-width: 90vw; border-radius: 16px; box-shadow: var(--shadow-3d); overflow: hidden; color: var(--text-color, #f8fafc);">
-                    
-                    <!-- Header -->
-                    <div style="background: linear-gradient(135deg, var(--primary-color, #3b82f6), var(--accent-color, #10b981)); color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
-                        <span>💳 تجديد الاشتراك الكاش (فوري / وي)</span>
-                        <button onclick="document.getElementById('subRenewalModalOverlay').remove()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold;">✕ إغلاق</button>
-                    </div>
-
-                    <!-- Body -->
-                    <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 11px;">
-                        
-                        <!-- المحافظ المعتمدة -->
-                        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-color, #10b981); padding: 10px; border-radius: 8px; color: var(--text-color);">
-                            💳 <b>محافظ التحويل المعتمدة للخدمة:</b><br>
-                            📱 فوري كاش: <b>01114099799</b><br>
-                            📱 وي كاش (WE): <b>01554440996</b>
-                        </div>
-
-                        <!-- اختيار الباقة -->
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <label style="font-weight: bold; color: var(--warning-color, #f59e0b);">اختر الباقة المراد تجديدها:</label>
-                            <select id="renewalPlanSelect" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
-                                <option value="اشتراك شهرى (30 يوم)">اشتراك شهرى (30 يوم)</option>
-                                <option value="اشتراك 3 شهور (90 يوم)">اشتراك 3 شهور (90 يوم)</option>
-                                <option value="اشتراك سنوي (سنة كاملة)">اشتراك سنوي (سنة كاملة)</option>
-                            </select>
-                        </div>
-
-                        <!-- المحفظة المحول إليها -->
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <label style="font-weight: bold; color: var(--warning-color, #f59e0b);">المحفظة المحول إليها:</label>
-                            <select id="renewalTargetWallet" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
-                                <option value="فوري كاش (01114099799)">فوري كاش (01114099799)</option>
-                                <option value="وي كاش (01554440996)">وي كاش (01554440996)</option>
-                            </select>
-                        </div>
-
-                        <!-- رقم محفظتك التي قمت بالتحويل منها -->
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <label style="font-weight: bold; color: var(--text-color);">رقم محفظتك التي قمت بالتحويل منها:</label>
-                            <input type="text" id="renewalUserWalletInput" placeholder="مثال: 010xxxxxxxx" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
-                        </div>
-
-                        <!-- كود الرقم المرجعي / رقم العملية -->
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <label style="font-weight: bold; color: var(--text-color);">كود الرقم المرجعي / رقم العملية:</label>
-                            <input type="text" id="renewalRefCodeInput" placeholder="أدخل كود العملية أو الرقم المرجعي للتحويل" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
-                        </div>
-
-                        <!-- زر إرسال التفعيل المباشر -->
-                        <button onclick="submitSubscriptionRenewalForm()" style="background: var(--accent-color, #10b981); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; font-family: 'Cairo', sans-serif; margin-top: 4px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-                            🚀 إرسال كود العملية للتفعيل المباشر
-                        </button>
-
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    };
-
-    window.submitSubscriptionRenewalForm = async function() {
-        let tenant = getActiveTenantContext();
-        let plan = document.getElementById('renewalPlanSelect')?.value || 'اشتراك شهرى';
-        let targetWallet = document.getElementById('renewalTargetWallet')?.value || 'فوري';
-        let userWallet = document.getElementById('renewalUserWalletInput')?.value?.trim() || '';
-        let refCode = document.getElementById('renewalRefCodeInput')?.value?.trim() || '';
-
-        if (!userWallet || !refCode) {
-            alert("⚠️ يرجى إدخال رقم محفظتك ورقم العملية أو الكود المرجعي لإتمام الطلب.");
-            return;
-        }
-
-        try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                await firebase.firestore().collection('subscriptionRequests').add({
-                    companyId: tenant.activeCompanyId,
-                    companyName: tenant.activeCompanyName,
-                    driver: tenant.activeDriver,
-                    plan: plan,
-                    targetWallet: targetWallet,
-                    userWallet: userWallet,
-                    refCode: refCode,
-                    status: 'pending',
-                    timestamp: new Date().toISOString()
-                });
-            }
-        } catch(e) {}
-
-        let overlay = document.getElementById('subRenewalModalOverlay');
-        if (overlay) overlay.remove();
-
-        alert("✅ تم إرسال تفاصيل كود العملية بنجاح إلى غرفة العمليات وسحابة فايربيس. سيتم مراجعة التفعيل وتحديث الباقة في أقرب وقت.");
     };
 
     window.sendBotQuickQuery = async function(customText = null) {
@@ -1452,19 +1352,40 @@
             let searchQuery = text.replace(/(جهات الاتصال|جهات اتصال|اتصال|ابحث عن)/g, '').trim();
             botReply = await syncAndSearchPhoneContacts(searchQuery);
         }
-        else if (contextualText.includes('تجديد الاشتراك') || contextualText.includes('تجديد') || contextualText.includes('معلومات صلاحية اشتراك شركتك') || contextualText.includes('صلاحية اشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية') || contextualText.includes('تقرير الصلاحية')) {
-            window.lastBotContext = 'تجديد الاشتراك';
+        else if (contextualText.includes('معلومات صلاحية اشتراك شركتك') || contextualText.includes('صلاحية اشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية') || contextualText.includes('تقرير الصلاحية')) {
+            window.lastBotContext = 'معلومات صلاحية اشتراك شركتك';
+            let subInfo = await getCompanySubscriptionInfo();
+            
+            // إظهار التفاصيل الخاصة بالشركة فقط لمدير الحساب (admin)، بينما يظهر كارت التجديد المحمي للعامة
+            let adminDetailsHtml = '';
+            if (tenant.activeRole === 'admin') {
+                adminDetailsHtml = `
+                    <div style="background: var(--bg-color); padding: 8px; border-radius: 6px; font-size: 11px; line-height: 1.8; border: 1px solid var(--border-color); margin-bottom: 8px;">
+                        🏢 اسم الشركة: <b>${subInfo.companyName}</b><br>
+                        👤 مدير الشركة: <b>${subInfo.adminName}</b><br>
+                        📞 الهاتف: <b>${subInfo.phone}</b><br>
+                        💳 الباقة الحالية: <b>${subInfo.planName}</b> | الحالة: <b style="color:var(--accent-color);">${subInfo.status}</b><br>
+                        ⏳ تاريخ انتهاء الصلاحية: <b style="color:var(--danger-color);">${subInfo.expiryDate}</b>
+                    </div>
+                `;
+            }
+
             botReply = `
                 <div class="chat-card" style="border-right-color: var(--warning-color);">
                     <div style="font-weight: bold; color: var(--warning-color); font-size: 12px; margin-bottom: 8px;">💳 كارت الاشتراك وتجديد الخدمة</div>
+                    ${adminDetailsHtml}
                     <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-color); padding: 10px; border-radius: 8px; font-size: 11px; color: var(--text-color);">
-                        💳 لتجديد الاشتراك، يرجى التحويل على محافظنا المعتمدة أدناه ثم الضغط على زر التجديد لإدخال بيانات التحويل:<br><br>
+                        💳 لتجديد الاشتراك، يرجى التحويل على محافظنا المعتمدة أدناه ثم إبلاغ الإدارة:<br><br>
                         📱 فوري كاش: <b>01114099799</b><br>
                         📱 وي كاش (WE): <b>01554440996</b><br>
-                        <button onclick="openSubscriptionRenewalModal()" style="margin-top: 8px; background: var(--accent-color); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; font-family: 'Cairo', sans-serif; width: 100%; box-shadow: 0 4px 10px rgba(16,185,129,0.3);">💳 فتح نافذة تجديد الاشتراك الكاش</button>
+                        <button onclick="sendBotQuickQuery('إرسال طلب كود التحويل للإدارة للتجديد')" style="margin-top: 8px; background: var(--accent-color); color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold; font-family: 'Cairo', sans-serif; width: 100%;">📤 إرسال طلب كود التحويل للإدارة للتجديد</button>
                     </div>
                 </div>
             `;
+        }
+        else if (contextualText.includes('إرسال طلب كود التحويل') || contextualText.includes('طلب التجديد')) {
+            window.lastBotContext = 'طلب تجديد الاشتراك';
+            botReply = `✅ <b>تم إرسال طلب كود التحويل للإدارة بنجاح:</b><br>- تم توثيق طلب تجديد الباقة لحسابك وإرساله لغرفة العمليات والإدارة في سحابة فايربيس.`;
         }
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
@@ -1601,7 +1522,7 @@
         else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
             window.lastBotContext = 'المساعدة';
             botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini Pro):</b><br>` +
-                       `- اكتب <b>"شحناتي"</b> أو <b>"تجديد الاشتراك"</b> لاستعراض شحناتك ونافذة التجديد.<br>` +
+                       `- اكتب <b>"شحناتي"</b> أو <b>"كارت الاشتراك"</b> لاستعراض شحناتك وتفاصيل الاشتراك.<br>` +
                        `- اضغط <b>"اختبار القيادة"</b> لبدء اختبارات أمان القيادة التفاعلية للسائقين.<br>` +
                        `- اضغط <b>"تصدير الأرشيف"</b> لتنزيل نسخة احتياطية كاملة من سجلاتك.<br>` +
                        `- فعّل زر <b>"🕵️ محادثة مؤقتة"</b> لتصفح معزول لا يحفظ الرسائل في السجل.<br>` +
