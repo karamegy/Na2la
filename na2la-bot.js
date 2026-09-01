@@ -162,7 +162,6 @@
                 </div>
             </div>
 
-            <!-- شريط الأرس إي إس (RSS Ticker) - مخصص لحساب المدير فقط -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
                     🚀 أسطورة الطريق (عزل تام للشركات والمستخدمين) | مزامنة الحسابات، حجب شحنات الزوار، وربط ذكاء Google Gemini 24/7
@@ -336,12 +335,9 @@
                 let tenant = getActiveTenantContext();
                 
                 try {
-                    const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                    const driversSnap = await db.collection('drivers').get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allDrivers = await db.collection('drivers').get();
-                        realFirebaseDrivers = allDrivers.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
                         realFirebaseDrivers = [];
                     }
@@ -410,84 +406,53 @@
         }
     };
 
+    // دالة جلب بيانات الاشتراك المتوافقة تماماً مع قسم معلومات صلاحية اشتراك شركتك ومجموعة drivers
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
-            planName: 'الباقة الاحترافية (Lifetime)',
-            expiryDate: '2026-12-31',
-            status: 'active ✅ (نشط)',
-            companyName: tenant.activeCompanyName
+            companyName: tenant.activeCompanyName,
+            adminName: tenant.activeDriver || 'غير محدد',
+            phone: 'غير متوفر',
+            planName: 'monthly',
+            status: 'نشط ✅',
+            expiryDate: '2026-09-28'
         };
-        
-        try {
-            let localSubKeys = [`company_sub_${tenant.activeCompanyId}`, 'company_subscription', 'subscription_info', 'app_subscription'];
-            for (let k of localSubKeys) {
-                let localData = JSON.parse(localStorage.getItem(k) || '{}');
-                if (localData && (localData.plan || localData.package || localData.expiry || localData.subExpiry || localData.expiryDate)) {
-                    subData.planName = localData.subPlan || localData.planName || localData.package || localData.plan || subData.planName;
-                    subData.expiryDate = localData.subExpiry || localData.expiryDate || localData.expiry || localData.endDate || localData.expiresAt || subData.expiryDate;
-                    subData.status = localData.subStatus || localData.subscriptionStatus || localData.status || subData.status;
-                    return subData;
-                }
-            }
 
-            let globalCompanyKeys = ['companies', 'na2la_companies', 'saved_companies', 'app_companies_list'];
-            for (let gk of globalCompanyKeys) {
-                let compList = JSON.parse(localStorage.getItem(gk) || '[]');
-                if (Array.isArray(compList) && compList.length > 0) {
-                    let matchedComp = compList.find(c => 
-                        (c.id && c.id === tenant.activeCompanyId) || 
-                        (c.companyId && c.companyId === tenant.activeCompanyId) ||
-                        (c.name && c.name.trim() === tenant.activeCompanyName.trim()) ||
-                        (c.admin && c.admin === tenant.activeDriver)
-                    );
-                    if (matchedComp) {
-                        subData.planName = matchedComp.package || matchedComp.plan || matchedComp.subPlan || subData.planName;
-                        subData.expiryDate = matchedComp.expiry || matchedComp.expiryDate || matchedComp.subExpiry || matchedComp.endDate || subData.expiryDate;
-                        subData.status = matchedComp.status || matchedComp.subStatus || subData.status;
-                        subData.companyName = matchedComp.name || tenant.activeCompanyName;
-                        return subData;
-                    }
-                }
-            }
-        } catch(e) {}
+        // 1. التحقق من realFirebaseDrivers
+        let matchedDriver = realFirebaseDrivers.find(d => 
+            (d.name && d.name.trim() === tenant.activeDriver.trim()) || 
+            (d.companyId && d.companyId === tenant.activeCompanyId) ||
+            (d.role === 'admin' && (d.companyId === tenant.activeCompanyId || !d.companyId))
+        );
 
-        if (realFirebaseAppData && (realFirebaseAppData.package || realFirebaseAppData.expiry || realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate)) {
-            subData.planName = realFirebaseAppData.subPlan || realFirebaseAppData.planName || realFirebaseAppData.package || realFirebaseAppData.plan || subData.planName;
-            subData.expiryDate = realFirebaseAppData.subExpiry || realFirebaseAppData.expiryDate || realFirebaseAppData.expiry || realFirebaseAppData.endDate || realFirebaseAppData.expiresAt || subData.expiryDate;
-            subData.status = realFirebaseAppData.subStatus || realFirebaseAppData.subscriptionStatus || realFirebaseAppData.status || subData.status;
+        if (matchedDriver) {
+            subData.companyName = matchedDriver.companyName || matchedDriver.name || tenant.activeCompanyName;
+            subData.adminName = matchedDriver.admin || matchedDriver.manager || matchedDriver.name || tenant.activeDriver;
+            subData.phone = matchedDriver.phone || matchedDriver.mobile || 'غير متوفر';
+            subData.planName = matchedDriver.subPlan || matchedDriver.plan || matchedDriver.package || 'monthly';
+            let st = matchedDriver.subStatus || matchedDriver.status || 'active';
+            subData.status = (st === 'active' || st.includes('نشط')) ? 'نشط ✅' : 'منتهي ⚠️';
+            subData.expiryDate = matchedDriver.subExpiry || matchedDriver.expiryDate || matchedDriver.expiry || '2026-09-28';
+            return subData;
         }
 
+        // 2. الاستعلام المباشر من مجموعة drivers في فايربيس
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                let subDoc = null;
-                
-                try {
-                    let querySnap = await db.collection('companies').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
-                    if (!querySnap.empty) subDoc = querySnap.docs[0];
-                    else {
-                        let nameSnap = await db.collection('companies').where('name', '==', tenant.activeCompanyName).limit(1).get();
-                        if (!nameSnap.empty) subDoc = nameSnap.docs[0];
-                    }
-                } catch(e) {}
-
-                if (!subDoc) {
-                    try {
-                        let appSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                        if (appSnap.exists) subDoc = appSnap;
-                    } catch(e) {}
-                }
-
-                if (subDoc && (subDoc.exists || subDoc.data)) {
-                    let d = typeof subDoc.data === 'function' ? subDoc.data() : subDoc;
-                    subData.planName = d.subPlan || d.planName || d.package || d.plan || subData.planName;
-                    subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || d.endDate || d.expiresAt || subData.expiryDate;
-                    subData.status = d.subStatus || d.subscriptionStatus || d.status || subData.status;
-                    subData.companyName = d.name || tenant.activeCompanyName;
+                let drvSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                if (!drvSnap.empty) {
+                    let dDoc = drvSnap.docs[0].data();
+                    subData.companyName = dDoc.companyName || tenant.activeCompanyName;
+                    subData.adminName = dDoc.admin || dDoc.name || tenant.activeDriver;
+                    subData.phone = dDoc.phone || dDoc.mobile || 'غير متوفر';
+                    subData.planName = dDoc.subPlan || dDoc.plan || 'monthly';
+                    subData.status = (dDoc.subStatus === 'active') ? 'نشط ✅' : 'نشط ✅';
+                    subData.expiryDate = dDoc.subExpiry || dDoc.expiryDate || '2026-09-28';
+                    return subData;
                 }
             }
-        } catch(err) {}
+        } catch(e) {}
 
         return subData;
     };
@@ -856,17 +821,17 @@
         `;
         if (role === 'visitor') {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
                 <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🌐 عن نقلة</button>
             `;
         } else if (role === 'driver') {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
                 <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
             `;
         } else {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('الاشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 الاشتراك</button>
+                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
                 <button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 الأسطول</button>
             `;
         }
@@ -1271,11 +1236,23 @@
         else if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
             window.lastBotContext = 'اشتراك';
             let subInfo = await getCompanySubscriptionInfo();
-            botReply = `💳 <b>حالة اشتراك وباقة شركة [${subInfo.companyName}] (Gemini):</b><br>` +
-                       `- نوع الباقة: <b>${subInfo.planName}</b><br>` +
-                       `- حالة الترخيص: <b style="color:var(--accent-color);">${subInfo.status}</b><br>` +
-                       `- تاريخ الانتهاء: <b style="color:var(--warning-color);">${subInfo.expiryDate}</b><br>` +
-                       `- متصل سحابياً بقاعدة بيانات فايربيس ومعزول بنجاح.`;
+            botReply = `
+                <div class="chat-card" style="border-right-color: var(--warning-color);">
+                    <div style="font-weight: bold; color: var(--warning-color); font-size: 12px; margin-bottom: 8px;">📊 معلومات صلاحية اشتراك شركتك</div>
+                    <div style="background: var(--bg-color); padding: 8px; border-radius: 6px; font-size: 11px; line-height: 1.8; border: 1px solid var(--border-color);">
+                        🏢 اسم الشركة: <b>${subInfo.companyName}</b><br>
+                        👤 مدير الشركة: <b>${subInfo.adminName}</b><br>
+                        📞 الهاتف: <b>${subInfo.phone}</b><br>
+                        💳 الباقة الحالية: <b>${subInfo.planName}</b> | الحالة: <b style="color:var(--accent-color);">${subInfo.status}</b><br>
+                        ⏳ تاريخ انتهاء الصلاحية: <b style="color:var(--danger-color);">${subInfo.expiryDate}</b>
+                    </div>
+                    <div style="margin-top: 8px; background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-color); padding: 8px; border-radius: 6px; font-size: 10px; color: var(--text-color);">
+                        💳 لتجديد الاشتراك، يرجى التحويل على محافظنا المعتمدة أدناه ثم إبلاغ الإدارة أو طلب التجديد:<br>
+                        📱 فوري كاش: <b>01114099799</b><br>
+                        📱 وي كاش (WE): <b>01554440996</b>
+                    </div>
+                </div>
+            `;
         }
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
