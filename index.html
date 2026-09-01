@@ -1772,51 +1772,49 @@
         }
 
         function initRealtimeListeners() {
-    if (isListenersInitialized) return;
-    isListenersInitialized = true;
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
-    
-    collections.forEach(colName => {
-        db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
             
-            // التعديل الصحيح: السماح للماستر أدمن (المدير) برؤية جميع الشركات والأعضاء بدون فلترة ضمن جدول drivers
-            if (colName === 'drivers' && loggedInDriverName === 'المدير') {
-                appData[colName] = rawData;
-            } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
-                appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
-            } else if (currentCompanyId) {
-                appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-            } else {
-                appData[colName] = rawData;
-            }
-            
-            scheduleSmartRender();
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    // إصلاح مطابقة معرف الشركة (معالجة حساسية الأحرف بين company_main و Company_main في فايرستور)
+                    if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-            if (document.getElementById('reports-tab').classList.contains('active')) {
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-                renderCompanyAdminSubscriptionView();
-            }
-            if (document.getElementById('companies-tab').classList.contains('active')) {
-                renderCompaniesManagementTable();
-            }
-        }, error => {
-            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-        });
-    });
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
 
-    db.collection('systemSettings').doc('config').onSnapshot(doc => {
-        if (doc.exists && doc.data().newsText) {
-            appData.newsText = doc.data().newsText;
-            renderRSSTicker();
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
         }
-    });
-}
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
@@ -2062,65 +2060,65 @@
             initRealtimeListeners();
             alert('تم الاتصال بالسحابة والتحقق من الحساب بنجاح 🚀');
         }
+function setupNavigation() {
+    const nav = document.getElementById('main-nav');
+    const headerCompaniesBtn = document.getElementById('header-companies-btn');
+    const quickCompaniesBtn = document.getElementById('quick-companies-btn');
 
-        function setupNavigation() {
-            const nav = document.getElementById('main-nav');
-            const headerCompaniesBtn = document.getElementById('header-companies-btn');
-            const quickCompaniesBtn = document.getElementById('quick-companies-btn');
+    const currentDriverName = String(
+        typeof loggedInDriverName !== 'undefined' && loggedInDriverName 
+            ? loggedInDriverName 
+            : localStorage.getItem('logged_in_driver_name') || ''
+    ).trim();
 
-            const currentDriverName = String(
-                typeof loggedInDriverName !== 'undefined' && loggedInDriverName 
-                    ? loggedInDriverName 
-                    : localStorage.getItem('logged_in_driver_name') || ''
-            ).trim();
+    // التحقق الصارم: يجب أن يكون اسم المستخدم "المدير" حصرياً لإظهار الأزرار
+    const isMasterAdmin = (currentDriverName === 'المدير');
 
-            const isMasterAdmin = (currentDriverName === 'المدير');
+    if (isMasterAdmin) {
+        if(headerCompaniesBtn) headerCompaniesBtn.style.display = 'inline-block';
+        if(quickCompaniesBtn) quickCompaniesBtn.style.display = 'flex';
+    } else {
+        if(headerCompaniesBtn) headerCompaniesBtn.style.display = 'none';
+        if(quickCompaniesBtn) quickCompaniesBtn.style.display = 'none';
+    }
 
-            if (isMasterAdmin) {
-                if(headerCompaniesBtn) headerCompaniesBtn.style.display = 'inline-block';
-                if(quickCompaniesBtn) quickCompaniesBtn.style.display = 'flex';
-            } else {
-                if(headerCompaniesBtn) headerCompaniesBtn.style.display = 'none';
-                if(quickCompaniesBtn) quickCompaniesBtn.style.display = 'none';
-            }
+    if (currentUserRole === 'admin') {
+        nav.innerHTML = `
+            <button type="button" class="active" onclick="switchTab('crud-tab', this); toggleSidebar();" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>
+            
+            ${isMasterAdmin ? `
+                <button type="button" onclick="switchTab('companies-tab', this); toggleSidebar();" style="background:var(--purple); color:white;">🏢 إدارة الشركات</button>
+                <button type="button" onclick="window.location.href='Pandan2la.html?userId=' + encodeURIComponent('${currentDriverName}') + '&companyId=' + encodeURIComponent(typeof currentCompanyId !== 'undefined' ? currentCompanyId : 'company_main'); toggleSidebar();" style="background:#0f172a; color:#f59e0b; border:1px dashed #f59e0b;">🐼 إدارة باندا (Pandan2la)</button>
+                <button type="button" onclick="window.location.href='Panda.html?userId=' + encodeURIComponent('${currentDriverName}') + '&companyId=' + encodeURIComponent(typeof currentCompanyId !== 'undefined' ? currentCompanyId : 'company_main'); toggleSidebar();" style="background:#1e293b; color:#22d3ee; border:1px solid #22d3ee;">🐼 لوحة باندا الرئيسية (Panda.html)</button>
+            ` : ''}
 
-            if (currentUserRole === 'admin') {
-                nav.innerHTML = `
-                    <button type="button" class="active" onclick="switchTab('crud-tab', this); toggleSidebar();" style="background:var(--danger); color:white;">⚙️ الإدارة والتحكم</button>
-                    
-                    ${isMasterAdmin ? `
-                        <button type="button" onclick="switchTab('companies-tab', this); toggleSidebar();" style="background:var(--purple); color:white;">🏢 إدارة الشركات</button>
-                        <button type="button" onclick="window.location.href='Pandan2la.html?userId=' + encodeURIComponent('${currentDriverName}') + '&companyId=' + encodeURIComponent(typeof currentCompanyId !== 'undefined' ? currentCompanyId : 'company_main'); toggleSidebar();" style="background:#0f172a; color:#f59e0b; border:1px dashed #f59e0b;">🐼 إدارة باندا (Pandan2la)</button>
-                        <button type="button" onclick="window.location.href='Panda.html?userId=' + encodeURIComponent('${currentDriverName}') + '&companyId=' + encodeURIComponent(typeof currentCompanyId !== 'undefined' ? currentCompanyId : 'company_main'); toggleSidebar();" style="background:#1e293b; color:#22d3ee; border:1px solid #22d3ee;">🐼 لوحة باندا الرئيسية (Panda.html)</button>
-                    ` : ''}
-
-                    <button type="button" onclick="switchTab('drivers-monitor-tab', this); toggleSidebar();" style="background:var(--warning); color:#fff;">👁️ مراقبة السائقين</button>
-                    <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
-                    <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
-                    <button type="button" onclick="switchTab('consolidated-invoices-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">📑 الفواتير المجمعة</button>
-                    <button type="button" onclick="switchTab('deferred-invoices-tab', this); toggleSidebar();" style="background:#3b82f6; color:#fff;">⏳ قسم الأجل</button>
-                    <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
-                    <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 الشات والمحادثة</button>
-                    <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
-                    <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 الخزينة</button>
-                    <button type="button" onclick="switchTab('fleet-tab', this); toggleSidebar();">🚚 الأسطول والصيانة</button>
-                    <button type="button" onclick="switchTab('drivers-tab', this); toggleSidebar();">👨‍✈️ السائقون</button>
-                    <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
-                    <button type="button" onclick="switchTab('customers-tab', this); toggleSidebar();">👥 العملاء</button>
-                    <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشركات SaaS</button>
-                `;
-            } else {
-                nav.innerHTML = `
-                    <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
-                    <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 شحناتي ومهماتي</button>
-                    <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
-                    <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 غرفة المحادثة والتواصل</button>
-                    <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
-                    <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 الخزينة</button>
-                    <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
-                `;
-            }
-        }
+            <button type="button" onclick="switchTab('drivers-monitor-tab', this); toggleSidebar();" style="background:var(--warning); color:#fff;">👁️ مراقبة السائقين</button>
+            <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
+            <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
+            <button type="button" onclick="switchTab('consolidated-invoices-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">📑 الفواتير المجمعة</button>
+            <button type="button" onclick="switchTab('deferred-invoices-tab', this); toggleSidebar();" style="background:#3b82f6; color:#fff;">⏳ قسم الأجل</button>
+            <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
+            <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 الشات والمحادثة</button>
+            <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
+            <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 الخزينة</button>
+            <button type="button" onclick="switchTab('fleet-tab', this); toggleSidebar();">🚚 الأسطول والصيانة</button>
+            <button type="button" onclick="switchTab('drivers-tab', this); toggleSidebar();">👨‍✈️ السائقون</button>
+            <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
+            <button type="button" onclick="switchTab('customers-tab', this); toggleSidebar();">👥 العملاء</button>
+            <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشركات SaaS</button>
+        `;
+    } else {
+        nav.innerHTML = `
+            <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
+            <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 شحناتي ومهماتي</button>
+            <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
+            <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 غرفة المحادثة والتواصل</button>
+            <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
+            <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 الخزينة</button>
+            <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
+        `;
+    }
+}
 
         function changeAdminPinPrompt() {
             const currentPass = prompt('أدخل كلمة السر (رمز PIN) الحالية للتأكيد:');
@@ -3940,7 +3938,8 @@
                 db.collection('customers').doc(String(cust.id || cust.name)).set(cust, { merge: true });
             }
         }
-function renderCRUDTable(forceSection) {
+
+        function renderCRUDTable(forceSection) {
             const section = forceSection || document.getElementById('crud-section-select').value;
             const headersRow = document.getElementById('crud-table-headers');
             const tbody = document.getElementById('crud-table-body');
