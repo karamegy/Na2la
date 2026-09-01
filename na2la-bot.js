@@ -411,6 +411,7 @@
         }
     };
 
+    // التحديث المحسّن لدالة جلب بيانات الاشتراك مع معالجة المرونة في المعرفات والبحث البديل
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
@@ -423,15 +424,25 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                const subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                if (subDoc.exists) {
-                    let d = subDoc.data();
+                let subDoc = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                
+                if (!subDoc.exists && tenant.activeCompanyId) {
+                    const querySnap = await db.collection('appData').where('companyId', '==', tenant.activeCompanyId).limit(1).get();
+                    if (!querySnap.empty) {
+                        subDoc = querySnap.docs[0];
+                    }
+                }
+
+                if (subDoc && subDoc.exists) {
+                    let d = subDoc.data ? subDoc.data() : subDoc;
                     subData.planName = d.subPlan || d.planName || d.package || subData.planName;
                     subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || subData.expiryDate;
-                    subData.status = d.subStatus || d.status || d.status || subData.status;
+                    subData.status = d.subStatus || d.status || subData.status;
                 }
             }
-        } catch(e) {}
+        } catch(err) {
+            console.error("خطأ في جلب بيانات الاشتراك:", err);
+        }
 
         return subData;
     };
