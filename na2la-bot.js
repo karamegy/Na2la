@@ -406,7 +406,6 @@
         }
     };
 
-    // دالة جلب بيانات الاشتراك المُحسنة والمصححة لكل حساب وشركة بدقة من مجموعة drivers في فايربيس
     window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
         let subData = {
@@ -422,7 +421,6 @@
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
 
-                // 1. البحث المباشر عن مستند السائق/المدير بالاسم النشط في مجموعة drivers
                 if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم') {
                     try {
                         let userDoc = await db.collection('drivers').doc(tenant.activeDriver).get();
@@ -440,7 +438,6 @@
                     } catch(err) {}
                 }
 
-                // 2. الاستعلام عبر companyId في مجموعة drivers
                 try {
                     let querySnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!querySnap.empty) {
@@ -458,7 +455,6 @@
             }
         } catch(e) {}
 
-        // 3. التحقق الاحتياطي من realFirebaseDrivers المحملة مسبقاً
         let matchedDriver = realFirebaseDrivers.find(d => 
             (d.name && d.name.trim().toLowerCase() === tenant.activeDriver.toLowerCase()) || 
             (d.companyId && d.companyId === tenant.activeCompanyId)
@@ -842,17 +838,17 @@
         `;
         if (role === 'visitor') {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
+                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 9px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 تقرير الصلاحية</button>
                 <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🌐 عن نقلة</button>
             `;
         } else if (role === 'driver') {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
+                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 9px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 تقرير الصلاحية</button>
                 <button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🚨 طوارئ SOS</button>
             `;
         } else {
             container.innerHTML = commonButtons + `
-                <button onclick="sendBotQuickQuery('اشتراك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 اشتراكات شركتك</button>
+                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 9px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 تقرير الصلاحية</button>
                 <button onclick="sendBotQuickQuery('إحصائيات شركتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📊 الأسطول</button>
             `;
         }
@@ -1254,8 +1250,8 @@
             let searchQuery = text.replace(/(جهات الاتصال|جهات اتصال|اتصال|ابحث عن)/g, '').trim();
             botReply = await syncAndSearchPhoneContacts(searchQuery);
         }
-        else if (contextualText.includes('اشتراك') || contextualText.includes('الاشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
-            window.lastBotContext = 'اشتراك';
+        else if (contextualText.includes('معلومات صلاحية اشتراك شركتك') || contextualText.includes('صلاحية اشتراك') || contextualText.includes('الباقة') || contextualText.includes('الصلاحية')) {
+            window.lastBotContext = 'معلومات صلاحية اشتراك شركتك';
             let subInfo = await getCompanySubscriptionInfo();
             botReply = `
                 <div class="chat-card" style="border-right-color: var(--warning-color);">
@@ -1270,10 +1266,15 @@
                     <div style="margin-top: 8px; background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-color); padding: 8px; border-radius: 6px; font-size: 10px; color: var(--text-color);">
                         💳 لتجديد الاشتراك، يرجى التحويل على محافظنا المعتمدة أدناه ثم إبلاغ الإدارة أو طلب التجديد:<br>
                         📱 فوري كاش: <b>01114099799</b><br>
-                        📱 وي كاش (WE): <b>01554440996</b>
+                        📱 وي كاش (WE): <b>01554440996</b><br>
+                        <button onclick="sendBotQuickQuery('إرسال طلب كود التحويل للإدارة للتجديد')" style="margin-top: 6px; background: var(--accent-color); color: #fff; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: bold; font-family: 'Cairo', sans-serif;">📤 إرسال طلب كود التحويل للإدارة للتجديد</button>
                     </div>
                 </div>
             `;
+        }
+        else if (contextualText.includes('إرسال طلب كود التحويل') || contextualText.includes('طلب التجديد')) {
+            window.lastBotContext = 'طلب تجديد الاشتراك';
+            botReply = `✅ <b>تم إرسال طلب كود التحويل للإدارة بنجاح:</b><br>- تم توثيق طلب تجديد الباقة لشركة <b>${tenant.activeCompanyName}</b> وإرساله لغرفة العمليات والإدارة في سحابة فايربيس.`;
         }
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
