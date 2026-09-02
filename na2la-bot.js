@@ -187,7 +187,7 @@
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 Gemini Pro (إدارة متطورة سحابياً)</span>
+                    <span id="botUserRoleBadge">🤖 Gemini Pro (مزامنة سحابية حقيقية 100%)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <div style="position: relative; display: inline-block;">
@@ -211,7 +211,7 @@
             <!-- شريط الإعلانات والأخبار -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 6px 12px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 20s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | إحصائيات فورية للخزينة، إيرادات الشحنات، والفواتير المجمعة سحابياً 100% بدون أي تخزين محلي
+                    🚀 مزامنة سحابية حقيقية 100% | تحديثات فورية للخزينة، إيرادات الشحنات، والفواتير المجمعة من قاعدة بيانات فايربيس مباشرة بدون أي قيم افتراضية
                 </div>
             </div>
 
@@ -240,7 +240,7 @@
             <!-- منطقة الرسائل -->
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 12px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المطور لإدارة الشحنات، الفواتير المجمعة، الخزينة، والإيرادات سحابياً.<br>- اطلب تقرير الخزنة، الفواتير، أو الإيرادات فوراً.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المطور للمزامنة الحقيقية 100% مع قاعدة بيانات فايربيس.<br>- جميع الأرقام والشحنات والفواتير مستمدة مباشرة من حذفك وتعديلاتك الفعلية بدون أي قيم افتراضية.
                 </div>
             </div>
 
@@ -502,7 +502,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    // --- جلب البيانات سحابياً بالكامل (شحنات، فواتير مجمعة، خزينة، مصروفات، عملاء) ---
+    // --- جلب البيانات الحقيقية من فايربيس 100% بدون أي قيم وهمية ---
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -515,60 +515,66 @@
                 } catch(e) { realFirebaseDrivers = []; }
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
+                    const shipmentsSnap = await db.collection('shipments').get();
                     if (!shipmentsSnap.empty) {
-                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allShipments = await db.collection('shipments').get();
-                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        let allS = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        // تصفية حقيقية مطابقة للشركة أو عامة بدون افتراضات وهمية
+                        realFirebaseShipments = allS.filter(s => {
+                            let sComp = s.companyId || s.company || '';
+                            return !sComp || sComp === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main';
+                        });
                     } else {
                         realFirebaseShipments = [];
                     }
                 } catch(e) { realFirebaseShipments = []; }
 
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
+                    const invoicesSnap = await db.collection('deferredInvoices').get();
                     if (!invoicesSnap.empty) {
-                        realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allInvoices = await db.collection('deferredInvoices').get();
-                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        let allInv = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        realFirebaseDeferredInvoices = allInv.filter(inv => {
+                            let iComp = inv.companyId || inv.company || '';
+                            return !iComp || iComp === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main';
+                        });
                     } else {
                         realFirebaseDeferredInvoices = [];
                     }
                 } catch(e) { realFirebaseDeferredInvoices = []; }
 
                 try {
-                    const consSnap = await db.collection('consolidatedInvoices').where('companyId', '==', tenant.activeCompanyId).get();
+                    const consSnap = await db.collection('consolidatedInvoices').get();
                     if (!consSnap.empty) {
-                        realFirebaseConsolidatedInvoices = consSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allCons = await db.collection('consolidatedInvoices').get();
-                        realFirebaseConsolidatedInvoices = allCons.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        let allCons = consSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        realFirebaseConsolidatedInvoices = allCons.filter(inv => {
+                            let iComp = inv.companyId || inv.company || '';
+                            return !iComp || iComp === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main';
+                        });
                     } else {
                         realFirebaseConsolidatedInvoices = [];
                     }
                 } catch(e) { realFirebaseConsolidatedInvoices = []; }
 
                 try {
-                    const treasurySnap = await db.collection('treasury').where('companyId', '==', tenant.activeCompanyId).get();
+                    const treasurySnap = await db.collection('treasury').get();
                     if (!treasurySnap.empty) {
-                        realFirebaseTreasury = treasurySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allTreasury = await db.collection('treasury').get();
-                        realFirebaseTreasury = allTreasury.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        let allT = treasurySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        realFirebaseTreasury = allT.filter(t => {
+                            let tComp = t.companyId || t.company || '';
+                            return !tComp || tComp === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main';
+                        });
                     } else {
                         realFirebaseTreasury = [];
                     }
                 } catch(e) { realFirebaseTreasury = []; }
 
                 try {
-                    const expensesSnap = await db.collection('expenses').where('companyId', '==', tenant.activeCompanyId).get();
+                    const expensesSnap = await db.collection('expenses').get();
                     if (!expensesSnap.empty) {
-                        realFirebaseExpenses = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allExpenses = await db.collection('expenses').get();
-                        realFirebaseExpenses = allExpenses.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        let allExp = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        realFirebaseExpenses = allExp.filter(e => {
+                            let eComp = e.companyId || e.company || '';
+                            return !eComp || eComp === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main';
+                        });
                     } else {
                         realFirebaseExpenses = [];
                     }
@@ -577,7 +583,7 @@
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
                     realFirebaseAppData = appDataSnap.exists ? (appDataSnap.data() || {}) : {};
-                } catch(e) {}
+                } catch(e) { realFirebaseAppData = {}; }
             }
         } catch(e) {}
     };
@@ -657,20 +663,11 @@
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') return [];
 
-        let allShipments = [];
-        if (realFirebaseShipments.length > 0) {
-            allShipments = realFirebaseShipments;
-        } else if (window.appData && Array.isArray(window.appData.shipments)) {
-            allShipments = window.appData.shipments;
-        } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
-            allShipments = window.Na2laApp.shipments;
-        } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
-            allShipments = window.shipments;
-        }
+        let allShipments = realFirebaseShipments; // اعتماد البيانات من فايربيس حصرياً بدون أي مصادر محلية وهمية
 
         let companyFiltered = allShipments.filter(s => {
-            let sCompanyId = s.companyId || 'company_main';
-            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
+            let sCompanyId = s.companyId || s.company || 'company_main';
+            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase() || tenant.activeCompanyId === 'company_main';
         });
 
         if (tenant.activeRole === 'admin') {
@@ -691,7 +688,7 @@
         return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
     };
 
-    // --- حساب الإيرادات والخزينة والمصروفات والأرباح والفواتير المجمعة ---
+    // --- حساب العمليات الحقيقية تماماً بدون أي قيم افتراضية ---
     window.getCompanyFinancials = function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') {
@@ -702,11 +699,11 @@
         if (realFirebaseTreasury && realFirebaseTreasury.length > 0) {
             treasurySum = realFirebaseTreasury.reduce((sum, t) => {
                 let amt = parseFloat(String(t.amount || 0).replace(/[^\d.-]/g, '')) || 0;
-                return t.type === 'in' || t.direction === 'in' || t.action === 'deposit' ? sum + amt : sum - amt;
+                return (t.type === 'in' || t.direction === 'in' || t.action === 'deposit' || !t.type) ? sum + amt : sum - amt;
             }, 0);
         } else {
-            let rawTreasury = realFirebaseAppData.treasury || '500';
-            treasurySum = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 500;
+            let rawTreasury = realFirebaseAppData.treasury || '0';
+            treasurySum = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 0;
         }
 
         let expensesSum = 0;
@@ -721,7 +718,7 @@
         }
 
         let deferredSum = 0;
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main');
         companyInvoices.forEach(inv => {
             if (inv.status !== 'paid') {
                 let rem = parseFloat(String(inv.remainingAmount || inv.totalAmount || inv.amount || 0).replace(/[^\d.-]/g, '')) || 0;
@@ -729,7 +726,7 @@
             }
         });
 
-        let consolidatedInvoices = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let consolidatedInvoices = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main');
 
         let shipments = getIsolatedUserShipments();
         let totalRevenueVal = shipments.reduce((sum, s) => {
@@ -737,10 +734,7 @@
             return sum + val;
         }, 0);
 
-        if (totalRevenueVal === 0) {
-            totalRevenueVal = 20496; // قيمة مطابقة للوحة التحكم الافتراضية
-        }
-
+        // إزالة الرقم الوهمي 20496 تماماً لتكون الإيرادات 0 إذا تم حذف الشحنات
         let netProfitVal = totalRevenueVal - expensesSum;
 
         return {
@@ -871,7 +865,7 @@
                         <tr>
                             <td>1</td>
                             <td>${invoice?.description || invoice?.notes || 'شحنات وخدمات مجمعة ومعتمدة للعميل'}</td>
-                            <td><b>${invoice?.totalAmount || invoice?.amount || '20496'} ج.م</b></td>
+                            <td><b>${invoice?.totalAmount || invoice?.amount || '0'} ج.م</b></td>
                         </tr>
                     </tbody>
                 </table>
@@ -1271,7 +1265,7 @@
 
     window.renderShipmentCardInChat = function(shipment) {
         let sId = shipment.id || shipment.shipmentNumber || 'معتمدة';
-        let priceVal = shipment.price || shipment.cost || '20496 ج.م';
+        let priceVal = shipment.price || shipment.cost || '0 ج.م';
         return `
             <div class="chat-card">
                 <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${sId}</div>
@@ -1464,8 +1458,8 @@
             if (tenant.activeRole === 'visitor') {
                 botReply = `🧾 قسم الفواتير مخصص للمستخدمين والعملاء المسجلين فقط.`;
             } else {
-                let companyConsolidated = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-                let companyDeferred = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+                let companyConsolidated = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main');
+                let companyDeferred = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId || tenant.activeCompanyId === 'company_main');
                 let allInvoices = companyConsolidated.concat(companyDeferred);
 
                 if (allInvoices.length === 0) {
@@ -1475,7 +1469,7 @@
                             <div style="font-size: 11px; color: var(--text-color);">
                                 - عدد الفواتير المسجلة سحابياً: <b>0 فاتورة</b><br>
                                 - الديون والآجل المستحق: <b style="color:var(--warning-color);">${financials.deferredDebts}</b><br>
-                                <i>يمكنك إنشاء وتعديل الفواتير المجمعة من قسم الفواتير بالمنصة.</i>
+                                <i>لا توجد فواتير معلقة حالياً بعد التحديث والحذف.</i>
                             </div>
                         </div>
                     `;
@@ -1486,7 +1480,7 @@
                     allInvoices.slice(0, 5).forEach(inv => {
                         let invNum = inv.invoiceNumber || inv.id || 'فاتورة';
                         let client = inv.clientName || inv.customer || 'عميل عام';
-                        let amt = inv.totalAmount || inv.amount || '20496';
+                        let amt = inv.totalAmount || inv.amount || '0';
                         botReply += `<tr><td><b>${invNum}</b></td><td>${client}</td><td>${amt} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:3px 6px; border-radius:6px; cursor:pointer; font-size:9px;">📄 طباعة PDF</button></td></tr>`;
                     });
                     botReply += `</table></div>`;
