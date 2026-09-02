@@ -505,6 +505,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
+    // [تم التصحيح والتحسين]: جلب تلقائي لكافة المستندات دون قيود مؤشر الفلترة الصارمة لتفادي أخطاء الفراغ أو المؤشرات
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -513,39 +514,21 @@
                 
                 try {
                     const driversSnap = await db.collection('drivers').get();
-                    if (!driversSnap.empty) {
-                        realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseDrivers = [];
-                    }
+                    realFirebaseDrivers = driversSnap.empty ? [] : driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseDrivers = [];
                 }
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
-                    if (!shipmentsSnap.empty) {
-                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allShipments = await db.collection('shipments').get();
-                        realFirebaseShipments = allShipments.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseShipments = [];
-                    }
+                    const shipmentsSnap = await db.collection('shipments').get();
+                    realFirebaseShipments = shipmentsSnap.empty ? [] : shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseShipments = [];
                 }
 
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
-                    if (!invoicesSnap.empty) {
-                        realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
-                        const allInvoices = await db.collection('deferredInvoices').get();
-                        realFirebaseDeferredInvoices = allInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseDeferredInvoices = [];
-                    }
+                    const invoicesSnap = await db.collection('deferredInvoices').get();
+                    realFirebaseDeferredInvoices = invoicesSnap.empty ? [] : invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseDeferredInvoices = [];
                 }
@@ -646,14 +629,14 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                const snap = await db.collection('drivers').get();
                 fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             }
         } catch(e) {}
         if (fleet.length === 0 && realFirebaseDrivers.length > 0) {
-            fleet = realFirebaseDrivers.filter(d => !d.companyId || d.companyId === tenant.activeCompanyId);
+            fleet = realFirebaseDrivers;
         }
-        return fleet;
+        return fleet.filter(d => !d.companyId || d.companyId === tenant.activeCompanyId || tenant.activeRole === 'admin');
     };
 
     window.getIsolatedUserShipments = function() {
@@ -688,7 +671,7 @@
 
         let companyFiltered = allShipments.filter(s => {
             let sCompanyId = s.companyId || 'company_main';
-            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
+            return tenant.activeRole === 'admin' || sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
         });
 
         if (tenant.activeRole === 'admin') {
@@ -721,7 +704,7 @@
         let expensesTotal = parseNumericCurrency(rawExpenses);
         
         let shipments = getIsolatedUserShipments();
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => tenant.activeRole === 'admin' || !inv.companyId || inv.companyId === tenant.activeCompanyId);
         
         return { treasuryBalance, expensesTotal, invoicesCount: companyInvoices.length, shipmentsCount: shipments.length };
     };
@@ -1433,7 +1416,7 @@
                 botReply = `🧾 قسم الفواتير مخصص للمستخدمين والعملاء المسجلين فقط.`;
             } else {
                 let searchTerm = text.replace(/(ابحث عن|بحث|فاتورة|فواتير|مجمعة|آجل)/g, '').trim();
-                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => tenant.activeRole === 'admin' || !inv.companyId || inv.companyId === tenant.activeCompanyId);
                 
                 if (searchTerm) {
                     companyInvoices = companyInvoices.filter(inv => 
