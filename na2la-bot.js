@@ -1,4 +1,15 @@
 (function() {
+    // تنظيف شامل لأي نسخ قديمة، عناصر DOM، وتايمر سابقة لمنع التكرار
+    ['na2laBotRootContainer', 'na2laBot', 'na2laBotModal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    });
+    document.querySelectorAll('#na2laBotStyles, style[data-na2la-bot]').forEach(el => el.remove());
+    if (window._na2laBotInterval) {
+        clearInterval(window._na2laBotInterval);
+        window._na2laBotInterval = null;
+    }
+
     if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         firebase.initializeApp({
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -10,18 +21,9 @@
         });
     }
 
-    const existingContainer = document.getElementById('na2laBotRootContainer');
-    if (existingContainer) existingContainer.remove();
-
-    window.botMemoryState = {
-        dutyStatus: 'active',
-        theme: 'default',
-        chatHistories: {},
-        contacts: [],
-        expensesTotal: 0
-    };
-
     const styleEl = document.createElement('style');
+    styleEl.id = 'na2laBotStyles';
+    styleEl.setAttribute('data-na2la-bot', 'true');
     styleEl.innerHTML = `
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
         
@@ -478,21 +480,26 @@
     };
 
     window.getActiveTenantContext = function() {
-        let rawUser = window.loggedInDriverName || window.currentUser?.name || window.currentUser || window.logged_in_driver_name || null;
-        let activeRole = window.currentUserRole || window.currentUser?.role || 'visitor';
-        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || 'company_main';
-        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || 'أسطورة الطريق الرئيسية';
+        let rawUser = window.loggedInDriverName || window.currentUser?.name || window.currentUser || window.logged_in_driver_name || window.appData?.currentUser || localStorage.getItem('currentUser') || localStorage.getItem('loggedUser') || null;
+        let activeRole = window.currentUserRole || window.currentUser?.role || window.appData?.currentUserRole || localStorage.getItem('userRole') || 'visitor';
+        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || window.appData?.companyId || localStorage.getItem('companyId') || 'company_main';
+        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || window.appData?.companyName || localStorage.getItem('companyName') || 'أسطورة الطريق الرئيسية';
 
         if (!rawUser || activeRole === 'visitor' || rawUser === 'زائر كريم') {
-            return {
-                activeDriver: 'زائر كريم',
-                activeCompanyId: activeCompanyId || 'guest_company',
-                activeCompanyName: activeCompanyName || 'زائر غير مسجل',
-                activeRole: 'visitor'
-            };
+            if (window.appData && window.appData.adminName) {
+                rawUser = window.appData.adminName;
+                activeRole = 'admin';
+            } else {
+                return {
+                    activeDriver: 'زائر كريم',
+                    activeCompanyId: activeCompanyId || 'company_main',
+                    activeCompanyName: activeCompanyName || 'زائر غير مسجل',
+                    activeRole: 'visitor'
+                };
+            }
         }
 
-        let activeDriver = rawUser;
+        let activeDriver = typeof rawUser === 'object' ? (rawUser.name || rawUser.title || 'المدير') : String(rawUser);
         if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole.includes('مدير')) {
             activeRole = "admin";
             if (!activeCompanyId) activeCompanyId = 'company_main';
@@ -555,7 +562,6 @@
             allShipments = realFirebaseShipments;
         }
 
-        // العزل التام للشركات
         let companyFiltered = allShipments.filter(s => {
             let sCompanyId = s.companyId || 'company_main';
             let activeComp = tenant.activeCompanyId || 'company_main';
@@ -566,7 +572,6 @@
             return companyFiltered;
         }
 
-        // عزل السائق الحسابي بدقة
         return companyFiltered.filter(s => {
             let matchesUser = (s.assignedDriver === tenant.activeDriver || s.driver === tenant.activeDriver || s.name === tenant.activeDriver);
             return matchesUser;
@@ -991,7 +996,9 @@
     window.addEventListener('na2laDataUpdated', () => {
         fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
     });
-    setInterval(() => {
+    
+    // تسجيل الفاصل الزمني (Interval) ليمكن حذفه عند إعادة الحقن
+    window._na2laBotInterval = setInterval(() => {
         fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
     }, 15000);
 
