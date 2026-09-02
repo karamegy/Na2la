@@ -2866,12 +2866,30 @@
             });
         }
 
-        function printConsolidatedInvoice(id) {
+                async function printConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
-            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
-            if(!inv) return;
+            
+            // 1. البحث في المصفوفة المحلية أولاً
+            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id) || String(i.id).trim() === String(id).trim());
+            
+            // 2. إذا لم يتم العثور عليها محلياً، جلبها مباشرة من Firestore كاحتياطي فوري
+            if (!inv) {
+                try {
+                    const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
+                    if (docSnap.exists) {
+                        inv = { id: docSnap.id, ...docSnap.data() };
+                    }
+                } catch (err) {
+                    console.error("خطأ أثناء جلب الفاتورة احتياطياً:", err);
+                }
+            }
 
-            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds.includes(String(s.id)));
+            if (!inv) {
+                alert('عذراً، لم يتم العثور على بيانات الفاتورة المطلوبة');
+                return;
+            }
+
+            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.includes(String(s.id)));
             let rowsHtml = '';
             matchingShipments.forEach((s, idx) => {
                 rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
@@ -2893,21 +2911,34 @@
                 <body>
                     <div class="header">
                         <h2>🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                        <p>رقم الفاتورة: #${inv.id} | التاريخ: ${inv.date}</p>
+                        <p>رقم الفاتورة: #${inv.id} | التاريخ: ${inv.date || '-'}</p>
                     </div>
-                    <p><strong>اسم العميل / الشركة:</strong> ${inv.client}</p>
+                    <p><strong>اسم العميل / الشركة:</strong> ${inv.client || '-'}</p>
                     <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد ملاحظات'}</p>
                     <table>
                         <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
-                    <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${inv.total} ج.م</h3>
+                    <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${inv.total || 0} ج.م</h3>
                 </body>
                 </html>
             `);
             win.document.close();
             setTimeout(() => win.print(), 300);
         }
+
+        async function deleteConsolidatedInvoice(id) {
+            if (currentUserRole !== 'admin') return;
+            if (confirm('هل أنت متأكد من حذف هذه الفاتورة المجمعة؟')) {
+                try {
+                    await db.collection('consolidatedInvoices').doc(String(id)).delete();
+                    alert('تم حذف الفاتورة المجمعة بنجاح 🗑️');
+                } catch (err) {
+                    alert('حدث خطأ أثناء الحذف: ' + err.message);
+                }
+            }
+        }
+
 
         function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
