@@ -27,7 +27,6 @@
             --border-color: #334155;
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
-            --purple-color: #8b5cf6;
             --shadow-3d: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
             font-family: 'Cairo', sans-serif !important;
         }
@@ -119,25 +118,6 @@
             color: #ffffff;
             font-weight: bold;
         }
-        .quiz-option-btn {
-            display: block;
-            width: 100%;
-            text-align: right;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 6px 10px;
-            border-radius: 6px;
-            margin-top: 4px;
-            cursor: pointer;
-            font-size: 10px;
-            font-family: 'Cairo', sans-serif;
-            transition: background 0.2s;
-        }
-        .quiz-option-btn:hover {
-            background: var(--primary-color);
-            color: #fff;
-        }
         .typing-dots span {
             height: 6px; width: 6px; float: left; margin: 0 2px;
             background-color: var(--text-color); border-radius: 50%;
@@ -155,13 +135,13 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي الموحد لمنصة نقلة">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 30px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي لمنصة نقلة">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 100px; right: 20px; width: 420px; max-width: 95vw; height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الموحد (عزل تام وسحابي 13.0)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي (عزل تام للشركات)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -184,16 +164,14 @@
 
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق (الإصدار الموحد النهائي 13.0) | عزل الشركات التام، مزامنة فايربيس السحابية الشاملة، وربط ذكاء Google Gemini 24/7
+                    🚀 أسطورة الطريق (عزل تام للشركات والمستخدمين) | مزامنة الحسابات، حجب شحنات الزوار، وربط ذكاء Google Gemini 24/7
                 </div>
             </div>
 
             <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px;">
-                <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة لا تحفظ في السجل">🕵️ محادثة مؤقتة</button>
+                <div style="display: flex; gap: 3px;">
                     <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
                     <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
-                    <button onclick="exportChatArchiveData()" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="تصدير الأرشيف الكامل">📤 تصدير</button>
                     <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
                 </div>
                 <div>
@@ -205,28 +183,22 @@
                 </div>
             </div>
 
-            <div id="tempChatAlertBanner" style="display: none; background: rgba(168, 85, 247, 0.2); border-bottom: 1px solid #a855f7; color: #d8b4fe; padding: 4px 10px; font-size: 10px; text-align: center; font-weight: bold;">
-                🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة): لن يتم حفظ هذه المحادثة في الذاكرة أو فايربيس.
-            </div>
-
             <div id="na2laBotMessages" style="flex: 1; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini الموحد (الإصدار 13.0)</b>.<br>- تم تفعيل العزل التام للشركات، المزامنة السحابية الشاملة بـ 7 مجموعات، وأتمتة المصروفات.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini</b> المدمج داخل منصة <b>أسطورة الطريق</b>.<br>- تم تفعيل عزل الحسابات والشركات بدقة تامة وحجب شحنات الزوار عن غير المسجلين.
                 </div>
             </div>
 
             <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color);"></div>
 
-            <!-- شريط الكتابة والمدخلات الكامل -->
+            <!-- شريط الكتابة المدخل والإرسال المعدل بدقة -->
             <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center; position: relative;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
-                <input type="file" id="importArchiveFileInput" accept=".json" style="display: none;" onchange="importChatArchiveData(this)">
-                
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 34px; height: 34px; min-width: 34px; border-radius: 50%; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;">📎</button>
                 
                 <div style="position: relative; flex: 1; display: flex; align-items: center;">
                     <span style="position: absolute; right: 10px; color: var(--primary-color); font-size: 12px; pointer-events: none;">✍️</span>
-                    <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، صرفت 200 بنزين، أو ابحث..." style="width: 100%; margin: 0; padding: 7px 28px 7px 10px; font-size: 11px; border-radius: 20px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                    <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، ابحث..." style="width: 100%; margin: 0; padding: 7px 28px 7px 10px; font-size: 11px; border-radius: 20px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
                 </div>
 
                 <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 34px; height: 34px; min-width: 34px; border-radius: 50%; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d);">🎤</button>
@@ -295,7 +267,6 @@
     window.realFirebaseCustomers = [];
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
-    window.isTempChatActive = false;
 
     const roadWisdoms = [
         "💡 **نصيحة قيادة سريعة (Gemini):** احرص دائماً على فحص ضغط الإطارات ومستوى الزيت قبل التحرك في الرحلات الطويلة لتجنب الأعطال المفاجئة.",
@@ -338,68 +309,6 @@
         `;
     };
 
-    window.toggleTemporaryChatMode = function() {
-        window.isTempChatActive = !window.isTempChatActive;
-        let btn = document.getElementById('botTempChatBtn');
-        let banner = document.getElementById('tempChatAlertBanner');
-        if (btn) {
-            btn.style.background = window.isTempChatActive ? "var(--purple-color)" : "var(--card-bg)";
-            btn.style.color = window.isTempChatActive ? "#fff" : "#a855f7";
-            btn.innerText = window.isTempChatActive ? "🕵️ مؤقت: مفعل" : "🕵️ محادثة مؤقتة";
-        }
-        if (banner) {
-            banner.style.display = window.isTempChatActive ? "block" : "none";
-        }
-        alert(window.isTempChatActive ? "تم تفعيل وضع المحادثة المؤقتة (Incognito Mode). لن يتم حفظ الرسائل القادمة في السجل." : "تم إلغاء وضع المحادثة المؤقتة. عادت الرسائل للحفظ التلقائي في السجل.");
-    };
-
-    window.exportChatArchiveData = function() {
-        let tenant = getActiveTenantContext();
-        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
-        let chatHistory = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        
-        let exportBundle = {
-            version: "13.0-PRO-UNIFIED",
-            tenant: tenant,
-            exportDate: new Date().toISOString(),
-            chatHistory: chatHistory,
-            appDataBackup: window.appData || {}
-        };
-
-        let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportBundle, null, 2));
-        let downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `Na2la_Archive_${tenant.activeCompanyId}_${Date.now()}.json`);
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-        alert("✅ تم تصدير واستخراج أرشيف السجلات والمحادثات بنجاح (Make the Switch Data Zip).");
-    };
-
-    window.importChatArchiveData = function(input) {
-        if (input.files && input.files[0]) {
-            let file = input.files[0];
-            let reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    let importedData = JSON.parse(e.target.result);
-                    if (importedData && importedData.chatHistory) {
-                        let tenant = getActiveTenantContext();
-                        let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
-                        localStorage.setItem(storageKey, JSON.stringify(importedData.chatHistory));
-                        loadChatHistory();
-                        alert("✅ تم استيراد ونقل الأرشيف بنجاح وتحديث المحادثة.");
-                    } else {
-                        alert("⚠️ تنسيق الملف غير صحيح.");
-                    }
-                } catch(err) {
-                    alert("❌ حدث خطأ أثناء قراءة ملف الأرشيف.");
-                }
-            };
-            reader.readAsText(file);
-        }
-    };
-
     window.getActiveTenantContext = function() {
         let rawUser = window.loggedInDriverName || window.currentUser?.name || window.currentUser || window.logged_in_driver_name || localStorage.getItem('logged_in_driver_name') || localStorage.getItem('na2la_current_user_identifier') || localStorage.getItem('current_user_name') || null;
         
@@ -430,7 +339,6 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    /* المزامنة السحابية الشاملة لـ 7 مجموعات في فايربيس (نسخة الإصدار 13.0) */
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -584,7 +492,7 @@
         return fleet;
     };
 
-    /* الحساب المالي الدقيق والمعزول تماماً للشركة (نسخة الإصدار 13.0) */
+    /* الحساب المالي المباشر والدقيق للشحنات، الخزينة، الديون، وصافي الأرباح بالربط التام مع index.html */
     window.getCompanyFinancials = function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') {
@@ -610,10 +518,10 @@
 
         let filterComp = (arr) => {
             if (!arr || !Array.isArray(arr)) return [];
-            return arr.filter(item => {
-                let itemComp = item.companyId || 'company_main';
-                return itemComp.toString().trim().toLowerCase() === tenant.activeCompanyId.toString().trim().toLowerCase();
-            });
+            if (tenant.activeDriver === 'المدير' || (tenant.activeRole === 'admin' && (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main'))) {
+                return arr;
+            }
+            return arr.filter(item => !item.companyId || item.companyId === tenant.activeCompanyId || (item.companyId && item.companyId.toLowerCase() === tenant.activeCompanyId.toLowerCase()));
         };
 
         let fShipments = filterComp(shipments);
@@ -630,16 +538,8 @@
         let revNum = fShipments.reduce((sum, s) => sum + Number(s.price || s.cost || 0), 0);
         let expNum = fExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         let netNum = revNum - expNum;
-
-        let cashNum = 0;
-        if (fTreasury.length > 0) {
-            cashNum = fTreasury.reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
-        } else if (appData.treasuryBalance !== undefined) {
-            cashNum = Number(appData.treasuryBalance || 0);
-        } else {
-            cashNum = netNum;
-        }
-
+        let cashNum = fTreasury.reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
+        
         let defNum = fDeferred.reduce((sum, inv) => inv.status !== 'paid' ? sum + Number(inv.remainingAmount || inv.totalAmount || 0) : sum, 0);
         let custDebtNum = fCustomers.reduce((sum, c) => sum + Number(c.debt || 0), 0);
         let debtsNum = defNum + custDebtNum;
@@ -700,7 +600,7 @@
             <body>
                 <div class="header">
                     <h2>تقرير الخزنة والمالية - شركة ${report.companyName}</h2>
-                    <p>صادر من منصة أسطورة الطريق (الإصدار 13.0) بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
+                    <p>صادر من منصة أسطورة الطريق بواسطة نموذج Gemini بتاريخ: ${new Date().toLocaleDateString('ar-EG')}</p>
                 </div>
                 <table>
                     <thead>
@@ -831,8 +731,9 @@
         }
 
         let companyFiltered = allShipments.filter(s => {
+            if (tenant.activeDriver === 'المدير' || (tenant.activeRole === 'admin' && tenant.activeCompanyId === 'company_main')) return true;
             let sCompanyId = s.companyId || 'company_main';
-            return sCompanyId.toString().trim().toLowerCase() === tenant.activeCompanyId.toString().trim().toLowerCase();
+            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
         });
 
         if (tenant.activeRole === 'admin') {
@@ -1117,7 +1018,6 @@
     };
 
     window.saveChatHistory = function(sender, htmlContent) {
-        if (window.isTempChatActive) return;
         let tenant = getActiveTenantContext();
         let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -1230,11 +1130,11 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                let querySnap = await db.collection('shipments').where('shipmentNumber', '==', shipmentId).get();
+                let querySnap = await db.collection('shipments').where('id', '==', String(shipmentId)).get();
                 if (!querySnap.empty) {
                     await querySnap.docs[0].ref.update({ status: newStatus });
                 } else {
-                    await db.collection('shipments').doc(shipmentId).update({ status: newStatus }).catch(async () => {});
+                    await db.collection('shipments').doc(String(shipmentId)).update({ status: newStatus }).catch(async () => {});
                 }
             }
             alert(`تم تحديث حالة الشحنة (${shipmentId}) إلى: ${newStatus} بنجاح.`);
@@ -1249,12 +1149,12 @@
         let sId = shipment.id || shipment.shipmentNumber || 'معتمدة';
         return `
             <div class="chat-card">
-                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: ${sId}</div>
-                <div style="font-size: 10px; color: var(--text-color);">الشركة: ${shipment.companyName || tenant.activeCompanyName}</div>
-                <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
+                <div style="font-weight: bold; color: var(--accent-color); font-size: 11px; margin-bottom: 4px;">📦 شحنة رقم: #${sId}</div>
+                <div style="font-size: 10px; color: var(--text-color);">العميل: ${shipment.name || '-'} | الحمولة: ${shipment.item || '-'}</div>
+                <div style="font-size: 10px; color: var(--text-color);">الأجرة: ${shipment.price || 0} ج.م | الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'في الانتظار'}</span></div>
                 <div style="margin-top: 6px; display: flex; gap: 4px;">
                     <button onclick="updateShipmentStatusFromChat('${sId}', 'في الطريق')" style="background:var(--primary-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">🚚 في الطريق</button>
-                    <button onclick="updateShipmentStatusFromChat('${sId}', 'تم التسليم')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ تم التسليم</button>
+                    <button onclick="updateShipmentStatusFromChat('${sId}', 'مكتملة')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ مكتملة</button>
                 </div>
             </div>
         `;
@@ -1311,7 +1211,7 @@
         if (typingEl) typingEl.remove();
 
         let tenant = syncPlatformUserData();
-        let financials = getCompanyFinancials();
+        let fin = getCompanyFinancials();
         let userShipments = getIsolatedUserShipments();
         let botReply = '';
         let lower = text.toLowerCase();
@@ -1331,19 +1231,21 @@
                 botReply = `⚠️ عذراً، لا يمكنك تسجيل المصروفات كزائر غير مسجل.`;
             } else {
                 try {
-                    let currentExp = parseFloat(localStorage.getItem(`expenses_val_${tenant.activeCompanyId}`) || '0') + parseFloat(amount);
-                    localStorage.setItem(`expenses_val_${tenant.activeCompanyId}`, currentExp);
-                    localStorage.setItem(`expenses_total_${tenant.activeCompanyId}`, currentExp + ' ج.م');
+                    let newExpObj = {
+                        id: String(Date.now()),
+                        amount: parseFloat(amount),
+                        title: description,
+                        companyId: tenant.activeCompanyId,
+                        companyName: tenant.activeCompanyName,
+                        driver: tenant.activeDriver,
+                        date: new Date().toLocaleDateString('ar-EG')
+                    };
                     
                     if (typeof firebase !== 'undefined' && firebase.firestore) {
-                        await firebase.firestore().collection('expenses').add({
-                            amount: parseFloat(amount),
-                            description: description,
-                            companyId: tenant.activeCompanyId,
-                            companyName: tenant.activeCompanyName,
-                            driver: tenant.activeDriver,
-                            timestamp: new Date().toISOString()
-                        });
+                        await firebase.firestore().collection('expenses').doc(newExpObj.id).set(newExpObj);
+                    }
+                    if (window.appData && Array.isArray(window.appData.expenses)) {
+                        window.appData.expenses.push(newExpObj);
                     }
                     botReply = `✅ <b>تم تسجيل المصروف بنجاح (Gemini NLP):</b><br>- المبلغ: <b>${amount} ج.م</b><br>- البيان: <b>${description}</b><br>- تم تحديث الخزنة والمصروفات لشركة [${tenant.activeCompanyName}] سحابياً.`;
                 } catch(err) {
@@ -1393,21 +1295,47 @@
                 userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
             }
         }
-        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('مالي') || contextualText.includes('pdf')) {
-            window.lastBotContext = 'الخزنة';
+        else if (contextualText.includes('الخزنة') || contextualText.includes('المالية') || contextualText.includes('تقرير') || contextualText.includes('أرباح') || contextualText.includes('إيرادات') || contextualText.includes('إرادات') || contextualText.includes('ديون') || contextualText.includes('آجل') || contextualText.includes('فواتير') || contextualText.includes('مجمعة')) {
+            window.lastBotContext = 'الخزنة والمالية الشاملة';
             if (tenant.activeRole === 'visitor') {
                 botReply = `💰 عذراً، تقارير الخزنة والمالية محجوبة عن الزوار وغير المسجلين. يرجى تسجيل الدخول.`;
             } else {
-                let report = await getCompanyFinancialReport();
-                botReply = `💰 <b>التقرير المالي والخزنة لشركة [${report.companyName}] (Gemini):</b><br>` +
-                           `<div class="bot-table-container"><table class="bot-custom-table">` +
-                           `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
-                           `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
-                           `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
-                           `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
-                           `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
-                           `</table></div><br>` +
-                           `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
+                botReply = `
+                    <div class="chat-card" style="border-right-color: var(--accent-color);">
+                        <div style="font-weight: bold; color: var(--accent-color); font-size: 12px; margin-bottom: 6px;">💰 التقرير المالي الشامل والمطابق لشركة [${tenant.activeCompanyName}]</div>
+                        <div class="bot-table-container">
+                            <table class="bot-custom-table">
+                                <tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>
+                                <tr><td><b>📦 عدد الشحنات</b></td><td><b>${fin.shipmentsCount} شحنة</b></td></tr>
+                                <tr><td><b>💰 الإيرادات الكلية</b></td><td style="color:#38bdf8; font-weight:bold;">${fin.revenue}</td></tr>
+                                <tr><td><b>⛽ المصروفات التشغيلية</b></td><td style="color:#ef4444; font-weight:bold;">${fin.expenses}</td></tr>
+                                <tr><td><b>📈 صافي الأرباح</b></td><td style="color:#8b5cf6; font-weight:bold;">${fin.netProfit}</td></tr>
+                                <tr><td><b>💵 رصيد الخزينة الحالي</b></td><td style="color:#10b981; font-weight:bold;">${fin.treasuryBalance}</td></tr>
+                                <tr><td><b>⏳ الديون والأجل المستحق</b></td><td style="color:#f59e0b; font-weight:bold;">${fin.debtsTotal}</td></tr>
+                                <tr><td><b>📑 الفواتير المجمعة</b></td><td><b>${fin.consolidatedCount} فاتورة (بقيمة ${fin.consolidatedTotal})</b></td></tr>
+                            </table>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 10px; font-family: 'Cairo', sans-serif;">📄 تصدير وطباعة تقرير الخزنة PDF</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        else if (contextualText.includes('موقع') || contextualText.includes('موقعي') || contextualText.includes('خريطة') || contextualText.includes('أين')) {
+            window.lastBotContext = 'موقع GPS';
+            if (tenant.activeRole === 'visitor') {
+                botReply = `📍 خدمة التتبع الجغرافي مخصصة للسائقين ومديري الشركات المسجلين.`;
+            } else {
+                let activeFleet = await getCompanyActiveFleet();
+                let myDriverData = activeFleet.find(d => d.name === tenant.activeDriver || d.id === tenant.activeDriver) || activeFleet[0];
+                let lat = myDriverData?.latitude || 30.0444;
+                let lng = myDriverData?.longitude || 31.2357;
+                let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                botReply = `📍 <b>الرصد الجغرافي اللحظي (GPS Link):</b><br>` +
+                           `- السائق / المركبة: <b>${myDriverData?.name || tenant.activeDriver}</b><br>` +
+                           `- الإحداثيات: (${lat.toFixed(4)}, ${lng.toFixed(4)})<br><br>` +
+                           `<a href="${mapsUrl}" target="_blank" style="background:var(--accent-color); color:#fff; padding:6px 12px; border-radius:6px; display:inline-block; font-weight:bold; text-decoration:none;">🗺️ فتح الموقع المباشر على خرائط جوجل</a>`;
             }
         }
         else if (contextualText.includes('المصروفات') || contextualText.includes('مصروف') || contextualText.includes('وقود')) {
@@ -1416,7 +1344,7 @@
                 botReply = `⛽ هذه الخدمة مخصصة للحسابات المسجلة.`;
             } else {
                 botReply = `⛽ <b>المصروفات التشغيلية لشركة [${tenant.activeCompanyName}]:</b><br>` +
-                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${financials.expensesTotal}</b><br>` +
+                           `- إجمالي المصروفات المسجلة: <b style="color:var(--danger-color);">${fin.expenses}</b><br>` +
                            `- يمكنك تسجيل مصروف جديد مباشرة بكتابة: <i>"صرفت 150 جنيه بنزين"</i>.`;
             }
         }
@@ -1428,8 +1356,8 @@
                 let activeFleet = await getCompanyActiveFleet();
                 botReply = `📊 <b>إحصائيات الأسطول والنشاط [${tenant.activeCompanyName}]:</b><br>` +
                            `- الأسطول والسائقون النشطون: <b>${activeFleet.length} سائق/مركبة</b><br>` +
-                           `- إجمالي شحنات الشركة: <b>${financials.shipmentsCount}</b><br>` +
-                           `- رصيد الخزنة: <b style="color:var(--accent-color);">${financials.treasuryBalance}</b>`;
+                           `- إجمالي شحنات الشركة: <b>${fin.shipmentsCount}</b><br>` +
+                           `- رصيد الخزينة: <b style="color:var(--accent-color);">${fin.treasuryBalance}</b>`;
             }
         }
         else if (contextualText.includes('طوارئ') || contextualText.includes('sos') || contextualText.includes('عطل') || contextualText.includes('حادث')) {
