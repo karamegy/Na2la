@@ -788,11 +788,78 @@
         printWindow.document.close();
     };
 
-    window.printConsolidatedInvoice = function(invoiceId) {
+    window.printConsolidatedInvoice = async function(invoiceId) {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') return;
-        let invoices = realFirebaseDeferredInvoices.filter(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
+
+        let conInv = null;
+        if (window.appData && window.appData.consolidatedInvoices) {
+            conInv = window.appData.consolidatedInvoices.find(i => String(i.id) === String(invoiceId) || String(i.id).trim() === String(invoiceId).trim());
+        }
+        if (!conInv && typeof firebase !== 'undefined' && firebase.firestore) {
+            try {
+                let docSnap = await firebase.firestore().collection('consolidatedInvoices').doc(String(invoiceId)).get();
+                if (docSnap.exists) {
+                    conInv = { id: docSnap.id, ...docSnap.data() };
+                }
+            } catch(e) {}
+        }
+
+        if (conInv) {
+            let matchingShipments = [];
+            if (window.appData && window.appData.shipments) {
+                matchingShipments = window.appData.shipments.filter(s => conInv.shipmentIds && conInv.shipmentIds.includes(String(s.id)));
+            }
+            let rowsHtml = '';
+            matchingShipments.forEach((s, idx) => {
+                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
+            });
+
+            let printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html dir="rtl">
+                <head>
+                    <title>فاتورة مجمعة رقم #${conInv.id}</title>
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                        .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
+                        th { background: #2563eb; color: #fff; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
+                        <p>رقم الفاتورة: #${conInv.id} | التاريخ: ${conInv.date || '-'}</p>
+                    </div>
+                    <p><strong>اسم العميل / الشركة:</strong> ${conInv.client || '-'}</p>
+                    <p><strong>ملاحظات:</strong> ${conInv.notes || 'لا توجد ملاحظات'}</p>
+                    <table>
+                        <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                    <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${conInv.total || 0} ج.م</h3>
+                    <script>window.onload = function() { window.print(); window.close(); }</script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            return;
+        }
+
+        let invoices = realFirebaseDeferredInvoices.filter(i => String(i.id) === String(invoiceId) || String(i.invoiceNumber) === String(invoiceId));
         let invoice = invoices.length > 0 ? invoices[0] : null;
+
+        if (!invoice && typeof firebase !== 'undefined' && firebase.firestore) {
+            try {
+                let docSnap = await firebase.firestore().collection('deferredInvoices').doc(String(invoiceId)).get();
+                if (docSnap.exists) {
+                    invoice = { id: docSnap.id, ...docSnap.data() };
+                }
+            } catch(e) {}
+        }
 
         if (!invoice) {
             alert("عذراً، لم يتم العثور على بيانات الفاتورة المطلوبة.");
@@ -803,7 +870,7 @@
         printWindow.document.write(`
             <html dir="rtl">
             <head>
-                <title>فاتورة مجمعة - ${invoice.invoiceNumber || invoiceId}</title>
+                <title>فاتورة آجل - ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</title>
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
                     body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
@@ -817,35 +884,35 @@
             <body>
                 <div class="header">
                     <h2>شركة ${tenant.activeCompanyName}</h2>
-                    <p>قسم الفواتير المجمعة والآجلة والعملاء</p>
+                    <p>قسم الفواتير الآجلة والمستحقات</p>
                 </div>
                 <div style="margin-bottom: 15px; font-size: 14px;">
-                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoiceId}</p>
+                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</p>
                     <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
-                    <p><b>التاريخ:</b> ${invoice.date || new Date().toLocaleDateString('ar-EG')}</p>
+                    <p><b>تاريخ الاستحقاق:</b> ${invoice.dueDate || '-'}</p>
                 </div>
                 <table>
                     <thead>
                         <tr>
                             <th>م</th>
                             <th>بيان الشحنة / الخدمة</th>
-                            <th>المبلغ (ج.م)</th>
+                            <th>المبلغ الإجمالي</th>
+                            <th>المتبقي</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
                             <td>1</td>
-                            <td>${invoice.description || invoice.notes || 'شحنات مجمعة ومعتمدة للعميل'}</td>
+                            <td>${invoice.description || invoice.notes || 'فاتورة آجل ومستحقات'}</td>
                             <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
+                            <td style="color: red; font-weight: bold;">${invoice.remainingAmount || invoice.totalAmount || '0'} ج.م</td>
                         </tr>
                     </tbody>
                 </table>
                 <div class="footer">
                     <p>التوقيع / الختم: ........................</p>
                 </div>
-                <script>
-                    window.onload = function() { window.print(); window.close(); }
-                </script>
+                <script>window.onload = function() { window.print(); window.close(); }</script>
             </body>
             </html>
         `);
@@ -1525,7 +1592,7 @@
             let randomAdv = adventureStories[Math.floor(Math.random() * adventureStories.length)];
             botReply = `${randomAdv}`;
         }
-        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('رسم') || contextualText.includes('توليد') || contextualTest.includes('جيبلي صورة')) {
+        else if (contextualText.includes('صورة') || contextualText.includes('صوره') || contextualText.includes('رسم') || contextualText.includes('توليد') || contextualText.includes('جيبلي صورة')) {
             window.lastBotContext = 'صورة';
             botReply = handleImageRequest(text);
         }
