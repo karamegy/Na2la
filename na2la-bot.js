@@ -158,8 +158,33 @@
         <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 85px; right: 20px; width: 420px; max-width: 92vw; height: 80vh; max-height: 650px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
+            
+            <!-- القائمة الجانبية الشاملة المحدثة -->
+            <div id="na2laBotSidebarMenu" style="display: none; position: absolute; top: 44px; right: 0; width: 280px; height: calc(100% - 44px); background: var(--bg-color); border-left: 1px solid var(--border-color); z-index: 2147483648; box-shadow: -5px 0 25px rgba(0,0,0,0.5); overflow-y: auto; padding: 12px; color: var(--text-color); font-size: 11px;">
+                <div style="font-weight: bold; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: var(--primary-color);">
+                    <span>🗂️ القائمة الجانبية الشاملة</span>
+                    <span style="cursor: pointer; font-size: 14px; padding: 2px 6px;" onclick="toggleNa2laSidebarMenu(event)">✕</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="font-weight: bold; font-size: 10px; color: var(--warning-color); margin-top: 4px;">📂 أقسام التشغيل والعمليات</div>
+                    <button onclick="sendBotQuickQuery('شحناتي'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>📦 الشحنات النشطة والمعتمدة</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('الفواتير'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>🧾 الفواتير والمستحقات الآجلة</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('الخزنة'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>💰 الخزنة والتقارير المالية</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('إحصائيات شركتي'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>📊 أسطول الشركة والسائقين</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('موقعي'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>📍 التتبع الجغرافي (GPS)</span><span>⬅</span></button>
+
+                    <div style="font-weight: bold; font-size: 10px; color: var(--accent-color); margin-top: 6px;">🛠️ الأدوات والخدمات الذكية</div>
+                    <button onclick="sendBotQuickQuery('اختبار القيادة'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>🎓 اختبار أمان القيادة</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>💳 كارت الاشتراك والتجديد</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('جهات الاتصال'); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>📇 جهات الاتصال المتزامنة</span><span>⬅</span></button>
+                    <button onclick="exportChatArchiveData(); toggleNa2laSidebarMenu();" style="text-align: right; background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-color); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>📤 تصدير الأرشيف والسجلات</span><span>⬅</span></button>
+                    <button onclick="sendBotQuickQuery('طوارئ SOS'); toggleNa2laSidebarMenu();" style="text-align: right; background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #f87171; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-family: 'Cairo', sans-serif; display: flex; align-items: center; justify-content: space-between;"><span>🚨 طوارئ SOS عاجلة</span><span>⬅</span></button>
+                </div>
+            </div>
+
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" onclick="toggleNa2laSidebarMenu(event)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 3px 7px; border-radius: 6px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-family: 'Cairo', sans-serif;" title="القائمة الجانبية الشاملة">☰ القائمة</button>
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
                     <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (عزل تام)</span>
                 </div>
@@ -280,6 +305,14 @@
             hasBotDragged = false;
         });
     }
+
+    window.toggleNa2laSidebarMenu = function(event) {
+        if (event) event.stopPropagation();
+        let sidebar = document.getElementById('na2laBotSidebarMenu');
+        if (!sidebar) return;
+        let isVisible = (sidebar.style.display === 'block');
+        sidebar.style.display = isVisible ? 'none' : 'block';
+    };
 
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
@@ -472,7 +505,6 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    /* جلب البيانات السحابية والصحيحة تماماً للشحنات */
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -624,7 +656,6 @@
         return fleet;
     };
 
-    /* تصفية وجلب شحنات الشركة السليمة والمعزولة */
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         
@@ -1268,7 +1299,6 @@
         `;
     };
 
-    /* إزالة دالة المزامنة والربط بـ ويكيبيديا نهائياً وتوجيه الاستفسارات العامة عبر جوجل فقط */
     window.fetchLiveWebAndWikipediaAnswer = async function(query) {
         let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
         return `🌐 <b>نتائج الاستعلام والتصفح المباشر (Gemini Pro):</b><br>` +
@@ -1356,7 +1386,6 @@
             window.lastBotContext = 'معلومات صلاحية اشتراك شركتك';
             let subInfo = await getCompanySubscriptionInfo();
             
-            // إظهار التفاصيل الخاصة بالشركة فقط لمدير الحساب (admin)، بينما يظهر كارت التجديد المحمي للعامة
             let adminDetailsHtml = '';
             if (tenant.activeRole === 'admin') {
                 adminDetailsHtml = `
