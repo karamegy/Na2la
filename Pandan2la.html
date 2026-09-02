@@ -306,6 +306,127 @@
             promoCodes: JSON.parse(localStorage.getItem('saas_promo_codes') || '{"N2LA30": 30, "VIP": 30}')
         };
 
+        // التحقق الصارم بالبصمة (WebAuthn API) مع حفظ السجل في panda_biometric_logs
+        async function verifyStrictBiometricAuth(userId, companyId) {
+            try {
+                if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
+                    const publicKey = {
+                        challenge: new Uint8Array(32),
+                        rp: { name: "Na2la SaaS Hub" },
+                        user: {
+                            id: Uint8Array.from(userId, c => c.charCodeAt(0)),
+                            name: userId,
+                            displayName: "مدير النظام / السائق"
+                        },
+                        pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+                        timeout: 60000,
+                        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" }
+                    };
+
+                    const credential = await navigator.credentials.get({ publicKey: { challenge: publicKey.challenge, userVerification: "required" } });
+                    
+                    if (credential) {
+                        await db.collection('panda_biometric_logs').add({
+                            userId: userId,
+                            companyId: companyId,
+                            status: "success",
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        return true;
+                    }
+                } else {
+                    const pinConfirm = prompt("⚠️ الجهاز لا يدعم البصمة الخارجية، يرجى إدخال رمز التحقق السري (PIN) للمتابعة:");
+                    const userDoc = await db.collection('drivers').doc(String(userId)).get();
+                    if (userDoc.exists && String(userDoc.data().pin) === String(pinConfirm)) {
+                        await db.collection('panda_biometric_logs').add({
+                            userId: userId,
+                            companyId: companyId,
+                            status: "success_pin_fallback",
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.error("خطأ في التحقق بالبصمة:", error);
+                showToast("فشل التحقق الأمني بالبصمة!", "error");
+            }
+            return false;
+        }
+
+        // إزالة الحسابات المخفية ومزامنة companyId بصرامة
+        async function enforceStrictCompanySync(currentUserId, currentCompanyId) {
+            const storedCompany = localStorage.getItem('active_company_id');
+            if (storedCompany && storedCompany !== currentCompanyId) {
+                localStorage.clear();
+                showToast("⚠️ تم اكتشاف حساب متداخل في الخلفية، وتم تطهير الجلسة لأسباب أمنية.", "error");
+                window.location.reload();
+                return;
+            }
+
+            try {
+                const userRef = db.collection('drivers').doc(String(currentUserId));
+                const userSnap = await userRef.get();
+
+                if (!userSnap.exists) {
+                    throw new Error("الحساب غير موجود في السحابة.");
+                }
+
+                const userData = userSnap.data();
+
+                if (userData.companyId !== currentCompanyId) {
+                    showToast("❌ خطأ أمني: عدم تطابق معرف الشركة (Company ID)!", "error");
+                    localStorage.clear();
+                    setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+                    return;
+                }
+
+                localStorage.setItem('active_company_id', currentCompanyId);
+                localStorage.setItem('logged_in_driver_id', currentUserId);
+
+                const isVerified = await verifyStrictBiometricAuth(currentUserId, currentCompanyId);
+                if (!isVerified) {
+                    alert("إجراء أمني: يجب تأكيد الهوية بالبصمة للوصول إلى لوحة التحكم.");
+                    window.location.reload();
+                    return;
+                }
+
+                await fetchCompanyIsolatedData(currentCompanyId);
+
+            } catch (err) {
+                showToast("خطأ في مزامنة الحساب: " + err.message, "error");
+            }
+        }
+
+        // جلب البيانات معزولة حصرياً بالـ companyId المرتبط
+        async function fetchCompanyIsolatedData(companyId) {
+            showToast("🔄 جاري مزامنة بيانات الشركة حصرياً...", "warning");
+            try {
+                const driversSnap = await db.collection('drivers').where('companyId', '==', companyId).get();
+                appData.drivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const reqsSnap = await db.collection('subscription_requests').where('companyId', '==', companyId).get();
+                appData.subscriptionRequests = reqsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const logsSnap = await db.collection('audit_logs').where('companyId', '==', companyId).orderBy('timestamp', 'desc').limit(25).get().catch(() => db.collection('audit_logs').orderBy('timestamp', 'desc').limit(25).get());
+                appData.auditLogs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                updateStatistics();
+                renderMemberSubscriptionsList();
+                renderAdminPendingCashRequests();
+                renderAuditLogs();
+                showToast('✅ تمت المزامنة الصارمة بنجاح تام!');
+            } catch (err) {
+                showToast('خطأ في جلب بيانات الشركة: ' + err.message, 'error');
+            }
+        }
+
+        // للاحتفاظ بالدالة القديمة عند الضغط على زر التحديث اليدوي
+        async function fetchAllDataFromCloud() {
+            const activeCompanyId = localStorage.getItem('active_company_id') || 'company_main';
+            await fetchCompanyIsolatedData(activeCompanyId);
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
             document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName}`;
@@ -314,31 +435,11 @@
             document.getElementById('cfg-quarterly-price').value = systemPricing.quarterly;
             document.getElementById('cfg-yearly-price').value = systemPricing.yearly;
 
-            fetchAllDataFromCloud();
+            const activeUserId = localStorage.getItem('logged_in_driver_id') || '1';
+            const activeCompanyId = localStorage.getItem('active_company_id') || 'company_main';
+            
+            enforceStrictCompanySync(activeUserId, activeCompanyId);
         });
-
-        // جلب البيانات مرة واحدة فقط لتوفير القراءات وعدم تجاوز حدود فايربيس
-        async function fetchAllDataFromCloud() {
-            showToast('🔄 جاري جلب البيانات من السحابة بنجاح...', 'warning');
-            try {
-                const driversSnap = await db.collection('drivers').get();
-                appData.drivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                const reqsSnap = await db.collection('subscription_requests').get();
-                appData.subscriptionRequests = reqsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                const logsSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(25).get();
-                appData.auditLogs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                updateStatistics();
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-                renderAuditLogs();
-                showToast('✅ تم التحديث بنجاح تام وبدون استهلاك مستمر!');
-            } catch (err) {
-                showToast('خطأ في الاتصال: ' + err.message, 'error');
-            }
-        }
 
         async function savePricingConfiguration() {
             const m = parseFloat(document.getElementById('cfg-monthly-price').value) || 300;
@@ -485,6 +586,7 @@
             const branch = document.getElementById('new-comp-branch').value.trim() || 'الفرع الرئيسي';
             const months = Number(document.getElementById('new-comp-plan').value);
             const promoCode = document.getElementById('new-comp-promo').value.trim().toUpperCase();
+            const currentCompanyId = localStorage.getItem('active_company_id') || 'company_main';
 
             if (!companyName || !adminName || !adminPhone || !adminPin) {
                 showToast('الرجاء إكمال كافة البيانات المطلوبة!', 'error');
@@ -652,7 +754,9 @@
 
         async function logAuditAction(action, details) {
             try {
+                const currentCompanyId = localStorage.getItem('active_company_id') || 'company_main';
                 await db.collection('audit_logs').add({
+                    companyId: currentCompanyId,
                     adminName: loggedInDriverName,
                     action,
                     details,
