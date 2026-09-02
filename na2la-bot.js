@@ -1,6 +1,3 @@
-// ==========================================
-// na2la-bot.js - النسخة الشاملة والمتكاملة (Pro V9.0)
-// ==========================================
 (function() {
     if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         firebase.initializeApp({
@@ -287,6 +284,8 @@
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
+    window.realFirebaseTreasury = [];
+    window.realFirebaseExpenses = [];
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
@@ -475,6 +474,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
+    // --- تحديث دالة الجلب السحابي لجلب الخزينة والمصروفات والشحنات والفواتير بدقة ---
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -483,14 +483,8 @@
                 
                 try {
                     const driversSnap = await db.collection('drivers').get();
-                    if (!driversSnap.empty) {
-                        realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    } else {
-                        realFirebaseDrivers = [];
-                    }
-                } catch(e) {
-                    realFirebaseDrivers = [];
-                }
+                    realFirebaseDrivers = !driversSnap.empty ? driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+                } catch(e) { realFirebaseDrivers = []; }
 
                 try {
                     const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
@@ -502,9 +496,7 @@
                     } else {
                         realFirebaseShipments = [];
                     }
-                } catch(e) {
-                    realFirebaseShipments = [];
-                }
+                } catch(e) { realFirebaseShipments = []; }
 
                 try {
                     const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
@@ -516,21 +508,42 @@
                     } else {
                         realFirebaseDeferredInvoices = [];
                     }
-                } catch(e) {
-                    realFirebaseDeferredInvoices = [];
-                }
+                } catch(e) { realFirebaseDeferredInvoices = []; }
+
+                // جلب الخزينة (Treasury) بدقة تامة من فايربيس
+                try {
+                    const treasurySnap = await db.collection('treasury').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!treasurySnap.empty) {
+                        realFirebaseTreasury = treasurySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
+                        const allTreasury = await db.collection('treasury').get();
+                        realFirebaseTreasury = allTreasury.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseTreasury = [];
+                    }
+                } catch(e) { realFirebaseTreasury = []; }
+
+                // جلب المصروفات (Expenses) بدقة تامة من فايربيس
+                try {
+                    const expensesSnap = await db.collection('expenses').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!expensesSnap.empty) {
+                        realFirebaseExpenses = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
+                        const allExpenses = await db.collection('expenses').get();
+                        realFirebaseExpenses = allExpenses.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseExpenses = [];
+                    }
+                } catch(e) { realFirebaseExpenses = []; }
 
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
-                    if (appDataSnap.exists) {
-                        realFirebaseAppData = appDataSnap.data() || {};
-                    } else {
-                        realFirebaseAppData = {};
-                    }
+                    realFirebaseAppData = appDataSnap.exists ? (appDataSnap.data() || {}) : {};
                 } catch(e) {}
             }
         } catch(e) {}
 
+        // دمج البيانات المحلية للاحتياط
         let tenantContext = getActiveTenantContext();
         let localInvoices = [];
         try {
@@ -679,21 +692,64 @@
         return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
     };
 
+    // --- التصحيح الجذري لدالة حساب الخزينة والمصروفات والديون والأرباح بدقة مطلقة ---
     window.getCompanyFinancials = function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') {
-            return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
+            return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', deferredDebts: '0 ج.م', netProfit: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
         }
-        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0 ج.م';
-        let rawExpenses = realFirebaseAppData.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || '0 ج.م';
         
-        let treasuryBalance = parseNumericCurrency(rawTreasury);
-        let expensesTotal = parseNumericCurrency(rawExpenses);
-        
-        let shipments = getIsolatedUserShipments();
+        // 1. حساب رصيد الخزينة الحقيقي من مجموعة treasury
+        let treasurySum = 0;
+        if (realFirebaseTreasury && realFirebaseTreasury.length > 0) {
+            treasurySum = realFirebaseTreasury.reduce((sum, t) => {
+                let amt = parseFloat(String(t.amount || 0).replace(/[^\d.-]/g, '')) || 0;
+                return t.type === 'in' ? sum + amt : sum - amt;
+            }, 0);
+        } else {
+            let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0';
+            treasurySum = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 0;
+        }
+
+        // 2. حساب إجمالي المصروفات من مجموعة expenses
+        let expensesSum = 0;
+        if (realFirebaseExpenses && realFirebaseExpenses.length > 0) {
+            expensesSum = realFirebaseExpenses.reduce((sum, e) => {
+                let amt = parseFloat(String(e.amount || 0).replace(/[^\d.-]/g, '')) || 0;
+                return sum + amt;
+            }, 0);
+        } else {
+            let rawExpenses = realFirebaseAppData.expenses || localStorage.getItem(`expenses_total_${tenant.activeCompanyId}`) || '0';
+            expensesSum = parseFloat(String(rawExpenses).replace(/[^\d.-]/g, '')) || 0;
+        }
+
+        // 3. حساب الديون والآجل من deferredInvoices
+        let deferredSum = 0;
         let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
-        
-        return { treasuryBalance, expensesTotal, invoicesCount: companyInvoices.length, shipmentsCount: shipments.length };
+        companyInvoices.forEach(inv => {
+            if (inv.status !== 'paid') {
+                let rem = parseFloat(String(inv.remainingAmount || inv.totalAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                deferredSum += rem;
+            }
+        });
+
+        // 4. حساب الشحنات والإيرادات وصافي الأرباح
+        let shipments = getIsolatedUserShipments();
+        let totalRevenue = shipments.reduce((sum, s) => {
+            let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
+            return sum + val;
+        }, 0);
+
+        let netProfitVal = totalRevenue - expensesSum;
+
+        return {
+            treasuryBalance: treasurySum.toLocaleString() + ' ج.م',
+            expensesTotal: expensesSum.toLocaleString() + ' ج.م',
+            deferredDebts: deferredSum.toLocaleString() + ' ج.م',
+            netProfit: netProfitVal.toLocaleString() + ' ج.م',
+            invoicesCount: companyInvoices.length,
+            shipmentsCount: shipments.length
+        };
     };
 
     window.getCompanyFinancialReport = async function() {
@@ -710,6 +766,8 @@
             companyName: tenant.activeCompanyName,
             treasury: financials.treasuryBalance,
             expenses: financials.expensesTotal,
+            deferredDebts: financials.deferredDebts,
+            netProfit: financials.netProfit,
             invoicesCount: financials.invoicesCount,
             shipmentsCount: shipments.length,
             estimatedRevenue: totalShipmentsValue.toLocaleString() + ' ج.م'
@@ -753,7 +811,9 @@
                     <tbody>
                         <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
                         <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
-                        <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
+                        <tr><td><b>الديون والآجل المستحق</b></td><td style="color:#d97706; font-weight:bold;">${report.deferredDebts}</td></tr>
+                        <tr><td><b>صافي الأرباح</b></td><td style="color:#7c3aed; font-weight:bold;">${report.netProfit}</td></tr>
+                        <tr><td><b>عدد الفواتير المجمعة والآجلة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
                         <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
                         <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
                     </tbody>
@@ -1551,6 +1611,8 @@
                            `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
                            `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
                            `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
+                           `<tr><td>الديون والآجل</td><td style="color:#f59e0b; font-weight:bold;">${report.deferredDebts}</td></tr>` +
+                           `<tr><td>صافي الأرباح</td><td style="color:#8b5cf6; font-weight:bold;">${report.netProfit}</td></tr>` +
                            `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
                            `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
                            `</table></div><br>` +
