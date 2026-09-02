@@ -1,3 +1,6 @@
+// ==========================================
+// na2la-bot.js - النسخة الشاملة والمتكاملة (Pro V9.0)
+// ==========================================
 (function() {
     if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         firebase.initializeApp({
@@ -1274,7 +1277,6 @@
                `<a href="${googleSearchUrl}" target="_blank" style="background: var(--primary-color); color: #fff; padding: 6px 12px; border-radius: 6px; display: inline-block; font-weight: bold; text-decoration: none; font-size: 11px;">🔍 البحث عن "${query}" عبر جوجل</a>`;
     };
 
-    // --- الدوال الخاصة بنافذة تجديد الاشتراك وتعبئة البيانات بالصورة الثانية ---
     window.openSubscriptionRenewalModal = function() {
         let existingModal = document.getElementById('subRenewalModalOverlay');
         if (existingModal) existingModal.remove();
@@ -1283,23 +1285,19 @@
             <div id="subRenewalModalOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 2147483647; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); font-family: 'Cairo', sans-serif;">
                 <div style="background: var(--card-bg, #1e293b); border: 1px solid var(--border-color, #334155); width: 400px; max-width: 90vw; border-radius: 16px; box-shadow: var(--shadow-3d); overflow: hidden; color: var(--text-color, #f8fafc);">
                     
-                    <!-- Header -->
                     <div style="background: linear-gradient(135deg, var(--primary-color, #3b82f6), var(--accent-color, #10b981)); color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
                         <span>💳 تجديد الاشتراك الكاش (فوري / وي)</span>
                         <button onclick="document.getElementById('subRenewalModalOverlay').remove()" style="background: #ef4444; border: none; color: white; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: bold;">✕ إغلاق</button>
                     </div>
 
-                    <!-- Body -->
                     <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px; font-size: 11px;">
                         
-                        <!-- المحافظ المعتمدة -->
                         <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--accent-color, #10b981); padding: 10px; border-radius: 8px; color: var(--text-color);">
                             💳 <b>محافظ التحويل المعتمدة للخدمة:</b><br>
                             📱 فوري كاش: <b>01114099799</b><br>
                             📱 وي كاش (WE): <b>01554440996</b>
                         </div>
 
-                        <!-- اختيار الباقة -->
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <label style="font-weight: bold; color: var(--warning-color, #f59e0b);">اختر الباقة المراد تجديدها:</label>
                             <select id="renewalPlanSelect" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
@@ -1309,7 +1307,6 @@
                             </select>
                         </div>
 
-                        <!-- المحفظة المحول إليها -->
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <label style="font-weight: bold; color: var(--warning-color, #f59e0b);">المحفظة المحول إليها:</label>
                             <select id="renewalTargetWallet" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
@@ -1318,19 +1315,16 @@
                             </select>
                         </div>
 
-                        <!-- رقم محفظتك التي قمت بالتحويل منها -->
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <label style="font-weight: bold; color: var(--text-color);">رقم محفظتك التي قمت بالتحويل منها:</label>
                             <input type="text" id="renewalUserWalletInput" placeholder="مثال: 010xxxxxxxx" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
                         </div>
 
-                        <!-- كود الرقم المرجعي / رقم العملية -->
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <label style="font-weight: bold; color: var(--text-color);">كود الرقم المرجعي / رقم العملية:</label>
                             <input type="text" id="renewalRefCodeInput" placeholder="أدخل كود العملية أو الرقم المرجعي للتحويل" style="padding: 8px; border-radius: 6px; background: var(--bg-color, #0f172a); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; font-size: 11px; outline: none;">
                         </div>
 
-                        <!-- زر إرسال التفعيل المباشر -->
                         <button onclick="submitSubscriptionRenewalForm()" style="background: var(--accent-color, #10b981); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; font-family: 'Cairo', sans-serif; margin-top: 4px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
                             🚀 إرسال كود العملية للتفعيل المباشر
                         </button>
@@ -1456,7 +1450,6 @@
             window.lastBotContext = 'معلومات صلاحية اشتراك شركتك';
             let subInfo = await getCompanySubscriptionInfo();
             
-            // تعديل بناءً على طلب المستخدم: إذا كان المستخدم زائراً، فلا يظهر كارت المدير، بل يظهر الكارت الخاص بالتجديد (الصورة الثانية) مباشرة
             let adminDetailsHtml = '';
             if (tenant.activeRole === 'admin') {
                 adminDetailsHtml = `
