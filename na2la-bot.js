@@ -179,7 +179,7 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini Pro المحدث - منصة نقلة سحابي 100%">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 95px; right: 20px; width: 440px; max-width: 94vw; height: 82vh; max-height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(25px); font-family: 'Cairo', sans-serif;">
             
@@ -187,7 +187,7 @@
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 Gemini Pro (مزامنة سحابية حقيقية 100%)</span>
+                    <span id="botUserRoleBadge">🤖 Gemini Pro (مزامنة سحابية حقيقية 100% - إصدار نهائي)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <div style="position: relative; display: inline-block;">
@@ -211,7 +211,7 @@
             <!-- شريط الإعلانات والأخبار -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 6px 12px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 20s linear infinite; font-weight: bold;">
-                    🚀 مزامنة سحابية حقيقية 100% | تحديثات فورية للخزينة، إيرادات الشحنات، والفواتير المجمعة من قاعدة بيانات فايربيس مباشرة بدون أي قيم افتراضية
+                    🚀 مزامنة سحابية حقيقية 100% | تحديثات فورية للخزينة، إيرادات الشحنات، والفواتير المجمعة من قاعدة بيانات فايربيس مباشرة بدون أي تخزين محلي
                 </div>
             </div>
 
@@ -240,7 +240,7 @@
             <!-- منطقة الرسائل -->
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 12px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المطور للمزامنة الحقيقية 100% مع قاعدة بيانات فايربيس.<br>- جميع الأرقام والشحنات والفواتير مستمدة مباشرة من حذفك وتعديلاتك الفعلية بدون أي قيم افتراضية.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المطور للمزامنة الحقيقية 100% مع قاعدة بيانات فايربيس (بدون أي تخزين محلي).<br>- جميع الأرقام والشحنات والفواتير مستمدة مباشرة من سحابة فايربيس.
                 </div>
             </div>
 
@@ -405,7 +405,7 @@
     window.exportChatArchiveData = function() {
         let tenant = getActiveTenantContext();
         let exportBundle = {
-            version: "9.5-PRO-CLOUD",
+            version: "10.5-PRO-CLOUD",
             tenant: tenant,
             exportDate: new Date().toISOString(),
             chatHistory: window.memoryChatHistory,
