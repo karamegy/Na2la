@@ -10,6 +10,15 @@
         window._na2laBotInterval = null;
     }
 
+    // تهيئة حالة الذاكرة الحية لمنع أخطاء الـ TypeError
+    window.botMemoryState = window.botMemoryState || {
+        chatHistories: {},
+        dutyStatus: 'active',
+        expensesTotal: 0,
+        theme: 'default',
+        contacts: []
+    };
+
     if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         firebase.initializeApp({
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -280,7 +289,7 @@
         const onDrag = (clientX, clientY) => {
             if (!isBotDragging) return;
             let dx = clientX - startBotX, dy = clientY - startBotY;
-            if (dx * dx + dy * dy > 36) hasBotDragged = true;
+            if (dx * dx + dy * dy > 100) hasBotDragged = true; // رفع حد المسافة لمنع حظر اللمسات الخفيفة على الجوال
             let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
             let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
             botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
@@ -304,9 +313,15 @@
             } 
         }, { passive: true });
         
-        document.addEventListener('touchend', stopDrag);
+        document.addEventListener('touchend', (e) => {
+            stopDrag();
+            if (!hasBotDragged) {
+                toggleNa2laBot();
+            }
+            hasBotDragged = false;
+        });
 
-        botBtn.addEventListener('click', () => {
+        botBtn.addEventListener('click', (e) => {
             if (!hasBotDragged) {
                 toggleNa2laBot();
             }
@@ -997,7 +1012,6 @@
         fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
     });
     
-    // تسجيل الفاصل الزمني (Interval) ليمكن حذفه عند إعادة الحقن
     window._na2laBotInterval = setInterval(() => {
         fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
     }, 15000);
