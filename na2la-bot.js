@@ -13,6 +13,7 @@
     const existingContainer = document.getElementById('na2laBotRootContainer');
     if (existingContainer) existingContainer.remove();
 
+    // 🛑 تخزين في الذاكرة الحية فقط (Zero LocalStorage) مع مزامنة لحظية سحابية تامة
     window.botMemoryState = {
         dutyStatus: 'active',
         theme: 'default',
@@ -169,7 +170,7 @@
             
             <div id="na2laBotSidebarMenu" style="display: none; position: absolute; top: 44px; right: 0; width: 280px; height: calc(100% - 44px); background: var(--bg-color); border-left: 1px solid var(--border-color); z-index: 2147483648; box-shadow: -5px 0 25px rgba(0,0,0,0.5); overflow-y: auto; padding: 12px; color: var(--text-color); font-size: 11px;">
                 <div style="font-weight: bold; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: var(--primary-color);">
-                    <span>🗂️ القائمة الجانبية الشاملة</span>
+                    <span>🗂️ القائمة الجانبية الشاملة (مزامنة فورية)</span>
                     <span style="cursor: pointer; font-size: 14px; padding: 2px 6px;" onclick="toggleNa2laSidebarMenu(event)">✕</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -194,7 +195,7 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <button type="button" onclick="toggleNa2laSidebarMenu(event)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 3px 7px; border-radius: 6px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-family: 'Cairo', sans-serif;" title="القائمة الجانبية الشاملة">☰ القائمة</button>
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (الجدول الخماسي)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (عزل تام وسحابي)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -217,13 +218,13 @@
 
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | الجدول الخماسي المعتمد: الشحنات، الإيرادات، صافي الأرباح، الخزينة، الديون والآجل
+                    🚀 أسطورة الطريق Pro | عزل تامة وعمليات فورية مع الجدول الخماسي المعتمد
                 </div>
             </div>
 
             <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 10px; flex-shrink: 0;">
                 <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة لا تحفظ في السجل">🕵️ محادثة مؤقتة</button>
+                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة في الذاكرة الحية">🕵️ محادثة مؤقتة</button>
                     <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
                     <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
                     <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
@@ -238,12 +239,12 @@
             </div>
 
             <div id="tempChatAlertBanner" style="display: none; background: rgba(168, 85, 247, 0.2); border-bottom: 1px solid #a855f7; color: #d8b4fe; padding: 4px 10px; font-size: 10px; text-align: center; font-weight: bold; flex-shrink: 0;">
-                🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة): لن يتم حفظ هذه المحادثة في الذاكرة أو فايربيس.
+                🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة في الذاكرة الحية): لن يتم حفظ هذه المحادثة سحابياً.
             </div>
 
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بالجدول الخماسي المعتمد.<br>- يمكنك فتح القائمة الجانبية (☰ القائمة) لاستعراض كافة الأقسام والخدمات.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بمزامنة فايربيس اللحظية والعزل التام.<br>- يمكنك فتح القائمة الجانبية (☰ القائمة) لاستعراض كافة الأقسام والخدمات.
                 </div>
             </div>
 
@@ -283,31 +284,18 @@
             let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
             botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
         };
-        const stopDrag = () => { 
-            if (!isBotDragging) return; 
-            isBotDragging = false; 
-        };
+        const stopDrag = () => { if (!isBotDragging) return; isBotDragging = false; };
 
         botBtn.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
         document.addEventListener('mousemove', (e) => onDrag(e.clientX, e.clientY));
         document.addEventListener('mouseup', stopDrag);
         
-        botBtn.addEventListener('touchstart', (e) => { 
-            if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); 
-        }, { passive: true });
-        
-        document.addEventListener('touchmove', (e) => { 
-            if (isBotDragging && e.touches.length === 1) { 
-                onDrag(e.touches[0].clientX, e.touches[0].clientY); 
-            } 
-        }, { passive: true });
-        
+        botBtn.addEventListener('touchstart', (e) => { if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+        document.addEventListener('touchmove', (e) => { if (isBotDragging && e.touches.length === 1) { onDrag(e.touches[0].clientX, e.touches[0].clientY); } }, { passive: true });
         document.addEventListener('touchend', stopDrag);
 
         botBtn.addEventListener('click', () => {
-            if (!hasBotDragged) {
-                toggleNa2laBot();
-            }
+            if (!hasBotDragged) toggleNa2laBot();
             hasBotDragged = false;
         });
     }
@@ -405,7 +393,7 @@
         let chatHistory = window.botMemoryState.chatHistories[storageKey] || [];
         
         let exportBundle = {
-            version: "9.0-PRO-NO-LOCAL",
+            version: "10.0-PRO-NO-LOCAL",
             tenant: tenant,
             exportDate: new Date().toISOString(),
             chatHistory: chatHistory,
@@ -470,7 +458,7 @@
         let resultHtml = `
             <div style="margin-top: 8px; padding: 8px; border-radius: 6px; font-size: 10px; font-weight: bold; background: ${isCorrect ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border: 1px solid ${isCorrect ? 'var(--accent-color)' : 'var(--danger-color)'}; color: ${isCorrect ? 'var(--accent-color)' : 'var(--danger-color)'};">
                 ${isCorrect ? '🎉 إجابة صحيحة وممتازة!' : '❌ إجابة غير صحيحة.'}<br>
-                💡 <b>الشرح والتعليل السقراطي:</b> ${explainText}
+                💡 <b>الشرح والتعليل:</b> ${explainText}
             </div>
         `;
         box.innerHTML += resultHtml;
@@ -544,9 +532,7 @@
 
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') {
-            return [];
-        }
+        if (tenant.activeRole === 'visitor') return [];
 
         let allShipments = [];
         if (window.appData && Array.isArray(window.appData.shipments) && window.appData.shipments.length > 0) {
@@ -647,14 +633,6 @@
         return fleet.filter(d => !d.companyId || d.companyId === tenant.activeCompanyId || tenant.activeRole === 'admin');
     };
 
-    window.parseNumericCurrency = function(val) {
-        if (!val) return '0 ج.م';
-        if (typeof val === 'number') return val.toLocaleString() + ' ج.م';
-        let cleanStr = String(val).replace(/[^\d.-]/g, '');
-        let num = parseFloat(cleanStr);
-        return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
-    };
-
     window.getCompanyFinancialReport = async function() {
         let tenant = getActiveTenantContext();
         let shipments = window.getIsolatedUserShipments();
@@ -747,137 +725,6 @@
         printWindow.document.close();
     };
 
-    window.printConsolidatedInvoice = async function(invoiceId) {
-        let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return;
-
-        let conInv = null;
-        if (window.appData && window.appData.consolidatedInvoices) {
-            conInv = window.appData.consolidatedInvoices.find(i => String(i.id) === String(invoiceId) || String(i.id).trim() === String(invoiceId).trim());
-        }
-        if (!conInv && typeof firebase !== 'undefined' && firebase.firestore) {
-            try {
-                let docSnap = await firebase.firestore().collection('consolidatedInvoices').doc(String(invoiceId)).get();
-                if (docSnap.exists) {
-                    conInv = { id: docSnap.id, ...docSnap.data() };
-                }
-            } catch(e) {}
-        }
-
-        if (conInv) {
-            let matchingShipments = [];
-            if (window.appData && window.appData.shipments) {
-                matchingShipments = window.appData.shipments.filter(s => conInv.shipmentIds && conInv.shipmentIds.includes(String(s.id)));
-            }
-            let rowsHtml = '';
-            matchingShipments.forEach((s, idx) => {
-                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
-            });
-
-            let printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>فاتورة مجمعة رقم #${conInv.id}</title>
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
-                        .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
-                        th { background: #2563eb; color: #fff; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                        <p>رقم الفاتورة: #${conInv.id} | التاريخ: ${conInv.date || '-'}</p>
-                    </div>
-                    <p><strong>اسم العميل / الشركة:</strong> ${conInv.client || '-'}</p>
-                    <p><strong>ملاحظات:</strong> ${conInv.notes || 'لا توجد ملاحظات'}</p>
-                    <table>
-                        <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
-                        <tbody>${rowsHtml}</tbody>
-                    </table>
-                    <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${conInv.total || 0} ج.م</h3>
-                    <script>window.onload = function() { window.print(); window.close(); }</script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-            return;
-        }
-
-        let invoices = realFirebaseDeferredInvoices.filter(i => String(i.id) === String(invoiceId) || String(i.invoiceNumber) === String(invoiceId));
-        let invoice = invoices.length > 0 ? invoices[0] : null;
-
-        if (!invoice && typeof firebase !== 'undefined' && firebase.firestore) {
-            try {
-                let docSnap = await firebase.firestore().collection('deferredInvoices').doc(String(invoiceId)).get();
-                if (docSnap.exists) {
-                    invoice = { id: docSnap.id, ...docSnap.data() };
-                }
-            } catch(e) {}
-        }
-
-        if (!invoice) {
-            alert("عذراً، لم يتم العثور على بيانات الفاتورة المطلوبة.");
-            return;
-        }
-
-        let printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <html dir="rtl">
-            <head>
-                <title>فاتورة آجل - ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</title>
-                <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
-                    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
-                    th { background: #f2f2f2; }
-                    .footer { margin-top: 40px; text-align: left; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>شركة ${tenant.activeCompanyName}</h2>
-                    <p>قسم الفواتير الآجلة والمستحقات</p>
-                </div>
-                <div style="margin-bottom: 15px; font-size: 14px;">
-                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</p>
-                    <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
-                    <p><b>تاريخ الاستحقاق:</b> ${invoice.dueDate || '-'}</p>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>م</th>
-                            <th>بيان الشحنة / الخدمة</th>
-                            <th>المبلغ الإجمالي</th>
-                            <th>المتبقي</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>${invoice.description || invoice.notes || 'فاتورة آجل ومستحقات'}</td>
-                            <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
-                            <td style="color: red; font-weight: bold;">${invoice.remainingAmount || invoice.totalAmount || '0'} ج.م</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <p>التوقيع / الختم: ........................</p>
-                </div>
-                <script>window.onload = function() { window.print(); window.close(); }</script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
-
     window.syncPlatformUserData = function() {
         let tenant = getActiveTenantContext();
         let isManager = (tenant.activeRole === 'admin');
@@ -889,9 +736,7 @@
         if (companyTagEl) companyTagEl.innerText = isManager ? `🏢 الشركة: ${tenant.activeCompanyName}` : `👤 المستخدم: ${tenant.activeDriver}`;
         
         let rssBar = document.getElementById('na2laRssTickerContainer');
-        if (rssBar) {
-            rssBar.style.display = isManager ? 'block' : 'none';
-        }
+        if (rssBar) rssBar.style.display = isManager ? 'block' : 'none';
 
         updateSyncButtonBadge();
         checkDutyStatusIndicator();
@@ -1077,7 +922,7 @@
                                    `- الوزن القائم: <b>${simulatedGross}.00 طن</b><br>` +
                                    `- الوزن الفارغ: <b>${simulatedTare}.00 طن</b><br>` +
                                    `- الصافي المستنتج: <b style="color:var(--accent-color);">${netWeight}.00 طن</b><br>` +
-                                   `- تم توثيق وحفظ المستند في سحابة فايربيس بنجاح.`;
+                                   `- تم توثيق وحفظ المستند سحابياً بنجاح.`;
                     container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; max-width: 80%; border: 1px solid var(--border-color);">${botReply}</div>`;
                     saveChatHistory('bot', botReply);
                     container.scrollTop = container.scrollHeight;
@@ -1104,9 +949,7 @@
         let filteredContacts = savedContacts;
         if (searchQuery && searchQuery.trim() !== '') {
             let q = searchQuery.trim().toLowerCase();
-            filteredContacts = savedContacts.filter(c => 
-                c.name.toLowerCase().includes(q) || c.phone.includes(q)
-            );
+            filteredContacts = savedContacts.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
         }
 
         let html = `📇 <b>جهات الاتصال المتزامنة الخاصة بحساب [${tenant.activeDriver}]:</b><br>`;
@@ -1159,7 +1002,7 @@
 
         let welcomeText = tenant.activeRole === 'visitor' 
             ? `مرحباً بك يا <b>زائر كريم</b> في منصة أسطورة الطريق.<br>- أنت تصفح المنصة كزائر غير مسجل. يرجى تسجيل الدخول بحسابك المعتمد لاستعراض الخدمات الشاملة.`
-            : `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'admin' ? 'مدير' : 'سائق'}) في منصة أسطورة الطريق.<br>- تم استعادة سجلك الشخصي ومزامنة بياناتك بنجاح وعزلها تماماً عبر الذاكرة الحية والسحابية.`;
+            : `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'admin' ? 'مدير' : 'سائق'}) في منصة أسطورة الطريق.<br>- تم استعادة سجلك ومزامنة بياناتك ومعزلها تماماً عبر الذاكرة الحية والسحابية.`;
 
         container.innerHTML = subHtmlBanner + `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${welcomeText}</div>`;
 
@@ -1380,7 +1223,7 @@
         else if (contextualText.includes('شحناتي') || contextualText.includes('الشحنات') || contextualText.includes('شحنة') || contextualText.includes('رحلة')) {
             window.lastBotContext = 'شحناتي';
             if (tenant.activeRole === 'visitor') {
-                botReply = `📦 <b>عذراً، أنت تصفح كزائر كريم غير مسجل:</b><br>- تم حجب شحنات الشركات عن الزوار لحماية الخصوصية. يرجى تسجيل الدخول بحسابك المعتمد لاستعراض شحناتك الخاصه.`;
+                botReply = `📦 <b>عذراً، أنت تصفح كزائر كريم غير مسجل:</b><br>- تم حجب شحنات الشركات عن الزوار لحماية الخصوصية. يرجى تسجيل الدخول بحسابك المعتمد لاستعراض شحناتك.`;
             } else if (userShipments.length === 0) {
                 botReply = `📦 لا توجد شحنات مسجلة حالياً ومطابقة لحسابك (${tenant.activeDriver}).`;
             } else {
@@ -1506,7 +1349,7 @@
             window.lastBotContext = 'خدمات المنصة';
             botReply = `🌐 <b>عن منصة أسطورة الطريق (نقلة):</b><br>` +
                        `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، الجدول الخماسي المعتمد، تتبع الشحنات، وأتمتة الفواتير الآجلة.<br>` +
-                       `- توفر مزامنة تامة لجهات الاتصال، تتبع GPS لحظي، وبوت ذكاء اصطناعي متكامل.`;
+                       `- توفر مزامنة تامة لجهات الاتصال، تتبع GPS لحظي، وبوت ذكاء اصطناعي متكامل سحابياً.`;
         }
         else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
             window.lastBotContext = 'المساعدة';
