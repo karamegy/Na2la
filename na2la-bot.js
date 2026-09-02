@@ -13,7 +13,7 @@
     const existingContainer = document.getElementById('na2laBotRootContainer');
     if (existingContainer) existingContainer.remove();
 
-    // 🛑 تخزين في الذاكرة الحية فقط (Zero LocalStorage) مع مزامنة لحظية سحابية تامة
+    // 🛑 اعتماد الذاكرة الحية والمزامنة السحابية الفورية حصرياً (Zero LocalStorage)
     window.botMemoryState = {
         dutyStatus: 'active',
         theme: 'default',
@@ -218,7 +218,7 @@
 
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | عزل تامة وعمليات فورية مع الجدول الخماسي المعتمد
+                    🚀 أسطورة الطريق Pro | عزل تام وعمليات فورية مع الجدول الخماسي المعتمد
                 </div>
             </div>
 
