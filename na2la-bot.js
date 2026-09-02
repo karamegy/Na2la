@@ -65,17 +65,18 @@
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 4px 8px;
+            padding: 3px 6px;
             border-radius: 6px;
             font-size: 10px;
             font-weight: bold;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
             box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
             transition: transform 0.2s, box-shadow 0.2s;
             font-family: 'Cairo', sans-serif;
+            white-space: nowrap;
         }
         .sync-account-hub-btn:hover {
             transform: translateY(-2px);
@@ -149,6 +150,23 @@
             0%, 80%, 100% { transform: scale(0); }
             40% { transform: scale(1.0); }
         }
+        
+        /* التنسيقات الجديدة للأزرار المصغرة */
+        .compact-action-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            font-family: 'Cairo', sans-serif;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
     `;
     document.head.appendChild(styleEl);
 
@@ -159,7 +177,8 @@
 
         <div id="na2laBotModal" style="position: fixed; bottom: 85px; right: 20px; width: 420px; max-width: 92vw; height: 80vh; max-height: 650px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
             
-            <div id="na2laBotSidebarMenu" style="display: none; position: absolute; top: 44px; right: 0; width: 280px; height: calc(100% - 44px); background: var(--bg-color); border-left: 1px solid var(--border-color); z-index: 2147483648; box-shadow: -5px 0 25px rgba(0,0,0,0.5); overflow-y: auto; padding: 12px; color: var(--text-color); font-size: 11px;">
+            <!-- القائمة الجانبية -->
+            <div id="na2laBotSidebarMenu" style="display: none; position: absolute; top: 72px; right: 0; width: 280px; height: calc(100% - 72px); background: var(--bg-color); border-left: 1px solid var(--border-color); z-index: 2147483648; box-shadow: -5px 0 25px rgba(0,0,0,0.5); overflow-y: auto; padding: 12px; color: var(--text-color); font-size: 11px;">
                 <div style="font-weight: bold; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; color: var(--primary-color);">
                     <span>🗂️ القائمة الجانبية الشاملة</span>
                     <span style="cursor: pointer; font-size: 14px; padding: 2px 6px;" onclick="toggleNa2laSidebarMenu(event)">✕</span>
@@ -181,13 +200,17 @@
                 </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button type="button" onclick="toggleNa2laSidebarMenu(event)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 3px 7px; border-radius: 6px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; font-family: 'Cairo', sans-serif;" title="القائمة الجانبية الشاملة">☰ القائمة</button>
-                    <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (الجدول الخماسي)</span>
+            <!-- الهيدر العلوي الأساسي المدمج -->
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 6px 10px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; margin-left: 5px;">
+                    <button type="button" onclick="toggleNa2laSidebarMenu(event)" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; white-space: nowrap; flex-shrink: 0; font-family: 'Cairo', sans-serif;" title="القائمة الجانبية">☰ القائمة</button>
+                    <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer; flex-shrink: 0;" title="تبديل حالة العمل"></span>
+                    
+                    <!-- عرض النص بحيث يظهر مقصوصاً إذا كان طويلاً ولا يشوه التصميم -->
+                    <span id="botUserRoleBadge" style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">🤖 مساعد Gemini</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
+                
+                <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
                             <span id="sync-icon-bolt">⚡</span> شحناتي 
@@ -202,7 +225,24 @@
                             <div id="syncHubItemsList" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
                     </div>
-                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">✕</button>
+                    <button onclick="toggleNa2laBot()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; font-size: 12px; border-radius: 4px; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+                </div>
+            </div>
+
+            <!-- شريط الأزرار المصغرة بجوار القائمة (الحل الجذري للمشكلة) -->
+            <div style="padding: 4px 8px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); flex-shrink: 0; overflow-x: auto;">
+                <div style="display: flex; gap: 4px; flex-wrap: nowrap;">
+                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" class="compact-action-btn" style="color: #a855f7; border-color: #a855f7;" title="محادثة مؤقتة">🕵️ مؤقت</button>
+                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" class="compact-action-btn" title="صوت مستمر">🎤 مستمر</button>
+                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" class="compact-action-btn" style="background: var(--accent-color); color: #fff; border-color: var(--accent-color);" title="ناطق صوتي">🔊 ناطق</button>
+                    <button onclick="clearBotChat()" class="compact-action-btn" style="color: var(--danger-color); border-color: var(--danger-color);" title="مسح المحادثة">🗑️ مسح</button>
+                </div>
+                <div>
+                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 1px 4px; font-size: 9px; border-radius: 4px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif; outline: none; margin-right: 5px;">
+                        <option value="default">🎨 داكن</option>
+                        <option value="royal">👑 ملكي</option>
+                        <option value="emerald">💎 زمردي</option>
+                    </select>
                 </div>
             </div>
 
@@ -212,29 +252,13 @@
                 </div>
             </div>
 
-            <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 10px; flex-shrink: 0;">
-                <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة لا تحفظ في السجل">🕵️ محادثة مؤقتة</button>
-                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
-                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
-                    <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
-                </div>
-                <div>
-                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 5px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif;">
-                        <option value="default">🎨 الداكن الأصلي</option>
-                        <option value="royal">👑 الأرجواني الملكي</option>
-                        <option value="emerald">💎 الزمردي الفاخر</option>
-                    </select>
-                </div>
-            </div>
-
             <div id="tempChatAlertBanner" style="display: none; background: rgba(168, 85, 247, 0.2); border-bottom: 1px solid #a855f7; color: #d8b4fe; padding: 4px 10px; font-size: 10px; text-align: center; font-weight: bold; flex-shrink: 0;">
-                🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة): لن يتم حفظ هذه المحادثة في الذاكرة أو فايربيس.
+                🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة): لن يتم حفظ هذه المحادثة في السجل.
             </div>
 
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بالجدول الخماسي المعتمد.<br>- يمكنك طلب تقرير الخزنة أو الجدول الخماسي في أي وقت لاستعراض الإيرادات، الأرباح، الشحنات، الديون، والخزينة.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بالجدول الخماسي المعتمد.<br>- يمكنك طلب تقرير الخزنة أو الجدول الخماسي لاستعراض الإيرادات، الأرباح، الشحنات، الديون.
                 </div>
             </div>
 
@@ -246,7 +270,7 @@
                 
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📎</button>
                 
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، أو اطلب الجدول الخماسي والتقارير..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، أو اطلب التقارير..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
 
                 <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
                 
@@ -388,12 +412,11 @@
         if (btn) {
             btn.style.background = window.isTempChatActive ? "var(--purple-color)" : "var(--card-bg)";
             btn.style.color = window.isTempChatActive ? "#fff" : "#a855f7";
-            btn.innerText = window.isTempChatActive ? "🕵️ مؤقت: مفعل" : "🕵️ محادثة مؤقتة";
+            btn.innerText = window.isTempChatActive ? "🕵️ نشط" : "🕵️ مؤقت";
         }
         if (banner) {
             banner.style.display = window.isTempChatActive ? "block" : "none";
         }
-        alert(window.isTempChatActive ? "تم تفعيل وضع المحادثة المؤقتة (Incognito Mode). لن يتم حفظ الرسائل القادمة في السجل." : "تم إلغاء وضع المحادثة المؤقتة. عادت الرسائل للحفظ التلقائي في السجل.");
     };
 
     window.exportChatArchiveData = function() {
@@ -504,7 +527,6 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    // جلب البيانات مع العزل الصارم حصرياً للشركة النشطة
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -688,47 +710,48 @@
         return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
     };
 
-    // تقرير الجدول الخماسي بدون قيم افتراضية وهمية (عزل صافي لكل شركة تبدأ من الصفر الحقيقي)
     window.getCompanyFinancialReport = async function() {
+        window.getCompanySubscriptionInfo = async function() {
         let tenant = getActiveTenantContext();
-        let shipments = window.getIsolatedUserShipments();
-        
-        let shipmentsCount = shipments.length;
-        
-        let totalRevenue = shipments.reduce((sum, s) => {
-            let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
-            return sum + val;
-        }, 0);
-
-        let totalExpenses = shipments.reduce((sum, s) => {
-            let fuel = parseFloat(String(s.fuelCost || 0).replace(/[^\d.-]/g, '')) || 0;
-            let extra = parseFloat(String(s.extraCost || 0).replace(/[^\d.-]/g, '')) || 0;
-            return sum + fuel + extra;
-        }, 0);
-
-        let localExp = parseFloat(localStorage.getItem(`expenses_val_${tenant.activeCompanyId}`) || '0');
-        totalExpenses += localExp;
-
-        let netProfit = totalRevenue - totalExpenses;
-
-        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0 ج.م';
-        let treasuryVal = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 0;
-
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => tenant.activeRole === 'admin' || !inv.companyId || inv.companyId === tenant.activeCompanyId);
-        let totalDebts = companyInvoices.reduce((sum, inv) => {
-            let amt = parseFloat(String(inv.totalAmount || inv.amount || 0).replace(/[^\d.-]/g, '')) || 0;
-            return sum + amt;
-        }, 0);
-
-        return {
-            companyName: tenant.activeCompanyName,
-            shipmentsCount: shipmentsCount,
-            revenue: totalRevenue.toLocaleString() + ' ج.م',
-            netProfit: netProfit.toLocaleString() + ' ج.م',
-            treasury: treasuryVal.toLocaleString() + ' ج.م',
-            debts: totalDebts.toLocaleString() + ' ج.م'
+        let subData = {
+            companyName: tenant.activeRole === 'admin' ? tenant.activeCompanyName : 'محجوبة للخصوصية',
+            adminName: tenant.activeRole === 'admin' ? (tenant.activeDriver || 'غير محدد') : 'إدارة الشركة',
+            phone: tenant.activeRole === 'admin' ? 'غير متوفر' : 'محجوب للخصوصية',
+            planName: 'monthly',
+            status: 'نشط ✅',
+            expiryDate: '2026-09-28'
         };
+
+        try {
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+
+                if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم' && tenant.activeRole === 'admin') {
+                    try {
+                        let userQuery = await db.collection('drivers').where('name', '==', tenant.activeDriver).get();
+                        if (userQuery.empty && tenant.activeCompanyId) {
+                            userQuery = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
+                        }
+                        
+                        if (!userQuery.empty) {
+                            let d = userQuery.docs[0].data();
+                            subData.companyName = d.companyName || d.title || tenant.activeCompanyName;
+                            subData.adminName = d.name || tenant.activeDriver;
+                            subData.phone = d.phone || d.mobile || 'غير متوفر';
+                            subData.planName = d.subPlan || d.plan || d.package || 'monthly';
+                            let st = d.subStatus || d.status || 'active';
+                            subData.status = (st === 'active' || st.includes('نشط')) ? 'نشط ✅' : 'منتهي ⚠️';
+                            subData.expiryDate = d.subExpiry || d.expiryDate || d.expiry || '2026-09-28';
+                            return subData;
+                        }
+                    } catch(err) {}
+                }
+            }
+        } catch(e) {}
+
+        return subData;
     };
+
 
     window.exportFinancialReportPDF = async function() {
         let tenant = getActiveTenantContext();
@@ -1029,6 +1052,7 @@
         if (btn) {
             btn.innerText = isBotVoiceOutputOn ? "🔊 ناطق" : "🔇 صامت";
             btn.style.background = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
+            btn.style.borderColor = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
         }
     };
 
@@ -1036,10 +1060,10 @@
         isBotContinuousActive = !isBotContinuousActive;
         let btn = document.getElementById('botContinuousBtn');
         if (isBotContinuousActive) {
-            btn.innerText = "🎤 مستمر: مفعل"; btn.style.background = "var(--accent-color)";
+            btn.innerText = "🎤 نشط"; btn.style.background = "var(--accent-color)"; btn.style.borderColor = "var(--accent-color)";
             startBotVoiceInput();
         } else {
-            btn.innerText = "🎤 مستمر معطل"; btn.style.background = "var(--border-color)";
+            btn.innerText = "🎤 مستمر"; btn.style.background = "var(--card-bg)"; btn.style.borderColor = "var(--border-color)";
         }
     };
 
