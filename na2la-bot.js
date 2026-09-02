@@ -289,7 +289,7 @@
         const onDrag = (clientX, clientY) => {
             if (!isBotDragging) return;
             let dx = clientX - startBotX, dy = clientY - startBotY;
-            if (dx * dx + dy * dy > 100) hasBotDragged = true; // رفع حد المسافة لمنع حظر اللمسات الخفيفة على الجوال
+            if (dx * dx + dy * dy > 100) hasBotDragged = true;
             let newLeft = Math.max(10, Math.min(initBotLeft + dx, window.innerWidth - botBtn.offsetWidth - 10));
             let newTop = Math.max(10, Math.min(initBotTop + dy, window.innerHeight - botBtn.offsetHeight - 10));
             botBtn.style.left = newLeft + 'px'; botBtn.style.top = newTop + 'px';
@@ -313,7 +313,7 @@
             } 
         }, { passive: true });
         
-        document.addEventListener('touchend', (e) => {
+        document.addEventListener('touchend', () => {
             stopDrag();
             if (!hasBotDragged) {
                 toggleNa2laBot();
@@ -321,7 +321,7 @@
             hasBotDragged = false;
         });
 
-        botBtn.addEventListener('click', (e) => {
+        botBtn.addEventListener('click', () => {
             if (!hasBotDragged) {
                 toggleNa2laBot();
             }
@@ -495,23 +495,19 @@
     };
 
     window.getActiveTenantContext = function() {
-        let rawUser = window.loggedInDriverName || window.currentUser?.name || window.currentUser || window.logged_in_driver_name || window.appData?.currentUser || localStorage.getItem('currentUser') || localStorage.getItem('loggedUser') || null;
-        let activeRole = window.currentUserRole || window.currentUser?.role || window.appData?.currentUserRole || localStorage.getItem('userRole') || 'visitor';
-        let activeCompanyId = window.currentCompanyId || window.Na2laApp?.companyId || window.appData?.companyId || localStorage.getItem('companyId') || 'company_main';
-        let activeCompanyName = window.currentCompanyName || window.Na2laApp?.companyName || window.appData?.companyName || localStorage.getItem('companyName') || 'أسطورة الطريق الرئيسية';
+        // التكامل السلس والدقيق مع متغيرات الـ index.html المعتمدة
+        let rawUser = window.loggedInDriverName || localStorage.getItem('logged_in_driver_name') || null;
+        let activeRole = window.currentUserRole || localStorage.getItem('current_user_role') || 'visitor';
+        let activeCompanyId = window.currentCompanyId || localStorage.getItem('current_company_id') || 'company_main';
+        let activeCompanyName = window.currentCompanyName || localStorage.getItem('companyName') || 'أسطورة الطريق الرئيسية';
 
         if (!rawUser || activeRole === 'visitor' || rawUser === 'زائر كريم') {
-            if (window.appData && window.appData.adminName) {
-                rawUser = window.appData.adminName;
-                activeRole = 'admin';
-            } else {
-                return {
-                    activeDriver: 'زائر كريم',
-                    activeCompanyId: activeCompanyId || 'company_main',
-                    activeCompanyName: activeCompanyName || 'زائر غير مسجل',
-                    activeRole: 'visitor'
-                };
-            }
+            return {
+                activeDriver: 'زائر كريم',
+                activeCompanyId: activeCompanyId || 'company_main',
+                activeCompanyName: activeCompanyName || 'زائر غير مسجل',
+                activeRole: 'visitor'
+            };
         }
 
         let activeDriver = typeof rawUser === 'object' ? (rawUser.name || rawUser.title || 'المدير') : String(rawUser);
@@ -527,7 +523,7 @@
     };
 
     window.fetchRealFirebaseData = async function() {
-        if (window.appData) {
+        if (window.appData && (Array.isArray(window.appData.shipments) && window.appData.shipments.length > 0)) {
             realFirebaseShipments = window.appData.shipments || [];
             realFirebaseDrivers = window.appData.drivers || [];
             realFirebaseDeferredInvoices = window.appData.deferredInvoices || [];
@@ -605,19 +601,31 @@
         };
 
         try {
+            let foundDrv = (realFirebaseDrivers || []).find(d => d.name === tenant.activeDriver || d.companyId === tenant.activeCompanyId);
+            if (foundDrv) {
+                subData.companyName = foundDrv.companyName || tenant.activeCompanyName;
+                subData.adminName = foundDrv.name || tenant.activeDriver;
+                subData.phone = foundDrv.phone || 'غير متوفر';
+                subData.planName = foundDrv.subPlan || 'monthly';
+                let expiry = foundDrv.subExpiry || '2026-09-28';
+                subData.expiryDate = expiry;
+                let today = new Date();
+                today.setHours(0,0,0,0);
+                let isExpired = new Date(expiry) < today;
+                subData.status = !isExpired ? 'نشط ✅' : 'منتهي ⚠️';
+                return subData;
+            }
+
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
                 if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم') {
                     let userQuery = await db.collection('drivers').where('name', '==', tenant.activeDriver).get();
-                    if (userQuery.empty && tenant.activeCompanyId) {
-                        userQuery = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
-                    }
                     if (!userQuery.empty) {
                         let d = userQuery.docs[0].data();
-                        subData.companyName = d.companyName || d.title || tenant.activeCompanyName;
+                        subData.companyName = d.companyName || tenant.activeCompanyName;
                         subData.adminName = d.name || tenant.activeDriver;
-                        subData.phone = d.phone || d.mobile || 'غير متوفر';
-                        subData.planName = d.subPlan || d.plan || d.package || 'monthly';
+                        subData.phone = d.phone || 'غير متوفر';
+                        subData.planName = d.subPlan || 'monthly';
                         let expiry = d.subExpiry || '2026-09-28';
                         subData.expiryDate = expiry;
                         let today = new Date();
@@ -633,48 +641,11 @@
         return subData;
     };
 
-    window.updateDriverLiveLocation = async function(lat, lng) {
-        let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return;
-        try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                await db.collection('drivers').doc(tenant.activeDriver).set({
-                    name: tenant.activeDriver,
-                    companyId: tenant.activeCompanyId,
-                    companyName: tenant.activeCompanyName,
-                    latitude: lat,
-                    longitude: lng,
-                    lastActive: new Date().toISOString(),
-                    status: window.botMemoryState.dutyStatus || 'active'
-                }, { merge: true });
-            }
-        } catch(e) {}
-    };
-
     window.getCompanyActiveFleet = async function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') return [];
-        let fleet = [];
-        try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
-                fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            }
-        } catch(e) {}
-        if (fleet.length === 0 && realFirebaseDrivers.length > 0) {
-            fleet = realFirebaseDrivers;
-        }
+        let fleet = realFirebaseDrivers.length > 0 ? realFirebaseDrivers : [];
         return fleet.filter(d => !d.companyId || d.companyId === tenant.activeCompanyId || tenant.activeRole === 'admin');
-    };
-
-    window.parseNumericCurrency = function(val) {
-        if (!val) return '0 ج.م';
-        if (typeof val === 'number') return val.toLocaleString() + ' ج.م';
-        let cleanStr = String(val).replace(/[^\d.-]/g, '');
-        let num = parseFloat(cleanStr);
-        return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
     };
 
     window.getCompanyFinancialReport = async function() {
@@ -696,13 +667,19 @@
         totalExpenses += window.botMemoryState.expensesTotal || 0;
         let netProfit = totalRevenue - totalExpenses;
 
-        let rawTreasury = realFirebaseAppData.treasury || '0 ج.م';
-        let treasuryVal = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 0;
+        let rawTreasury = realFirebaseAppData.treasury || [];
+        let treasuryVal = 0;
+        if (Array.isArray(rawTreasury)) {
+            treasuryVal = rawTreasury.reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
+        }
 
         let companyInvoices = realFirebaseDeferredInvoices.filter(inv => tenant.activeRole === 'admin' || !inv.companyId || inv.companyId === tenant.activeCompanyId);
         let totalDebts = companyInvoices.reduce((sum, inv) => {
-            let amt = parseFloat(String(inv.totalAmount || inv.amount || 0).replace(/[^\d.-]/g, '')) || 0;
-            return sum + amt;
+            if (inv.status !== 'paid') {
+                let amt = parseFloat(String(inv.remainingAmount || inv.totalAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                return sum + amt;
+            }
+            return sum;
         }, 0);
 
         return {
@@ -763,137 +740,6 @@
                 <script>
                     window.onload = function() { window.print(); window.close(); }
                 </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
-
-    window.printConsolidatedInvoice = async function(invoiceId) {
-        let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return;
-
-        let conInv = null;
-        if (window.appData && window.appData.consolidatedInvoices) {
-            conInv = window.appData.consolidatedInvoices.find(i => String(i.id) === String(invoiceId) || String(i.id).trim() === String(invoiceId).trim());
-        }
-        if (!conInv && typeof firebase !== 'undefined' && firebase.firestore) {
-            try {
-                let docSnap = await firebase.firestore().collection('consolidatedInvoices').doc(String(invoiceId)).get();
-                if (docSnap.exists) {
-                    conInv = { id: docSnap.id, ...docSnap.data() };
-                }
-            } catch(e) {}
-        }
-
-        if (conInv) {
-            let matchingShipments = [];
-            if (window.appData && window.appData.shipments) {
-                matchingShipments = window.appData.shipments.filter(s => conInv.shipmentIds && conInv.shipmentIds.includes(String(s.id)));
-            }
-            let rowsHtml = '';
-            matchingShipments.forEach((s, idx) => {
-                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
-            });
-
-            let printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html dir="rtl">
-                <head>
-                    <title>فاتورة مجمعة رقم #${conInv.id}</title>
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
-                        .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
-                        th { background: #2563eb; color: #fff; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                        <p>رقم الفاتورة: #${conInv.id} | التاريخ: ${conInv.date || '-'}</p>
-                    </div>
-                    <p><strong>اسم العميل / الشركة:</strong> ${conInv.client || '-'}</p>
-                    <p><strong>ملاحظات:</strong> ${conInv.notes || 'لا توجد ملاحظات'}</p>
-                    <table>
-                        <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
-                        <tbody>${rowsHtml}</tbody>
-                    </table>
-                    <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${conInv.total || 0} ج.م</h3>
-                    <script>window.onload = function() { window.print(); window.close(); }</script>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-            return;
-        }
-
-        let invoices = realFirebaseDeferredInvoices.filter(i => String(i.id) === String(invoiceId) || String(i.invoiceNumber) === String(invoiceId));
-        let invoice = invoices.length > 0 ? invoices[0] : null;
-
-        if (!invoice && typeof firebase !== 'undefined' && firebase.firestore) {
-            try {
-                let docSnap = await firebase.firestore().collection('deferredInvoices').doc(String(invoiceId)).get();
-                if (docSnap.exists) {
-                    invoice = { id: docSnap.id, ...docSnap.data() };
-                }
-            } catch(e) {}
-        }
-
-        if (!invoice) {
-            alert("عذراً، لم يتم العثور على بيانات الفاتورة المطلوبة.");
-            return;
-        }
-
-        let printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <html dir="rtl">
-            <head>
-                <title>فاتورة آجل - ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</title>
-                <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
-                    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
-                    th { background: #f2f2f2; }
-                    .footer { margin-top: 40px; text-align: left; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>شركة ${tenant.activeCompanyName}</h2>
-                    <p>قسم الفواتير الآجلة والمستحقات</p>
-                </div>
-                <div style="margin-bottom: 15px; font-size: 14px;">
-                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoice.invoiceId || invoiceId}</p>
-                    <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
-                    <p><b>تاريخ الاستحقاق:</b> ${invoice.dueDate || '-'}</p>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>م</th>
-                            <th>بيان الشحنة / الخدمة</th>
-                            <th>المبلغ الإجمالي</th>
-                            <th>المتبقي</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>${invoice.description || invoice.notes || 'فاتورة آجل ومستحقات'}</td>
-                            <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
-                            <td style="color: red; font-weight: bold;">${invoice.remainingAmount || invoice.totalAmount || '0'} ج.م</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <p>التوقيع / الختم: ........................</p>
-                </div>
-                <script>window.onload = function() { window.print(); window.close(); }</script>
             </body>
             </html>
         `);
@@ -1008,10 +854,6 @@
 
     fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
 
-    window.addEventListener('na2laDataUpdated', () => {
-        fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
-    });
-    
     window._na2laBotInterval = setInterval(() => {
         fetchRealFirebaseData().then(() => { updateSyncButtonBadge(); });
     }, 15000);
@@ -1264,7 +1106,7 @@
                 if (!querySnap.empty) {
                     await querySnap.docs[0].ref.update({ status: newStatus });
                 } else {
-                    await db.collection('shipments').doc(shipmentId).update({ status: newStatus }).catch(async () => {});
+                    await db.collection('shipments').doc(String(shipmentId)).update({ status: newStatus }).catch(async () => {});
                 }
             }
             alert(`تم تحديث حالة الشحنة (${shipmentId}) إلى: ${newStatus} بنجاح وسحابياً.`);
@@ -1283,7 +1125,7 @@
                 <div style="font-size: 10px; color: var(--text-color);">الحالة: <span style="color: var(--accent-color); font-weight: bold;">${shipment.status || 'نشطة'}</span></div>
                 <div style="margin-top: 6px; display: flex; gap: 4px;">
                     <button onclick="updateShipmentStatusFromChat('${sId}', 'في الطريق')" style="background:var(--primary-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">🚚 في الطريق</button>
-                    <button onclick="updateShipmentStatusFromChat('${sId}', 'تم التسليم')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ تم التسليم</button>
+                    <button onclick="updateShipmentStatusFromChat('${sId}', 'مكتملة')" style="background:var(--accent-color); color:#fff; border:none; padding:3px 6px; border-radius:4px; font-size:9px; cursor:pointer; font-family:'Cairo', sans-serif;">✅ مكتملة</button>
                 </div>
             </div>
         `;
@@ -1340,11 +1182,14 @@
                 try {
                     window.botMemoryState.expensesTotal = (window.botMemoryState.expensesTotal || 0) + parseFloat(amount);
                     if (typeof firebase !== 'undefined' && firebase.firestore) {
-                        await firebase.firestore().collection('expenses').add({
+                        let expId = String(Date.now());
+                        await firebase.firestore().collection('expenses').doc(expId).set({
+                            id: expId,
                             amount: parseFloat(amount),
-                            description: description,
+                            title: description,
                             companyId: tenant.activeCompanyId,
                             driver: tenant.activeDriver,
+                            date: new Date().toLocaleDateString('ar-EG'),
                             timestamp: new Date().toISOString()
                         });
                     }
@@ -1422,7 +1267,7 @@
                     companyInvoices = companyInvoices.filter(inv => 
                         String(inv.invoiceNumber || '').includes(searchTerm) ||
                         String(inv.clientName || inv.customer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        String(inv.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+                        String(inv.notes || '').toLowerCase().includes(searchTerm.toLowerCase())
                     );
                 }
                 if (companyInvoices.length === 0) {
@@ -1432,7 +1277,7 @@
                                `<div class="bot-table-container"><table class="bot-custom-table">` +
                                `<tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>إجراء</th></tr>`;
                     companyInvoices.slice(0, 5).forEach(inv => {
-                        let invNum = inv.invoiceNumber || inv.id || 'فاتورة';
+                        let invNum = inv.invoiceId || inv.invoiceNumber || 'فاتورة';
                         let client = inv.clientName || inv.customer || 'عميل عام';
                         let amt = inv.totalAmount || inv.amount || '0';
                         botReply += `<tr><td><b>${invNum}</b></td><td>${client}</td><td>${amt} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;">📄 طباعة PDF</button></td></tr>`;
