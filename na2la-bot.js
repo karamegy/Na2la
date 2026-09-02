@@ -1,7 +1,8 @@
 (function() {
-    if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-        firebase.initializeApp({
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+    // التأكد من الاعتماد على نسخة فايربيس الخاصة بالمنصة دون إعادة تهيئة متعارضة
+    const db = (typeof firebase !== 'undefined' && firebase.apps.length) ? firebase.firestore() : null;
+    const auth = (typeof firebase !== 'undefined' && firebase.apps.length && firebase.auth) ? firebase.auth() : null;
+apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
