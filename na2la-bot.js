@@ -504,6 +504,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
+    // جلب البيانات مع العزل الصارم حصرياً للشركة النشطة
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -511,21 +512,21 @@
                 let tenant = getActiveTenantContext();
                 
                 try {
-                    const driversSnap = await db.collection('drivers').get();
+                    const driversSnap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                     realFirebaseDrivers = driversSnap.empty ? [] : driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseDrivers = [];
                 }
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').get();
+                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', tenant.activeCompanyId).get();
                     realFirebaseShipments = shipmentsSnap.empty ? [] : shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseShipments = [];
                 }
 
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').get();
+                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
                     realFirebaseDeferredInvoices = invoicesSnap.empty ? [] : invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 } catch(e) {
                     realFirebaseDeferredInvoices = [];
@@ -557,8 +558,11 @@
 
         if (localInvoices.length > 0) {
             localInvoices.forEach(inv => {
-                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                    realFirebaseDeferredInvoices.push(inv);
+                let invCompany = inv.companyId || tenantContext.activeCompanyId;
+                if (invCompany === tenantContext.activeCompanyId) {
+                    if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
+                        realFirebaseDeferredInvoices.push(inv);
+                    }
                 }
             });
         }
@@ -627,7 +631,7 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                const snap = await db.collection('drivers').get();
+                const snap = await db.collection('drivers').where('companyId', '==', tenant.activeCompanyId).get();
                 fleet = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             }
         } catch(e) {}
@@ -647,12 +651,6 @@
         let allShipments = [];
         if (realFirebaseShipments.length > 0) {
             allShipments = realFirebaseShipments;
-        } else if (window.appData && Array.isArray(window.appData.shipments)) {
-            allShipments = window.appData.shipments;
-        } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
-            allShipments = window.Na2laApp.shipments;
-        } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
-            allShipments = window.shipments;
         } else {
             try {
                 let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments'];
@@ -669,7 +667,7 @@
 
         let companyFiltered = allShipments.filter(s => {
             let sCompanyId = s.companyId || 'company_main';
-            return tenant.activeRole === 'admin' || sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
+            return sCompanyId === tenant.activeCompanyId || sCompanyId.toLowerCase() === tenant.activeCompanyId.toLowerCase();
         });
 
         if (tenant.activeRole === 'admin') {
@@ -690,20 +688,18 @@
         return isNaN(num) ? '0 ج.م' : num.toLocaleString() + ' ج.م';
     };
 
-    // جلب دقيق لبيانات الجدول الخماسي (الشحنات، الإيرادات، صافي الأرباح، الخزينة، الديون والآجل)
+    // تقرير الجدول الخماسي بدون قيم افتراضية وهمية (عزل صافي لكل شركة تبدأ من الصفر الحقيقي)
     window.getCompanyFinancialReport = async function() {
         let tenant = getActiveTenantContext();
         let shipments = window.getIsolatedUserShipments();
         
         let shipmentsCount = shipments.length;
         
-        // 1. الإيرادات الإجمالية
         let totalRevenue = shipments.reduce((sum, s) => {
             let val = parseFloat(String(s.price || s.cost || 0).replace(/[^\d.-]/g, '')) || 0;
             return sum + val;
         }, 0);
 
-        // 2. إجمالي المصروفات التشغيلية والوقود
         let totalExpenses = shipments.reduce((sum, s) => {
             let fuel = parseFloat(String(s.fuelCost || 0).replace(/[^\d.-]/g, '')) || 0;
             let extra = parseFloat(String(s.extraCost || 0).replace(/[^\d.-]/g, '')) || 0;
@@ -713,28 +709,16 @@
         let localExp = parseFloat(localStorage.getItem(`expenses_val_${tenant.activeCompanyId}`) || '0');
         totalExpenses += localExp;
 
-        // 3. صافي الأرباح (الإيرادات - المصروفات)
         let netProfit = totalRevenue - totalExpenses;
 
-        // 4. الخزينة (الرصيد الحالي)
-        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '500 ج.م';
-        let treasuryVal = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 500;
+        let rawTreasury = realFirebaseAppData.treasury || localStorage.getItem(`treasury_balance_${tenant.activeCompanyId}`) || '0 ج.م';
+        let treasuryVal = parseFloat(String(rawTreasury).replace(/[^\d.-]/g, '')) || 0;
 
-        // 5. الديون والآجل (الفواتير غير المسددة أو المستحقات)
         let companyInvoices = realFirebaseDeferredInvoices.filter(inv => tenant.activeRole === 'admin' || !inv.companyId || inv.companyId === tenant.activeCompanyId);
         let totalDebts = companyInvoices.reduce((sum, inv) => {
             let amt = parseFloat(String(inv.totalAmount || inv.amount || 0).replace(/[^\d.-]/g, '')) || 0;
             return sum + amt;
         }, 0);
-
-        // Fallback افتراضي في حال كانت البيانات فارغة لتعكس نفس قيم الواجهة الخماسية للمنصة
-        if (totalRevenue === 0 && shipmentsCount === 0) {
-            shipmentsCount = 4;
-            totalRevenue = 5550;
-            netProfit = 5450;
-            treasuryVal = 500;
-            totalDebts = 4250;
-        }
 
         return {
             companyName: tenant.activeCompanyName,
@@ -1269,7 +1253,7 @@
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
-                let querySnap = await db.collection('shipments').where('shipmentNumber', '==', shipmentId).get();
+                let querySnap = await db.collection('shipments').where('shipmentNumber', '==', shipmentId).where('companyId', '==', tenant.activeCompanyId).get();
                 if (!querySnap.empty) {
                     await querySnap.docs[0].ref.update({ status: newStatus });
                 } else {
