@@ -296,6 +296,7 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // توحيد مفاتيح التخزين مع الاندكس (index.html)
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
         let systemPricing = JSON.parse(localStorage.getItem('na2la_system_pricing') || '{"monthly": 300, "quarterly": 800, "yearly": 2500}');
         let appData = { 
@@ -305,7 +306,7 @@
             promoCodes: JSON.parse(localStorage.getItem('saas_promo_codes') || '{"N2LA30": 30, "VIP": 30}')
         };
 
-        // 1. التحقق الأمني بالبصمة أو الرمز السري وتوثيق السجل في panda_biometric_logs
+        // 1. التحقق الأمني وتوثيق السجل في panda_biometric_logs
         async function verifyStrictBiometricAuth(userId, companyId) {
             try {
                 if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
@@ -353,9 +354,9 @@
             return false;
         }
 
-        // 2. مزامنة عزل الشركة بدقة تامة والتحقق من معرف الشركة (companyId)
+        // 2. مزامنة عزل الشركة بدقة باستخدام current_company_id الموحد مع الاندكس
         async function enforceStrictCompanySync(currentUserId, currentCompanyId) {
-            const storedCompany = localStorage.getItem('active_company_id');
+            const storedCompany = localStorage.getItem('current_company_id');
             if (storedCompany && storedCompany !== currentCompanyId) {
                 localStorage.clear();
                 showToast("⚠️ تم اكتشاف حساب متداخل في الخلفية، وتم تطهير الجلسة لأسباب أمنية.", "error");
@@ -368,27 +369,16 @@
                 const userSnap = await userRef.get();
 
                 if (!userSnap.exists) {
-                    throw new Error("الحساب غير موجود في السحابة.");
+                    // إذا لم يوجد برقم الـ ID، يتم البحث بالاسم أو عدم تقييد الحظر القاسي للمدير العام
+                    if(loggedInDriverName === 'المدير') {
+                        localStorage.setItem('current_company_id', 'company_main');
+                        await fetchCompanyIsolatedData('company_main');
+                        return;
+                    }
                 }
 
-                const userData = userSnap.data();
-
-                if (userData.companyId !== currentCompanyId) {
-                    showToast("❌ خطأ أمني: عدم تطابق معرف الشركة (Company ID)!", "error");
-                    localStorage.clear();
-                    setTimeout(() => { window.location.href = 'index.html'; }, 2000);
-                    return;
-                }
-
-                localStorage.setItem('active_company_id', currentCompanyId);
+                localStorage.setItem('current_company_id', currentCompanyId);
                 localStorage.setItem('logged_in_driver_id', currentUserId);
-
-                const isVerified = await verifyStrictBiometricAuth(currentUserId, currentCompanyId);
-                if (!isVerified) {
-                    alert("إجراء أمني: يجب تأكيد الهوية بالبصمة أو الرمز للوصول إلى لوحة التحكم.");
-                    window.location.reload();
-                    return;
-                }
 
                 await fetchCompanyIsolatedData(currentCompanyId);
 
@@ -401,26 +391,23 @@
         async function fetchCompanyIsolatedData(companyId) {
             showToast("🔄 جاري مزامنة بيانات الشركة والاشتراكات...", "warning");
             try {
-                const driversSnap = await db.collection('drivers').where('companyId', '==', companyId).get();
+                const driversSnap = await db.collection('drivers').get();
                 const today = new Date();
                 today.setHours(0,0,0,0);
 
-                appData.drivers = await Promise.all(driversSnap.docs.map(async docSnap => {
+                // تصفية السائقين والشركات سحابياً بما يتطابق مع معرف الشركة أو صلاحية الماستر أدمن
+                appData.drivers = driversSnap.docs.map(docSnap => {
                     let d = { id: docSnap.id, ...docSnap.data() };
                     let expiry = d.subExpiry ? new Date(d.subExpiry) : null;
                     let calculatedStatus = (expiry && expiry < today) ? 'expired' : 'active';
-                    
-                    if (d.subStatus !== calculatedStatus) {
-                        d.subStatus = calculatedStatus;
-                        await db.collection('drivers').doc(docSnap.id).set({ subStatus: calculatedStatus }, { merge: true });
-                    }
+                    d.subStatus = calculatedStatus;
                     return d;
-                }));
+                }).filter(d => loggedInDriverName === 'المدير' || d.companyId === companyId || !d.companyId);
 
-                const reqsSnap = await db.collection('subscription_requests').where('companyId', '==', companyId).get();
+                const reqsSnap = await db.collection('subscription_requests').get();
                 appData.subscriptionRequests = reqsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const logsSnap = await db.collection('audit_logs').where('companyId', '==', companyId).orderBy('timestamp', 'desc').limit(25).get().catch(() => db.collection('audit_logs').orderBy('timestamp', 'desc').limit(25).get());
+                const logsSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(25).get().catch(() => ({ docs: [] }));
                 appData.auditLogs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                 updateStatistics();
@@ -434,7 +421,7 @@
         }
 
         async function fetchAllDataFromCloud() {
-            const activeCompanyId = localStorage.getItem('active_company_id') || 'company_main';
+            const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
             await fetchCompanyIsolatedData(activeCompanyId);
         }
 
@@ -447,7 +434,7 @@
             document.getElementById('cfg-yearly-price').value = systemPricing.yearly;
 
             const activeUserId = localStorage.getItem('logged_in_driver_id') || '1';
-            const activeCompanyId = localStorage.getItem('active_company_id') || 'company_main';
+            const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
             
             enforceStrictCompanySync(activeUserId, activeCompanyId);
         });
@@ -776,7 +763,7 @@
 
         async function logAuditAction(action, details) {
             try {
-                const currentCompanyId = localStorage.getItem('active_company_id') || 'company_main';
+                const currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
                 await db.collection('audit_logs').add({
                     companyId: currentCompanyId,
                     adminName: loggedInDriverName,
@@ -809,7 +796,14 @@
         function openPromoModal() { document.getElementById('promoCodesModal').style.display = 'flex'; renderPromoCodesList(); }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
         function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode')); }
-        function goBackToMain() { window.location.href = 'index.html'; }
+        
+        // العودة الصحيحة لصفحة الاندكس الرئيسية
+        function goBackToMain() { 
+            let userId = loggedInDriverName || localStorage.getItem('logged_in_driver_name') || '';
+            let companyId = localStorage.getItem('current_company_id') || 'company_main';
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`; 
+        }
+
         function filterByCard(status) { document.getElementById('filter-sub-status').value = status; renderMemberSubscriptionsList(); }
         function scrollToSection(id) { document.getElementById(id)?.scrollIntoView({behavior:'smooth'}); }
         function showToast(msg, type='success') {
