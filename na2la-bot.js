@@ -145,7 +145,23 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     
-                    <!-- قائمة المنسدلة المركزية الشاملة لكافة الأزرار والخصائص -->
+                    <!-- زر شحناتي / تتبع شحنة -->
+                    <div style="position: relative; display: inline-block;">
+                        <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
+                            <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
+                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
+                        </button>
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span id="syncHubUserTitle">👤 الحساب المتصل</span>
+                                <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
+                            </div>
+                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 6px;">🏢 الشركة: جاري المزامنة...</div>
+                            <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- قائمة المنسدلة المركزية الشاملة لكافة الأزرار والخصائص (منقولة لليمين بجوار الإغلاق لتظهر بالكامل) -->
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
                             ☰ القائمة والتحكم
@@ -165,7 +181,7 @@
                                 <button onclick="openBotSection('account-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #fbbf24; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">👤 البروفايل والإعدادات</button>
                             </div>
 
-                            <!-- أدوات تفضيلات المحادثة (التي تم إزالتها من الواجهة الرئيسية) -->
+                            <!-- أدوات تفضيلات المحادثة -->
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: #a855f7;">
                                 ⚙️ تفضيلات المساعد الصوتي والمحادثة
                             </div>
@@ -190,22 +206,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- زر شحناتي / تتبع شحنة -->
-                    <div style="position: relative; display: inline-block;">
-                        <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
-                            <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
-                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
-                        </button>
-                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
-                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
-                                <span id="syncHubUserTitle">👤 الحساب المتصل</span>
-                                <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
-                            </div>
-                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 6px;">🏢 الشركة: جاري المزامنة...</div>
-                            <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
-                        </div>
-                    </div>
                     
                     <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 4px;" title="إغلاق">✕</button>
                 </div>
@@ -218,7 +218,7 @@
                 </div>
             </div>
 
-            <!-- شريط إضافي نظيف تماماً يحتوي فقط على مُبدل الثيم (كما طلبت: "فقط تغير الثيم فقط بلواجه") -->
+            <!-- شريط إضافي نظيف تماماً يحتوي فقط على مُبدل الثيم -->
             <div style="padding: 8px 14px; background: var(--bg-color); display: flex; justify-content: flex-end; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px; flex-shrink: 0;">
                 <div>
                     <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 5px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif; font-weight: bold;" title="تغيير ثيم الواجهة">
@@ -241,7 +241,7 @@
                 </div>
             </div>
 
-            <!-- صندوق الإدخال السفلي المطوّر (يحتوي فقط على الإرسال، المرفقات والصوت) -->
+            <!-- صندوق الإدخال السفلي المطوّر -->
             <div style="padding: 10px 14px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; background: var(--bg-color); align-items: center; position: relative; flex-shrink: 0; min-height: 56px; box-sizing: border-box;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
                 <input type="file" id="importArchiveFileInput" accept=".json" style="display: none;" onchange="importChatArchiveData(this)">
