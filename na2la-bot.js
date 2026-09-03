@@ -138,24 +138,18 @@
 
         <div id="na2laBotModal" style="position: fixed; bottom: 95px; right: 20px; width: 430px; max-width: 94vw; height: 82vh; max-height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(25px); font-family: 'Cairo', sans-serif;">
             
-            <!-- شريط العنوان العلوي الاحترافي المعالج لمنع التداخل والقص -->
-            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); gap: 8px;">
+            <!-- شريط العنوان العلوي (القائمة والتتبع يميناً 100% | حالة البوت واسمه وزر الإغلاق يساراً) -->
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); gap: 8px; direction: rtl;">
                 
-                <!-- الجانب الأيسر: حالة البوت واسم المستخدم -->
-                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden;">
-                    <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer; flex-shrink: 0;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🤖 مساعد Gemini الذكي Pro</span>
-                </div>
-
-                <!-- الجانب الأيمن: القائمة، زر شحناتي/تتبع، وزر الإغلاق -->
+                <!-- الجانب الأيمن: زر القائمة والتحكم + زر شحناتي/تتبع -->
                 <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                     
-                    <!-- زر القائمة والتحكم (يمين) -->
+                    <!-- زر القائمة والتحكم -->
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
                             ☰ القائمة والتحكم
                         </button>
-                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; left: 0; width: 290px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px;">
+                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right;">
                             
                             <!-- أقسام المنصة -->
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
@@ -196,13 +190,13 @@
                         </div>
                     </div>
 
-                    <!-- زر شحناتي / تتبع شحنة (يمين بجوار القائمة) -->
+                    <!-- زر شحناتي / تتبع شحنة -->
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
                             <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
                             <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
                         </button>
-                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; left: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px; text-align: right;">
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
                                 <span id="syncHubUserTitle">👤 الحساب المتصل</span>
                                 <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
@@ -211,9 +205,13 @@
                             <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- زر الإغلاق -->
-                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 2px;" title="إغلاق">✕</button>
+                <!-- الجانب الأيسر: حالة البوت، الاسم، وزر الإغلاق -->
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; overflow: hidden; justify-content: flex-end;">
+                    <span id="botUserRoleBadge" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🤖 مساعد Gemini الذكي Pro</span>
+                    <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer; flex-shrink: 0;" title="تبديل حالة العمل"></span>
+                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 2px; flex-shrink: 0;" title="إغلاق">✕</button>
                 </div>
             </div>
 
