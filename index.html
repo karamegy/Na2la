@@ -670,6 +670,34 @@
         </div>
     </section>
 
+    <!-- قسم إدارة البصمة البيومترية الجديد -->
+    <section id="biometric-tab" class="app-section">
+        <div class="card" style="border: 2px solid var(--accent);">
+            <h3 style="color: var(--accent);">👆 قسم إدارة البصمة البيومترية والمصادقة الآمنة</h3>
+            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 12px;">إدارة أجهزة وبصمات الإصبع (WebAuthn) المربوطة بحسابك والتحقق السحابي:</p>
+            
+            <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="btn-success" onclick="registerNewUserBiometricDevice()" style="flex: 1;">+ تسجيل بصمة جهاز جديد لهذا الحساب 👆</button>
+                <button type="button" class="btn-main" onclick="testCurrentBiometricAuth()" style="flex: 1;">🔐 اختبار المصادقة البيومترية الآن</button>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>صاحب الحساب</th>
+                            <th>معرف البصمة / الجهاز (Credential ID)</th>
+                            <th>نوع المصادقة</th>
+                            <th>تاريخ التسجيل</th>
+                            <th>إدارة الحذف</th>
+                        </tr>
+                    </thead>
+                    <tbody id="biometric-credentials-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
     <!-- صفحة إدارة الشركات والاشتراكات -->
     <section id="companies-tab" class="app-section">
         <div class="card" style="border: 2px solid var(--purple);">
@@ -1224,8 +1252,8 @@
         <button type="button" class="bottom-nav-btn" onclick="switchTab('chat-tab', this)">
             <span>💬</span> الدردشة
         </button>
-        <button type="button" class="bottom-nav-btn" onclick="switchTab('treasury-tab', this)">
-            <span>💵</span> الخزينة
+        <button type="button" class="bottom-nav-btn" onclick="switchTab('biometric-tab', this)">
+            <span>👆</span> البصمة
         </button>
         <button type="button" class="bottom-nav-btn" onclick="toggleSidebar()">
             <span>☰</span> القائمة
@@ -1254,9 +1282,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // إزالة التخزين المحلي غير المرغوب فيه ومنع تعارضات المزامنة والتبويبات
-        // تم الاعتماد حصرياً على المزامنة السحابية الفورية في الإصدار العاشر V10
-
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         let storedPin = '01036';
         let currentUserRole = localStorage.getItem('current_user_role') || ''; 
@@ -1274,7 +1299,7 @@
 
         let appData = { 
             shipments: [], trucks: [], customers: [], expenses: [], treasury: [], docs: [], 
-            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [], subscriptionRequests: [],
+            drivers: [], chat: [], posts: [], communityPosts: [], consolidatedInvoices: [], deferredInvoices: [], subscriptionRequests: [], biometricCredentials: [],
             newsText: '🌟 نظام سحابي آمن بالكامل مع العزل التام للشركات ومصادقة البصمة البيومترية الإصدار العاشر 🚀'
         };
 
@@ -1299,7 +1324,6 @@
             } catch (err) {
                 console.log("Biometric API note:", err);
             }
-            // نافذة محاكاة وتحقيق البصمة البيومترية في حال عدم توفر مستشعر مادي مباشر
             return confirm("👆 يرجى تأكيد بصمة الإصبع أو التحقق البيومتري للمتابعة الآمنة لنظام أسطورة الطريق V10:");
         }
 
@@ -1310,6 +1334,114 @@
                 return;
             }
             performUnifiedLogin();
+        }
+
+        // دوال إدارة وبصمات الأجهزة البيومترية الجديدة
+        async function registerNewUserBiometricDevice() {
+            try {
+                if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+                    alert('⚠️ متصفحك أو جهازك لا يدعم مصادقة الـ WebAuthn البيومترية المباشرة.');
+                    return;
+                }
+                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                if (!available) {
+                    alert('⚠️ لا يتوفر قارئ بصمة بيومتري نشط على هذا الجهاز.');
+                    return;
+                }
+
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+                const userIdUint = new TextEncoder().encode(loggedInDriverName);
+
+                const publicKey = {
+                    challenge: challenge,
+                    rp: { name: "أسطورة الطريق Na2la V10" },
+                    user: {
+                        id: userIdUint,
+                        name: loggedInDriverName,
+                        displayName: loggedInDriverName
+                    },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                    timeout: 60000,
+                    attestation: "direct"
+                };
+
+                const credential = await navigator.credentials.create({ publicKey });
+                if (credential) {
+                    const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
+                    let drv = getCurrentDriver();
+                    
+                    let newCredObj = {
+                        id: 'bio_' + Date.now(),
+                        companyId: currentCompanyId,
+                        driverId: drv.id || '1',
+                        driverName: loggedInDriverName,
+                        credentialId: credIdBase64.substring(0, 32) + '...',
+                        type: 'بصمة بيومترية (Platform Authenticator)',
+                        createdAt: new Date().toLocaleString('ar-EG')
+                    };
+
+                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
+                    alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
+                    renderBiometricManagementTable();
+                }
+            } catch (err) {
+                console.error("Biometric registration error:", err);
+                alert('فشل تسجيل البصمة البيومترية: ' + (err.message || 'تم إلغاء العملية'));
+            }
+        }
+
+        async function testCurrentBiometricAuth() {
+            const passed = await verifyBiometricAuth();
+            if (passed) {
+                alert('✅ تم نجاح اختبار المصادقة البيومترية وبصمة الإصبع بامتياز!');
+            } else {
+                alert('❌ فشل التحقق البيومتري.');
+            }
+        }
+
+        function renderBiometricManagementTable() {
+            const tbody = document.getElementById('biometric-credentials-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            db.collection('biometricCredentials').onSnapshot(snapshot => {
+                tbody.innerHTML = '';
+                let list = [];
+                snapshot.forEach(doc => {
+                    let d = doc.data();
+                    if (loggedInDriverName === 'المدير' || d.driverName === loggedInDriverName) {
+                        list.push({ id: doc.id, ...d });
+                    }
+                });
+
+                if (list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.7; padding:12px;">لا توجد بصمات أو أجهزة بيومترية مسجلة حالياً.</td></tr>`;
+                    return;
+                }
+
+                list.forEach(item => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="font-weight:bold;">${item.driverName}</td>
+                        <td><code>${item.credentialId}</code></td>
+                        <td>${item.type}</td>
+                        <td>${item.createdAt}</td>
+                        <td><button type="button" class="btn-danger btn-sm" onclick="deleteBiometricCredential('${item.id}')">حذف البصمة 🗑️</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        function deleteBiometricCredential(id) {
+            if (confirm('هل أنت متأكد من حذف ربط هذه البصمة البيومترية؟')) {
+                db.collection('biometricCredentials').doc(String(id)).delete().then(() => {
+                    alert('تم حذف البصمة بنجاح.');
+                    renderBiometricManagementTable();
+                });
+            }
         }
 
         function goToAuthenticatedPage(pageName) {
@@ -1819,13 +1951,12 @@
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs'];
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials'];
             
             collections.forEach(colName => {
                 db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // تطبيق العزل التام للشركات بدقة مطلقة
                     if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
                         appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
                     } else if (currentCompanyId) {
@@ -2182,6 +2313,7 @@
 
                     <button type="button" onclick="switchTab('drivers-monitor-tab', this); toggleSidebar();" style="background:var(--warning); color:#fff;">👁️ مراقبة السائقين</button>
                     <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
+                    <button type="button" onclick="switchTab('biometric-tab', this); toggleSidebar();" style="background:#0284c7; color:white;">👆 إدارة البصمة البيومترية</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
                     <button type="button" onclick="switchTab('consolidated-invoices-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">📑 الفواتير المجمعة</button>
                     <button type="button" onclick="switchTab('deferred-invoices-tab', this); toggleSidebar();" style="background:#3b82f6; color:#fff;">⏳ قسم الأجل</button>
@@ -2198,6 +2330,7 @@
             } else {
                 nav.innerHTML = `
                     <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
+                    <button type="button" onclick="switchTab('biometric-tab', this); toggleSidebar();" style="background:#0284c7; color:white;">👆 إدارة البصمة البيومترية</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 شحناتي ومهماتي</button>
                     <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
                     <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 غرفة المحادثة والتواصل</button>
@@ -2481,6 +2614,7 @@
             }
 
             if(tabId === 'map-tab') setTimeout(initMap, 200);
+            if(tabId === 'biometric-tab') renderBiometricManagementTable();
             if(tabId === 'reports-tab') {
                 updateInvoiceDropdown();
                 renderMemberSubscriptionsList();
@@ -2904,80 +3038,41 @@
         }
 
         async function printConsolidatedInvoice(id) {
-    if (currentUserRole !== 'admin') return;
-    
-    // 1. البحث في الذاكرة المحلية أولاً
-    let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
-    
-    // 2. إذا لم تكن موجودة محلياً بسبب تأخير المزامنة، يتم جلبها مباشرة من Firestore
-    if (!inv) {
-        try {
-            const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
-            if (docSnap.exists) {
-                inv = { id: docSnap.id, ...docSnap.data() };
+            if (currentUserRole !== 'admin') return;
+            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
+            if (!inv) {
+                try {
+                    const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
+                    if (docSnap.exists) inv = { id: docSnap.id, ...docSnap.data() };
+                } catch (err) { console.error(err); }
             }
-        } catch (err) {
-            console.error("خطأ في جلب الفاتورة المجمعة من السحابة:", err);
+            if (!inv) { alert('لم يتم العثور على الفاتورة.'); return; }
+
+            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.includes(String(s.id)));
+            let rowsHtml = '';
+            matchingShipments.forEach((s, idx) => {
+                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
+            });
+
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html lang="ar" dir="rtl">
+                <head><title>فاتورة مجمعة رقم #${inv.id}</title>
+                <style>body{font-family:Tahoma,sans-serif;padding:25px;direction:rtl;text-align:right;}table{width:100%;border-collapse:collapse;margin-top:15px;}th,td{border:1px solid #cbd5e1;padding:8px;text-align:center;font-size:12px;}th{background:#2563eb;color:#fff;}</style></head>
+                <body>
+                    <h2 style="text-align:center;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
+                    <p><strong>اسم العميل:</strong> ${inv.client}</p>
+                    <table><thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+                    <h3 style="text-align:left;color:#059669;margin-top:20px;">الإجمالي الكلي: ${inv.total} ج.م</h3>
+                </body></html>
+            `);
+            win.document.close();
+            setTimeout(() => win.print(), 300);
         }
-    }
-
-    // 3. التحقق النهائي من وجود البيانات
-    if (!inv) {
-        alert('عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.');
-        return;
-    }
-
-    // جلب الشحنات المرتبطة بالفاتورة
-    let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.includes(String(s.id)));
-    let rowsHtml = '';
-    
-    matchingShipments.forEach((s, idx) => {
-        rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
-    });
-
-    // إذا كانت الشحنات غير محملة محلياً، يمكن عرض الإجمالي مباشرة
-    if (matchingShipments.length === 0 && inv.shipmentIds) {
-        inv.shipmentIds.forEach((sId, idx) => {
-            rowsHtml += `<tr><td>${idx+1}</td><td>شحنة مسجلة (معرف: ${sId})</td><td>-</td><td>-</td></tr>`;
-        });
-    }
-
-    const win = window.open('', '_blank');
-    win.document.write(`
-        <html lang="ar" dir="rtl">
-        <head>
-            <title>فاتورة مجمعة رقم #${inv.id}</title>
-            <style>
-                body { font-family: Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
-                .header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
-                th { background: #2563eb; color: #fff; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h2>🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                <p>رقم الفاتورة: #${inv.id} | التاريخ: ${inv.date || 'حالي'}</p>
-            </div>
-            <p><strong>اسم العميل / الشركة:</strong> ${inv.client}</p>
-            <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد ملاحظات'}</p>
-            <table>
-                <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
-                <tbody>${rowsHtml}</tbody>
-            </table>
-            <h3 style="margin-top: 20px; text-align: left; color: #059669;">الإجمالي الكلي: ${inv.total} ج.م</h3>
-        </body>
-        </html>
-    `);
-    win.document.close();
-    setTimeout(() => win.print(), 300);
-}
-
 
         function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
-            if(confirm('هل أنت متأكد من حذف هذه الفاتورة المجمعة؟')) {
+            if(confirm('حذف الفاتورة المجمعة؟')) {
                 db.collection('consolidatedInvoices').doc(String(id)).delete();
             }
         }
@@ -3950,7 +4045,6 @@
                 alert('تم النشر في المجتمع بنجاح! 🚀');
             });
         }
-
         function renderCommunityPosts() {
             const container = document.getElementById('community-posts-container');
             if(!container) return;
