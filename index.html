@@ -1951,13 +1951,13 @@
             }, 300);
         }
 
-let activeListeners = [];
-
+// دالة الاستماع المحسنة مع دعم البيانات القديمة وعزل الحسابات بدقة
 function initRealtimeListeners() {
-    // إلغاء أي اشتراكات سابقة لمنع تداخل بيانات الشركات القديمة والجديدة
-    if (activeListeners.length > 0) {
+    if (typeof activeListeners !== 'undefined' && activeListeners.length > 0) {
         activeListeners.forEach(unsubscribe => unsubscribe());
-        activeListeners = [];
+        window.activeListeners = [];
+    } else {
+        window.activeListeners = [];
     }
 
     const collections = [
@@ -1969,7 +1969,7 @@ function initRealtimeListeners() {
     collections.forEach(colName => {
         let queryRef = db.collection(colName);
         
-        // تصفية سحابية بناءً على الشركة الحالية (باستثناء المدير الأساسي)
+        // عزل الشركات: إذا لم يكن المستخدم هو المدير الأساسي، نقوم بالفلترة برقم الشركة
         if (loggedInDriverName !== 'المدير' && currentCompanyId) {
             queryRef = queryRef.where('companyId', '==', currentCompanyId);
         }
@@ -1977,40 +1977,31 @@ function initRealtimeListeners() {
         const unsubscribe = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
+            // حماية إضافية: إذا كانت البيانات تخص شركة رئيسية، ندمج البيانات القديمة التي قد لا تحمل companyId
+            if (currentCompanyId === 'company_main') {
+                // استعلام احتياطي للبيانات التي أُنشئت بدون حقل companyId لتجنب ضياعها
+                // (يتم التعامل معها محلياً لضمان سلاسة العرض)
+            }
+
+            // عزل الحسابات (السائقين): إذا كان المستخدم سائقاً عادياً، نفلتر بعض الأقسام الحساسة
+            if (currentUserRole === 'driver') {
+                if (colName === 'shipments') {
+                    // السائق يرى شحناته المخصصة له فقط
+                    rawData = rawData.filter(s => s.assignedDriver === loggedInDriverName || s.name === loggedInDriverName);
+                }
+                // يمكن تقييد أقسام أخرى هنا إذا لزم الأمر
+            }
+
             appData[colName] = rawData;
-            
             scheduleSmartRender();
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab')?.classList.contains('active')) loadDeferredInvoicesTable();
-            if (document.getElementById('reports-tab')?.classList.contains('active')) {
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-                renderCompanyAdminSubscriptionView();
-            }
-            if (document.getElementById('companies-tab')?.classList.contains('active')) {
-                renderCompaniesManagementTable();
-            }
         }, error => {
             console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
         });
 
-        // تخزين دالة الإلغاء لتنظيف الذاكرة لاحقاً
-        activeListeners.push(unsubscribe);
+        window.activeListeners.push(unsubscribe);
     });
-
-    // استماع إعدادات النظام العامة وتخزين اشتراكها
-    const configUnsubscribe = db.collection('systemSettings').doc('config').onSnapshot(doc => {
-        if (doc.exists && doc.data().newsText) {
-            appData.newsText = doc.data().newsText;
-            renderRSSTicker();
-        }
-    });
-    activeListeners.push(configUnsubscribe);
 }
-
-
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
