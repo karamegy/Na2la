@@ -152,6 +152,10 @@
         }
         #na2laBotModal::-webkit-scrollbar { width: 5px; }
         #na2laBotModal::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+        
+        /* تخصيص شريط التمرير للقائمة المنسدلة لضمان سلاسة التصفح */
+        #mainBotMenuDropdownMenu::-webkit-scrollbar { width: 5px; }
+        #mainBotMenuDropdownMenu::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
     `;
     document.head.appendChild(styleEl);
 
@@ -173,7 +177,7 @@
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
                             ☰ القائمة والتحكم
                         </button>
-                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
+                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; max-height: 380px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
                             
                             <!-- أقسام المنصة (العرض مباشرة داخل البوت) -->
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
