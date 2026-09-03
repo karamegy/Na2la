@@ -1950,80 +1950,104 @@
                 }
             }, 300);
         }
-let activeListeners = [];
 
-function initRealtimeListeners() {
-    // 1. تنظيف أي اشتراكات سابقة تماماً لمنع تداخل البيانات
-    if (activeListeners && activeListeners.length > 0) {
-        activeListeners.forEach(unsubscribe => {
-            if (typeof unsubscribe === 'function') unsubscribe();
-        });
-        activeListeners = [];
-    }
+        // الاستماع الفوري السحابي مع العزل التام للشركات وحسابات المستخدمين
+        function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-    // 2. مزامنة الحالة الحالية بين الذاكرة والـ localStorage
-    const storedRole = localStorage.getItem('current_user_role') || currentUserRole;
-    const storedDriverName = localStorage.getItem('logged_in_driver_name') || loggedInDriverName;
-    const storedCompanyId = localStorage.getItem('current_company_id') || currentCompanyId || 'company_main';
-
-    currentUserRole = storedRole;
-    loggedInDriverName = storedDriverName;
-    currentCompanyId = storedCompanyId;
-
-    const collections = [
-        'shipments', 'deferredInvoices', 'consolidatedInvoices', 
-        'treasury', 'expenses', 'drivers', 'posts', 
-        'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'
-    ];
-
-    collections.forEach(colName => {
-        // جلب البيانات كاملة من السحابة لضمان عدم ضياع المستندات القديمة التي لاتحوي companyId
-        let queryRef = db.collection(colName);
-
-        const unsubscribe = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'];
             
-            // 3. التصفية محلياً: عرض بيانات الشركة المحددة + البيانات القديمة العامة التي بلا companyId
-            if (storedDriverName !== 'المدير' && storedRole !== 'admin' && storedCompanyId) {
-                rawData = rawData.filter(item => !item.companyId || item.companyId === storedCompanyId);
-            }
-            
-            appData[colName] = rawData;
-            
-            if (typeof scheduleSmartRender === 'function') {
-                scheduleSmartRender();
-            } else if (typeof render === 'function') {
-                render();
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (colName === 'communityPosts') {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
+
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
+        }
+
+        function renderMemberSubscriptionsList() {
+            if (loggedInDriverName !== 'المدير') return;
+            const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
+            const container = document.getElementById('members-subscriptions-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            let drivers = appData.drivers || [];
+            let filtered = drivers.filter(d => {
+                const nameStr = d.name ? d.name.toLowerCase() : '';
+                const compStr = d.companyName ? d.companyName.toLowerCase() : '';
+                const phoneStr = d.phone || '';
+                return nameStr.includes(query) || compStr.includes(query) || phoneStr.includes(query);
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<p style="font-size: 10px; text-align: center; opacity: 0.8;">لا توجد حسابات شركات أو أعضاء مطابقة للبحث.</p>`;
+                return;
             }
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab')?.classList.contains('active') && typeof loadDeferredInvoicesTable === 'function') {
-                loadDeferredInvoicesTable();
-            }
-            if (document.getElementById('companies-tab')?.classList.contains('active') && typeof renderCompaniesManagementTable === 'function') {
-                renderCompaniesManagementTable();
-            }
-        }, error => {
-            console.error(`خطأ في مزامنة مجموعة ${colName}:`, error);
-        });
+            filtered.forEach(d => {
+                let plan = d.subPlan || 'monthly';
+                let expiry = d.subExpiry || 'لم يُحدد';
+                let status = d.subStatus || 'active';
+                let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
+                let compNameLabel = d.companyName ? `🏢 الشركة: <strong>${d.companyName}</strong>` : `🏢 الحساب الرئيسي`;
 
-        activeListeners.push(unsubscribe);
-    });
-
-    // استماع إعدادات النظام العامة
-    try {
-        const configUnsubscribe = db.collection('systemSettings').doc('config').onSnapshot(doc => {
-            if (doc.exists && doc.data().newsText) {
-                appData.newsText = doc.data().newsText;
-                if (typeof renderRSSTicker === 'function') renderRSSTicker();
-            }
-        });
-        activeListeners.push(configUnsubscribe);
-    } catch (e) {
-        console.warn("إعدادات النظام غير متاحة حالياً", e);
-    }
-}
+                let itemDiv = document.createElement('div');
+                itemDiv.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px; font-size:11px;';
+                itemDiv.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <strong>👤 ${d.name || 'بدون اسم'} (${d.role || 'سائق'})</strong>
+                        <span style="font-size:9px;">${statusBadge}</span>
+                    </div>
+                    <p style="font-size:10px; opacity:0.85; margin-bottom:4px;">${compNameLabel}</p>
+                    <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${d.phone || 'غير مسجل'} | الباقة: <strong>${plan}</strong> | الانتهاء: <span style="color:var(--danger);">${expiry}</span></p>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        <select id="plan-select-${d.id}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
+                            <option value="monthly" ${plan==='monthly'?'selected':''}>اشتراك شهري (30 يوم) 🗓️</option>
+                            <option value="quarterly" ${plan==='quarterly'?'selected':''}>اشتراك ربع سنوي (90 يوم) 📊</option>
+                            <option value="yearly" ${plan==='yearly'?'selected':''}>اشتراك سنوي (365 يوم) 🌟</option>
+                            <option value="lifetime" ${plan==='lifetime'?'selected':''}>ترخيص دائم ♾️</option>
+                            <option value="trial" ${plan==='trial'?'selected':''}>تجريبي (7 أيام) ⏳</option>
+                        </select>
+                        <button type="button" class="btn-success btn-sm" style="width:auto; margin-bottom:0;" onclick="updateMemberSub('${d.id}')">تفعيل الباقة 🚀</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            });
+        }
 
         function renderCompanyAdminSubscriptionView() {
             const card = document.getElementById('company-admin-sub-card');
