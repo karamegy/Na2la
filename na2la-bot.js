@@ -142,27 +142,9 @@
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
                     <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    
-                    <!-- زر شحناتي / تتبع شحنة -->
-                    <div style="position: relative; display: inline-block;">
-                        <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
-                            <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
-                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
-                        </button>
-                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
-                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
-                                <span id="syncHubUserTitle">👤 الحساب المتصل</span>
-                                <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
-                            </div>
-                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 6px;">🏢 الشركة: جاري المزامنة...</div>
-                            <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
-                        </div>
-                    </div>
 
-                    <!-- قائمة المنسدلة المركزية الشاملة لكافة الأزرار والخصائص (منقولة لليمين بجوار الإغلاق لتظهر بالكامل) -->
-                    <div style="position: relative; display: inline-block;">
+                    <!-- زر القائمة والتحكم منقول إلى هنا بجانب البوت لمنع قص الشريط المنسدل -->
+                    <div style="position: relative; display: inline-block; margin-right: 4px;">
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
                             ☰ القائمة والتحكم
                         </button>
@@ -204,6 +186,24 @@
                                 <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
                                 <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <!-- زر شحناتي / تتبع شحنة -->
+                    <div style="position: relative; display: inline-block;">
+                        <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
+                            <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
+                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
+                        </button>
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
+                                <span id="syncHubUserTitle">👤 الحساب المتصل</span>
+                                <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
+                            </div>
+                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 6px;">🏢 الشركة: جاري المزامنة...</div>
+                            <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
                     </div>
                     
