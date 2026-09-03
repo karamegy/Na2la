@@ -1336,8 +1336,17 @@
             performUnifiedLogin();
         }
 
-      async function registerNewUserBiometricDevice() {
+      let isBiometricProcessing = false;
+
+async function registerNewUserBiometricDevice() {
+    if (isBiometricProcessing) {
+        alert('⚠️ هناك طلب بصمة قيد التنفيذ بالفعل، يرجى الانتظار لحين اكتماله.');
+        return;
+    }
+
     try {
+        isBiometricProcessing = true;
+
         if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
             alert('⚠️ متصفحك أو جهازك لا يدعم مصادقة الـ WebAuthn البيومترية المباشرة.');
             return;
@@ -1373,7 +1382,7 @@
             
             let newCredObj = {
                 id: 'bio_' + Date.now(),
-                companyId: currentCompanyId || 'company_main', // التأكد من إرفاق معرف الشركة المعزولة
+                companyId: currentCompanyId || 'company_main',
                 driverId: String(drv.id || '1'),
                 driverName: loggedInDriverName,
                 credentialId: credIdBase64.substring(0, 32) + '...',
@@ -1381,7 +1390,6 @@
                 createdAt: new Date().toLocaleString('ar-EG')
             };
 
-            // استخدام معرف موثق لتجنب رفض قواعد الأمان
             await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
             alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
             renderBiometricManagementTable();
@@ -1389,8 +1397,11 @@
     } catch (err) {
         console.error("Biometric registration error:", err);
         alert('فشل تسجيل البصمة البيومترية بسبب الصلاحيات أو الإلغاء: ' + (err.message || 'تم إلغاء العملية'));
+    } finally {
+        isBiometricProcessing = false; // فك القفل دائماً عند الانتهاء
     }
 }
+
         async function testCurrentBiometricAuth() {
             const passed = await verifyBiometricAuth();
             if (passed) {
