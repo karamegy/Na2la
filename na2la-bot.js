@@ -32,7 +32,7 @@
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --purple-color: #8b5cf6;
-            --shadow-3d: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            --shadow-3d: 0 12px 30px -5px rgba(0, 0, 0, 0.5);
             font-family: 'Cairo', sans-serif !important;
         }
         #na2laBotRootContainer[data-theme="royal"] {
@@ -69,14 +69,14 @@
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 10px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
             font-weight: bold;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
             box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
             transition: transform 0.2s, box-shadow 0.2s;
             font-family: 'Cairo', sans-serif;
@@ -94,10 +94,10 @@
             background: var(--bg-color);
             border: 1px solid var(--border-color);
             border-right: 4px solid var(--primary-color);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 6px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             font-family: 'Cairo', sans-serif;
         }
         .penta-grid-box {
@@ -111,7 +111,7 @@
             background: var(--bg-color);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 6px 8px;
+            padding: 8px;
             text-align: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
@@ -125,50 +125,68 @@
             font-weight: bold;
             color: var(--accent-color);
         }
+        #na2laBotModal::-webkit-scrollbar { width: 5px; }
+        #na2laBotModal::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
     `;
     document.head.appendChild(styleEl);
 
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 62px; height: 62px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
 
-        <div id="na2laBotModal" style="position: fixed; bottom: 85px; right: 20px; width: 420px; max-width: 92vw; height: 80vh; max-height: 650px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
-            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0; position: relative;">
+        <div id="na2laBotModal" style="position: fixed; bottom: 95px; right: 20px; width: 430px; max-width: 94vw; height: 82vh; max-height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(25px); font-family: 'Cairo', sans-serif;">
+            
+            <!-- شريط العنوان العلوي الاحترافي -->
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 13px; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
                     <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 5px;">
-                    <!-- زر القائمة الرئيسي الجديد -->
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    
+                    <!-- قائمة المنسدلة المركزية الشاملة لكافة الأزرار والخصائص -->
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
-                            ☰ القائمة
+                            ☰ القائمة والتحكم
                         </button>
-                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 110%; right: 0; width: 280px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 10px; color: var(--text-color); font-size: 11px;">
-                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--warning-color);">
-                                📂 قائمة أقسام وأزرار المنصة
+                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px;">
+                            
+                            <!-- أقسام المنصة -->
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
+                                📂 أقسام المنصة الأساسية
                             </div>
-                            <!-- الأقسام السريعة -->
-                            <div id="menuDropdownSectionsList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                                <button onclick="openBotSection('shipments-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
-                                <button onclick="openBotSection('chat-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💬 الدردشة</button>
-                                <button onclick="openBotSection('deferred-invoices-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">⏳ الأجل</button>
-                                <button onclick="openBotSection('treasury-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💵 الخزينة</button>
-                                <button onclick="openBotSection('map-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #a78bfa; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">🗺️ الخريطة</button>
-                                <button onclick="openBotSection('reports-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📊 التقارير</button>
-                                <button onclick="openBotSection('account-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #fbbf24; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">👤 البروفايل</button>
+                            <div id="menuDropdownSectionsList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                                <button onclick="openBotSection('shipments-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
+                                <button onclick="openBotSection('chat-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💬 الدردشة</button>
+                                <button onclick="openBotSection('deferred-invoices-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">⏳ الأجل والفواتير</button>
+                                <button onclick="openBotSection('treasury-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💵 الخزينة والحسابات</button>
+                                <button onclick="openBotSection('reports-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📊 التقارير الشاملة</button>
+                                <button onclick="openBotSection('account-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #fbbf24; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">👤 البروفايل والإعدادات</button>
                             </div>
-                            <div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 3px; color: var(--accent-color);">
-                                ⚡ أزرار سريعة
+
+                            <!-- أدوات تفضيلات المحادثة (التي تم إزالتها من الواجهة الرئيسية) -->
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: #a855f7;">
+                                ⚙️ تفضيلات المساعد الصوتي والمحادثة
                             </div>
-                            <div id="menuDropdownQuickActionsList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">
-                                <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
-                                <button onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
-                                <button onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
-                                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
-                                <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
-                                <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
+                            <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+                                <button onclick="toggleTemporaryChatMode(); closeMainBotMenus();" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🕵️ تفعيل/إلغاء المحادثة المؤقتة</button>
+                                <button onclick="toggleBotContinuousVoice(); closeMainBotMenus();" id="botContinuousBtn" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 الاستماع الصوتي المستمر</button>
+                                <button onclick="toggleBotVoiceOutput(); closeMainBotMenus();" id="botVoiceToggleBtn" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 تبديل الناطق الصوتي (مفعل)</button>
+                                <button onclick="clearBotChat(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--danger-color); border: 1px solid var(--danger-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🗑️ مسح الذاكرة الحالية</button>
+                            </div>
+
+                            <!-- الأزرار والإجراءات السريعة -->
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--accent-color);">
+                                ⚡ إجراءات واستعلامات سريعة
+                            </div>
+                            <div id="menuDropdownQuickActionsList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px;">
+                                <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
+                                <button onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
+                                <button onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
+                                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
+                                <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
+                                <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
                             </div>
                         </div>
                     </div>
@@ -177,37 +195,33 @@
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
                             <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
-                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 4px; border-radius: 8px; font-size: 8px; font-weight: bold; display: none;">0</span>
+                            <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
                         </button>
-                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 110%; right: 0; width: 260px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 8px; color: var(--text-color); font-size: 11px;">
-                            <div style="font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid var(--border-color); padding-bottom: 3px; display: flex; justify-content: space-between;">
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px;">
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
                                 <span id="syncHubUserTitle">👤 الحساب المتصل</span>
                                 <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
                             </div>
-                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 4px;">🏢 الشركة: جاري المزامنة...</div>
-                            <div id="syncHubItemsList" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
+                            <div id="syncHubCompanyTag" style="font-size: 9px; color: var(--warning-color); margin-bottom: 6px;">🏢 الشركة: جاري المزامنة...</div>
+                            <div id="syncHubItemsList" style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;"></div>
                         </div>
                     </div>
-                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer;">✕</button>
+                    
+                    <button onclick="toggleNa2laBot()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 0 4px;" title="إغلاق">✕</button>
                 </div>
             </div>
 
-            <!-- تم إخفاء الشريط السفلي والعلوي القديم للأزرار، وتم نقل كل شيء داخل القائمة المنسدلة لعدم التضارب وتفريغ الواجهة -->
-            <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
+            <!-- شريط الإشعارات المتحرك للشركات -->
+            <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 6px 12px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | تتبع الشحنات للزوار برقم الشحنة، وعزل تام للشركات
+                    🚀 أسطورة الطريق Pro | تتبع الشحنات للزوار برقم الشحنة، وعزل تام للبيانات والشركات
                 </div>
             </div>
 
-            <div style="padding: 6px 12px; background: var(--bg-color); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 10px; flex-shrink: 0;">
-                <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة لا تحفظ في السجل">🕵️ محادثة مؤقتة</button>
-                    <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر معطل</button>
-                    <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
-                    <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="مسح محادثة">🗑️ مسح</button>
-                </div>
+            <!-- شريط إضافي نظيف تماماً يحتوي فقط على مُبدل الثيم (كما طلبت: "فقط تغير الثيم فقط بلواجه") -->
+            <div style="padding: 8px 14px; background: var(--bg-color); display: flex; justify-content: flex-end; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 11px; flex-shrink: 0;">
                 <div>
-                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 3px 5px; font-size: 10px; border-radius: 6px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif;">
+                    <select id="botThemeSelect" onchange="changeBotTheme(this.value)" style="padding: 5px 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; font-family: 'Cairo', sans-serif; font-weight: bold;" title="تغيير ثيم الواجهة">
                         <option value="default">🎨 الداكن الأصلي</option>
                         <option value="royal">👑 الأرجواني الملكي</option>
                         <option value="emerald">💎 الزمردي الفاخر</option>
@@ -215,27 +229,30 @@
                 </div>
             </div>
 
-            <div id="tempChatAlertBanner" style="display: none; background: rgba(168, 85, 247, 0.2); border-bottom: 1px solid #a855f7; color: #d8b4fe; padding: 4px 10px; font-size: 10px; text-align: center; font-weight: bold; flex-shrink: 0;">
+            <!-- تنبيه وضع المحادثة المؤقتة -->
+            <div id="tempChatAlertBanner" style="display: none; background: rgba(168, 85, 247, 0.25); border-bottom: 1px solid #a855f7; color: #d8b4fe; padding: 6px 12px; font-size: 11px; text-align: center; font-weight: bold; flex-shrink: 0;">
                 🕵️ وضع الخصوصية الفائقة (محادثة مؤقتة): لن يتم حفظ هذه المحادثة في الذاكرة أو فايربيس.
             </div>
 
-            <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
-                <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
+            <!-- صندوق الرسائل والمحتوى الرئيسي للدردشة -->
+            <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; line-height: 1.65; background: var(--card-bg); color: var(--text-color);">
+                <div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                     مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b>.<br>- للزوار: قم بكتابة <b>رقم شحنتك</b> مباشرة في الصندوق أدناه لتتبع حالة شحنتك بدقة تامة.
                 </div>
             </div>
 
-            <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center; position: relative; flex-shrink: 0; min-height: 52px; box-sizing: border-box;">
+            <!-- صندوق الإدخال السفلي المطوّر (يحتوي فقط على الإرسال، المرفقات والصوت) -->
+            <div style="padding: 10px 14px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; background: var(--bg-color); align-items: center; position: relative; flex-shrink: 0; min-height: 56px; box-sizing: border-box;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
                 <input type="file" id="importArchiveFileInput" accept=".json" style="display: none;" onchange="importChatArchiveData(this)">
                 
-                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📎</button>
+                <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; min-width: 38px; border-radius: 10px; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s;">📎</button>
                 
-                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل المساعد..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل المساعد..." style="flex: 1; min-width: 0; height: 38px; margin: 0; padding: 0 12px; font-size: 12px; border-radius: 10px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
 
-                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
+                <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 38px; height: 38px; min-width: 38px; border-radius: 10px; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
                 
-                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; height: 36px; padding: 0 12px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">إرسال</button>
+                <button onclick="sendBotQuickQuery()" style="background: var(--primary-color); color: white; border: none; height: 38px; padding: 0 16px; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 12px; font-family: 'Cairo', sans-serif; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);">إرسال</button>
             </div>
         </div>
     `;
@@ -348,7 +365,7 @@
         if (btn) {
             btn.style.background = window.isTempChatActive ? "var(--purple-color)" : "var(--card-bg)";
             btn.style.color = window.isTempChatActive ? "#fff" : "#a855f7";
-            btn.innerText = window.isTempChatActive ? "🕵️ مؤقت: مفعل" : "🕵️ محادثة مؤقتة";
+            btn.innerText = window.isTempChatActive ? "🕵️ مؤقت: مفعل" : "🕵️ تفعيل/إلغاء المحادثة المؤقتة";
         }
         if (banner) { banner.style.display = window.isTempChatActive ? "block" : "none"; }
         alert(window.isTempChatActive ? "تم تفعيل وضع المحادثة المؤقتة (Incognito Mode)." : "تم إلغاء وضع المحادثة المؤقتة.");
@@ -580,7 +597,6 @@
         let syncLabel = document.getElementById('syncHubBtnLabel');
         if (syncLabel) syncLabel.innerText = isVisitor ? 'تتبع شحنة' : 'شحناتي';
 
-        // للزائر، نقوم بإخفاء خيارات القائمة المنسدلة غير المتعلقة بالتتبع حمايةً للعزل
         const sectionsList = document.getElementById('menuDropdownSectionsList');
         const quickActionsList = document.getElementById('menuDropdownQuickActionsList');
         if (isVisitor) {
@@ -631,7 +647,7 @@
         } else {
             const syncedShipments = getIsolatedUserShipments();
             listContainer.innerHTML = syncedShipments.length === 0 ? `<div style="padding: 6px; text-align: center;">لا توجد شحنات معزولة</div>` :
-                syncedShipments.slice(0, 5).map(s => `<div style="padding: 4px 6px; background:var(--card-bg); margin-bottom:3px; border-radius:4px; cursor:pointer;" onclick="openBotSection('shipments-tab')">📦 ${s.id || 'شحنة'} (${s.status || 'نشطة'}) ⬅</div>`).join('');
+                syncedShipments.slice(0, 5).map(s => `<div style="padding: 5px 8px; background:var(--card-bg); margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="openBotSection('shipments-tab')">📦 ${s.id || 'شحنة'} (${s.status || 'نشطة'}) ⬅</div>`).join('');
         }
         dropdown.style.display = 'block';
     };
@@ -678,25 +694,31 @@
         isBotVoiceOutputOn = !isBotVoiceOutputOn;
         let btn = document.getElementById('botVoiceToggleBtn');
         if (btn) {
-            btn.innerText = isBotVoiceOutputOn ? "🔊 ناطق" : "🔇 صامت";
-            btn.style.background = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
+            btn.innerText = isBotVoiceOutputOn ? "🔊 تبديل الناطق الصوتي (مفعل)" : "🔇 تبديل الناطق الصوتي (صامت)";
+            btn.style.color = isBotVoiceOutputOn ? "var(--accent-color)" : "var(--danger-color)";
         }
     };
 
     window.toggleBotContinuousVoice = function() {
         isBotContinuousActive = !isBotContinuousActive;
         let btn = document.getElementById('botContinuousBtn');
-        if (isBotContinuousActive) { btn.innerText = "🎤 مستمر: مفعل"; startBotVoiceInput(); }
-        else { btn.innerText = "🎤 مستمر معطل"; }
+        if (isBotContinuousActive) { 
+            btn.innerText = "🎤 الاستماع المستمر: مفعل"; 
+            btn.style.color = "var(--accent-color)";
+            startBotVoiceInput(); 
+        } else { 
+            btn.innerText = "🎤 الاستماع الصوتي المستمر"; 
+            btn.style.color = "#38bdf8";
+        }
     };
 
     window.handleScaleTicketUpload = function(input) {
         if (input.files && input.files[0]) {
             let container = document.getElementById('na2laBotMessages');
-            container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end;">📎 تحليل بونة الميزان: ${input.files[0].name}</div>`;
+            container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end;">📎 تحليل بونة الميزان: ${input.files[0].name}</div>`;
             setTimeout(() => {
                 let botReply = `✅ <b>نجاح استخراج الأوزان (OCR):</b> القائم 32 طن، الفارغ 10 طن، الصافي 22 طن.`;
-                container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${botReply}</div>`;
+                container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color);">${botReply}</div>`;
                 container.scrollTop = container.scrollHeight;
             }, 800);
         }
@@ -723,9 +745,9 @@
             `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: 178830...) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
             `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole}). تم تفعيل العزل التام وتتبع الشحنات.`;
 
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${welcomeText}</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color);">${welcomeText}</div>`;
         history.forEach(msg => {
-            container.innerHTML += `<div style="background: ${msg.sender === 'user' ? 'var(--primary-color)' : 'var(--bg-color)'}; color: ${msg.sender === 'user' ? 'white' : 'var(--text-color)'}; padding: 9px 12px; border-radius: 10px; align-self: ${msg.sender === 'user' ? 'flex-end' : 'flex-start'}; border: 1px solid var(--border-color);">${msg.htmlContent}</div>`;
+            container.innerHTML += `<div style="background: ${msg.sender === 'user' ? 'var(--primary-color)' : 'var(--bg-color)'}; color: ${msg.sender === 'user' ? 'white' : 'var(--text-color)'}; padding: 10px 14px; border-radius: 12px; align-self: ${msg.sender === 'user' ? 'flex-end' : 'flex-start'}; border: 1px solid var(--border-color);">${msg.htmlContent}</div>`;
         });
         container.scrollTop = container.scrollHeight;
     };
@@ -735,6 +757,7 @@
         let storageKey = `na2la_chat_history_${tenant.activeCompanyId}_${tenant.activeDriver.replace(/\s+/g, '_')}`;
         localStorage.removeItem(storageKey);
         loadChatHistory();
+        alert("🗑️ تم مسح محادثات الذاكرة الحالية بنجاح.");
     };
 
     window.changeBotTheme = function(themeId) {
@@ -773,7 +796,7 @@
         let text = customText || (inputEl ? inputEl.value.trim() : "");
         if (!text || !container) return;
 
-        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 9px 12px; border-radius: 10px; align-self: flex-end;">${text}</div>`;
+        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end;">${text}</div>`;
         saveChatHistory('user', text);
         if (inputEl && !customText) inputEl.value = "";
         container.scrollTop = container.scrollHeight;
@@ -859,7 +882,7 @@
             `;
         }
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${botReply}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color);">${botReply}</div>`;
         saveChatHistory('bot', botReply);
         container.scrollTop = container.scrollHeight;
         speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
