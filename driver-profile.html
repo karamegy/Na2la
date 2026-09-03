@@ -824,94 +824,120 @@
             };
         }
 
-        function renderMyAccount() {
-            let loggedInUser = getLoggedInUser();
-            let targetDrv = getTargetViewingDriver();
-            let isViewingSelf = String(targetDrv.id) === String(loggedInUser.id) || targetDrv.name === loggedInUser.name;
+               function renderMyAccount() {
+            let drv = getCurrentDriver();
 
-            let displayName = targetDrv.name || 'المدير';
-            document.getElementById('gplus-name-display').innerText = displayName;
-            document.getElementById('gplus-badge-display').innerText = targetDrv.role === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
-            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || '+201114099799'} | الرتبة: ${targetDrv.role || 'admin'}`;
+            document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
+            document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
+            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
             
-            let targetShipments = (appData.shipments || []).filter(s => {
-                let drvName = (targetDrv.name || '').trim();
-                let assigned = (s.assignedDriver || s.driver || '').trim();
-                let clientName = (s.name || s.client || '').trim();
+            const profileShipmentsContainer = document.getElementById('profile-user-shipments-container');
+            if (profileShipmentsContainer) {
+                // تحديد ارتفاع أقصى للحاوية وتفعيل التمرير العمودي الرأسي
+                profileShipmentsContainer.style.cssText = 'max-height: 280px; overflow-y: auto; padding-left: 4px; display: flex; flex-direction: column; gap: 8px;';
+                profileShipmentsContainer.innerHTML = '';
+                let allShipments = appData.shipments || [];
                 
-                if (loggedInUser.role === 'admin') {
-                    return true;
+                let userShipments = allShipments.filter(s => {
+                    let isLoggredAdmin = (loggedInDriverName === 'المدير' || currentUserRole === 'admin');
+                    let isViewingAdmin = (drv.name === 'المدير' || drv.role === 'admin' || drv.role === 'مدير نظام');
+                    
+                    if (isLoggredAdmin && isViewingAdmin && (!viewingProfileName || viewingProfileName === loggedInDriverName)) {
+                        return true;
+                    }
+                    return (drv.name && s.assignedDriver === drv.name) || 
+                           (drv.name && s.name === drv.name) ||
+                           (drv.name && s.driver === drv.name);
+                });
+
+                const statShipmentsEl = document.getElementById('gplus-stat-shipments');
+                if (statShipmentsEl) statShipmentsEl.innerText = userShipments.length;
+
+                if (userShipments.length === 0) {
+                    profileShipmentsContainer.innerHTML = `<p style="font-size: 11px; opacity: 0.8; text-align: center; padding: 10px;">لا توجد شحنات أو حمولات مسجلة لهذا الحساب حالياً.</p>`;
+                } else {
+                    userShipments.forEach(s => {
+                        let isDelivered = s.status === 'مكتملة' || s.status === 'delivered';
+                        let badgeClass = isDelivered ? 'bg-delivered' : 'bg-pending';
+                        let badgeBg = isDelivered ? 'var(--success, #10b981)' : 'var(--warning, #f59e0b)';
+                        
+                        let div = document.createElement('div');
+                        div.style.cssText = 'background: var(--bg); border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 8px; margin-bottom: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.02);';
+                        div.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
+                                <span style="color: var(--accent); font-size: 10px; font-weight: bold; direction: ltr; unicode-bidi: embed;">📦 #${s.id || '---'}</span>
+                                <span class="badge ${badgeClass}" style="font-size: 8px; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: #fff; font-weight: bold;">${s.status || 'قيد التنفيذ'}</span>
+                            </div>
+                            <div style="font-size: 10px; display: flex; flex-direction: column; gap: 3px;">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.75;">العميل: <strong style="color: var(--text-color);">${s.name || s.client || '-'}</strong></span>
+                                    <span style="opacity: 0.75;">الحمولة: <strong style="color: var(--text-color);">${s.item || s.cargo || '-'}</strong></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
+                                    <span style="color: var(--success); font-weight: bold; font-size: 11px;">💰 ${s.price || 0} ج.م</span>
+                                    <span style="opacity: 0.75; font-size: 9px;">👤 السائق: ${s.assignedDriver || 'غير محدد'}</span>
+                                </div>
+                            </div>
+                        `;
+                        profileShipmentsContainer.appendChild(div);
+                    });
                 }
-                return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
-            });
+            }
 
-            document.getElementById('gplus-stat-shipments').innerText = targetShipments.length;
-            document.getElementById('gplus-stat-role').innerText = targetDrv.role || 'admin';
-            document.getElementById('gplus-stat-status').innerText = targetDrv.status || 'متاح 🟢';
-
-            renderAccountShipmentsList(targetShipments);
-
-            let totalEarnings = targetShipments.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
-            document.getElementById('wallet-total-earnings').innerText = totalEarnings.toLocaleString() + ' ج.م';
-            document.getElementById('wallet-advances').innerText = (targetDrv.advances || 0).toLocaleString() + ' ج.م';
-
-            document.getElementById('fleet-truck-plate').innerText = targetDrv.truckPlate || 'غير محدد 🚚';
-            document.getElementById('fleet-truck-model').innerText = targetDrv.truckModel || 'نقل ثقيل / دينا';
+            document.getElementById('gplus-stat-role').innerText = drv.role || 'سائق';
+            document.getElementById('gplus-stat-status').innerText = drv.status || 'متاح';
 
             const backBtn = document.getElementById('gplus-back-to-myprofile-btn');
             const editSettingsCard = document.getElementById('my-profile-edit-settings-card');
             const avatarUploadLabel = document.getElementById('gplus-avatar-upload-label-container');
             const coverUploadBtn = document.getElementById('gplus-cover-upload-btn-container');
-            const coverControls = document.getElementById('cover-controls-area');
-            const gpsCard = document.getElementById('gps-broadcast-card');
-            const truckEditControls = document.getElementById('truck-edit-controls');
 
-            if (!isViewingSelf) {
+            if (viewingProfileName && viewingProfileName !== loggedInDriverName) {
                 if(backBtn) backBtn.style.display = 'inline-block';
                 if(editSettingsCard) editSettingsCard.style.display = 'none';
                 if(avatarUploadLabel) avatarUploadLabel.style.display = 'none';
                 if(coverUploadBtn) coverUploadBtn.style.display = 'none';
-                if(coverControls) coverControls.style.display = 'none';
-                if(gpsCard) gpsCard.style.display = 'none';
-                if(truckEditControls) truckEditControls.style.display = 'none';
-                document.getElementById('profile-wall-heading').innerText = `✍️ النشر على حائط: ${displayName}`;
+                document.getElementById('profile-wall-heading').innerText = `✍️ النشر على حائط: ${drv.name || ''}`;
             } else {
                 if(backBtn) backBtn.style.display = 'none';
                 if(editSettingsCard) editSettingsCard.style.display = 'block';
                 if(avatarUploadLabel) avatarUploadLabel.style.display = 'block';
                 if(coverUploadBtn) coverUploadBtn.style.display = 'block';
-                if(coverControls) coverControls.style.display = 'flex';
-                if(gpsCard) gpsCard.style.display = 'block';
-                if(truckEditControls) truckEditControls.style.display = 'block';
-                document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي الشخصي';
+                document.getElementById('profile-wall-heading').innerText = '✍️ حائط النشر الحر على بروفايلي';
                 
-                document.getElementById('my-edit-name').value = loggedInUser.name || '';
-                document.getElementById('my-edit-phone').value = loggedInUser.phone || '';
+                document.getElementById('my-edit-name').value = drv.name || '';
+                document.getElementById('my-edit-phone').value = drv.phone || '';
                 
                 const titleSelect = document.getElementById('my-edit-title');
-                titleSelect.innerHTML = '';
-                driverTitlesList.forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t; 
-                    opt.innerText = t;
-                    if(loggedInUser.title === t) opt.selected = true;
-                    titleSelect.appendChild(opt);
-                });
+                if (titleSelect) {
+                    titleSelect.innerHTML = '';
+                    driverTitlesList.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t; opt.innerText = t;
+                        if(drv.title === t) opt.selected = true;
+                        titleSelect.appendChild(opt);
+                    });
+                }
             }
 
             const coverBanner = document.getElementById('gplus-cover-banner-preview');
-            let currentH = targetDrv.coverHeight || 180;
-            coverBanner.style.height = currentH + 'px';
-            if (targetDrv.cover) coverBanner.style.backgroundImage = `url('${targetDrv.cover}')`;
-            else coverBanner.style.backgroundImage = '';
-            document.getElementById('cover-height-label').innerText = currentH + 'px';
+            let currentH = drv.coverHeight || 180;
+            if (coverBanner) {
+                coverBanner.style.height = currentH + 'px';
+                coverBanner.style.backgroundImage = drv.cover ? `url('${drv.cover}')` : 'none';
+            }
+            const heightLabel = document.getElementById('cover-height-label');
+            if(heightLabel) heightLabel.innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
-            avatarPreview.innerHTML = targetDrv.avatar ? `<img src="${targetDrv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : (displayName ? displayName.charAt(0) : 'م');
+            if (avatarPreview) {
+                avatarPreview.innerHTML = drv.avatar ? `<img src="${drv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
+            }
 
-            setupWallListener(targetDrv.id || targetDrv.name);
+            if (drv.name) loadAndRenderProfileWall(drv.name);
             renderProfileDriverSearch();
         }
+   
 
         function renderAccountShipmentsList(shipments) {
             const container = document.getElementById('account-specific-shipments-list');
