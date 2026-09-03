@@ -1950,9 +1950,10 @@
                 }
             }, 300);
         }
+let activeListeners = [];
 
 function initRealtimeListeners() {
-    // 1. تنظيف أي اشتراكات سابقة تماماً لمنع تداخل البيانات أو تراكم القراءات
+    // 1. تنظيف أي اشتراكات سابقة تماماً لمنع تداخل البيانات
     if (activeListeners && activeListeners.length > 0) {
         activeListeners.forEach(unsubscribe => {
             if (typeof unsubscribe === 'function') unsubscribe();
@@ -1960,7 +1961,7 @@ function initRealtimeListeners() {
         activeListeners = [];
     }
 
-    // 2. مزامنة الحالة الحالية بصرامة بين الذاكرة والـ localStorage لمنع أي فجوة في الهوية
+    // 2. مزامنة الحالة الحالية بين الذاكرة والـ localStorage
     const storedRole = localStorage.getItem('current_user_role') || currentUserRole;
     const storedDriverName = localStorage.getItem('logged_in_driver_name') || loggedInDriverName;
     const storedCompanyId = localStorage.getItem('current_company_id') || currentCompanyId || 'company_main';
@@ -1976,27 +1977,25 @@ function initRealtimeListeners() {
     ];
 
     collections.forEach(colName => {
+        // جلب البيانات كاملة من السحابة لضمان عدم ضياع المستندات القديمة التي لاتحوي companyId
         let queryRef = db.collection(colName);
-        
-        // 3. تطبيق العزل السحابي بدقة: المدير يرى كل البيانات، بينما مستخدم الشركة يرى بيانات شركته فقط
-        if (storedDriverName !== 'المدير' && storedRole !== 'admin' && storedCompanyId) {
-            queryRef = queryRef.where('companyId', '==', storedCompanyId);
-        }
 
         const unsubscribe = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // تحديث الكائن المحلي للبيانات الخاصة بهذه المجموعة فقط
+            // 3. التصفية محلياً: عرض بيانات الشركة المحددة + البيانات القديمة العامة التي بلا companyId
+            if (storedDriverName !== 'المدير' && storedRole !== 'admin' && storedCompanyId) {
+                rawData = rawData.filter(item => !item.companyId || item.companyId === storedCompanyId);
+            }
+            
             appData[colName] = rawData;
             
-            // جدولة الرسم بذكاء لمنع استهلاك المعالج
             if (typeof scheduleSmartRender === 'function') {
                 scheduleSmartRender();
             } else if (typeof render === 'function') {
                 render();
             }
 
-            // تحديث الواجهات الملحقة إن وجدت
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
             if (document.getElementById('deferred-invoices-tab')?.classList.contains('active') && typeof loadDeferredInvoicesTable === 'function') {
@@ -2024,26 +2023,6 @@ function initRealtimeListeners() {
     } catch (e) {
         console.warn("إعدادات النظام غير متاحة حالياً", e);
     }
-}
-
-// دالة آمنة لتغيير الشركة النشطة فوراً دون أي تضارب أو بقايا بيانات سابقة
-function switchCompanyContext(newCompanyId) {
-    currentCompanyId = newCompanyId;
-    localStorage.setItem('current_company_id', newCompanyId);
-    
-    // تفريغ البيانات المؤقتة الحالية لمنع دمجها بالخطأ مع الشركة الجديدة
-    const collectionsToClear = [
-        'shipments', 'deferredInvoices', 'consolidatedInvoices', 
-        'treasury', 'expenses', 'drivers', 'posts', 'chat', 'trucks'
-    ];
-    collectionsToClear.forEach(col => {
-        appData[col] = [];
-    });
-
-    // إعادة تشغيل الاستماع السحابي بالهوية والمعرف الجديدين فوراً
-    initRealtimeListeners();
-    
-    if (typeof render === 'function') render();
 }
 
         function renderCompanyAdminSubscriptionView() {
