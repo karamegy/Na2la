@@ -179,6 +179,14 @@
                         </button>
                         <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; max-height: 380px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
                             
+                            <!-- قسم خاص بالزوار للاستعلام السريع -->
+                            <div id="visitorMenuSection" style="display: none; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+                                <div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--accent-color);">
+                                    📦 استعلام الشحنات للزوار
+                                </div>
+                                <button onclick="promptVisitorShipmentQuery(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color); font-size: 11px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-weight: bold; width: 100%; text-align: right; display: block;">🔍 استعلام عن شحنة برقمها</button>
+                            </div>
+
                             <!-- أقسام المنصة (العرض مباشرة داخل البوت) -->
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
                                 📂 أقسام المنصة والعرض المباشر بالبوت
@@ -304,6 +312,13 @@
     window.addEventListener('click', () => {
         closeMainBotMenus();
     });
+
+    window.promptVisitorShipmentQuery = function() {
+        let shipmentId = prompt('أدخل رقم الشحنة المراد الاستعلام عنها (مثال: 178830):');
+        if (shipmentId && shipmentId.trim() !== '') {
+            sendBotQuickQuery(shipmentId.trim());
+        }
+    };
 
     window.openBotSection = function(tabId, sectionName = '') {
         let tenant = getActiveTenantContext();
@@ -742,6 +757,11 @@
 
         const sectionsList = document.getElementById('menuDropdownSectionsList');
         const quickActionsList = document.getElementById('menuDropdownQuickActionsList');
+        const visitorMenuSec = document.getElementById('visitorMenuSection');
+        
+        if (visitorMenuSec) {
+            visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
+        }
         if (isVisitor) {
             if (sectionsList) sectionsList.style.display = 'none';
             if (quickActionsList) quickActionsList.style.display = 'none';
