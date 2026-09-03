@@ -363,10 +363,18 @@
 
     window.renderPentaTableInsideBot = async function() {
         await fetchRealFirebaseData();
-        let financials = getCompanyFinancials();
+        let tenant = getActiveTenantContext();
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ عذراً، الجدول الخماسي والتقارير المالية مخصصة للمديرين والمشرفين فقط.</div>`;
+            container.scrollTop = container.scrollHeight;
+            speakBotReplyText("عذراً، هذا القسم مخصص للمديرين والمشرفين فقط.");
+            return;
+        }
+
+        let financials = getCompanyFinancials();
         let replyHtml = `
             📊 <b>الجدول الخماسي المعتمد (عرض مباشر بالبوت):</b>
             <div class="penta-grid-box">
@@ -389,9 +397,10 @@
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
-        if (tenant.activeRole === 'visitor') {
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ هذا القسم مخصص للأعضاء المسجلين فقط.</div>`;
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ عذراً، الفواتير الآجلة مخصصة للمديرين والمشرفين فقط.</div>`;
             container.scrollTop = container.scrollHeight;
+            speakBotReplyText("عذراً، هذا القسم مخصص للمديرين والمشرفين فقط.");
             return;
         }
 
@@ -427,9 +436,10 @@
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
-        if (tenant.activeRole === 'visitor') {
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ هذا القسم مخصص للأعضاء المسجلين فقط.</div>`;
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ عذراً، الفواتير المجمعة مخصصة للمديرين والمشرفين فقط.</div>`;
             container.scrollTop = container.scrollHeight;
+            speakBotReplyText("عذراً، هذا القسم مخصص للمديرين والمشرفين فقط.");
             return;
         }
 
@@ -457,9 +467,10 @@
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
-        if (tenant.activeRole === 'visitor') {
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ هذا القسم مخصص للأعضاء المسجلين فقط.</div>`;
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ عذراً، حالة الأسطول وصيانة الزيت مخصصة للمديرين والمشرفين فقط.</div>`;
             container.scrollTop = container.scrollHeight;
+            speakBotReplyText("عذراً، هذا القسم مخصص للمديرين والمشرفين فقط.");
             return;
         }
 
@@ -482,10 +493,18 @@
 
     window.renderTreasuryInsideBot = async function() {
         await fetchRealFirebaseData();
-        let financials = getCompanyFinancials();
+        let tenant = getActiveTenantContext();
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ عذراً، حسابات الخزينة والمصروفات مخصصة للمديرين والمشرفين فقط.</div>`;
+            container.scrollTop = container.scrollHeight;
+            speakBotReplyText("عذراً، قسم الخزينة والحسابات مخصص للمديرين فقط.");
+            return;
+        }
+
+        let financials = getCompanyFinancials();
         let replyHtml = `
             💵 <b>حسابات الخزينة والمصروفات:</b>
             <div class="chat-card">
