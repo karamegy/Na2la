@@ -182,16 +182,16 @@
                                 <button onclick="promptVisitorShipmentQuery(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color); font-size: 11px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-weight: bold; width: 100%; text-align: right; display: block;">🔍 استعلام عن شحنة برقمها</button>
                             </div>
 
-                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
+                            <div id="managerMenuSectionHeader" style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
                                 📂 أقسام المنصة والعرض المباشر بالبوت
                             </div>
                             <div id="menuDropdownSectionsList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                                 <button onclick="renderShipmentsInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📦 عرض الشحنات بالبوت</button>
-                                <button onclick="renderPentaTableInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📊 الجدول الخماسي بالبوت</button>
-                                <button onclick="renderDeferredInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">⏳ الفواتير الآجلة بالبوت</button>
-                                <button onclick="renderConsolidatedInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--purple-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📑 الفواتير المجمعة بالبوت</button>
-                                <button onclick="renderFleetInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">🚚 حالة الأسطول وصيانة الزيت</button>
-                                <button onclick="renderTreasuryInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💵 الخزينة والحسابات بالبوت</button>
+                                <button class="admin-only-section" onclick="renderPentaTableInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📊 الجدول الخماسي بالبوت</button>
+                                <button class="admin-only-section" onclick="renderDeferredInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">⏳ الفواتير الآجلة بالبوت</button>
+                                <button class="admin-only-section" onclick="renderConsolidatedInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--purple-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📑 الفواتير المجمعة بالبوت</button>
+                                <button class="admin-only-section" onclick="renderFleetInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">🚚 حالة الأسطول وصيانة الزيت</button>
+                                <button class="admin-only-section" onclick="renderTreasuryInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💵 الخزينة والحسابات بالبوت</button>
                                 <button onclick="openBotSection('chat-tab', 'الدردشة'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💬 الانتقال لدردشة المنصة</button>
                             </div>
 
@@ -210,9 +210,9 @@
                             </div>
                             <div id="menuDropdownQuickActionsList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px;">
                                 <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
-                                <button onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
-                                <button onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
-                                <button onclick="sendBotQuickQuery('صيانة الشاحنات'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🛠️ الصيانة</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('صيانة الشاحنات'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🛠️ الصيانة</button>
                                 <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
                                 <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
                                 <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
@@ -846,7 +846,7 @@
         let shipments = getIsolatedUserShipments();
         let shipmentsCount = shipments.length;
 
-        if (tenant.activeRole === 'visitor') {
+        if (tenant.activeRole === 'visitor' || tenant.activeRole === 'driver') {
             return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', revenues: '0 ج.م', netProfit: '0 ج.م', deferredDebt: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
         }
 
@@ -884,12 +884,13 @@
         let tenant = getActiveTenantContext();
         let isManager = (tenant.activeRole === 'admin' || tenant.activeRole === 'supervisor');
         let isVisitor = (tenant.activeRole === 'visitor');
+        let isDriver = (tenant.activeRole === 'driver');
 
         let badgeEl = document.getElementById('botUserRoleBadge');
-        if (badgeEl) badgeEl.innerText = isVisitor ? `🤖 تتبع الشحنات للزوار (رقم الشحنة فقط)` : `🤖 ${tenant.activeDriver} (${isManager ? tenant.activeCompanyName : 'حساب مستخدم'})`;
+        if (badgeEl) badgeEl.innerText = isVisitor ? `🤖 تتبع الشحنات للزوار (رقم الشحنة فقط)` : `🤖 ${tenant.activeDriver} (${isManager ? tenant.activeCompanyName : 'سائق مسجل'})`;
 
         let companyTagEl = document.getElementById('syncHubCompanyTag');
-        if (companyTagEl) companyTagEl.innerText = isVisitor ? `🏢 وضع زائر (تتبع برقم الشحنة)` : (isManager ? `🏢 الشركة: ${tenant.activeCompanyName}` : `👤 المستخدم: ${tenant.activeDriver}`);
+        if (companyTagEl) companyTagEl.innerText = isVisitor ? `🏢 وضع زائر (تتبع برقم الشحنة)` : (isManager ? `🏢 الشركة: ${tenant.activeCompanyName}` : `👤 السائق: ${tenant.activeDriver}`);
         
         let rssBar = document.getElementById('na2laRssTickerContainer');
         if (rssBar) rssBar.style.display = isManager ? 'block' : 'none';
@@ -897,19 +898,19 @@
         let syncLabel = document.getElementById('syncHubBtnLabel');
         if (syncLabel) syncLabel.innerText = isVisitor ? 'تتبع شحنة' : 'شحناتي';
 
-        const sectionsList = document.getElementById('menuDropdownSectionsList');
-        const quickActionsList = document.getElementById('menuDropdownQuickActionsList');
         const visitorMenuSec = document.getElementById('visitorMenuSection');
-        
         if (visitorMenuSec) {
             visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
         }
-        if (isVisitor) {
-            if (sectionsList) sectionsList.style.display = 'none';
-            if (quickActionsList) quickActionsList.style.display = 'none';
-        } else {
-            if (sectionsList) sectionsList.style.display = 'flex';
-            if (quickActionsList) quickActionsList.style.display = 'grid';
+
+        // إخفاء/إظهار أقسام الإدارة حصرياً عن السائقين والزوار
+        document.querySelectorAll('.admin-only-section').forEach(el => {
+            el.style.display = (isManager) ? 'block' : 'none';
+        });
+
+        const managerHeader = document.getElementById('managerMenuSectionHeader');
+        if (managerHeader) {
+            managerHeader.style.display = isManager ? 'flex' : 'none';
         }
 
         updateSyncButtonBadge();
@@ -1048,7 +1049,7 @@
 
         let welcomeText = tenant.activeRole === 'visitor' ? 
             `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: 178830...) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
-            `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole}). تم تفعيل العزل التام وتتبع الشحنات.`;
+            `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'driver' ? 'سائق' : tenant.activeRole}). تم تفعيل العزل التام وتتبع الشحنات.`;
 
         container.innerHTML = `<div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${welcomeText}</div>`;
         history.forEach(msg => {
@@ -1111,8 +1112,6 @@
 
         await fetchRealFirebaseData();
         let tenant = syncPlatformUserData();
-        let financials = getCompanyFinancials();
-        let userShipments = getIsolatedUserShipments();
         let botReply = '';
         let lower = text.toLowerCase();
 
@@ -1150,15 +1149,18 @@
             botReply = `<div class="chat-card"><b>${randQuiz.q}</b><br>${randQuiz.explain}</div>`;
         }
         else if (lower.includes('صيانة الشاحنات') || lower.includes('صيانة') || lower.includes('عطل')) {
-            botReply = `
-                🛠️ <b>مساعد الصيانة والتشخيص الذكي (AI Mechanic):</b><br>
-                اختر نوع المشكلة للاستعلام الفوري:<br>
-                - مشكلة في الدينامو أو الشحن ⚡<br>
-                - خشونة أو ثقل في الدبرياج والفتيس ⚙️<br>
-                - ارتفاع حرارة المحرك 🌡️<br>
-                - خروج دخان من الشكمان 💨<br>
-                *(يمكنك أيضاً الانتقال مباشرة لقسم "مساعد الذكاء الاصطناعي للصيانة" من القائمة الشاملة للمنصة).*
-            `;
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، قسم صيانة الأسطول العام مخصص للمديرين والمشرفين فقط.`;
+            } else {
+                botReply = `
+                    🛠️ <b>مساعد الصيانة والتشخيص الذكي (AI Mechanic):</b><br>
+                    اختر نوع المشكلة للاستعلام الفوري:<br>
+                    - مشكلة في الدينامو أو الشحن ⚡<br>
+                    - خشونة أو ثقل في الدبرياج والفتيس ⚙️<br>
+                    - ارتفاع حرارة المحرك 🌡️<br>
+                    - خروج دخان من الشكمان 💨
+                `;
+            }
         }
         else if (lower.includes('صلاحية اشتراك') || lower.includes('الاشتراك')) {
             let subInfo = await getCompanySubscriptionInfo();
@@ -1169,24 +1171,44 @@
             return;
         }
         else if (lower.includes('الجدول الخماسي') || lower.includes('الخماسي')) {
-            await renderPentaTableInsideBot();
-            return;
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، الجدول الخماسي مخصص للمديرين والمشرفين فقط.`;
+            } else {
+                await renderPentaTableInsideBot();
+                return;
+            }
         }
         else if (lower.includes('الفواتير المجمعة')) {
-            await renderConsolidatedInvoicesInsideBot();
-            return;
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، الفواتير المجمعة مخصصة للمديرين والمشرفين فقط.`;
+            } else {
+                await renderConsolidatedInvoicesInsideBot();
+                return;
+            }
         }
         else if (lower.includes('الفواتير')) {
-            await renderDeferredInvoicesInsideBot();
-            return;
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، الفواتير الآجلة مخصصة للمديرين والمشرفين فقط.`;
+            } else {
+                await renderDeferredInvoicesInsideBot();
+                return;
+            }
         }
-        else if (lower.includes('الخزنة')) {
-            await renderTreasuryInsideBot();
-            return;
+        else if (lower.includes('الخزنة') || lower.includes('الخزينة')) {
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، حسابات الخزينة مخصصة للمديرين والمشرفين فقط.`;
+            } else {
+                await renderTreasuryInsideBot();
+                return;
+            }
         }
         else if (lower.includes('الأسطول') || lower.includes('الزيت')) {
-            await renderFleetInsideBot();
-            return;
+            if (tenant.activeRole === 'driver') {
+                botReply = `⚠️ عذراً، حالة الأسطول والصيانة مخصصة للمديرين والمشرفين فقط.`;
+            } else {
+                await renderFleetInsideBot();
+                return;
+            }
         }
         else if (lower.includes('رسم')) {
             botReply = handleImageRequest(text);
