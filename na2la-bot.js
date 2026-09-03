@@ -36,7 +36,7 @@
             font-family: 'Cairo', sans-serif !important;
             direction: rtl;
             text-align: right;
-            unicode-bidi: plaintext;
+            unicode-bidi: normal;
         }
         #na2laBotRootContainer[data-theme="royal"] {
             --primary-color: #8b5cf6;
@@ -85,7 +85,6 @@
             font-family: 'Cairo', sans-serif;
             white-space: nowrap;
             direction: rtl;
-            unicode-bidi: plaintext;
         }
         .sync-account-hub-btn:hover {
             transform: translateY(-2px);
@@ -107,7 +106,6 @@
             font-family: 'Cairo', sans-serif;
             direction: rtl;
             text-align: right;
-            unicode-bidi: plaintext;
         }
         .penta-grid-box {
             display: grid;
@@ -133,6 +131,9 @@
             font-size: 11px;
             font-weight: bold;
             color: var(--accent-color);
+            direction: ltr;
+            unicode-bidi: isolate;
+            display: inline-block;
         }
         .bot-data-table {
             width: 100%;
@@ -166,7 +167,7 @@
     containerDiv.innerHTML = `
         <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 62px; height: 62px; border-radius: 50%; font-size: 28px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
 
-        <div id="na2laBotModal" style="position: fixed; bottom: 95px; right: 20px; width: 430px; max-width: 94vw; height: 82vh; max-height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(25px); font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; unicode-bidi: plaintext;">
+        <div id="na2laBotModal" style="position: fixed; bottom: 95px; right: 20px; width: 430px; max-width: 94vw; height: 82vh; max-height: 680px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(25px); font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;">
             
             <!-- شريط العنوان العلوي -->
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); gap: 8px; direction: rtl;">
@@ -179,7 +180,7 @@
                         <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
                             ☰ القائمة والتحكم
                         </button>
-                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; max-height: 380px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl; unicode-bidi: plaintext;">
+                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; max-height: 380px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
                             
                             <!-- قسم خاص بالزوار للاستعلام السريع -->
                             <div id="visitorMenuSection" style="display: none; flex-direction: column; gap: 5px; margin-bottom: 10px;">
@@ -233,7 +234,7 @@
                             <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
                             <span id="btn-sync-badge" style="background: var(--danger-color, #ef4444); color: #fff; padding: 1px 5px; border-radius: 8px; font-size: 9px; font-weight: bold; display: none;">0</span>
                         </button>
-                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl; unicode-bidi: plaintext;">
+                        <div id="syncHubDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 270px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483647; padding: 10px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
                             <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; display: flex; justify-content: space-between;">
                                 <span id="syncHubUserTitle">👤 الحساب المتصل</span>
                                 <span style="color: var(--accent-color); cursor: pointer;" onclick="openConnectedAccountHub()">الملف ⬅</span>
@@ -276,8 +277,8 @@
             </div>
 
             <!-- صندوق الرسائل والمحتوى الرئيسي للدردشة -->
-            <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; line-height: 1.65; background: var(--card-bg); color: var(--text-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">
-                <div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: right; direction: rtl; unicode-bidi: plaintext;">
+            <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 16px; overflow-y: auto; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; line-height: 1.65; background: var(--card-bg); color: var(--text-color); text-align: right; direction: rtl;">
+                <div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: right; direction: rtl;">
                     مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b>.<br>- للزوار: قم بكتابة <b>رقم شحنتك</b> مباشرة في الصندوق أدناه لتتبع حالة شحنتك بدقة تامة.
                 </div>
             </div>
@@ -289,7 +290,7 @@
                 
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 38px; height: 38px; min-width: 38px; border-radius: 10px; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s;">📎</button>
                 
-                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل المساعد..." style="flex: 1; min-width: 0; height: 38px; margin: 0; padding: 0 12px; font-size: 12px; border-radius: 10px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none; direction: rtl; text-align: right; unicode-bidi: plaintext;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل المساعد..." style="flex: 1; min-width: 0; height: 38px; margin: 0; padding: 0 12px; font-size: 12px; border-radius: 10px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none; direction: rtl; text-align: right;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
 
                 <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 38px; height: 38px; min-width: 38px; border-radius: 10px; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
                 
@@ -332,7 +333,7 @@
         let container = document.getElementById('na2laBotMessages');
         if (container) {
             let botMsg = `حسناً، جارٍ الانتقال إلى قسم <b>${sectionName || 'المطلوب'}</b>...`;
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${botMsg}</div>`;
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${botMsg}</div>`;
             container.scrollTop = container.scrollHeight;
             speakBotReplyText(`حسناً، جارٍ الانتقال إلى قسم ${sectionName}`);
         }
@@ -346,7 +347,7 @@
         }, 600);
     };
 
-    // دوال العرض المباشر داخل البوت نفسه
+    // دوال العرض المباشر داخل البوت نفسه (مع عزل الأرقام والأسعار لمنع الانعكاس)
     window.renderShipmentsInsideBot = async function() {
         await fetchRealFirebaseData();
         let tenant = getActiveTenantContext();
@@ -360,18 +361,18 @@
         }
 
         let shipments = getIsolatedUserShipments();
-        let replyHtml = `📦 <b>عرض الشحنات المباشر (عدد: ${shipments.length}):</b>`;
+        let replyHtml = `📦 <b>عرض الشحنات المباشر (عدد: <bdi>${shipments.length}</bdi>):</b>`;
         if (shipments.length === 0) {
             replyHtml += `<div class="chat-card">لا توجد شحنات مسجلة حالياً ضمن نطاق شركتك.</div>`;
         } else {
             replyHtml += `<table class="bot-data-table"><tr><th>رقم الشحنة</th><th>العميل</th><th>الحالة</th><th>القيمة</th></tr>`;
             shipments.forEach(s => {
-                replyHtml += `<tr><td><b>${s.id || '-'}</b></td><td>${s.name || '-'}</td><td><span style="color:var(--accent-color);">${s.status || 'نشطة'}</span></td><td>${s.price || 0} ج.م</td></tr>`;
+                replyHtml += `<tr><td><b dir="ltr" style="unicode-bidi: isolate;">${s.id || '-'}</b></td><td>${s.name || '-'}</td><td><span style="color:var(--accent-color);">${s.status || 'نشطة'}</span></td><td><span dir="ltr" style="unicode-bidi: isolate;">${s.price || 0} ج.م</span></td></tr>`;
             });
             replyHtml += `</table>`;
         }
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${replyHtml}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
         speakBotReplyText("حسناً، تم عرض شحنات شركتك مباشرة في البوت.");
     };
@@ -393,7 +394,7 @@
             </div>
         `;
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${replyHtml}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
         speakBotReplyText("حسناً، تم عرض الجدول الخماسي المالي مباشرة في البوت.");
     };
@@ -411,18 +412,18 @@
         }
 
         let invoices = realFirebaseDeferredInvoices || [];
-        let replyHtml = `⏳ <b>الفواتير الآجلة المسجلة (عدد: ${invoices.length}):</b>`;
+        let replyHtml = `⏳ <b>الفواتير الآجلة المسجلة (عدد: <bdi>${invoices.length}</bdi>):</b>`;
         if (invoices.length === 0) {
             replyHtml += `<div class="chat-card">لا توجد فواتير أجل مسجلة حالياً في السحابة.</div>`;
         } else {
             replyHtml += `<table class="bot-data-table"><tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>الحالة</th></tr>`;
             invoices.forEach(inv => {
-                replyHtml += `<tr><td><b>${inv.id || '-'}</b></td><td>${inv.clientName || inv.name || '-'}</td><td>${inv.amount || inv.price || 0} ج.م</td><td><span style="color:var(--warning-color);">${inv.status || 'معلق/آجل'}</span></td></tr>`;
+                replyHtml += `<tr><td><b dir="ltr" style="unicode-bidi: isolate;">${inv.id || '-'}</b></td><td>${inv.clientName || inv.name || '-'}</td><td><span dir="ltr" style="unicode-bidi: isolate;">${inv.amount || inv.price || 0} ج.م</span></td><td><span style="color:var(--warning-color);">${inv.status || 'معلق/آجل'}</span></td></tr>`;
             });
             replyHtml += `</table>`;
         }
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${replyHtml}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
         speakBotReplyText("حسناً، تم عرض الفواتير الآجلة مباشرة في البوت.");
     };
@@ -442,7 +443,7 @@
             </div>
         `;
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${replyHtml}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
         speakBotReplyText("حسناً، تم عرض الخزينة والحسابات مباشرة في البوت.");
     };
@@ -812,7 +813,7 @@
         } else {
             const syncedShipments = getIsolatedUserShipments();
             listContainer.innerHTML = syncedShipments.length === 0 ? `<div style="padding: 6px; text-align: center;">لا توجد شحنات معزولة</div>` :
-                syncedShipments.slice(0, 5).map(s => `<div style="padding: 5px 8px; background:var(--card-bg); margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="renderShipmentsInsideBot()">📦 ${s.id || 'شحنة'} (${s.status || 'نشطة'}) ⬅</div>`).join('');
+                syncedShipments.slice(0, 5).map(s => `<div style="padding: 5px 8px; background:var(--card-bg); margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="renderShipmentsInsideBot()">📦 <bdi>${s.id || 'شحنة'}</bdi> (${s.status || 'نشطة'}) ⬅</div>`).join('');
         }
         dropdown.style.display = 'block';
     };
@@ -880,10 +881,10 @@
     window.handleScaleTicketUpload = function(input) {
         if (input.files && input.files[0]) {
             let container = document.getElementById('na2laBotMessages');
-            container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end; text-align: right; direction: rtl; unicode-bidi: plaintext;">📎 تحليل بونة الميزان: ${input.files[0].name}</div>`;
+            container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end; text-align: right; direction: rtl;">📎 تحليل بونة الميزان: ${input.files[0].name}</div>`;
             setTimeout(() => {
-                let botReply = `✅ <b>نجاح استخراج الأوزان (OCR):</b> القائم 32 طن، الفارغ 10 طن، الصافي 22 طن.`;
-                container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${botReply}</div>`;
+                let botReply = `✅ <b>نجاح استخراج الأوزان (OCR):</b> القائم <bdi>32</bdi> طن، الفارغ <bdi>10</bdi> طن، الصافي <bdi>22</bdi> طن.`;
+                container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${botReply}</div>`;
                 container.scrollTop = container.scrollHeight;
             }, 800);
         }
@@ -907,12 +908,12 @@
         if (!container) return;
 
         let welcomeText = tenant.activeRole === 'visitor' ? 
-            `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: 178830...) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
+            `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: <bdi>178830</bdi>) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
             `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole}). تم تفعيل العزل التام وتتبع الشحنات.`;
 
-        container.innerHTML = `<div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${welcomeText}</div>`;
+        container.innerHTML = `<div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${welcomeText}</div>`;
         history.forEach(msg => {
-            container.innerHTML += `<div style="background: ${msg.sender === 'user' ? 'var(--primary-color)' : 'var(--bg-color)'}; color: ${msg.sender === 'user' ? 'white' : 'var(--text-color)'}; padding: 10px 14px; border-radius: 12px; align-self: ${msg.sender === 'user' ? 'flex-end' : 'flex-start'}; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${msg.htmlContent}</div>`;
+            container.innerHTML += `<div style="background: ${msg.sender === 'user' ? 'var(--primary-color)' : 'var(--bg-color)'}; color: ${msg.sender === 'user' ? 'white' : 'var(--text-color)'}; padding: 10px 14px; border-radius: 12px; align-self: ${msg.sender === 'user' ? 'flex-end' : 'flex-start'}; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${msg.htmlContent}</div>`;
         });
         container.scrollTop = container.scrollHeight;
     };
@@ -955,14 +956,13 @@
         }
     };
 
-    // مزامنة ذكية وحقيقية مع الذكاء الاصطناعي بالاعتماد على بيانات وبيئة العمل الفورية
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
         let container = document.getElementById('na2laBotMessages');
         let text = customText || (inputEl ? inputEl.value.trim() : "");
         if (!text || !container) return;
 
-        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end; text-align: right; direction: rtl; unicode-bidi: plaintext;">${text}</div>`;
+        container.innerHTML += `<div style="background: var(--primary-color); color: white; padding: 10px 14px; border-radius: 12px; align-self: flex-end; text-align: right; direction: rtl;">${text}</div>`;
         saveChatHistory('user', text);
         if (inputEl && !customText) inputEl.value = "";
         container.scrollTop = container.scrollHeight;
@@ -985,20 +985,20 @@
 
         if (matchedShipment) {
             botReply = `
-                📦 <strong>نتيجة تتبع الشحنة رقم (${matchedShipment.id}):</strong>
+                📦 <strong>نتيجة تتبع الشحنة رقم (<bdi dir="ltr" style="unicode-bidi:isolate;">${matchedShipment.id}</bdi>):</strong>
                 <div class="chat-card">
                     👤 <b>العميل:</b> ${matchedShipment.name || '-'}<br>
                     📍 <b>العنوان:</b> ${matchedShipment.address || '-'}<br>
                     📦 <b>الحمولة:</b> ${matchedShipment.item || '-'}<br>
-                    💰 <b>الأجرة:</b> ${matchedShipment.price || 0} ج.م<br>
+                    💰 <b>الأجرة:</b> <span dir="ltr" style="unicode-bidi:isolate;">${matchedShipment.price || 0} ج.م</span><br>
                     📌 <b>حالة الشحنة:</b> <b style="color:var(--accent-color);">${matchedShipment.status || 'نشطة'}</b><br>
-                    📅 <b>التاريخ:</b> ${matchedShipment.date || '-'}
+                    📅 <b>التاريخ:</b> <span dir="ltr" style="unicode-bidi:isolate;">${matchedShipment.date || '-'}</span>
                 </div>
             `;
         }
         else if (tenant.activeRole === 'visitor') {
             if (lower.includes('كيف') || lower.includes('شحنة') || lower.includes('تتبع')) {
-                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
+                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
             } else {
                 botReply = `⚠️ عذراً يا زائرنا الكريم، حسابك مخصص لتتبع الشحنات برقمها فقط. يرجى إدخال <b>رقم الشحنة الصحيح</b> للاستعلام عنها.`;
             }
@@ -1009,7 +1009,7 @@
         }
         else if (lower.includes('صلاحية اشتراك') || lower.includes('الاشتراك')) {
             let subInfo = await getCompanySubscriptionInfo();
-            botReply = `💳 <b>كارت الاشتراك:</b><br>الشركة: <b>${subInfo.companyName}</b><br>الباقة: <b>${subInfo.planName}</b><br>الحالة: <b style="color:var(--accent-color);">${subInfo.status}</b><br>الانتهاء: <b>${subInfo.expiryDate}</b>`;
+            botReply = `💳 <b>كارت الاشتراك:</b><br>الشركة: <b>${subInfo.companyName}</b><br>الباقة: <b>${subInfo.planName}</b><br>الحالة: <b style="color:var(--accent-color);">${subInfo.status}</b><br>الانتهاء: <b dir="ltr" style="unicode-bidi:isolate;">${subInfo.expiryDate}</b>`;
         }
         else if (lower.includes('شحناتي') || lower.includes('الشحنات')) {
             await renderShipmentsInsideBot();
@@ -1031,17 +1031,16 @@
             botReply = handleImageRequest(text);
         }
         else {
-            // محاكاة استجابة ذكية ومزامنة تحليلية تعتمد على سياق المنصة والبيانات الحية
             botReply = `
                 🤖 <b>تحليلات مساعد Gemini Pro الذكي:</b><br>
                 بناءً على استفسارك ("${text}") وحالة حسابك الحالي في شركة <b>${tenant.activeCompanyName}</b>:<br>
-                - إجمالي الشحنات المتاحة لنطاقك: <b>${userShipments.length} شحنة</b>.<br>
+                - إجمالي الشحنات المتاحة لنطاقك: <b><bdi>${userShipments.length}</bdi> شحنة</b>.<br>
                 - رصيد الخزينة الحالي: <span style="color:var(--accent-color);">${financials.treasuryBalance}</span>.<br>
-                💡 <i>ملاحظة: يمكنك استخدام أزرار "القائمة والتحكم" بالاعلى لاستعراض الأقسام، أو كتابة رقم الشحنة مباشرة للتتبع السريع.</i>
+                💡 <i>ملاحظة: يمكنك استخدام أزرار "القائمة والتحكم" بالأعلى لاستعراض الأقسام، أو كتابة رقم الشحنة مباشرة للتتبع السريع.</i>
             `;
         }
 
-        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl; unicode-bidi: plaintext;">${botReply}</div>`;
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-start; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${botReply}</div>`;
         saveChatHistory('bot', botReply);
         container.scrollTop = container.scrollHeight;
         speakBotReplyText(botReply.replace(/<[^>]*>?/gm, ''));
