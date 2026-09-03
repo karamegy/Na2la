@@ -398,18 +398,27 @@
         let invoices = getIsolatedDeferredInvoices();
         let replyHtml = `⏳ <b>الفواتير الآجلة المسجلة (عدد: ${invoices.length}):</b>`;
         if (invoices.length === 0) {
-            replyHtml += `<div class="chat-card">لا توجد فواتير أجل مسجلة حالياً في السحابة.</div>`;
+            replyHtml += `<div class="chat-card">لا توجد فواتير أجل مسجلة حالياً.</div>`;
         } else {
             replyHtml += `<table class="bot-data-table"><tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>الحالة</th></tr>`;
             invoices.forEach(inv => {
-                replyHtml += `<tr><td><b>${inv.id || '-'}</b></td><td>${inv.clientName || inv.name || '-'}</td><td>${inv.remainingAmount || inv.totalAmount || inv.price || 0} ج.م</td><td><span style="color:var(--warning-color);">${inv.status || 'معلق/آجل'}</span></td></tr>`;
+                let isPaid = inv.status === 'paid' || inv.status === 'مسدد' || inv.status === 'مفسد' || Number(inv.remainingAmount || 0) <= 0;
+                let statusText = isPaid ? 'مسدد ✅' : (inv.status || 'معلق/آجل');
+                let statusColor = isPaid ? 'var(--accent-color, #10b981)' : 'var(--warning-color, #f59e0b)';
+                
+                replyHtml += `<tr>
+                    <td><b>${inv.id || inv.invoiceNumber || '-'}</b></td>
+                    <td>${inv.clientName || inv.name || '-'}</td>
+                    <td>${inv.remainingAmount || inv.totalAmount || inv.price || 0} ج.م</td>
+                    <td><span style="color: ${statusColor}; font-weight: bold;">${statusText}</span></td>
+                </tr>`;
             });
             replyHtml += `</table>`;
         }
 
         container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
-        speakBotReplyText("حسناً، تم عرض الفواتير الآجلة مباشرة في البوت.");
+        speakBotReplyText("حسناً، تم عرض الفواتير الآجلة وتحديث حالة السداد مباشرة في البوت.");
     };
 
     window.renderConsolidatedInvoicesInsideBot = async function() {
@@ -749,7 +758,6 @@
         return subData;
     };
 
-    // دالة مساعدة لفلترة وعزل السجلات بدقة تامة حسب الشركة الحالية
     window.matchesCompany = function(item) {
         let tenant = getActiveTenantContext();
         if (!item) return false;
@@ -789,7 +797,10 @@
     };
 
     window.getIsolatedDeferredInvoices = function() {
-        let allInvoices = realFirebaseDeferredInvoices.length > 0 ? realFirebaseDeferredInvoices : (window.appData?.deferredInvoices || []);
+        let localAppData = window.appData || (typeof appData !== 'undefined' ? appData : {});
+        let allInvoices = (localAppData.deferredInvoices && localAppData.deferredInvoices.length > 0) ? 
+                          localAppData.deferredInvoices : 
+                          (realFirebaseDeferredInvoices.length > 0 ? realFirebaseDeferredInvoices : []);
         return allInvoices.filter(matchesCompany);
     };
 
@@ -834,7 +845,8 @@
         }, 0);
 
         let deferredDebt = isolatedInvoices.reduce((sum, inv) => {
-            if (inv.status !== 'paid') return sum + Number(inv.remainingAmount || inv.totalAmount || inv.price || 0);
+            let isPaid = inv.status === 'paid' || inv.status === 'مسدد' || inv.status === 'مفسد' || Number(inv.remainingAmount || 0) <= 0;
+            if (!isPaid) return sum + Number(inv.remainingAmount || inv.totalAmount || inv.price || 0);
             return sum;
         }, 0);
         
