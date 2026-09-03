@@ -392,14 +392,14 @@
             return;
         }
 
-        let invoices = realFirebaseDeferredInvoices || [];
+        let invoices = getIsolatedDeferredInvoices();
         let replyHtml = `⏳ <b>الفواتير الآجلة المسجلة (عدد: ${invoices.length}):</b>`;
         if (invoices.length === 0) {
             replyHtml += `<div class="chat-card">لا توجد فواتير أجل مسجلة حالياً في السحابة.</div>`;
         } else {
             replyHtml += `<table class="bot-data-table"><tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>الحالة</th></tr>`;
             invoices.forEach(inv => {
-                replyHtml += `<tr><td><b>${inv.id || '-'}</b></td><td>${inv.clientName || inv.name || '-'}</td><td>${inv.amount || inv.price || 0} ج.م</td><td><span style="color:var(--warning-color);">${inv.status || 'معلق/آجل'}</span></td></tr>`;
+                replyHtml += `<tr><td><b>${inv.id || '-'}</b></td><td>${inv.clientName || inv.name || '-'}</td><td>${inv.remainingAmount || inv.totalAmount || inv.price || 0} ج.م</td><td><span style="color:var(--warning-color);">${inv.status || 'معلق/آجل'}</span></td></tr>`;
             });
             replyHtml += `</table>`;
         }
@@ -679,6 +679,15 @@
         return subData;
     };
 
+    // دالة مساعدة لفلترة وعزل السجلات بدقة تامة حسب الشركة الحالية
+    window.matchesCompany = function(item) {
+        let tenant = getActiveTenantContext();
+        if (!item) return false;
+        let itemComp = String(item.companyId || 'company_main').trim().toLowerCase();
+        let activeComp = String(tenant.activeCompanyId || 'company_main').trim().toLowerCase();
+        return itemComp === activeComp;
+    };
+
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') {
@@ -686,12 +695,7 @@
         }
 
         let allShipments = realFirebaseShipments.length > 0 ? realFirebaseShipments : (window.appData?.shipments || []);
-        
-        let companyFiltered = allShipments.filter(s => {
-            let sCompanyId = String(s.companyId || 'company_main').trim().toLowerCase();
-            let activeComp = String(tenant.activeCompanyId || 'company_main').trim().toLowerCase();
-            return sCompanyId === activeComp;
-        });
+        let companyFiltered = allShipments.filter(matchesCompany);
 
         if (tenant.activeRole === 'admin' || tenant.activeRole === 'supervisor') {
             return companyFiltered;
@@ -702,6 +706,21 @@
             let currentDriver = String(tenant.activeDriver).trim();
             return sDriver === currentDriver;
         });
+    };
+
+    window.getIsolatedTreasury = function() {
+        let allTreasury = realFirebaseTreasury.length > 0 ? realFirebaseTreasury : (window.appData?.treasury || []);
+        return allTreasury.filter(matchesCompany);
+    };
+
+    window.getIsolatedExpenses = function() {
+        let allExpenses = realFirebaseExpenses.length > 0 ? realFirebaseExpenses : (window.appData?.expenses || []);
+        return allExpenses.filter(matchesCompany);
+    };
+
+    window.getIsolatedDeferredInvoices = function() {
+        let allInvoices = realFirebaseDeferredInvoices.length > 0 ? realFirebaseDeferredInvoices : (window.appData?.deferredInvoices || []);
+        return allInvoices.filter(matchesCompany);
     };
 
     window.parseNumericCurrency = function(val) {
@@ -721,12 +740,21 @@
             return { treasuryBalance: '0 ج.م', expensesTotal: '0 ج.م', revenues: '0 ج.م', netProfit: '0 ج.م', deferredDebt: '0 ج.م', invoicesCount: 0, shipmentsCount: 0 };
         }
 
+        let isolatedTreasury = getIsolatedTreasury();
+        let isolatedExpenses = getIsolatedExpenses();
+        let isolatedInvoices = getIsolatedDeferredInvoices();
+
         let totalRevenues = shipments.reduce((sum, s) => sum + Number(s.price || 0), 0);
-        let totalExpenses = (realFirebaseExpenses || []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        let totalExpenses = isolatedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         let netProfit = totalRevenues - totalExpenses;
-        let treasuryBalance = (realFirebaseTreasury || []).reduce((sum, t) => sum + (t.type === 'in' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
-        let deferredDebt = (realFirebaseDeferredInvoices || []).reduce((sum, inv) => {
-            if (inv.status !== 'paid') return sum + Number(inv.remainingAmount || inv.totalAmount || 0);
+        
+        let treasuryBalance = isolatedTreasury.reduce((sum, t) => {
+            let amt = Number(t.amount || 0);
+            return (t.type === 'in' || t.type === 'deposit') ? sum + amt : sum - amt;
+        }, 0);
+
+        let deferredDebt = isolatedInvoices.reduce((sum, inv) => {
+            if (inv.status !== 'paid') return sum + Number(inv.remainingAmount || inv.totalAmount || inv.price || 0);
             return sum;
         }, 0);
         
@@ -736,7 +764,7 @@
             revenues: parseNumericCurrency(totalRevenues),
             netProfit: parseNumericCurrency(netProfit),
             deferredDebt: parseNumericCurrency(deferredDebt),
-            invoicesCount: realFirebaseDeferredInvoices.length + realFirebaseConsolidatedInvoices.length || 1, 
+            invoicesCount: isolatedInvoices.length || 1, 
             shipmentsCount 
         };
     };
@@ -980,10 +1008,10 @@
         let cleanedQuery = text.replace(/[^\d]/g, '');
         let matchedShipment = null;
         if (cleanedQuery.length >= 4) {
-            matchedShipment = (realFirebaseShipments || []).find(s => String(s.id).trim() === cleanedQuery || String(s.id).includes(cleanedQuery));
+            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && (String(s.id).trim() === cleanedQuery || String(s.id).includes(cleanedQuery)));
         }
         if (!matchedShipment) {
-            matchedShipment = (realFirebaseShipments || []).find(s => String(s.id).toLowerCase() === text.toLowerCase());
+            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && String(s.id).toLowerCase() === text.toLowerCase());
         }
 
         if (matchedShipment) {
