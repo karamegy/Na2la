@@ -3061,30 +3061,70 @@
         }
 
         async function printConsolidatedInvoice(id) {
-    console.log("Searching for invoice ID:", id);
+    console.log("--- بدء عملية طباعة الفاتورة المجمعة ---");
+    console.log("الـ ID المستلم للدالة:", id);
+
+    if (!id || id === 'undefined' || id === 'null') {
+        alert('خطأ: معرف الفاتورة (ID) غير مرسل بشكل صحيح!');
+        return;
+    }
+
     let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
     
     if (!inv) {
+        console.لم يتم العثور عليها محلياً، جاري البحث في Firestore مباشرة...();
         try {
             const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
             if (docSnap.exists) {
                 inv = { id: docSnap.id, ...docSnap.data() };
+                console.log("تم العثور عليها في Firestore بنجاح:", inv);
+            } else {
+                console.warn("المستند غير موجود نهائياً في مجموعة consolidatedInvoices بهذا الـ ID.");
             }
         } catch (err) {
-            console.error("Error fetching invoice from Firestore:", err);
+            console.error("خطأ تقني أثناء جلب المستند من فايرسبورغ (قد يكون بسبب قواعد الأمان):", err);
         }
     }
 
     if (!inv) { 
-        alert(`عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة (ID: ${id}).`); 
+        alert(`عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة (ID: ${id}). تحقق من وحدة التحكم F12.`); 
         return; 
     }
 
-    // متابعة عملية الطباعة...
     let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.map(String).includes(String(s.id)));
-    // ... باقي كود الطباعة
-}
+    let rowsHtml = '';
+    
+    matchingShipments.forEach((s, idx) => {
+        rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
+    });
 
+    const win = window.open('', '_blank');
+    win.document.write(`
+        <html lang="ar" dir="rtl">
+        <head>
+            <title>فاتورة مجمعة رقم #${inv.id}</title>
+            <style>
+                body { font-family: Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
+                th { background: #2563eb; color: #fff; }
+            </style>
+        </head>
+        <body>
+            <h2 style="text-align:center; color:#0f172a;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
+            <p><strong>اسم العميل / الشركة:</strong> ${inv.client || '-'}</p>
+            <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد'}</p>
+            <table>
+                <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${inv.total || 0} ج.م</h3>
+        </body>
+        </html>
+    `);
+    win.document.close();
+    setTimeout(() => win.print(), 300);
+}
 
         function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
