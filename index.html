@@ -3060,71 +3060,102 @@
             });
         }
 
-        async function printConsolidatedInvoice(id) {
-    console.log("Searching for invoice ID:", id);
-    
-    if (!id || id === 'undefined' || id === 'null') {
-        alert('خطأ: معرف الفاتورة غير مرسل بشكل صحيح.');
+async function printConsolidatedInvoice(id) {
+    if (!id) {
+        alert('عذراً، معرف الفاتورة غير صالح.');
         return;
     }
 
-    let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
+    // تنظيف معرف الفاتورة بإزالة علامة # والمساحات لضمان التطابق التام
+    const cleanId = String(id).replace('#', '').trim();
     
+    // 1. البحث في المصفوفة المحلية
+    let inv = (appData.consolidatedInvoices || []).find(i => {
+        const storedId = String(i.id || '').replace('#', '').trim();
+        const storedNum = String(i.invoiceNumber || '').replace('#', '').trim();
+        return storedId === cleanId || storedNum === cleanId;
+    });
+
+    // 2. إذا لم توجد محلياً، البحث المباشر في Firestore
     if (!inv) {
-        console.log("Not found locally, fetching from Firestore...");
         try {
-            const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
+            const docSnap = await db.collection('consolidatedInvoices').doc(cleanId).get();
             if (docSnap.exists) {
                 inv = { id: docSnap.id, ...docSnap.data() };
-                console.log("Found in Firestore successfully:", inv);
+            } else {
+                const querySnap = await db.collection('consolidatedInvoices').where('invoiceNumber', '==', cleanId).get();
+                if (!querySnap.empty) {
+                    inv = { id: querySnap.docs[0].id, ...querySnap.docs[0].data() };
+                }
             }
         } catch (err) {
-            console.error("Firestore fetch error:", err);
+            console.error("Firestore error:", err);
         }
     }
 
+    if (!inv && typeof realFirebaseDeferredInvoices !== 'undefined') {
+        inv = realFirebaseDeferredInvoices.find(i => {
+            const sId = String(i.id || '').replace('#', '').trim();
+            const sNum = String(i.invoiceNumber || '').replace('#', '').trim();
+            return sId === cleanId || sNum === cleanId;
+        });
+    }
+
     if (!inv) { 
-        alert('عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.'); 
+        alert(`عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة (رقم: ${id}).`); 
         return; 
     }
 
-    let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.map(String).includes(String(s.id)));
-    let rowsHtml = '';
-    
-    matchingShipments.forEach((s, idx) => {
-        rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
+    let shipmentIds = inv.shipmentIds || inv.shipments || [];
+    let matchingShipments = (appData.shipments || []).filter(s => {
+        return shipmentIds.map(String).includes(String(s.id)) || shipmentIds.map(String).includes(String(s.shipmentNumber));
     });
+
+    if (matchingShipments.length === 0 && typeof realFirebaseShipments !== 'undefined') {
+        matchingShipments = realFirebaseShipments.filter(s => {
+            return shipmentIds.map(String).includes(String(s.id)) || shipmentIds.map(String).includes(String(s.shipmentNumber));
+        });
+    }
+
+    let rowsHtml = '';
+    matchingShipments.forEach((s, idx) => {
+        rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || s.description || '-'}</td><td>${s.address || s.destination || '-'}</td><td>${s.price || s.cost || 0} ج.م</td></tr>`;
+    });
+
+    if (rowsHtml === '') {
+        rowsHtml = `<tr><td>1</td><td>${inv.description || 'شحنات مجمعة'}</td><td>-</td><td>${inv.total || inv.totalAmount || 0} ج.م</td></tr>`;
+    }
 
     const win = window.open('', '_blank');
     win.document.write(`
         <html lang="ar" dir="rtl">
         <head>
-            <title>فاتورة مجمعة رقم #${inv.id}</title>
+            <title>فاتورة مجمعة رقم #${inv.invoiceNumber || inv.id || cleanId}</title>
             <style>
-                body { font-family: Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
                 table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-                th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
+                th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; font-family: 'Cairo', sans-serif; }
                 th { background: #2563eb; color: #fff; }
             </style>
         </head>
         <body>
             <h2 style="text-align:center; color:#0f172a;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-            <p><strong>اسم العميل / الشركة:</strong> ${inv.client || '-'}</p>
+            <p><strong>رقم الفاتورة:</strong> #${inv.invoiceNumber || inv.id || cleanId}</p>
+            <p><strong>اسم العميل / الشركة:</strong> ${inv.client || inv.clientName || '-'}</p>
             <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد'}</p>
             <table>
                 <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${inv.total || 0} ج.م</h3>
+            <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${inv.total || inv.totalAmount || 0} ج.م</h3>
         </body>
         </html>
     `);
     win.document.close();
     setTimeout(() => win.print(), 300);
 }
-
-
-        function deleteConsolidatedInvoice(id) {
+       function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
             if(confirm('حذف الفاتورة المجمعة؟')) {
                 db.collection('consolidatedInvoices').doc(String(id)).delete();
