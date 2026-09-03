@@ -6,11 +6,6 @@
     <title>أسطورة الطريق - إدارة الشركات والاشتراكات الموسعة (SaaS Hub PRO MAX)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- مكتبات Firebase V8 -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    
     <style>
         :root {
             --primary: linear-gradient(135deg, #1e293b, #0f172a);
@@ -71,7 +66,6 @@
         .header-actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; width: 100%; }
         @media(min-width: 600px) { .header-actions { width: auto; } }
 
-        /* القائمة المنسدلة المستقلة العائمة فوق الصفحة الأم */
         .sections-dropdown-menu {
             display: none;
             position: absolute;
@@ -161,7 +155,6 @@
             </div>
         </div>
         <div class="header-actions">
-            <!-- زر فتح القائمة المنسدلة المستقلة للأقسام -->
             <div style="position: relative; display: inline-block;">
                 <button type="button" class="btn-sm btn-purple" onclick="toggleSectionsDropdown(event)">📂 الأقسام ▾</button>
                 <div id="sectionsDropdownMenu" class="sections-dropdown-menu">
@@ -325,7 +318,10 @@
         <div id="audit-logs-container" style="max-height: 150px; overflow-y: auto; font-size: 9px; margin-top: 6px;"></div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, setDoc, doc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -336,8 +332,8 @@
             measurementId: "G-KH4ZYFB8LC"
         };
         
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
         let systemPricing = JSON.parse(localStorage.getItem('na2la_system_pricing') || '{"monthly": 300, "quarterly": 800, "yearly": 2500}');
@@ -348,7 +344,6 @@
             promoCodes: JSON.parse(localStorage.getItem('saas_promo_codes') || '{"N2LA30": 30, "VIP": 30}')
         };
 
-        // التحكم في ظهور واختفاء القائمة المنسدلة المستقلة للأقسام
         function toggleSectionsDropdown(event) {
             event.stopPropagation();
             const menu = document.getElementById('sectionsDropdownMenu');
@@ -358,8 +353,8 @@
                 menu.style.display = 'block';
             }
         }
+        window.toggleSectionsDropdown = toggleSectionsDropdown;
 
-        // الانتقال السلس للقسم وإغلاق القائمة
         function jumpToSection(sectionId) {
             document.getElementById('sectionsDropdownMenu').style.display = 'none';
             const target = document.getElementById(sectionId);
@@ -367,59 +362,12 @@
                 target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
+        window.jumpToSection = jumpToSection;
 
-        // إغلاق القائمة عند النقر خارجها
         window.addEventListener('click', () => {
             const menu = document.getElementById('sectionsDropdownMenu');
             if (menu) menu.style.display = 'none';
         });
-
-        async function verifyStrictBiometricAuth(userId, companyId) {
-            try {
-                if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
-                    const publicKey = {
-                        challenge: new Uint8Array(32),
-                        rp: { name: "Na2la SaaS Hub" },
-                        user: {
-                            id: Uint8Array.from(userId, c => c.charCodeAt(0)),
-                            name: userId,
-                            displayName: "مدير النظام / السائق"
-                        },
-                        pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-                        timeout: 60000,
-                        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" }
-                    };
-
-                    const credential = await navigator.credentials.get({ publicKey: { challenge: publicKey.challenge, userVerification: "required" } });
-                    
-                    if (credential) {
-                        await db.collection('panda_biometric_logs').add({
-                            userId: userId,
-                            companyId: companyId,
-                            status: "success",
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        return true;
-                    }
-                } else {
-                    const pinConfirm = prompt("⚠️ الجهاز لا يدعم البصمة الخارجية، يرجى إدخال رمز التحقق السري (PIN) للمتابعة:");
-                    const userDoc = await db.collection('drivers').doc(String(userId)).get();
-                    if (userDoc.exists && String(userDoc.data().pin) === String(pinConfirm)) {
-                        await db.collection('panda_biometric_logs').add({
-                            userId: userId,
-                            companyId: companyId,
-                            status: "success_pin_fallback",
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        return true;
-                    }
-                }
-            } catch (error) {
-                console.error("خطأ في التحقق بالبصمة:", error);
-                showToast("فشل التحقق الأمني بالبصمة!", "error");
-            }
-            return false;
-        }
 
         async function enforceStrictCompanySync(currentUserId, currentCompanyId) {
             const storedCompany = localStorage.getItem('current_company_id');
@@ -431,10 +379,10 @@
             }
 
             try {
-                const userRef = db.collection('drivers').doc(String(currentUserId));
-                const userSnap = await userRef.get();
+                const userRef = doc(db, 'drivers', String(currentUserId));
+                const userSnap = await getDoc(userRef);
 
-                if (!userSnap.exists) {
+                if (!userSnap.exists()) {
                     if(loggedInDriverName === 'المدير') {
                         localStorage.setItem('current_company_id', 'company_main');
                         await fetchCompanyIsolatedData('company_main');
@@ -455,9 +403,16 @@
         async function fetchCompanyIsolatedData(companyId) {
             showToast("🔄 جاري مزامنة بيانات الشركة والاشتراكات...", "warning");
             try {
-                const driversSnap = await db.collection('drivers').get();
                 const today = new Date();
                 today.setHours(0,0,0,0);
+
+                let driversSnap;
+                if (loggedInDriverName === 'المدير' || companyId === 'company_main') {
+                    driversSnap = await getDocs(collection(db, 'drivers'));
+                } else {
+                    const qDrivers = query(collection(db, 'drivers'), where('companyId', '==', companyId));
+                    driversSnap = await getDocs(qDrivers);
+                }
 
                 appData.drivers = driversSnap.docs.map(docSnap => {
                     let d = { id: docSnap.id, ...docSnap.data() };
@@ -465,13 +420,20 @@
                     let calculatedStatus = (expiry && expiry < today) ? 'expired' : 'active';
                     d.subStatus = calculatedStatus;
                     return d;
-                }).filter(d => loggedInDriverName === 'المدير' || d.companyId === companyId || !d.companyId);
+                });
 
-                const reqsSnap = await db.collection('subscription_requests').get();
-                appData.subscriptionRequests = reqsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                let reqsSnap = { docs: [] };
+                try {
+                    reqsSnap = await getDocs(collection(db, 'subscription_requests'));
+                } catch (e) { console.warn("لا يمكن جلب طلبات الاشتراك:", e.message); }
+                appData.subscriptionRequests = reqsSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-                const logsSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(25).get().catch(() => ({ docs: [] }));
-                appData.auditLogs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                let logsSnap = { docs: [] };
+                try {
+                    const qLogs = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(25));
+                    logsSnap = await getDocs(qLogs);
+                } catch (e) { console.warn("لا يمكن جلب سجلات التدقيق:", e.message); }
+                appData.auditLogs = logsSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
                 updateStatistics();
                 renderMemberSubscriptionsList();
@@ -482,11 +444,13 @@
                 showToast('خطأ في جلب بيانات الشركة: ' + err.message, 'error');
             }
         }
+        window.fetchCompanyIsolatedData = fetchCompanyIsolatedData;
 
         async function fetchAllDataFromCloud() {
             const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
             await fetchCompanyIsolatedData(activeCompanyId);
         }
+        window.fetchAllDataFromCloud = fetchAllDataFromCloud;
 
         window.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
@@ -511,7 +475,7 @@
             localStorage.setItem('na2la_system_pricing', JSON.stringify(systemPricing));
 
             try {
-                await db.collection('systemSettings').doc('pricing').set(systemPricing);
+                await setDoc(doc(db, 'systemSettings', 'pricing'), systemPricing);
                 updateStatistics();
                 showToast('✅ تم حفظ وتحديث أسعار الباقات والإيرادات بنجاح!');
                 logAuditAction('تحديث الأسعار', `تم تحديث أسعار الباقات: شهري=${m}, ربع سنوي=${q}, سنوي=${y}`);
@@ -519,6 +483,7 @@
                 showToast('خطأ في الحفظ السحابي: ' + err.message, 'error');
             }
         }
+        window.savePricingConfiguration = savePricingConfiguration;
 
         function updateStatistics() {
             const drivers = appData.drivers || [];
@@ -565,7 +530,7 @@
         }
 
         function renderMemberSubscriptionsList() {
-            const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
+            const queryBox = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
             const statusFilter = document.getElementById('filter-sub-status')?.value || 'all';
             const container = document.getElementById('members-subscriptions-container');
             if (!container) return;
@@ -579,7 +544,7 @@
                 const nameStr = (d.name || '').toLowerCase();
                 const compStr = (d.companyName || '').toLowerCase();
                 const phoneStr = d.phone || '';
-                const matchesSearch = nameStr.includes(query) || compStr.includes(query) || phoneStr.includes(query);
+                const matchesSearch = nameStr.includes(queryBox) || compStr.includes(queryBox) || phoneStr.includes(queryBox);
 
                 let expiry = d.subExpiry ? new Date(d.subExpiry) : null;
                 let isExpired = expiry && expiry < today;
@@ -618,6 +583,7 @@
                 container.appendChild(itemDiv);
             });
         }
+        window.renderMemberSubscriptionsList = renderMemberSubscriptionsList;
 
         function renderAdminPendingCashRequests() {
             const container = document.getElementById('admin-pending-cash-requests');
@@ -680,7 +646,7 @@
                 createdAt: new Date().toISOString()
             };
 
-            await db.collection('drivers').doc(newAdminId).set(newAdminData);
+            await setDoc(doc(db, 'drivers', newAdminId), newAdminData);
             await logAuditAction('إضافة شركة', `تم إنشاء شركة ${companyName} (${adminName})`);
             
             closeModal('addCompanyModal');
@@ -688,6 +654,7 @@
             showToast('✅ تم إنشاء الشركة وتفعيلها بنجاح!');
             fetchAllDataFromCloud();
         }
+        window.handleCreateCompanySubmit = handleCreateCompanySubmit;
 
         async function approveSubscriptionRequest(reqId, driverId, months) {
             let reqItem = appData.subscriptionRequests.find(r => String(r.id) === String(reqId));
@@ -703,31 +670,34 @@
             exp.setMonth(exp.getMonth() + Number(months));
             let newExpStr = exp.toISOString().split('T')[0];
 
-            await db.collection('drivers').doc(String(targetDrv.id)).set({ subExpiry: newExpStr, subStatus: 'active' }, { merge: true });
-            await db.collection('subscription_requests').doc(String(reqId)).set({ status: 'approved' }, { merge: true });
+            await setDoc(doc(db, 'drivers', String(targetDrv.id)), { subExpiry: newExpStr, subStatus: 'active' }, { merge: true });
+            await setDoc(doc(db, 'subscription_requests', String(reqId)), { status: 'approved' }, { merge: true });
             
             await logAuditAction('موافقة كاش', `تم تجديد اشتراك ${targetDrv.companyName || targetDrv.name} لمدة ${months} أشهر`);
             showToast('✅ تمت الموافقة وتفعيل الاشتراك بنجاح!');
             fetchAllDataFromCloud();
         }
+        window.approveSubscriptionRequest = approveSubscriptionRequest;
 
         async function updateMemberSub(driverId) {
             let driver = appData.drivers.find(d => String(d.id) === String(driverId));
             if (!driver) return;
             let newExpiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            await db.collection('drivers').doc(String(driver.id)).set({ subExpiry: newExpiryDate, subStatus: 'active' }, { merge: true });
+            await setDoc(doc(db, 'drivers', String(driver.id)), { subExpiry: newExpiryDate, subStatus: 'active' }, { merge: true });
             await logAuditAction('تجديد اشتراك', `تم تجديد اشتراك ${driver.companyName || driver.name} لمدة شهر إضافي`);
             showToast('✅ تم التجديد بنجاح حتى ' + newExpiryDate);
             fetchAllDataFromCloud();
         }
+        window.updateMemberSub = updateMemberSub;
 
         async function deleteCompanyAccount(driverId, name) {
             if (!confirm(`⚠️ هل أنت متأكد من حذف الحساب والشركة (${name})؟`)) return;
-            await db.collection('drivers').doc(String(driverId)).delete();
+            await deleteDoc(doc(db, 'drivers', String(driverId)));
             await logAuditAction('حذف شركة', `تم حذف الحساب والشركة (${name})`);
             showToast('✅ تم الحذف بنجاح');
             fetchAllDataFromCloud();
         }
+        window.deleteCompanyAccount = deleteCompanyAccount;
 
         async function openCompanyDetails(driverId, companyId) {
             let driver = appData.drivers.find(d => String(d.id) === String(driverId));
@@ -736,7 +706,8 @@
             let shipmentsCount = 0;
             if (companyId) {
                 try {
-                    const shipSnap = await db.collection('shipments').where('companyId', '==', companyId).get();
+                    const qShip = query(collection(db, 'shipments'), where('companyId', '==', companyId));
+                    const shipSnap = await getDocs(qShip);
                     shipmentsCount = shipSnap.size;
                 } catch(e) { shipmentsCount = 'غير متاح'; }
             }
@@ -753,6 +724,7 @@
             `;
             document.getElementById('companyDetailsModal').style.display = 'flex';
         }
+        window.openCompanyDetails = openCompanyDetails;
 
         function sendWhatsAppReminder(phone, name, expiryDate) {
             if (!phone) { showToast('رقم الهاتف غير مسجل!', 'error'); return; }
@@ -762,6 +734,7 @@
             const msg = encodeURIComponent(`مرحباً بك يا مدير شركة (${name})،\nنود تذكيركم بأن اشتراكم في نظام "أسطورة الطريق" ينتهي بتاريخ (${expiryDate}). يرجى التجديد لضمان استمرار العمل.\nشكراً لثقتكم 🚀`);
             window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
         }
+        window.sendWhatsAppReminder = sendWhatsAppReminder;
 
         function sendBulkWhatsAppReminders() {
             const today = new Date();
@@ -777,6 +750,7 @@
             });
             showToast(count > 0 ? `جاري إرسال التذكيرات لـ (${count}) شركة 💬` : 'لا توجد شركات تنتهي اشتراكاتهم قريباً.', count > 0 ? 'success' : 'warning');
         }
+        window.sendBulkWhatsAppReminders = sendBulkWhatsAppReminders;
 
         function printCompanyInvoice(driverId) {
             let driver = appData.drivers.find(d => String(d.id) === String(driverId));
@@ -796,6 +770,7 @@
             `);
             win.document.close();
         }
+        window.printCompanyInvoice = printCompanyInvoice;
 
         function addNewPromoCode() {
             let code = document.getElementById('promo-code-input').value.trim().toUpperCase();
@@ -807,6 +782,7 @@
             showToast(`✅ تم حفظ الكود الترويجي (${code}) بنجاح!`);
             renderPromoCodesList();
         }
+        window.addNewPromoCode = addNewPromoCode;
 
         function renderPromoCodesList() {
             let container = document.getElementById('active-promo-list');
@@ -816,6 +792,7 @@
                 container.innerHTML += `<div style="display:flex; justify-content:space-between; padding:3px; border-bottom:1px solid var(--border-color); font-size:9px;"><span>${c} (${d} يوم)</span><button class="btn-danger btn-sm" style="padding:1px 4px;" onclick="deletePromoCode('${c}')">حذف</button></div>`;
             }
         }
+        window.renderPromoCodesList = renderPromoCodesList;
 
         function deletePromoCode(c) {
             delete appData.promoCodes[c];
@@ -823,16 +800,17 @@
             renderPromoCodesList();
             showToast('✅ تم الحذف بنجاح');
         }
+        window.deletePromoCode = deletePromoCode;
 
         async function logAuditAction(action, details) {
             try {
                 const currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
-                await db.collection('audit_logs').add({
+                await addDoc(collection(db, 'audit_logs'), {
                     companyId: currentCompanyId,
                     adminName: loggedInDriverName,
                     action,
                     details,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    timestamp: serverTimestamp()
                 });
             } catch(e){}
         }
@@ -854,20 +832,33 @@
             document.body.appendChild(a); a.click(); a.remove();
             showToast('✅ تم تصدير نسخة الاحتياط بنجاح!');
         }
+        window.exportCompaniesJSON = exportCompaniesJSON;
 
         function openAddCompanyModal() { document.getElementById('addCompanyModal').style.display = 'flex'; }
+        window.openAddCompanyModal = openAddCompanyModal;
+
         function openPromoModal() { document.getElementById('promoCodesModal').style.display = 'flex'; renderPromoCodesList(); }
+        window.openPromoModal = openPromoModal;
+
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        window.closeModal = closeModal;
+
         function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode')); }
+        window.toggleDarkMode = toggleDarkMode;
         
         function goBackToMain() { 
             let userId = loggedInDriverName || localStorage.getItem('logged_in_driver_name') || '';
             let companyId = localStorage.getItem('current_company_id') || 'company_main';
             window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`; 
         }
+        window.goBackToMain = goBackToMain;
 
         function filterByCard(status) { document.getElementById('filter-sub-status').value = status; renderMemberSubscriptionsList(); }
+        window.filterByCard = filterByCard;
+
         function scrollToSection(id) { document.getElementById(id)?.scrollIntoView({behavior:'smooth'}); }
+        window.scrollToSection = scrollToSection;
+
         function showToast(msg, type='success') {
             const container = document.getElementById('toast-container');
             const t = document.createElement('div');
