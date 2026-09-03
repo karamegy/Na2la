@@ -59,6 +59,10 @@
             --warning-color: #fbbf24;
             --danger-color: #f87171;
         }
+        /* إخفاء عناصر الإدارة افتراضياً تماماً لضمان عدم ظهورها للسائقين والزوار */
+        .admin-only-section {
+            display: none !important;
+        }
         @keyframes marquee {
             0% { transform: translateX(100%); }
             100% { transform: translateX(-100%); }
@@ -187,11 +191,11 @@
                             </div>
                             <div id="menuDropdownSectionsList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
                                 <button onclick="renderShipmentsInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📦 عرض الشحنات بالبوت</button>
-                                <button class="admin-only-section" onclick="renderPentaTableInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📊 الجدول الخماسي بالبوت</button>
-                                <button class="admin-only-section" onclick="renderDeferredInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">⏳ الفواتير الآجلة بالبوت</button>
-                                <button class="admin-only-section" onclick="renderConsolidatedInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--purple-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📑 الفواتير المجمعة بالبوت</button>
-                                <button class="admin-only-section" onclick="renderFleetInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">🚚 حالة الأسطول وصيانة الزيت</button>
-                                <button class="admin-only-section" onclick="renderTreasuryInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💵 الخزينة والحسابات بالبوت</button>
+                                <button class="admin-only-section" onclick="renderPentaTableInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%;">📊 الجدول الخماسي بالبوت</button>
+                                <button class="admin-only-section" onclick="renderDeferredInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%;">⏳ الفواتير الآجلة بالبوت</button>
+                                <button class="admin-only-section" onclick="renderConsolidatedInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--purple-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%;">📑 الفواتير المجمعة بالبوت</button>
+                                <button class="admin-only-section" onclick="renderFleetInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%;">🚚 حالة الأسطول وصيانة الزيت</button>
+                                <button class="admin-only-section" onclick="renderTreasuryInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%;">💵 الخزينة والحسابات بالبوت</button>
                                 <button onclick="openBotSection('chat-tab', 'الدردشة'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💬 الانتقال لدردشة المنصة</button>
                             </div>
 
@@ -651,12 +655,11 @@
         }
 
         let activeDriver = rawUser;
-        if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole.includes('مدير')) {
+        // منع أي خلط: إذا لم يكن المستخدم مديراً صريحاً، يتم اعتباره سائقاً تلقائياً
+        if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole === 'مدير' || activeRole === 'مدير شركة') {
             activeRole = "admin";
-        } else if (activeDriver.includes('سائق') || activeRole.includes('driver')) {
+        } else {
             activeRole = "driver";
-        } else if (activeRole.includes('supervisor') || activeRole.includes('مشرف')) {
-            activeRole = "supervisor";
         }
 
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
@@ -903,9 +906,9 @@
             visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
         }
 
-        // إخفاء/إظهار أقسام الإدارة حصرياً عن السائقين والزوار
+        // تطبيق العزل التام: إظهار أقسام الإدارة حصرياً للمديرين، وإخفائها تماماً عن السائقين
         document.querySelectorAll('.admin-only-section').forEach(el => {
-            el.style.display = (isManager) ? 'block' : 'none';
+            el.style.display = isManager ? 'block' : 'none';
         });
 
         const managerHeader = document.getElementById('managerMenuSectionHeader');
@@ -979,6 +982,8 @@
         if (dot) { dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444'; }
     };
 
+    // التشغيل الفوري لفرض قيود الرتبة قبل جلب البيانات
+    syncPlatformUserData();
     fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
 
     let isBotVoiceOutputOn = true, isBotContinuousActive = false;
@@ -989,6 +994,7 @@
         let isHidden = (modal.style.display === 'none' || modal.style.display === '');
         modal.style.display = isHidden ? 'flex' : 'none';
         if (isHidden) {
+            syncPlatformUserData();
             fetchRealFirebaseData().then(() => {
                 syncPlatformUserData();
                 loadChatHistory();
