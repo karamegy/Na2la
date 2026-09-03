@@ -134,12 +134,46 @@
         <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 85px; right: 20px; width: 420px; max-width: 92vw; height: 80vh; max-height: 650px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
-            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
+            <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0; position: relative;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (عزل تام للشركات والشحنات)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
+                    <!-- زر القائمة الرئيسي الجديد -->
+                    <div style="position: relative; display: inline-block;">
+                        <button type="button" class="sync-account-hub-btn" style="background: linear-gradient(135deg, #8b5cf6, #6d28d9);" onclick="toggleMainBotMenuDropdown(event)">
+                            ☰ القائمة
+                        </button>
+                        <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 110%; right: 0; width: 280px; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 10px; color: var(--text-color); font-size: 11px;">
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--warning-color);">
+                                📂 قائمة أقسام وأزرار المنصة
+                            </div>
+                            <!-- الأقسام السريعة -->
+                            <div id="menuDropdownSectionsList" style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                                <button onclick="openBotSection('shipments-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
+                                <button onclick="openBotSection('chat-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💬 الدردشة</button>
+                                <button onclick="openBotSection('deferred-invoices-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">⏳ الأجل</button>
+                                <button onclick="openBotSection('treasury-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">💵 الخزينة</button>
+                                <button onclick="openBotSection('map-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #a78bfa; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">🗺️ الخريطة</button>
+                                <button onclick="openBotSection('reports-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">📊 التقارير</button>
+                                <button onclick="openBotSection('account-tab'); closeMainBotMenus();" style="background: var(--card-bg); color: #fbbf24; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 10px; font-size: 10px; text-align: right; cursor: pointer; font-weight: bold;">👤 البروفايل</button>
+                            </div>
+                            <div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 3px; color: var(--accent-color);">
+                                ⚡ أزرار سريعة
+                            </div>
+                            <div id="menuDropdownQuickActionsList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">
+                                <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
+                                <button onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
+                                <button onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
+                                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
+                                <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
+                                <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 9px; padding: 5px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- زر شحناتي / تتبع شحنة -->
                     <div style="position: relative; display: inline-block;">
                         <button type="button" class="sync-account-hub-btn" onclick="toggleSyncHubDropdown(event)">
                             <span id="sync-icon-bolt">⚡</span> <span id="syncHubBtnLabel">شحناتي</span> 
@@ -158,19 +192,10 @@
                 </div>
             </div>
 
-            <div style="background: var(--bg-color); padding: 5px 8px; border-bottom: 1px solid var(--border-color); display: flex; gap: 4px; overflow-x: auto; flex-shrink: 0;" id="botSectionsNavBar">
-                <button onclick="openBotSection('shipments-tab')" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
-                <button onclick="openBotSection('chat-tab')" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">💬 الدردشة</button>
-                <button onclick="openBotSection('deferred-invoices-tab')" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">⏳ الأجل</button>
-                <button onclick="openBotSection('treasury-tab')" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">💵 الخزينة</button>
-                <button onclick="openBotSection('map-tab')" style="background: var(--card-bg); color: #a78bfa; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">🗺️ الخريطة</button>
-                <button onclick="openBotSection('reports-tab')" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">📊 التقارير</button>
-                <button onclick="openBotSection('account-tab')" style="background: var(--card-bg); color: #fbbf24; border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; font-size: 9px; white-space: nowrap; cursor: pointer; font-weight: bold;">👤 البروفايل</button>
-            </div>
-
+            <!-- تم إخفاء الشريط السفلي والعلوي القديم للأزرار، وتم نقل كل شيء داخل القائمة المنسدلة لعدم التضارب وتفريغ الواجهة -->
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | عزل تام للشركات، تتبع الزوار برقم الشحنة فقط، والجدول الخماسي الدقيق
+                    🚀 أسطورة الطريق Pro | تتبع الشحنات للزوار برقم الشحنة، وعزل تام للشركات
                 </div>
             </div>
 
@@ -196,11 +221,9 @@
 
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b>.<br>- تم تطبيق العزل التام للزوار بحيث يمكن للزائر <b>تتبع رقم شحنته فقط</b> عند إدخال رقمه، دون رؤية أي بيانات أخرى.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b>.<br>- للزوار: قم بكتابة <b>رقم شحنتك</b> مباشرة في الصندوق أدناه لتتبع حالة شحنتك بدقة تامة.
                 </div>
             </div>
-
-            <div id="botQuickActionsContainer" style="padding: 6px 10px; background: var(--bg-color); display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; border-top: 1px solid var(--border-color); flex-shrink: 0;"></div>
 
             <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); display: flex; gap: 6px; background: var(--bg-color); align-items: center; position: relative; flex-shrink: 0; min-height: 52px; box-sizing: border-box;">
                 <input type="file" id="scaleTicketFileInput" accept="image/*" style="display: none;" onchange="handleScaleTicketUpload(this)">
@@ -208,7 +231,7 @@
                 
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📎</button>
                 
-                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل مساعد Gemini..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="أدخل رقم شحنتك للتتبع أو اسأل المساعد..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
 
                 <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
                 
@@ -218,10 +241,26 @@
     `;
     document.body.appendChild(containerDiv);
 
+    window.toggleMainBotMenuDropdown = function(event) {
+        event.stopPropagation();
+        const menu = document.getElementById('mainBotMenuDropdownMenu');
+        if (!menu) return;
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    };
+
+    window.closeMainBotMenus = function() {
+        const menu = document.getElementById('mainBotMenuDropdownMenu');
+        if (menu) menu.style.display = 'none';
+    };
+
+    window.addEventListener('click', () => {
+        closeMainBotMenus();
+    });
+
     window.openBotSection = function(tabId) {
         let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor' && tabId !== 'shipments-tab') {
-            alert('⚠️ عذراً يا زائرنا الكريم، هذا القسم مخصص للأعضاء والسائقين المسجلين فقط. يمكنك تتبع رقم شحنتك مباشرة.');
+        if (tenant.activeRole === 'visitor') {
+            alert('⚠️ عذراً يا زائرنا الكريم، هذا القسم مخصص للأعضاء والسائقين المسجلين فقط. يمكنك تتبع رقم شحنتك مباشرة بكتابته في الدردشة.');
             return;
         }
         if (typeof switchTab === 'function') {
@@ -465,11 +504,10 @@
         return subData;
     };
 
-    // الدقة العالية في العزل: الزائر لا يرى شيئاً تلقائياً سوى التتبع برقم الشحنة
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') {
-            return []; // الزائر لا يرى أي شحنات تلقائياً منعاً للتسريب
+            return [];
         }
 
         let allShipments = realFirebaseShipments.length > 0 ? realFirebaseShipments : (window.appData?.shipments || []);
@@ -542,7 +580,17 @@
         let syncLabel = document.getElementById('syncHubBtnLabel');
         if (syncLabel) syncLabel.innerText = isVisitor ? 'تتبع شحنة' : 'شحناتي';
 
-        renderQuickButtons(tenant.activeRole);
+        // للزائر، نقوم بإخفاء خيارات القائمة المنسدلة غير المتعلقة بالتتبع حمايةً للعزل
+        const sectionsList = document.getElementById('menuDropdownSectionsList');
+        const quickActionsList = document.getElementById('menuDropdownQuickActionsList');
+        if (isVisitor) {
+            if (sectionsList) sectionsList.style.display = 'none';
+            if (quickActionsList) quickActionsList.style.display = 'none';
+        } else {
+            if (sectionsList) sectionsList.style.display = 'flex';
+            if (quickActionsList) quickActionsList.style.display = 'grid';
+        }
+
         updateSyncButtonBadge();
         checkDutyStatusIndicator();
         return tenant;
@@ -588,11 +636,6 @@
         dropdown.style.display = 'block';
     };
 
-    window.addEventListener('click', () => {
-        const dropdown = document.getElementById('syncHubDropdownMenu');
-        if (dropdown) dropdown.style.display = 'none';
-    });
-
     window.openConnectedAccountHub = function() {
         if (isVisitorRole()) {
             alert('⚠️ الزائر ليس لديه بروفايل خاص. يرجى تسجيل الدخول لحسابك.');
@@ -612,37 +655,6 @@
         let dot = document.getElementById('botStatusDot');
         let currentStatus = localStorage.getItem('driver_duty_status') || 'active';
         if (dot) { dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444'; }
-    };
-
-    window.renderQuickButtons = function(role) {
-        let container = document.getElementById('botQuickActionsContainer');
-        if (!container) return;
-
-        if (role === 'visitor') {
-            container.innerHTML = `
-                <button onclick="sendBotQuickQuery('كيف أتتبع شحنتي؟')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; grid-column: span 3;">📦 كيفية تتبع الشحنة برقمها</button>
-                <button onclick="sendBotQuickQuery('خدمات المنصة')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; grid-column: span 3;">🌐 عن أسطورة الطريق</button>
-            `;
-            return;
-        }
-
-        let commonButtons = `
-            <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
-            <button onclick="sendBotQuickQuery('الجدول الخماسي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
-            <button onclick="sendBotQuickQuery('الفواتير')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
-            <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
-            <button onclick="sendBotQuickQuery('اختبار القيادة')" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
-            <button onclick="exportChatArchiveData()" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
-            <button onclick="sendBotQuickQuery('رسم شاحنة')" style="background: var(--card-bg); border: 1px solid #f472b6; color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎨 رسم</button>
-            <button onclick="openBotSection('treasury-tab')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">💰 الخزنة</button>
-            <button onclick="openBotSection('map-tab')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #a78bfa; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold;">🗺️ الخريطة</button>
-        `;
-
-        if (role === 'driver') {
-            container.innerHTML = commonButtons + `<button onclick="sendBotQuickQuery('طوارئ SOS')" style="background: rgba(239,68,68,0.2); border: 1px solid #ef4444; color: #ef4444; font-size: 10px; padding: 6px 4px; border-radius: 6px; grid-column: span 3;">🚨 طوارئ SOS</button>`;
-        } else {
-            container.innerHTML = commonButtons + `<button onclick="openBotSection('account-tab')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #fbbf24; font-size: 10px; padding: 6px 4px; border-radius: 6px; grid-column: span 3;">👤 البروفايل وإدارة الشركات</button>`;
-        }
     };
 
     fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
@@ -773,7 +785,6 @@
         let botReply = '';
         let lower = text.toLowerCase();
 
-        // فحص تتبع الشحنة برقمها (للجميع وخاصة الزوار)
         let cleanedQuery = text.replace(/[^\d]/g, '');
         let matchedShipment = null;
         if (cleanedQuery.length >= 4) {
@@ -798,7 +809,7 @@
         }
         else if (tenant.activeRole === 'visitor') {
             if (lower.includes('كيف') || lower.includes('شحنة') || lower.includes('تتبع')) {
-                botReply = `📦 أهلاً بك يا زائر كريم.لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
+                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
             } else {
                 botReply = `⚠️ عذراً يا زائرنا الكريم، حسابك مخصص لتتبع الشحنات برقمها فقط. يرجى إدخال <b>رقم الشحنة الصحيح</b> للاستعلام عنها.`;
             }
