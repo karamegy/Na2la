@@ -284,6 +284,7 @@
     window.realFirebaseShipments = [];
     window.realFirebaseDrivers = [];
     window.realFirebaseDeferredInvoices = [];
+    window.realFirebaseConsolidatedInvoices = [];
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
@@ -370,7 +371,7 @@
         let chatHistory = JSON.parse(localStorage.getItem(storageKey) || '[]');
         
         let exportBundle = {
-            version: "9.0-PRO",
+            version: "10.0-PRO",
             tenant: tenant,
             exportDate: new Date().toISOString(),
             chatHistory: chatHistory,
@@ -472,7 +473,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    /* جلب البيانات السحابية والصحيحة تماماً للشحنات */
+    /* جلب البيانات السحابية والمطابقة تماماً لمسارات وجداول index.html (تشمل shipments, deferredInvoices, consolidatedInvoices, drivers) */
     window.fetchRealFirebaseData = async function() {
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -504,6 +505,7 @@
                     realFirebaseShipments = [];
                 }
 
+                /* جلب الفواتير الآجلة deferredInvoices بمطابقة تامة لـ index.html */
                 try {
                     const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', tenant.activeCompanyId).get();
                     if (!invoicesSnap.empty) {
@@ -518,6 +520,21 @@
                     realFirebaseDeferredInvoices = [];
                 }
 
+                /* جلب الفواتير المجمعة consolidatedInvoices بمطابقة تامة لـ index.html */
+                try {
+                    const conInvoicesSnap = await db.collection('consolidatedInvoices').where('companyId', '==', tenant.activeCompanyId).get();
+                    if (!conInvoicesSnap.empty) {
+                        realFirebaseConsolidatedInvoices = conInvoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else if (tenant.activeCompanyId === 'company_main' || tenant.activeCompanyId === 'Company_main') {
+                        const allConInvoices = await db.collection('consolidatedInvoices').get();
+                        realFirebaseConsolidatedInvoices = allConInvoices.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    } else {
+                        realFirebaseConsolidatedInvoices = [];
+                    }
+                } catch(e) {
+                    realFirebaseConsolidatedInvoices = [];
+                }
+
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
                     if (appDataSnap.exists) {
@@ -530,24 +547,24 @@
         } catch(e) {}
 
         let tenantContext = getActiveTenantContext();
-        let localInvoices = [];
-        try {
-            let invKeys = [`deferredInvoices_${tenantContext.activeCompanyId}`, 'deferredInvoices'];
-            for (let key of invKeys) {
-                let localData = JSON.parse(localStorage.getItem(key) || '[]');
-                if (Array.isArray(localData) && localData.length > 0) {
-                    localInvoices = localData;
-                    break;
-                }
+        
+        /* دعم الدمج مع نافذة index.html العامة (window.appData) إن وجدت */
+        if (window.appData) {
+            if (Array.isArray(window.appData.shipments) && window.appData.shipments.length > 0) {
+                window.appData.shipments.forEach(s => {
+                    if (!realFirebaseShipments.some(x => String(x.id) === String(s.id))) realFirebaseShipments.push(s);
+                });
             }
-        } catch(e) {}
-
-        if (localInvoices.length > 0) {
-            localInvoices.forEach(inv => {
-                if (!realFirebaseDeferredInvoices.some(i => (i.id && i.id === inv.id) || (i.invoiceNumber === inv.invoiceNumber))) {
-                    realFirebaseDeferredInvoices.push(inv);
-                }
-            });
+            if (Array.isArray(window.appData.deferredInvoices) && window.appData.deferredInvoices.length > 0) {
+                window.appData.deferredInvoices.forEach(i => {
+                    if (!realFirebaseDeferredInvoices.some(x => String(x.id) === String(i.id) || String(x.invoiceId) === String(i.invoiceId))) realFirebaseDeferredInvoices.push(i);
+                });
+            }
+            if (Array.isArray(window.appData.consolidatedInvoices) && window.appData.consolidatedInvoices.length > 0) {
+                window.appData.consolidatedInvoices.forEach(ci => {
+                    if (!realFirebaseConsolidatedInvoices.some(x => String(x.id) === String(ci.id) || String(x.invoiceNumber) === String(ci.invoiceNumber))) realFirebaseConsolidatedInvoices.push(ci);
+                });
+            }
         }
     };
 
@@ -624,7 +641,7 @@
         return fleet;
     };
 
-    /* تصفية وجلب شحنات الشركة السليمة والمعزولة */
+    /* تصفية وجلب شحنات الشركة والمعزولة */
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
         
@@ -637,10 +654,6 @@
             allShipments = realFirebaseShipments;
         } else if (window.appData && Array.isArray(window.appData.shipments)) {
             allShipments = window.appData.shipments;
-        } else if (window.Na2laApp && Array.isArray(window.Na2laApp.shipments)) {
-            allShipments = window.Na2laApp.shipments;
-        } else if (typeof window.shipments !== 'undefined' && Array.isArray(window.shipments)) {
-            allShipments = window.shipments;
         } else {
             try {
                 let localKeys = [`shipments_${tenant.activeCompanyId}`, 'shipments'];
@@ -648,8 +661,6 @@
                     let localData = JSON.parse(localStorage.getItem(key) || '[]');
                     if (Array.isArray(localData) && localData.length > 0) {
                         allShipments = localData; break;
-                    } else if (localData && Array.isArray(localData.shipments)) {
-                        allShipments = localData.shipments; break;
                     }
                 }
             } catch(e) {}
@@ -690,9 +701,15 @@
         let expensesTotal = parseNumericCurrency(rawExpenses);
         
         let shipments = getIsolatedUserShipments();
-        let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let companyDeferredInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+        let companyConsolidatedInvoices = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
         
-        return { treasuryBalance, expensesTotal, invoicesCount: companyInvoices.length, shipmentsCount: shipments.length };
+        return { 
+            treasuryBalance, 
+            expensesTotal, 
+            invoicesCount: companyDeferredInvoices.length + companyConsolidatedInvoices.length, 
+            shipmentsCount: shipments.length 
+        };
     };
 
     window.getCompanyFinancialReport = async function() {
@@ -752,7 +769,7 @@
                     <tbody>
                         <tr><td><b>رصيد الخزنة الحالي</b></td><td style="color:#059669; font-weight:bold;">${report.treasury}</td></tr>
                         <tr><td><b>إجمالي المصروفات التشغيلية</b></td><td style="color:#dc2626; font-weight:bold;">${report.expenses}</td></tr>
-                        <tr><td><b>عدد الفواتير المجمعة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
+                        <tr><td><b>عدد الفواتير المجمعة والآجلة</b></td><td>${report.invoicesCount} فاتورة</td></tr>
                         <tr><td><b>إجمالي الشحنات المسجلة</b></td><td>${report.shipmentsCount} شحنة</td></tr>
                         <tr><td><b>الإيرادات التقديرية</b></td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>
                     </tbody>
@@ -769,68 +786,79 @@
         printWindow.document.close();
     };
 
+    /* طباعة الفواتير المجمعة أو الآجلة مطابقة تماماً لطريقة index.html */
     window.printConsolidatedInvoice = function(invoiceId) {
         let tenant = getActiveTenantContext();
         if (tenant.activeRole === 'visitor') return;
-        let invoices = realFirebaseDeferredInvoices.filter(i => i.id === invoiceId || i.invoiceNumber === invoiceId);
-        let invoice = invoices.length > 0 ? invoices[0] : null;
-
-        if (!invoice) {
-            alert("عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.");
+        
+        let cleanId = String(invoiceId).replace('#', '').trim();
+        
+        // البحث في الفواتير المجمعة أولاً
+        let conInv = realFirebaseConsolidatedInvoices.find(i => String(i.id) === cleanId || String(i.invoiceNumber) === cleanId);
+        if (conInv) {
+            if (typeof window.printConsolidatedInvoice === 'function' && window.printConsolidatedInvoice !== arguments.callee) {
+                // إذا كانت وظيفة المنصة الأساسية متاحة، استدعها
+                window.printConsolidatedInvoice(invoiceId);
+                return;
+            }
+            let win = window.open('', '_blank');
+            win.document.write(`
+                <html lang="ar" dir="rtl">
+                <head>
+                    <title>فاتورة مجمعة - #${conInv.invoiceNumber || conInv.id}</title>
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; font-family: 'Cairo', sans-serif; }
+                        th { background: #2563eb; color: #fff; }
+                    </style>
+                </head>
+                <body>
+                    <h2 style="text-align:center; color:#0f172a;">🐎 شركة ${tenant.activeCompanyName} - فاتورة مجمعة رسمية</h2>
+                    <p><strong>رقم الفاتورة:</strong> #${conInv.invoiceNumber || conInv.id}</p>
+                    <p><strong>العميل / الشركة:</strong> ${conInv.client || conInv.clientName || 'عميل عام'}</p>
+                    <p><strong>التاريخ:</strong> ${conInv.date || new Date().toLocaleDateString('ar-EG')}</p>
+                    <p><strong>ملاحظات:</strong> ${conInv.notes || 'لا توجد'}</p>
+                    <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${conInv.total || conInv.totalAmount || 0} ج.م</h3>
+                    <script>window.onload = function() { window.print(); window.close(); }</script>
+                </body>
+                </html>
+            `);
+            win.document.close();
             return;
         }
 
-        let printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <html dir="rtl">
-            <head>
-                <title>فاتورة مجمعة - ${invoice.invoiceNumber || invoiceId}</title>
-                <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-                    body { font-family: 'Cairo', Tahoma, sans-serif; padding: 20px; color: #111; }
-                    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; font-size: 13px; font-family: 'Cairo', sans-serif; }
-                    th { background: #f2f2f2; }
-                    .footer { margin-top: 40px; text-align: left; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>شركة ${tenant.activeCompanyName}</h2>
-                    <p>قسم الفواتير المجمعة والآجلة والعملاء</p>
-                </div>
-                <div style="margin-bottom: 15px; font-size: 14px;">
-                    <p><b>رقم الفاتورة:</b> ${invoice.invoiceNumber || invoiceId}</p>
-                    <p><b>العميل / الشركة:</b> ${invoice.clientName || invoice.customer || 'عميل عام'}</p>
-                    <p><b>التاريخ:</b> ${invoice.date || new Date().toLocaleDateString('ar-EG')}</p>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>م</th>
-                            <th>بيان الشحنة / الخدمة</th>
-                            <th>المبلغ (ج.م)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>${invoice.description || invoice.notes || 'شحنات مجمعة ومعتمدة للعميل'}</td>
-                            <td><b>${invoice.totalAmount || invoice.amount || '0'} ج.م</b></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <p>التوقيع / الختم: ........................</p>
-                </div>
-                <script>
-                    window.onload = function() { window.print(); window.close(); }
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
+        // البحث في الفواتير الآجلة deferredInvoices
+        let defInv = realFirebaseDeferredInvoices.find(i => String(i.id) === cleanId || String(i.invoiceId) === cleanId);
+        if (defInv) {
+            let win = window.open('', '_blank');
+            win.document.write(`
+                <html lang="ar" dir="rtl">
+                <head>
+                    <title>فاتورة آجل - ${defInv.invoiceId}</title>
+                    <style>
+                        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+                        body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                    </style>
+                </head>
+                <body>
+                    <h2 style="text-align:center; color:#0f172a;">🐎 شركة ${tenant.activeCompanyName} - فاتورة آجل ومستحقات</h2>
+                    <p><strong>رقم الفاتورة:</strong> ${defInv.invoiceId}</p>
+                    <p><strong>العميل:</strong> ${defInv.clientName}</p>
+                    <p><strong>هاتف العميل:</strong> ${defInv.clientPhone || 'غير مسجل'}</p>
+                    <p><strong>إجمالي المبلغ:</strong> ${defInv.totalAmount} ج.م</p>
+                    <p><strong>المبلغ المتبقي:</strong> <span style="color:#dc2626; font-weight:bold;">${defInv.remainingAmount} ج.م</span></p>
+                    <p><strong>تاريخ الاستحقاق:</strong> ${defInv.dueDate}</p>
+                    <script>window.onload = function() { window.print(); window.close(); }</script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+            return;
+        }
+
+        alert("عذراً، لم يتم العثور على بيانات الفاتورة المطلوبة.");
     };
 
     window.syncPlatformUserData = function() {
@@ -945,11 +973,11 @@
         if (!container) return;
         let commonButtons = `
             <button onclick="sendBotQuickQuery('شحناتي')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📦 الشحنات</button>
+            <button onclick="sendBotQuickQuery('الفواتير')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🧾 الفواتير</button>
             <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">💳 كارت الاشتراك</button>
             <button onclick="sendBotQuickQuery('اختبار القيادة')" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎓 اختبار القيادة</button>
             <button onclick="exportChatArchiveData()" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📤 تصدير الأرشيف</button>
             <button onclick="sendBotQuickQuery('رسم شاحنة')" style="background: var(--card-bg); border: 1px solid #f472b6; color: #f472b6; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎨 رسم وسائط</button>
-            <button onclick="sendBotQuickQuery('جهات الاتصال')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #34d399; font-size: 10px; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">📇 جهات الاتصال</button>
         `;
         if (role === 'visitor') {
             container.innerHTML = commonButtons + `
@@ -1268,7 +1296,6 @@
         `;
     };
 
-    /* إزالة دالة المزامنة والربط بـ ويكيبيديا نهائياً وتوجيه الاستفسارات العامة عبر جوجل فقط */
     window.fetchLiveWebAndWikipediaAnswer = async function(query) {
         let googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
         return `🌐 <b>نتائج الاستعلام والتصفح المباشر (Gemini Pro):</b><br>` +
@@ -1356,7 +1383,6 @@
             window.lastBotContext = 'معلومات صلاحية اشتراك شركتك';
             let subInfo = await getCompanySubscriptionInfo();
             
-            // إظهار التفاصيل الخاصة بالشركة فقط لمدير الحساب (admin)، بينما يظهر كارت التجديد المحمي للعامة
             let adminDetailsHtml = '';
             if (tenant.activeRole === 'admin') {
                 adminDetailsHtml = `
@@ -1398,35 +1424,58 @@
                 userShipments.forEach(s => { botReply += renderShipmentCardInChat(s); });
             }
         }
-        else if (contextualText.includes('الفواتير') || contextualText.includes('فاتورة') || contextualText.includes('آجل')) {
+        else if (contextualText.includes('الفواتير') || contextualText.includes('فاتورة') || contextualText.includes('آجل') || contextualText.includes('مجمعة')) {
             window.lastBotContext = 'الفواتير';
             if (tenant.activeRole === 'visitor') {
                 botReply = `🧾 قسم الفواتير مخصص للمستخدمين والعملاء المسجلين فقط.`;
             } else {
                 let searchTerm = text.replace(/(ابحث عن|بحث|فاتورة|فواتير|مجمعة|آجل)/g, '').trim();
-                let companyInvoices = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
                 
+                // جلب الفواتير الآجلة والفواتير المجمعة بالتوافق التام مع index.html
+                let deferredList = realFirebaseDeferredInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+                let consolidatedList = realFirebaseConsolidatedInvoices.filter(inv => !inv.companyId || inv.companyId === tenant.activeCompanyId);
+
                 if (searchTerm) {
-                    companyInvoices = companyInvoices.filter(inv => 
-                        String(inv.invoiceNumber || '').includes(searchTerm) ||
-                        String(inv.clientName || inv.customer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        String(inv.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+                    deferredList = deferredList.filter(inv => 
+                        String(inv.invoiceId || '').includes(searchTerm) ||
+                        String(inv.clientName || '').toLowerCase().includes(searchTerm.toLowerCase())
+                    );
+                    consolidatedList = consolidatedList.filter(inv => 
+                        String(inv.invoiceNumber || inv.id || '').includes(searchTerm) ||
+                        String(inv.client || inv.clientName || '').toLowerCase().includes(searchTerm.toLowerCase())
                     );
                 }
 
-                if (companyInvoices.length === 0) {
-                    botReply = `🧾 <b>الفواتير المجمعة:</b><br><i>لا توجد فواتير مطابقة لـ "${searchTerm || 'الكل'}".</i>`;
+                let totalInvoicesCount = deferredList.length + consolidatedList.length;
+
+                if (totalInvoicesCount === 0) {
+                    botReply = `🧾 <b>الفواتير (آجلة ومجمعة):</b><br><i>لا توجد فواتير مطابقة لـ "${searchTerm || 'الكل'}".</i>`;
                 } else {
-                    botReply = `🧾 <b>نتائج الفواتير لحسابك (${companyInvoices.length} فاتورة):</b><br>` +
-                               `<div class="bot-table-container"><table class="bot-custom-table">` +
-                               `<tr><th>رقم الفاتورة</th><th>العميل</th><th>المبلغ</th><th>إجراء</th></tr>`;
-                    companyInvoices.slice(0, 5).forEach(inv => {
-                        let invNum = inv.invoiceNumber || inv.id || 'فاتورة';
-                        let client = inv.clientName || inv.customer || 'عميل عام';
-                        let amt = inv.totalAmount || inv.amount || '0';
-                        botReply += `<tr><td><b>${invNum}</b></td><td>${client}</td><td>${amt} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;">📄 طباعة PDF</button></td></tr>`;
-                    });
-                    botReply += `</table></div>`;
+                    botReply = `🧾 <b>نتائج الفواتير لحسابك (${totalInvoicesCount} فاتورة):</b><br>`;
+                    
+                    if (deferredList.length > 0) {
+                        botReply += `<br><b>⏳ الفواتير الآجلة:</b><div class="bot-table-container"><table class="bot-custom-table">` +
+                                   `<tr><th>رقم الفاتورة</th><th>العميل</th><th>المتبقي</th><th>إجراء</th></tr>`;
+                        deferredList.slice(0, 3).forEach(inv => {
+                            let invNum = inv.invoiceId || 'فاتورة';
+                            let client = inv.clientName || 'عميل';
+                            let rem = inv.remainingAmount || inv.totalAmount || '0';
+                            botReply += `<tr><td><b>${invNum}</b></td><td>${client}</td><td>${rem} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;">📄 PDF</button></td></tr>`;
+                        });
+                        botReply += `</table></div>`;
+                    }
+
+                    if (consolidatedList.length > 0) {
+                        botReply += `<br><b>📑 الفواتير المجمعة:</b><div class="bot-table-container"><table class="bot-custom-table">` +
+                                   `<tr><th>رقم الفاتورة</th><th>العميل</th><th>الإجمالي</th><th>إجراء</th></tr>`;
+                        consolidatedList.slice(0, 3).forEach(inv => {
+                            let invNum = inv.invoiceNumber || inv.id || 'فاتورة';
+                            let client = inv.client || inv.clientName || 'عميل';
+                            let total = inv.total || inv.totalAmount || '0';
+                            botReply += `<tr><td><b>#${String(invNum).slice(-6)}</b></td><td>${client}</td><td>${total} ج.م</td><td><button onclick="printConsolidatedInvoice('${inv.id || invNum}')" style="background:var(--primary-color); color:#fff; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; font-size:9px;">📄 طباعة</button></td></tr>`;
+                        });
+                        botReply += `</table></div>`;
+                    }
                 }
             }
         }
@@ -1457,7 +1506,7 @@
                            `<tr><th>البند المالي</th><th>القيمة المعتمدة</th></tr>` +
                            `<tr><td>رصيد الخزنة</td><td style="color:#10b981; font-weight:bold;">${report.treasury}</td></tr>` +
                            `<tr><td>إجمالي المصروفات</td><td style="color:#ef4444; font-weight:bold;">${report.expenses}</td></tr>` +
-                           `<tr><td>عدد الفواتير</td><td>${report.invoicesCount}</td></tr>` +
+                           `<tr><td>عدد الفواتير (آجلة ومجمعة)</td><td>${report.invoicesCount}</td></tr>` +
                            `<tr><td>الإيرادات التقديرية</td><td style="font-weight:bold;">${report.estimatedRevenue}</td></tr>` +
                            `</table></div><br>` +
                            `<button onclick="exportFinancialReportPDF()" style="background: var(--primary-color); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; font-family: 'Cairo', sans-serif;">📄 طباعة وتصدير تقرير الخزنة PDF</button>`;
@@ -1516,13 +1565,13 @@
         else if (contextualText.includes('خدمات المنصة') || contextualText.includes('الخدمات') || contextualText.includes('ما هي نقلة') || contextualText.includes('عن نقلة') || contextualText.includes('من نحن')) {
             window.lastBotContext = 'خدمات المنصة';
             botReply = `🌐 <b>عن منصة أسطورة الطريق (نقلة):</b><br>` +
-                       `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة، وعزل بيانات الحسابات والمستخدمين تماماً.<br>` +
+                       `- المنصة البرمجية الرائدة لإدارة أسطول الشحن والنقل البري، تتبع الشحنات، أتمتة الفواتير الآجلة والمجمعة، وعزل بيانات الحسابات والمستخدمين تماماً.<br>` +
                        `- توفر مزامنة تامة لجهات الاتصال، تتبع GPS لحظي، وبوت ذكاء اصطناعي متكامل.`;
         }
         else if (contextualText.includes('المساعدة') || contextualText.includes('كيف أستخدم') || contextualText.includes('تعليمات') || contextualText.includes('شرح')) {
             window.lastBotContext = 'المساعدة';
             botReply = `❓ <b>دليل الاستخدام السريع (مدعوم بواسطة Gemini Pro):</b><br>` +
-                       `- اكتب <b>"شحناتي"</b> أو <b>"كارت الاشتراك"</b> لاستعراض شحناتك وتفاصيل الاشتراك.<br>` +
+                       `- اكتب <b>"شحناتي"</b> أو <b>"الفواتير"</b> أو <b>"كارت الاشتراك"</b> لاستعراض شحناتك وفواتيرك وتفاصيل الاشتراك.<br>` +
                        `- اضغط <b>"اختبار القيادة"</b> لبدء اختبارات أمان القيادة التفاعلية للسائقين.<br>` +
                        `- اضغط <b>"تصدير الأرشيف"</b> لتنزيل نسخة احتياطية كاملة من سجلاتك.<br>` +
                        `- فعّل زر <b>"🕵️ محادثة مؤقتة"</b> لتصفح معزول لا يحفظ الرسائل في السجل.<br>` +
