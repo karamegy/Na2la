@@ -1951,57 +1951,53 @@
             }, 300);
         }
 
-// دالة الاستماع المحسنة مع دعم البيانات القديمة وعزل الحسابات بدقة
-function initRealtimeListeners() {
-    if (typeof activeListeners !== 'undefined' && activeListeners.length > 0) {
-        activeListeners.forEach(unsubscribe => unsubscribe());
-        window.activeListeners = [];
-    } else {
-        window.activeListeners = [];
-    }
+        // الاستماع الفوري السحابي مع العزل التام للشركات وحسابات المستخدمين
+        function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-    const collections = [
-        'shipments', 'deferredInvoices', 'consolidatedInvoices', 
-        'treasury', 'expenses', 'drivers', 'posts', 
-        'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'
-    ];
-    
-    collections.forEach(colName => {
-        let queryRef = db.collection(colName);
-        
-        // عزل الشركات: إذا لم يكن المستخدم هو المدير الأساسي، نقوم بالفلترة برقم الشركة
-        if (loggedInDriverName !== 'المدير' && currentCompanyId) {
-            queryRef = queryRef.where('companyId', '==', currentCompanyId);
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'];
+            
+            collections.forEach(colName => {
+                db.collection(colName).onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (colName === 'communityPosts') {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
+
+            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
         }
 
-        const unsubscribe = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // حماية إضافية: إذا كانت البيانات تخص شركة رئيسية، ندمج البيانات القديمة التي قد لا تحمل companyId
-            if (currentCompanyId === 'company_main') {
-                // استعلام احتياطي للبيانات التي أُنشئت بدون حقل companyId لتجنب ضياعها
-                // (يتم التعامل معها محلياً لضمان سلاسة العرض)
-            }
-
-            // عزل الحسابات (السائقين): إذا كان المستخدم سائقاً عادياً، نفلتر بعض الأقسام الحساسة
-            if (currentUserRole === 'driver') {
-                if (colName === 'shipments') {
-                    // السائق يرى شحناته المخصصة له فقط
-                    rawData = rawData.filter(s => s.assignedDriver === loggedInDriverName || s.name === loggedInDriverName);
-                }
-                // يمكن تقييد أقسام أخرى هنا إذا لزم الأمر
-            }
-
-            appData[colName] = rawData;
-            scheduleSmartRender();
-
-        }, error => {
-            console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
-        });
-
-        window.activeListeners.push(unsubscribe);
-    });
-}
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -3185,7 +3181,7 @@ function initRealtimeListeners() {
             return drv;
         }
 
-                        function renderMyAccount() {
+                function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
@@ -3194,8 +3190,6 @@ function initRealtimeListeners() {
             
             const profileShipmentsContainer = document.getElementById('profile-user-shipments-container');
             if (profileShipmentsContainer) {
-                // تحديد ارتفاع أقصى للحاوية وتفعيل التمرير العمودي الرأسي
-                profileShipmentsContainer.style.cssText = 'max-height: 280px; overflow-y: auto; padding-left: 4px; display: flex; flex-direction: column; gap: 8px;';
                 profileShipmentsContainer.innerHTML = '';
                 let allShipments = appData.shipments || [];
                 
@@ -3223,20 +3217,24 @@ function initRealtimeListeners() {
                         let badgeBg = isDelivered ? 'var(--success, #10b981)' : 'var(--warning, #f59e0b)';
                         
                         let div = document.createElement('div');
-                        div.style.cssText = 'background: var(--bg); border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 8px; margin-bottom: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.02);';
+                        div.style.cssText = 'background: var(--bg); border: 1px solid var(--border-color); padding: 12px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);';
                         div.innerHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
-                                <span style="color: var(--accent); font-size: 10px; font-weight: bold; direction: ltr; unicode-bidi: embed;">📦 #${s.id || '---'}</span>
-                                <span class="badge ${badgeClass}" style="font-size: 8px; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: #fff; font-weight: bold;">${s.status || 'قيد التنفيذ'}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                                <span style="color: var(--accent); font-size: 11px; font-weight: bold; direction: ltr; unicode-bidi: embed;">📦 #${s.id || '---'}</span>
+                                <span class="badge ${badgeClass}" style="font-size: 9px; padding: 3px 8px; border-radius: 6px; background: ${badgeBg}; color: #fff; font-weight: bold;">${s.status || 'قيد التنفيذ'}</span>
                             </div>
-                            <div style="font-size: 10px; display: flex; flex-direction: column; gap: 3px;">
+                            <div style="font-size: 11px; display: flex; flex-direction: column; gap: 5px;">
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="opacity: 0.75;">العميل: <strong style="color: var(--text-color);">${s.name || s.client || '-'}</strong></span>
-                                    <span style="opacity: 0.75;">الحمولة: <strong style="color: var(--text-color);">${s.item || s.cargo || '-'}</strong></span>
+                                    <span style="opacity: 0.8;">العميل / المرسل:</span>
+                                    <strong style="color: var(--text-color);">${s.name || s.client || '-'}</strong>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
-                                    <span style="color: var(--success); font-weight: bold; font-size: 11px;">💰 ${s.price || 0} ج.م</span>
-                                    <span style="opacity: 0.75; font-size: 9px;">👤 السائق: ${s.assignedDriver || 'غير محدد'}</span>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.8;">الحمولة:</span>
+                                    <strong style="color: var(--text-color);">${s.item || s.cargo || '-'}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+                                    <span style="color: var(--success); font-weight: bold; font-size: 12px;">💰 ${s.price || 0} ج.م</span>
+                                    <span style="opacity: 0.85; font-size: 10px;">👤 السائق: ${s.assignedDriver || 'غير محدد'}</span>
                                 </div>
                             </div>
                         `;
@@ -3297,6 +3295,11 @@ function initRealtimeListeners() {
 
             if (drv.name) loadAndRenderProfileWall(drv.name);
             renderProfileDriverSearch();
+        }
+
+        function resetToMyProfile() {
+            viewingProfileName = null;
+            renderMyAccount();
         }
 
         function updateProfileAvatar(input) {
@@ -4686,4 +4689,4 @@ function render() {
 </script>
 <script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
 </body>
-                        </html>
+    </html>
