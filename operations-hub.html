@@ -303,12 +303,15 @@ transform: translateY(-2px);
 <div class="logo-subtext">تحالف الحصان والباندا - غرفة العمليات Pro Max مع ربط Gemini API الذكي، واتساب الآلي، والتحليلات (Emad AI OS)</div>
 </div>
 
-<!-- شريط المزامنة وحالة الاتصال وعزل الشركات والـ GPS الحي -->
+<!-- شريط المزامنة وحالة الاتصال وعزل الشركات وصورة الحساب النشط -->
 <div id="syncSessionBanner" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 18px; border-radius: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-3d); flex-wrap: wrap; gap: 10px;">
-<div style="font-size: 13px;">
+<div style="font-size: 13px; display: flex; align-items: center; gap: 12px;">
+<img id="activeUserAvatarImg" src="" alt="صورة الحساب" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary-color); display: none;" />
+<div>
 👤 الحساب النشط: <b id="activeUserDisplay" style="color: var(--primary-color);">جاري المزامنة...</b>
 <span id="activeCompanyDisplay" style="margin-right: 15px; color: var(--accent-color); font-size: 12px;">Company ID: --</span>
 <span id="activeRoleDisplay" style="margin-right: 10px; color: var(--warning-color); font-size: 12px;">[الدور: --]</span>
+</div>
 </div>
 <div style="font-size: 12px; display: flex; gap: 15px; align-items: center;">
 <span id="offlineStatusBadge" style="color: var(--accent-color);">🟢 متصل بالإنترنت</span>
@@ -587,7 +590,7 @@ transform: translateY(-2px);
 <select id="priceCargoType" style="margin: 7px 0;">
 <option value="standard">بضائع عامة / جاف</option>
 <option value="refrigerated">بضائع مبردة / خضار وفاكهة</option>
-<option value="heavy">مواد ثقيلة / أعلاف وحبوب</option>
+<option value="heavy">مواد ثقيلة / أعلاف والحبوب</option>
 </select>
 <button onclick="calculateFreightPrice()" class="btn-submit" style="background: var(--accent-color);">احسب السعر المقترح للشحنة</button>
 <div id="freightPriceResultBox" style="margin-top: 12px; font-size: 14px; font-weight: bold; color: var(--accent-color); text-align: center;"></div>
@@ -642,7 +645,7 @@ transform: translateY(-2px);
 
     <div id="opsAiChatMessages" style="flex: 1; padding: 12px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
         <div style="background: var(--bg-color); padding: 8px 12px; border-radius: 8px; align-self: flex-start; border: 1px solid var(--border-color);" id="aiWelcomeMessage">
-            أهلاً بيك! معك مساعد "نقلة" الذكي المتصل بننموذج Gemini اللغوي الفعلي. تحدث معي وسأساعدك في كافة عمليات التشغيل والتحليل!
+            أهلاً بيك! معك مساعد "نقلة" الذكي المتصل بنموذج Gemini اللغوي الفعلي. تحدث معي وسأساعدك في كافة عمليات التشغيل والتحليل!
         </div>
     </div>
     
@@ -814,25 +817,42 @@ async function initPlatformSessionAndSync() {
 }
 
 async function fetchUserRoleAndSyncUI() {
+    let userAvatarUrl = "";
     if (window.db && window.firebaseModules) {
         const { collection, getDocs, query, where } = window.firebaseModules;
         try {
-            // محاولة البحث في مجموعة السائقين/المستخدمين لجلب الدور والاسم بدقة
+            // البحث في مجموعة drivers أو platform_users لجلب الدور والصورة (Avatar)
             const qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
             const snap = await getDocs(qDrivers);
             let found = false;
             snap.forEach(docSnap => {
                 let d = docSnap.data();
-                if (d.name === currentUserAccount || d.phone === currentUserAccount) {
+                if (d.name === currentUserAccount || d.phone === currentUserAccount || d.name === "المدير") {
                     currentUserRole = d.role || d.status || "مدير النظام";
+                    if (d.avatar) userAvatarUrl = d.avatar;
                     found = true;
                 }
             });
+
+            // محاولة البحث في platform_users إذا لم توجد في drivers
+            if (!found) {
+                const qUsers = query(collection(window.db, "platform_users"), where("companyId", "==", currentCompanyId));
+                const snapUsers = await getDocs(qUsers);
+                snapUsers.forEach(docSnap => {
+                    let u = docSnap.data();
+                    if (u.name === currentUserAccount || u.name === "المدير") {
+                        currentUserRole = u.role || "مدير النظام";
+                        if (u.avatar) userAvatarUrl = u.avatar;
+                        found = true;
+                    }
+                });
+            }
+
             if (!found && currentUserAccount.includes("المدير")) {
                 currentUserRole = "مدير تنفيذي / مالك الشركة";
             }
         } catch (e) {
-            console.log("Role fetch fallback:", e);
+            console.log("Role/Avatar fetch fallback:", e);
         }
     }
 
@@ -840,11 +860,17 @@ async function fetchUserRoleAndSyncUI() {
     let compDisplayEl = document.getElementById("activeCompanyDisplay");
     let roleDisplayEl = document.getElementById("activeRoleDisplay");
     let fleetCompInput = document.getElementById("fleetCompanyId");
+    let avatarImgEl = document.getElementById("activeUserAvatarImg");
 
     if (userDisplayEl) userDisplayEl.innerText = currentUserAccount;
     if (compDisplayEl) compDisplayEl.innerText = "Company ID: " + currentCompanyId;
     if (roleDisplayEl) roleDisplayEl.innerText = "[الدور: " + currentUserRole + "]";
     if (fleetCompInput) fleetCompInput.value = currentCompanyId;
+
+    if (avatarImgEl && userAvatarUrl) {
+        avatarImgEl.src = userAvatarUrl;
+        avatarImgEl.style.display = 'block';
+    }
 
     let welcomeEl = document.getElementById("aiWelcomeMessage");
     if (welcomeEl) {
@@ -987,7 +1013,6 @@ async function loadRouteHistoryData() {
     if (!window.db || !window.firebaseModules) return;
     const { collection, getDocs, query, where, limit } = window.firebaseModules;
     try {
-        // تم استخدام فلترة بسيطة companyId فقط وترتيب النتائج برمجياً لمنع أخطاء الصلاحيات أو غياب Index
         const q = query(collection(window.db, "viper_gps_live"), where("companyId", "==", currentCompanyId), limit(50));
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
@@ -1005,7 +1030,8 @@ async function loadRouteHistoryData() {
         });
         showLiveToast("🗺️ تم استرجاع سجل المسار التاريخي بنجاح!");
     } catch(err) {
-        container.innerHTML = "خطأ في استرجاع سجل المسار: " + err.message;
+        console.error("Route history permission error:", err);
+        container.innerHTML = `<span style="color: var(--danger-color);">⚠️ تعذر جلب سجل المسار بسبب قيود صلاحيات الأمان (Firestore Rules). يرجى السماح بالقراءة لمجموعة viper_gps_live في وحدة تحكم Firebase.</span>`;
     }
 }
 
@@ -1174,7 +1200,7 @@ list.sort((a, b) => b.timestamp - a.timestamp);
 list.forEach((item) => {
 container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${item.truck}</b>: ${item.mission} <br><small style="color:var(--accent-color);">👤 السائق: ${item.driver || 'غير محدد'} | الشركة: ${item.companyId}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_fleet_ops', '${item.id}')">حذف</button></div>`;
 });
-});
+}, (err) => { console.error("Fleet snapshot error:", err); });
 
 const qLogistics = query(collection(dbInst, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(50));
 onSnapshot(qLogistics, (snapshot) => {
@@ -1208,7 +1234,7 @@ container.innerHTML += `<div class="item-row" style="padding:8px 0; border-botto
 });
 let scoreEl = document.getElementById("driverScoreDisplay");
 if(scoreEl) scoreEl.innerText = Math.min(99, 90 + tripCount * 2) + "%";
-});
+}, (err) => { console.error("Logistics snapshot error:", err); });
 
 const qFinance = query(collection(dbInst, "viper_finance"), where("companyId", "==", currentCompanyId), limit(50));
 onSnapshot(qFinance, (snapshot) => {
@@ -1234,7 +1260,7 @@ container.innerHTML += `<div class="item-row" style="display:flex; justify-conte
 let totalOut = document.getElementById("totalFinanceOutput");
 if(totalOut) totalOut.innerText = `صافي الحركات المالية للشركة: ${total} ج.م`;
 evaluateFinancialAnalytics(cachedFinanceData);
-});
+}, (err) => { console.error("Finance snapshot error:", err); });
 
 const qWallet = query(collection(dbInst, "viper_wallet"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qWallet, (snapshot) => {
@@ -1252,7 +1278,7 @@ list.sort((a, b) => b.timestamp - a.timestamp);
 list.forEach((d) => {
 container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${d.name}</b> <br><small style="color:var(--warning-color);">انتهاء: ${d.expiry}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_wallet', '${d.id}')">حذف</button></div>`;
 });
-});
+}, (err) => { console.error("Wallet snapshot error:", err); });
 
 const qAdvances = query(collection(dbInst, "viper_advances"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qAdvances, (snapshot) => {
@@ -1270,7 +1296,7 @@ list.sort((a, b) => b.timestamp - a.timestamp);
 list.forEach((ad) => {
 container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>السائق: ${ad.driver}</b> - المبلغ: <span style="color:var(--warning-color);">${ad.amount} ج.م</span><br><small style="color:var(--secondary-text);">${ad.reason}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_advances', '${ad.id}')">حذف</button></div>`;
 });
-});
+}, (err) => { console.error("Advances snapshot error:", err); });
 
 const qSubs = query(collection(dbInst, "viper_subcontractors"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qSubs, (snapshot) => {
@@ -1288,7 +1314,7 @@ list.sort((a, b) => b.timestamp - a.timestamp);
 list.forEach((sb) => {
 container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>المقاول: ${sb.name}</b> (${sb.truckNo})<br><small style="color:var(--accent-color);">المستحقات: ${sb.dues} ج.م</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_subcontractors', '${sb.id}')">حذف</button></div>`;
 });
-});
+}, (err) => { console.error("Subcontractors snapshot error:", err); });
 
 onSnapshot(collection(dbInst, "viper_radio_alerts"), (snapshot) => {
 let container = document.getElementById("radioContainer");
@@ -1302,7 +1328,7 @@ snapshot.forEach((docSnap) => {
 let r = docSnap.data();
 container.innerHTML += `<div class="item-row" style="padding:8px 0; border-bottom:1px solid var(--border-color);"><div>🚨 <b>${r.alert}</b> <br><small style="color:var(--secondary-text);">بواسطة: ${r.owner || 'سائق بالأسطول'}</small></div></div>`;
 });
-});
+}, (err) => { console.error("Radio snapshot error:", err); });
 }
 
 async function deleteCloudItem(collectionName, docId) {
