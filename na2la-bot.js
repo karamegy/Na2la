@@ -128,6 +128,27 @@
             background: var(--primary-color);
             color: #fff;
         }
+        /* شريط القائمة الأفقي الاحترافي الجديد */
+        #botQuickActionsContainer {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            gap: 6px !important;
+            background: var(--bg-color) !important;
+            padding: 8px 10px !important;
+            border-bottom: 1px solid var(--border-color) !important;
+            scrollbar-width: thin;
+            flex-shrink: 0;
+        }
+        #botQuickActionsContainer::-webkit-scrollbar {
+            height: 4px;
+        }
+        #botQuickActionsContainer::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
         .typing-dots span {
             height: 6px; width: 6px; float: left; margin: 0 2px;
             background-color: var(--text-color); border-radius: 50%;
@@ -145,13 +166,13 @@
     const containerDiv = document.createElement('div');
     containerDiv.id = 'na2laBotRootContainer';
     containerDiv.innerHTML = `
-        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini الذكي Pro لمنصة نقلة">🤖</button>
+        <button id="na2laBotBtn" style="position: fixed; bottom: 25px; right: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 26px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 2147483647; display: flex; align-items: center; justify-content: center; animation: floatAnim 2.5s ease-in-out infinite;" title="🤖 مساعد Gemini Pro (V10 PRO)">🤖</button>
 
         <div id="na2laBotModal" style="position: fixed; bottom: 85px; right: 20px; width: 420px; max-width: 92vw; height: 80vh; max-height: 650px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: var(--shadow-3d); z-index: 2147483646; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(20px); font-family: 'Cairo', sans-serif;">
             <div style="background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 10px 14px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 12px; flex-shrink: 0;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span id="botStatusDot" onclick="toggleDutyStatus()" style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; cursor: pointer;" title="تبديل حالة العمل"></span>
-                    <span id="botUserRoleBadge">🤖 مساعد Gemini الذكي Pro (عزل تام)</span>
+                    <span id="botUserRoleBadge">🤖 مساعد Gemini Pro (عزل تام)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <div style="position: relative; display: inline-block;">
@@ -174,18 +195,16 @@
 
             <div id="na2laRssTickerContainer" style="display: none; background: rgba(217, 119, 6, 0.15); border-bottom: 1px solid var(--border-color); padding: 5px 10px; font-size: 11px; color: var(--warning-color); white-space: nowrap; overflow: hidden; position: relative; flex-shrink: 0;">
                 <div style="display: inline-block; animation: marquee 18s linear infinite; font-weight: bold;">
-                    🚀 أسطورة الطريق Pro | الخصوصية الفائقة، التعليم الموجه للسائقين، توليد الوسائط الذكي، ونقل الأرشيف الحصري
+                    🚀 أسطورة الطريق V10 PRO | شريط القائمة الموحد، الخصوصية الفائقة، التعليم الموجه للسائقين، وتوليد الوسائط
                 </div>
             </div>
 
-            <!-- شريط القائمة الموحد (Menu Bar) الداخلي المنظم كبديل للأزرار المتداخلة العشوائية -->
-            <div id="botQuickActionsContainer" style="background: var(--bg-color); padding: 8px 10px; border-bottom: 1px solid var(--border-color); display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; flex-shrink: 0; scrollbar-width: thin;">
-                <!-- يتم تعبئته ديناميكياً حسب صلاحيات المستخدم (زائر، سائق، مشرف، مدير) -->
-            </div>
+            <!-- شريط القائمة الأفقي الموحد الشامل لكافة أقسام المنصة بدون تداخل -->
+            <div id="botQuickActionsContainer"></div>
 
             <div style="padding: 5px 12px; background: var(--card-bg); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 10px; flex-shrink: 0;">
                 <div style="display: flex; gap: 4px; align-items: center;">
-                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 2px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;" title="محادثة مؤقتة لا تحفظ في السجل">🕵️ مؤقت</button>
+                    <button onclick="toggleTemporaryChatMode()" id="botTempChatBtn" style="background: var(--card-bg); color: #a855f7; border: 1px solid #a855f7; padding: 2px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🕵️ مؤقت</button>
                     <button onclick="toggleBotContinuousVoice()" id="botContinuousBtn" style="background: var(--border-color); color: #fff; border: none; padding: 2px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🎤 مستمر</button>
                     <button onclick="toggleBotVoiceOutput()" id="botVoiceToggleBtn" style="background: var(--accent-color); color: #fff; border: none; padding: 2px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🔊 ناطق</button>
                     <button onclick="clearBotChat()" style="background: var(--danger-color); color: #fff; border: none; padding: 2px 6px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif;">🗑️ مسح</button>
@@ -205,7 +224,7 @@
 
             <div id="na2laBotMessages" style="flex: 1 1 auto; min-height: 0; padding: 14px; overflow-y: auto; font-size: 12px; display: flex; flex-direction: column; gap: 10px; line-height: 1.6; background: var(--card-bg); color: var(--text-color);">
                 <div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">
-                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بشريط القائمة الشامل للأقسام والشحنات.
+                    مرحباً بك! أنا مساعدك الذكي <b>Gemini Pro</b> المدمج بكافة مميزات المنصة وشريط القائمة الشامل.
                 </div>
             </div>
 
@@ -215,7 +234,7 @@
                 
                 <button onclick="document.getElementById('scaleTicketFileInput').click()" title="رفع وتحليل بونة الميزان OCR" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">📎</button>
                 
-                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، أو اختر من شريط القائمة بالأعلى..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
+                <input type="text" id="na2laBotInput" placeholder="اكتب سؤالك، اسأل عن الشحنات، أو اختر من شريط القائمة..." style="flex: 1; min-width: 0; height: 36px; margin: 0; padding: 0 10px; font-size: 11px; border-radius: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); font-family: 'Cairo', sans-serif; box-sizing: border-box; outline: none;" onkeypress="if(event.key === 'Enter') sendBotQuickQuery()">
 
                 <button onclick="startBotVoiceInput()" title="تسجيل صوتي" style="background: var(--warning-color); border: none; width: 36px; height: 36px; min-width: 36px; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-3d); flex-shrink: 0;">🎤</button>
                 
@@ -587,7 +606,7 @@
         alert(next === 'active' ? '🟢 حالة العمل: نشط' : '🔴 حالة العمل: استراحة');
     };
 
-    /* بناء شريط القائمة الموحد (Menu Bar) الشامل لعرض الشحنات وأقسام المنصة تماماً حسب دور المستخدم */
+    /* بناء شريط القائمة الأفقي الموحد الشامل لكافة الأقسام والشحنات بدقة تامة */
     window.renderQuickMenu = function(role) {
         let container = document.getElementById('botQuickActionsContainer');
         if (!container) return;
@@ -615,26 +634,15 @@
 
         container.innerHTML = menuItems.map(m => {
             if (m.action) {
-                return `<button onclick="${m.action}" style="background: var(--card-bg); border: 1px solid var(--border-color); color: ${m.color}; font-size: 10px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; flex-shrink: 0;">${m.label}</button>`;
+                return `<button onclick="${m.action}" style="background: var(--card-bg); border: 1px solid var(--border-color); color: ${m.color}; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; flex-shrink: 0; white-space: nowrap;">${m.label}</button>`;
             }
-            return `<button onclick="sendBotQuickQuery('${m.query}')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: ${m.color}; font-size: 10px; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; flex-shrink: 0;">${m.label}</button>`;
+            return `<button onclick="sendBotQuickQuery('${m.query}')" style="background: var(--card-bg); border: 1px solid var(--border-color); color: ${m.color}; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; flex-shrink: 0; white-space: nowrap;">${m.label}</button>`;
         }).join('');
     };
 
     fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
 
     let isBotVoiceOutputOn = true, isBotContinuousActive = false;
-
-    window.playWalkieBeep = function(type = 'start') {
-        try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = 'sine'; osc.frequency.value = type === 'start' ? 880 : 440;
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.12);
-        } catch(e) {}
-    };
 
     window.toggleNa2laBot = function() {
         let modal = document.getElementById('na2laBotModal');
@@ -699,8 +707,8 @@
         if (!container) return;
 
         let welcomeText = tenant.activeRole === 'visitor' 
-            ? `مرحباً بك يا <b>زائر كريم</b> في منصة أسطورة الطريق.<br>- يمكنك استخدام شريط القائمة بالأعلى لاستعراض الخدمات.`
-            : `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'admin' ? 'مدير' : 'سائق'}).<br>- شريط القائمة جاهز لخدمتك وعرض كافة أقسام المنصة.`;
+            ? `مرحباً بك يا <b>زائر كريم</b> في منصة أسطورة الطريق.<br>- يمكنك استخدام شريط القائمة الأفقي بالأعلى لاستعراض الخدمات.`
+            : `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'admin' ? 'مدير' : 'سائق'}).<br>- شريط القائمة الأفقي جاهز لخدمتك وعرض كافة أقسام المنصة.`;
 
         container.innerHTML = `<div style="background: var(--bg-color); padding: 10px 14px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${welcomeText}</div>`;
         history.forEach(msg => {
@@ -795,7 +803,7 @@
             if (tenant.activeRole !== 'admin') botReply = `💰 تقارير الخزنة مخصصة لمدير النظام فقط.`;
             else botReply = `💰 <b>رصيد الخزنة:</b> ${financials.treasuryBalance}<br><b>إجمالي المصروفات:</b> ${financials.expensesTotal}`;
         }
-        else if (lower.includes('إحصائيات شركتي')) {
+        else if (lower.includes('إحصائيات شركتي') || lower.includes('الأسطول')) {
             if (tenant.activeRole !== 'admin') botReply = `📊 مخصص للمديرين فقط.`;
             else botReply = `📊 إحصائيات الأسطول: إجمالي الشحنات (${financials.shipmentsCount}) والرصيد (${financials.treasuryBalance}).`;
         }
@@ -806,7 +814,7 @@
             botReply = `🌐 أسطورة الطريق (نقلة): المنصة الرائدة لإدارة الشحن وأتمتة الفواتير والأسطول.`;
         }
         else {
-            botReply = `🤖 استجابة ذكية من مساعد Gemini Pro حول: "${text}". يمكنك اختيار أي قسم من شريط القائمة بالأسفل.`;
+            botReply = `🤖 استجابة ذكية من مساعد Gemini Pro حول: "${text}". يمكنك اختيار أي قسم من شريط القائمة بالأعلى.`;
         }
 
         container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 9px 12px; border-radius: 10px; align-self: flex-start; border: 1px solid var(--border-color);">${botReply}</div>`;
