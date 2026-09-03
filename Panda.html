@@ -105,12 +105,18 @@
         </div>
         
         <div class="flex items-center gap-2" style="flex-shrink: 0;">
-            <button type="button" class="btn-app btn-purple" style="padding: 6px 10px; font-size: 11px;" onclick="openSectionsModal()">
+            <!-- زر بروفايل الحساب المتصل مع اسمه ورتبته -->
+            <div class="badge" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(16,185,129,0.4); padding: 5px 10px; display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-user-tie text-emerald"></i>
+                <span id="current-user-badge" style="color: #34d399; font-weight: 900;">كرم حمدي</span>
+                <span style="color: #64748b;">|</span>
+                <span id="current-role-badge" style="color: #38bdf8; font-weight: 700;">مدير عام</span>
+            </div>
+
+            <!-- زر الأقسام -->
+            <button type="button" class="btn-app btn-purple" style="padding: 6px 12px; font-size: 11px;" onclick="openSectionsModal()">
                 <i class="fa-solid fa-bars-staggered"></i> الأقسام
             </button>
-            <div class="badge" style="background: rgba(0,0,0,0.5);">
-                <i class="fa-solid fa-user-check text-emerald"></i> <span id="current-user-badge">كرم حمدي</span>
-            </div>
             <button type="button" class="btn-app" style="padding: 6px 10px; font-size: 11px;" onclick="refreshRoomsData()" title="مزامنة">
                 <i class="fa-solid fa-rotate"></i>
             </button>
@@ -271,6 +277,9 @@
         const db = getFirestore(app);
 
         let currentCompanyId = localStorage.getItem('current_company_id') || localStorage.getItem('quantum_company_id') || 'company_main';
+        let currentUserName = localStorage.getItem('quantum_gate_user') || 'كرم حمدي عبدالعظيم';
+        let currentUserRole = localStorage.getItem('quantum_gate_role') || 'مدير عام';
+
         let localStream = null;
         let peerConnection = null;
         let mediaRecorder = null;
@@ -288,13 +297,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             const isAuth = localStorage.getItem('quantum_gate_authenticated');
             const gate = document.getElementById('biometric-gate');
-            const userBadge = document.getElementById('current-user-badge');
-            const companyBadge = document.getElementById('company-badge-ui');
-            const savedUser = localStorage.getItem('quantum_gate_user') || 'كرم حمدي عبدالعظيم';
             
-            if(userBadge) userBadge.textContent = savedUser;
-            if(companyBadge) companyBadge.textContent = currentCompanyId;
-            document.getElementById('gate-company-id').value = currentCompanyId;
+            updateHeaderUserInfo();
 
             if(gate) {
                 if(isAuth === 'true') gate.classList.add('hidden');
@@ -310,25 +314,43 @@
             startRealtimeRoomsSync();
         });
 
+        function updateHeaderUserInfo() {
+            const userBadge = document.getElementById('current-user-badge');
+            const roleBadge = document.getElementById('current-role-badge');
+            const companyBadge = document.getElementById('company-badge-ui');
+            
+            if(userBadge) userBadge.textContent = currentUserName;
+            if(roleBadge) roleBadge.textContent = currentUserRole;
+            if(companyBadge) companyBadge.textContent = currentCompanyId;
+            
+            const gateUser = document.getElementById('gate-username');
+            const gateCompany = document.getElementById('gate-company-id');
+            if(gateUser) gateUser.value = currentUserName;
+            if(gateCompany) gateCompany.value = currentCompanyId;
+        }
+
         window.verifyGateBiometric = async function() {
             const usernameInput = document.getElementById('gate-username').value.trim() || 'كرم حمدي';
             const companyInput = document.getElementById('gate-company-id').value.trim() || 'company_main';
             
             currentCompanyId = companyInput;
-            localStorage.setItem('quantum_gate_user', usernameInput);
+            currentUserName = usernameInput;
+            currentUserRole = 'مدير عام';
+
+            localStorage.setItem('quantum_gate_user', currentUserName);
+            localStorage.setItem('quantum_gate_role', currentUserRole);
             localStorage.setItem('quantum_company_id', currentCompanyId);
             localStorage.setItem('current_company_id', currentCompanyId);
             localStorage.setItem('quantum_gate_authenticated', 'true');
 
-            document.getElementById('current-user-badge').textContent = usernameInput;
-            document.getElementById('company-badge-ui').textContent = currentCompanyId;
+            updateHeaderUserInfo();
             document.getElementById('biometric-gate').classList.add('hidden');
 
             try {
                 await addDoc(collection(db, "panda_biometric_logs"), {
                     companyId: currentCompanyId,
-                    username: usernameInput,
-                    role: "مدير نظام",
+                    username: currentUserName,
+                    role: currentUserRole,
                     action: "تسجيل دخول وتوثيق كمي بالبصمة لغرف الميتينج",
                     status: "معتمد ✅",
                     timestamp: serverTimestamp()
@@ -336,7 +358,7 @@
             } catch(e) { console.error("Log error:", e); }
 
             startRealtimeRoomsSync();
-            alert(`🔓 تم التحقق بالبصمة بنجاح يا ${usernameInput}! تم ربط الغرف بالشركة: ${currentCompanyId}`);
+            alert(`🔓 تم التحقق بالبصمة بنجاح يا ${currentUserName}! تم ربط الغرف بالشركة: ${currentCompanyId}`);
         };
 
         window.refreshRoomsData = function() {
@@ -411,11 +433,10 @@
                     if (localVideoEl) localVideoEl.srcObject = localStream;
                 }
 
-                const currentUser = localStorage.getItem('quantum_gate_user') || 'كرم حمدي';
                 await setDoc(doc(db, "panda_webrtc_rooms", roomId), {
                     roomId,
                     companyId: currentCompanyId,
-                    creator: currentUser,
+                    creator: currentUserName,
                     createdAt: serverTimestamp()
                 }, { merge: true });
 
@@ -629,11 +650,10 @@
             const input = document.getElementById('video-chat-input');
             const text = input.value.trim();
             if(!text) return;
-            const currentUser = localStorage.getItem('quantum_gate_user') || 'كرم حمدي';
             try {
                 await addDoc(collection(db, "panda_chat_messages"), {
                     companyId: currentCompanyId,
-                    sender: currentUser,
+                    sender: currentUserName,
                     message: text,
                     timestamp: serverTimestamp()
                 });
