@@ -189,6 +189,8 @@
                                 <button onclick="renderShipmentsInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📦 عرض الشحنات بالبوت</button>
                                 <button onclick="renderPentaTableInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📊 الجدول الخماسي بالبوت</button>
                                 <button onclick="renderDeferredInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--warning-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">⏳ الفواتير الآجلة بالبوت</button>
+                                <button onclick="renderConsolidatedInvoicesInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--purple-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📑 الفواتير المجمعة بالبوت</button>
+                                <button onclick="renderFleetInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">🚚 حالة الأسطول وصيانة الزيت</button>
                                 <button onclick="renderTreasuryInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: #34d399; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💵 الخزينة والحسابات بالبوت</button>
                                 <button onclick="openBotSection('chat-tab', 'الدردشة'); closeMainBotMenus();" style="background: var(--card-bg); color: #f472b6; border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">💬 الانتقال لدردشة المنصة</button>
                             </div>
@@ -210,6 +212,7 @@
                                 <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
                                 <button onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
                                 <button onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
+                                <button onclick="sendBotQuickQuery('صيانة الشاحنات'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🛠️ الصيانة</button>
                                 <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
                                 <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
                                 <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
@@ -409,6 +412,65 @@
         speakBotReplyText("حسناً، تم عرض الفواتير الآجلة مباشرة في البوت.");
     };
 
+    window.renderConsolidatedInvoicesInsideBot = async function() {
+        await fetchRealFirebaseData();
+        let tenant = getActiveTenantContext();
+        let container = document.getElementById('na2laBotMessages');
+        if (!container) return;
+
+        if (tenant.activeRole === 'visitor') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ هذا القسم مخصص للأعضاء المسجلين فقط.</div>`;
+            container.scrollTop = container.scrollHeight;
+            return;
+        }
+
+        let conInvoices = getIsolatedConsolidatedInvoices();
+        let replyHtml = `📑 <b>الفواتير المجمعة للشركة (عدد: ${conInvoices.length}):</b>`;
+        if (conInvoices.length === 0) {
+            replyHtml += `<div class="chat-card">لا توجد فواتير مجمعة مسجلة حالياً.</div>`;
+        } else {
+            replyHtml += `<table class="bot-data-table"><tr><th>رقم الفاتورة</th><th>العميل</th><th>عدد الشحنات</th><th>الإجمالي</th></tr>`;
+            conInvoices.forEach(inv => {
+                let count = (inv.shipmentIds || inv.shipments || []).length;
+                replyHtml += `<tr><td><b>${inv.invoiceNumber || inv.id || '-'}</b></td><td>${inv.client || inv.clientName || '-'}</td><td>${count}</td><td>${inv.total || inv.totalAmount || 0} ج.م</td></tr>`;
+            });
+            replyHtml += `</table>`;
+        }
+
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
+        container.scrollTop = container.scrollHeight;
+        speakBotReplyText("حسناً، تم عرض الفواتير المجمعة مباشرة في البوت.");
+    };
+
+    window.renderFleetInsideBot = async function() {
+        await fetchRealFirebaseData();
+        let tenant = getActiveTenantContext();
+        let container = document.getElementById('na2laBotMessages');
+        if (!container) return;
+
+        if (tenant.activeRole === 'visitor') {
+            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ هذا القسم مخصص للأعضاء المسجلين فقط.</div>`;
+            container.scrollTop = container.scrollHeight;
+            return;
+        }
+
+        let trucks = getIsolatedTrucks();
+        let replyHtml = `🚚 <b>حالة الأسطول وصيانة الزيت (عدد: ${trucks.length}):</b>`;
+        if (trucks.length === 0) {
+            replyHtml += `<div class="chat-card">لا توجد مركبات مسجلة في الأسطول حالياً.</div>`;
+        } else {
+            replyHtml += `<table class="bot-data-table"><tr><th>المركبة</th><th>السائق</th><th>عداد الـ KM</th><th>الزيت القادم</th></tr>`;
+            trucks.forEach(t => {
+                replyHtml += `<tr><td><b>${t.num || '-'}</b></td><td>${t.driver || '-'}</td><td>${t.km || 0} كم</td><td>${t.nextOil || 0} كم</td></tr>`;
+            });
+            replyHtml += `</table>`;
+        }
+
+        container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
+        container.scrollTop = container.scrollHeight;
+        speakBotReplyText("حسناً، تم عرض حالة الأسطول والصيانة مباشرة في البوت.");
+    };
+
     window.renderTreasuryInsideBot = async function() {
         await fetchRealFirebaseData();
         let financials = getCompanyFinancials();
@@ -471,6 +533,7 @@
     window.realFirebaseConsolidatedInvoices = [];
     window.realFirebaseTreasury = [];
     window.realFirebaseExpenses = [];
+    window.realFirebaseTrucks = [];
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
@@ -617,6 +680,13 @@
                     }
                 } catch(e) {}
 
+                try {
+                    const trucksSnap = await db.collection('trucks').get();
+                    if (!trucksSnap.empty) {
+                        realFirebaseTrucks = trucksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }
+                } catch(e) {}
+
                 let tenant = getActiveTenantContext();
                 try {
                     const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
@@ -721,6 +791,16 @@
     window.getIsolatedDeferredInvoices = function() {
         let allInvoices = realFirebaseDeferredInvoices.length > 0 ? realFirebaseDeferredInvoices : (window.appData?.deferredInvoices || []);
         return allInvoices.filter(matchesCompany);
+    };
+
+    window.getIsolatedConsolidatedInvoices = function() {
+        let allCon = realFirebaseConsolidatedInvoices.length > 0 ? realFirebaseConsolidatedInvoices : (window.appData?.consolidatedInvoices || []);
+        return allCon.filter(matchesCompany);
+    };
+
+    window.getIsolatedTrucks = function() {
+        let allTrucks = realFirebaseTrucks.length > 0 ? realFirebaseTrucks : (window.appData?.trucks || []);
+        return allTrucks.filter(matchesCompany);
     };
 
     window.parseNumericCurrency = function(val) {
@@ -1038,6 +1118,17 @@
             let randQuiz = driverQuizzes[Math.floor(Math.random() * driverQuizzes.length)];
             botReply = `<div class="chat-card"><b>${randQuiz.q}</b><br>${randQuiz.explain}</div>`;
         }
+        else if (lower.includes('صيانة الشاحنات') || lower.includes('صيانة') || lower.includes('عطل')) {
+            botReply = `
+                🛠️ <b>مساعد الصيانة والتشخيص الذكي (AI Mechanic):</b><br>
+                اختر نوع المشكلة للاستعلام الفوري:<br>
+                - مشكلة في الدينامو أو الشحن ⚡<br>
+                - خشونة أو ثقل في الدبرياج والفتيس ⚙️<br>
+                - ارتفاع حرارة المحرك 🌡️<br>
+                - خروج دخان من الشكمان 💨<br>
+                *(يمكنك أيضاً الانتقال مباشرة لقسم "مساعد الذكاء الاصطناعي للصيانة" من القائمة الشاملة للمنصة).*
+            `;
+        }
         else if (lower.includes('صلاحية اشتراك') || lower.includes('الاشتراك')) {
             let subInfo = await getCompanySubscriptionInfo();
             botReply = `💳 <b>كارت الاشتراك:</b><br>الشركة: <b>${subInfo.companyName}</b><br>الباقة: <b>${subInfo.planName}</b><br>الحالة: <b style="color:var(--accent-color);">${subInfo.status}</b><br>الانتهاء: <b>${subInfo.expiryDate}</b>`;
@@ -1050,12 +1141,20 @@
             await renderPentaTableInsideBot();
             return;
         }
+        else if (lower.includes('الفواتير المجمعة')) {
+            await renderConsolidatedInvoicesInsideBot();
+            return;
+        }
         else if (lower.includes('الفواتير')) {
             await renderDeferredInvoicesInsideBot();
             return;
         }
         else if (lower.includes('الخزنة')) {
             await renderTreasuryInsideBot();
+            return;
+        }
+        else if (lower.includes('الأسطول') || lower.includes('الزيت')) {
+            await renderFleetInsideBot();
             return;
         }
         else if (lower.includes('رسم')) {
