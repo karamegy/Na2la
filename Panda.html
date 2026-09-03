@@ -30,7 +30,7 @@
         .btn-purple { background: linear-gradient(135deg, #7c3aed, #a78bfa); color: white; }
         .btn-teal { background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; }
 
-        /* بوابة المصادقة البيومترية */
+        /* بوابة المصادقة البيومترية وعزل الشركات */
         .gate-overlay { position: fixed; inset: 0; background: rgba(2, 16, 12, 0.98); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(20px); }
         
         /* شبكات الفيديو */
@@ -383,12 +383,33 @@
         }
 
         window.startWebRTCConference = async function() {
-            const roomId = document.getElementById('webrtc-room-id').value.trim() || `${currentCompanyId}-room-${Math.floor(Math.random() * 1000)}`;
-            document.getElementById('webrtc-room-id').value = roomId;
+            const roomIdInput = document.getElementById('webrtc-room-id');
+            const roomId = roomIdInput.value.trim() || `${currentCompanyId}-room-${Math.floor(Math.random() * 1000)}`;
+            roomIdInput.value = roomId;
 
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('local-video').srcObject = localStream;
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("متصفحك لا يدعم الوصول المباشر للكاميرا أو الميكروفون.");
+                }
+
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } catch (videoErr) {
+                    console.warn("Camera failed, attempting audio-only...", videoErr);
+                    try {
+                        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                        alert("⚠️ تعذر تشغيل الكاميرا، تم تفعيل الميكروفون فقط.");
+                    } catch (audioErr) {
+                        console.warn("Audio also failed, entering room without hardware stream...", audioErr);
+                        localStream = null;
+                        alert("⚠️ تم الدخول للغرفة بنجاح في وضع الدردشة والسبورة (الكاميرا والمايكروفون غير متوفرين أو مرفوضين).");
+                    }
+                }
+
+                if (localStream) {
+                    const localVideoEl = document.getElementById('local-video');
+                    if (localVideoEl) localVideoEl.srcObject = localStream;
+                }
 
                 const currentUser = localStorage.getItem('quantum_gate_user') || 'كرم حمدي';
                 await setDoc(doc(db, "panda_webrtc_rooms", roomId), {
@@ -398,20 +419,27 @@
                     createdAt: serverTimestamp()
                 }, { merge: true });
 
-                peerConnection = new RTCPeerConnection(rtcConfig);
-                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                if (localStream) {
+                    peerConnection = new RTCPeerConnection(rtcConfig);
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                peerConnection.ontrack = (event) => {
-                    if(event.streams[0]) {
-                        document.getElementById('remote-video').srcObject = event.streams[0];
-                        document.getElementById('remote-status-label').textContent = "متصل بنجاح ✅";
-                    }
-                };
+                    peerConnection.ontrack = (event) => {
+                        if(event.streams[0]) {
+                            const remoteVideoEl = document.getElementById('remote-video');
+                            if (remoteVideoEl) remoteVideoEl.srcObject = event.streams[0];
+                            const remoteStatusEl = document.getElementById('remote-status-label');
+                            if (remoteStatusEl) remoteStatusEl.textContent = "متصل بنجاح ✅";
+                        }
+                    };
+                }
 
                 startVideoChatSync(roomId);
-                alert(`🎥 تم الاتصال بالغرفة (${roomId}) بنجاح!`);
+                if (localStream) {
+                    alert(`🎥 تم الاتصال بالغرفة (${roomId}) بنجاح!`);
+                }
             } catch(e) {
-                alert("تعذر الوصول للكاميرا أو بدء الجلسة.");
+                console.error("WebRTC Connection Error:", e);
+                alert(`⚠️ خطأ في الاتصال بالغرفة: ${e.message || 'تأكد من إذن الكاميرا أو فتح الصفحة عبر HTTPS'}`);
             }
         };
 
@@ -423,9 +451,12 @@
         window.endWebRTCConference = function() {
             if(peerConnection) { peerConnection.close(); peerConnection = null; }
             if(localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-            document.getElementById('local-video').srcObject = null;
-            document.getElementById('remote-video').srcObject = null;
-            document.getElementById('remote-status-label').textContent = "تم الإنهاء";
+            const localVideoEl = document.getElementById('local-video');
+            const remoteVideoEl = document.getElementById('remote-video');
+            const remoteStatusEl = document.getElementById('remote-status-label');
+            if (localVideoEl) localVideoEl.srcObject = null;
+            if (remoteVideoEl) remoteVideoEl.srcObject = null;
+            if (remoteStatusEl) remoteStatusEl.textContent = "تم الإنهاء";
             alert("📞 تم إنهاء الجلسة المرئية.");
         };
 
@@ -433,6 +464,8 @@
             if(localStream) {
                 const track = localStream.getAudioTracks()[0];
                 if(track) track.enabled = !track.enabled;
+            } else {
+                alert("لا يوجد بث صوتي نشط حالياً.");
             }
         };
 
@@ -440,6 +473,8 @@
             if(localStream) {
                 const track = localStream.getVideoTracks()[0];
                 if(track) track.enabled = !track.enabled;
+            } else {
+                alert("لا يوجد بث مرئي نشط حالياً.");
             }
         };
 
@@ -452,12 +487,14 @@
                         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
                         if(sender) sender.replaceTrack(screenTrack);
                     }
-                    document.getElementById('local-video').srcObject = screenStream;
+                    const localVideoEl = document.getElementById('local-video');
+                    if (localVideoEl) localVideoEl.srcObject = screenStream;
                     screenTrack.onended = () => toggleScreenShare();
                     isScreenSharing = true;
                 } else {
                     const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                    document.getElementById('local-video').srcObject = camStream;
+                    const localVideoEl = document.getElementById('local-video');
+                    if (localVideoEl) localVideoEl.srcObject = camStream;
                     localStream = camStream;
                     isScreenSharing = false;
                 }
