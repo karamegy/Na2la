@@ -59,9 +59,9 @@
             --warning-color: #fbbf24;
             --danger-color: #f87171;
         }
-        /* إخفاء عناصر الإدارة افتراضياً تماماً لضمان عدم ظهورها للسائقين والزوار */
+        /* إخفاء عناصر الإدارة افتراضياً ليتم التحكم بها برمجياً عبر الـ JS */
         .admin-only-section {
-            display: none !important;
+            display: none;
         }
         @keyframes marquee {
             0% { transform: translateX(100%); }
@@ -655,7 +655,6 @@
         }
 
         let activeDriver = rawUser;
-        // منع أي خلط: إذا لم يكن المستخدم مديراً صريحاً، يتم اعتباره سائقاً تلقائياً
         if (activeDriver === "المدير" || activeRole.includes('admin') || activeRole.includes('owner') || activeRole === 'مدير' || activeRole === 'مدير شركة') {
             activeRole = "admin";
         } else {
@@ -906,7 +905,7 @@
             visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
         }
 
-        // تطبيق العزل التام: إظهار أقسام الإدارة حصرياً للمديرين، وإخفائها تماماً عن السائقين
+        // إظهار أقسام الإدارة للمدير وإخفاها للسائقين باستخدام block أو none
         document.querySelectorAll('.admin-only-section').forEach(el => {
             el.style.display = isManager ? 'block' : 'none';
         });
