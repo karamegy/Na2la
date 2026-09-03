@@ -7,7 +7,7 @@
 <!-- استدعاء مكتبات Firebase الإصدار العاشر، html2canvas، ومكتبة الخرائط Leaflet -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot, query, where, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 const firebaseConfig = {
 apiKey: "AIzaSyDn-rNJ2ak3IODdfzTZmXKJePDdgxhfyIY",
 authDomain: "n2la-642d3.firebaseapp.com",
@@ -20,7 +20,7 @@ measurementId: "G-KH4ZYFB8LC"
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 window.db = db;
-window.firebaseModules = { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot, query, where, orderBy, limit };
+window.firebaseModules = { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, onSnapshot, query, where, limit };
 window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -642,7 +642,7 @@ transform: translateY(-2px);
 
     <div id="opsAiChatMessages" style="flex: 1; padding: 12px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
         <div style="background: var(--bg-color); padding: 8px 12px; border-radius: 8px; align-self: flex-start; border: 1px solid var(--border-color);" id="aiWelcomeMessage">
-            أهلاً بيك! معك مساعد "نقلة" الذكي المتصل بنموذج Gemini اللغوي الفعلي. تحدث معي وسأساعدك في كافة عمليات التشغيل والتحليل!
+            أهلاً بيك! معك مساعد "نقلة" الذكي المتصل بننموذج Gemini اللغوي الفعلي. تحدث معي وسأساعدك في كافة عمليات التشغيل والتحليل!
         </div>
     </div>
     
@@ -685,7 +685,7 @@ const themesList = [
 let currentThemeIndex = 0;
 let currentUserAccount = "";
 let currentCompanyId = "";
-let currentUserRole = "driver";
+let currentUserRole = "مدير النظام";
 let activeLeafletMap = null;
 let isVoiceOutputEnabled = true;
 let isContinuousVoiceActive = false;
@@ -790,7 +790,7 @@ document.getElementById('themeCounterDisplay').innerText = currentThemeIndex + 1
 }
 }
 
-function initPlatformSessionAndSync() {
+async function initPlatformSessionAndSync() {
     const urlParams = new URLSearchParams(window.location.search);
     let urlUser = urlParams.get('userId') || urlParams.get('user') || urlParams.get('driver') || urlParams.get('phone');
     let urlCompany = urlParams.get('companyId') || urlParams.get('company');
@@ -800,24 +800,41 @@ function initPlatformSessionAndSync() {
                          localStorage.getItem('na2la_current_user_identifier') || 
                          localStorage.getItem('na2la_user_session') || 
                          localStorage.getItem('currentUser') || 
-                         localStorage.getItem('na2la_driver_phone') || '';
+                         localStorage.getItem('na2la_driver_phone') || 'المدير';
 
     currentCompanyId = urlCompany || 
                        localStorage.getItem('na2la_company_id') || 
                        localStorage.getItem('na2la_company') || 
-                       localStorage.getItem('companyId') || '';
-
-    if (!currentUserAccount) {
-        currentUserAccount = prompt("أدخل اسم السائق أو معرف المستخدم النشط للجلسة:") || "سائق_نشط";
-    }
-    if (!currentCompanyId) {
-        currentCompanyId = prompt("أدخل معرف الشركة (Company ID) لعزل وتأمين البيانات:") || "COMPANY_DEFAULT";
-    }
+                       localStorage.getItem('companyId') || 'company_main';
 
     localStorage.setItem('na2la_current_user', currentUserAccount);
     localStorage.setItem('na2la_company_id', currentCompanyId);
 
-    currentUserRole = localStorage.getItem('na2la_user_role') || "سائق أسطول معتمد";
+    waitForFirestoreAndInit();
+}
+
+async function fetchUserRoleAndSyncUI() {
+    if (window.db && window.firebaseModules) {
+        const { collection, getDocs, query, where } = window.firebaseModules;
+        try {
+            // محاولة البحث في مجموعة السائقين/المستخدمين لجلب الدور والاسم بدقة
+            const qDrivers = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId));
+            const snap = await getDocs(qDrivers);
+            let found = false;
+            snap.forEach(docSnap => {
+                let d = docSnap.data();
+                if (d.name === currentUserAccount || d.phone === currentUserAccount) {
+                    currentUserRole = d.role || d.status || "مدير النظام";
+                    found = true;
+                }
+            });
+            if (!found && currentUserAccount.includes("المدير")) {
+                currentUserRole = "مدير تنفيذي / مالك الشركة";
+            }
+        } catch (e) {
+            console.log("Role fetch fallback:", e);
+        }
+    }
 
     let userDisplayEl = document.getElementById("activeUserDisplay");
     let compDisplayEl = document.getElementById("activeCompanyDisplay");
@@ -833,8 +850,6 @@ function initPlatformSessionAndSync() {
     if (welcomeEl) {
         welcomeEl.innerHTML = `أهلاً بيك يا <b>${currentUserAccount}</b>! تمت مزامنة جلستك النشطة بنجاح مع العزل التام للشركة (<b>${currentCompanyId}</b>).`;
     }
-
-    waitForFirestoreAndInit();
 }
 
 function waitForFirestoreAndInit() {
@@ -842,7 +857,9 @@ function waitForFirestoreAndInit() {
         setTimeout(waitForFirestoreAndInit, 300);
         return;
     }
-    initCloudSyncWithIsolation();
+    fetchUserRoleAndSyncUI().then(() => {
+        initCloudSyncWithIsolation();
+    });
 }
 
 function toggleLiveGpsTracking() {
@@ -968,19 +985,23 @@ async function loadRouteHistoryData() {
     let container = document.getElementById("routeHistoryContainer");
     container.innerHTML = "⏳ جاري استرجاع نقاط مسار الـ GPS السحابي...";
     if (!window.db || !window.firebaseModules) return;
-    const { collection, getDocs, query, where, orderBy, limit } = window.firebaseModules;
+    const { collection, getDocs, query, where, limit } = window.firebaseModules;
     try {
-        const q = query(collection(window.db, "viper_gps_live"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(15));
+        // تم استخدام فلترة بسيطة companyId فقط وترتيب النتائج برمجياً لمنع أخطاء الصلاحيات أو غياب Index
+        const q = query(collection(window.db, "viper_gps_live"), where("companyId", "==", currentCompanyId), limit(50));
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
             container.innerHTML = "لا توجد نقاط مسار GPS مسجلة لهذه الشركة حتى الآن.";
             return;
         }
+        let list = [];
+        snapshot.forEach(docSnap => list.push(docSnap.data()));
+        list.sort((a, b) => b.timestamp - a.timestamp);
+
         container.innerHTML = "<b>📍 أحدث إحداثيات مسجلة لخط السير:</b><br>";
-        snapshot.forEach(docSnap => {
-            let data = docSnap.data();
+        list.slice(0, 15).forEach(data => {
             let timeStr = new Date(data.timestamp).toLocaleTimeString('ar-EG');
-            container.innerHTML += `- خط العرض: ${data.lat.toFixed(4)}, خط الطول: ${data.lng.toFixed(4)} (السائق: ${data.driver}, الساعة: ${timeStr})<br>`;
+            container.innerHTML += `- خط العرض: ${Number(data.lat).toFixed(4)}, خط الطول: ${Number(data.lng).toFixed(4)} (السائق: ${data.driver}, الساعة: ${timeStr})<br>`;
         });
         showLiveToast("🗺️ تم استرجاع سجل المسار التاريخي بنجاح!");
     } catch(err) {
@@ -1134,10 +1155,10 @@ L.marker([24.0889, 32.8998]).addTo(activeLeafletMap).bindPopup('<b>موقع ال
 }
 
 function initCloudSyncWithIsolation() {
-const { collection, onSnapshot, query, where, orderBy, limit } = window.firebaseModules;
+const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
 const dbInst = window.db;
 
-const qFleet = query(collection(dbInst, "viper_fleet_ops"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(50));
+const qFleet = query(collection(dbInst, "viper_fleet_ops"), where("companyId", "==", currentCompanyId), limit(50));
 onSnapshot(qFleet, (snapshot) => {
 let container = document.getElementById("fleetContainer");
 if (!container) return;
@@ -1146,13 +1167,16 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد عمليات أسطول مسجلة خاصة بشركتك (${currentCompanyId}).</div>`;
 return;
 }
-snapshot.forEach((docSnap) => {
-let item = docSnap.data();
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${item.truck}</b>: ${item.mission} <br><small style="color:var(--accent-color);">👤 السائق: ${item.driver || 'غير محدد'} | الشركة: ${item.companyId}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_fleet_ops', '${docSnap.id}')">حذف</button></div>`;
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
+list.forEach((item) => {
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${item.truck}</b>: ${item.mission} <br><small style="color:var(--accent-color);">👤 السائق: ${item.driver || 'غير محدد'} | الشركة: ${item.companyId}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_fleet_ops', '${item.id}')">حذف</button></div>`;
 });
 });
 
-const qLogistics = query(collection(dbInst, "viper_logistics"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(50));
+const qLogistics = query(collection(dbInst, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(50));
 onSnapshot(qLogistics, (snapshot) => {
 let container = document.getElementById("logisticsContainer");
 if (!container) return;
@@ -1162,10 +1186,13 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد شحنات مسجلة لشركتك النشطة حالياً.</div>`;
 return;
 }
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
 let tripCount = 0;
-snapshot.forEach((docSnap) => {
+list.forEach((m) => {
 tripCount++;
-let m = docSnap.data();
 cachedLogisticsData.push(m);
 container.innerHTML += `<div class="item-row" style="padding:8px 0; border-bottom:1px solid var(--border-color);">
     <div><b>العميل:</b> ${m.client} (${m.cargo}) <br><small style="color:var(--secondary-text);">هاتف: ${m.phone || 'غير مسجل'} | التحصيل: ${m.paymentMethod || 'نقدي'}</small></div>
@@ -1175,7 +1202,7 @@ container.innerHTML += `<div class="item-row" style="padding:8px 0; border-botto
     <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
         <button class="btn-submit" style="background: var(--accent-color); font-size: 10px; padding: 4px; margin:0; width:auto;" onclick="sendWhatsAppClientNotification('${m.client}', '${m.phone}', '${m.cargo}', '${m.loadLocation}', '${m.unloadLocation}')">💬 إرسال واتساب للعميل</button>
         <button class="btn-submit" style="background: var(--primary-color); font-size: 10px; padding: 4px; margin:0; width:auto;" onclick="makePhoneCall('+201114099799')">📞 اتصال</button>
-        <button class="btn-action-del" style="width:auto; padding:2px 8px;" onclick="deleteCloudItem('viper_logistics', '${docSnap.id}')">حذف</button>
+        <button class="btn-action-del" style="width:auto; padding:2px 8px;" onclick="deleteCloudItem('viper_logistics', '${m.id}')">حذف</button>
     </div>
 </div>`;
 });
@@ -1183,7 +1210,7 @@ let scoreEl = document.getElementById("driverScoreDisplay");
 if(scoreEl) scoreEl.innerText = Math.min(99, 90 + tripCount * 2) + "%";
 });
 
-const qFinance = query(collection(dbInst, "viper_finance"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(50));
+const qFinance = query(collection(dbInst, "viper_finance"), where("companyId", "==", currentCompanyId), limit(50));
 onSnapshot(qFinance, (snapshot) => {
 let container = document.getElementById("financeContainer");
 if (!container) return;
@@ -1195,18 +1222,21 @@ container.innerHTML = `<div style='text-align:center; color:var(--secondary-text
 evaluateFinancialAnalytics([]);
 return;
 }
-snapshot.forEach((docSnap) => {
-let ex = docSnap.data();
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
+list.forEach((ex) => {
 cachedFinanceData.push(ex);
 total += Number(ex.cost) || 0;
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item} <br><small style="color:var(--secondary-text);">${ex.owner || ''}</small>: <span style="color:${Number(ex.cost)>=0?'var(--accent-color)':'var(--danger-color)'};">${ex.cost} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${docSnap.id}')">حذف</button></div>`;
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div>${ex.item} <br><small style="color:var(--secondary-text);">${ex.owner || ''}</small>: <span style="color:${Number(ex.cost)>=0?'var(--accent-color)':'var(--danger-color)'};">${ex.cost} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_finance', '${ex.id}')">حذف</button></div>`;
 });
 let totalOut = document.getElementById("totalFinanceOutput");
 if(totalOut) totalOut.innerText = `صافي الحركات المالية للشركة: ${total} ج.م`;
 evaluateFinancialAnalytics(cachedFinanceData);
 });
 
-const qWallet = query(collection(dbInst, "viper_wallet"), where("owner", "==", currentUserAccount), orderBy("timestamp", "desc"), limit(20));
+const qWallet = query(collection(dbInst, "viper_wallet"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qWallet, (snapshot) => {
 let container = document.getElementById("walletContainer");
 if (!container) return;
@@ -1215,13 +1245,16 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد مستندات مسجلة في محفظتك الشخصية.</div>`;
 return;
 }
-snapshot.forEach((docSnap) => {
-let d = docSnap.data();
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${d.name}</b> <br><small style="color:var(--warning-color);">انتهاء: ${d.expiry}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_wallet', '${docSnap.id}')">حذف</button></div>`;
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
+list.forEach((d) => {
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${d.name}</b> <br><small style="color:var(--warning-color);">انتهاء: ${d.expiry}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_wallet', '${d.id}')">حذف</button></div>`;
 });
 });
 
-const qAdvances = query(collection(dbInst, "viper_advances"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(20));
+const qAdvances = query(collection(dbInst, "viper_advances"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qAdvances, (snapshot) => {
 let container = document.getElementById("advancesContainer");
 if (!container) return;
@@ -1230,13 +1263,16 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد سلف أو عهد نثرية مسجلة.</div>`;
 return;
 }
-snapshot.forEach((docSnap) => {
-let ad = docSnap.data();
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>السائق: ${ad.driver}</b> - المبلغ: <span style="color:var(--warning-color);">${ad.amount} ج.م</span><br><small style="color:var(--secondary-text);">${ad.reason}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_advances', '${docSnap.id}')">حذف</button></div>`;
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
+list.forEach((ad) => {
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>السائق: ${ad.driver}</b> - المبلغ: <span style="color:var(--warning-color);">${ad.amount} ج.م</span><br><small style="color:var(--secondary-text);">${ad.reason}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_advances', '${ad.id}')">حذف</button></div>`;
 });
 });
 
-const qSubs = query(collection(dbInst, "viper_subcontractors"), where("companyId", "==", currentCompanyId), orderBy("timestamp", "desc"), limit(20));
+const qSubs = query(collection(dbInst, "viper_subcontractors"), where("companyId", "==", currentCompanyId), limit(20));
 onSnapshot(qSubs, (snapshot) => {
 let container = document.getElementById("subContractorsContainer");
 if (!container) return;
@@ -1245,9 +1281,12 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد شحنات مسجلة لمقاولي باطن.</div>`;
 return;
 }
-snapshot.forEach((docSnap) => {
-let sb = docSnap.data();
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>المقاول: ${sb.name}</b> (${sb.truckNo})<br><small style="color:var(--accent-color);">المستحقات: ${sb.dues} ج.م</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_subcontractors', '${docSnap.id}')">حذف</button></div>`;
+let list = [];
+snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
+list.sort((a, b) => b.timestamp - a.timestamp);
+
+list.forEach((sb) => {
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>المقاول: ${sb.name}</b> (${sb.truckNo})<br><small style="color:var(--accent-color);">المستحقات: ${sb.dues} ج.م</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_subcontractors', '${sb.id}')">حذف</button></div>`;
 });
 });
 
@@ -1455,7 +1494,6 @@ messagesContainer.scrollTop = messagesContainer.scrollHeight;
 let reply = "";
 let apiKey = localStorage.getItem('na2la_gemini_api_key');
 
-// فحص الأوامر المحلية السريعة (اختصار أوامر النظام)
 let lowerText = text.toLowerCase();
 if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف')) {
     let numbers = text.match(/\d+/);
@@ -1480,7 +1518,6 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
     reply = `📞 جاري فتح شاشة الاتصال الهاتفي فوراً.`;
     setTimeout(() => { makePhoneCall("+201114099799"); }, 1000);
 } else if (apiKey) {
-    // الاتصال الفعلي بـ Google Gemini API
     messagesContainer.innerHTML += `<div id="aiTypingIndicator" style="background: var(--bg-color); color: var(--secondary-text); padding: 6px 10px; border-radius: 8px; align-self: flex-start; font-size: 11px;">🤖 جاري التفكير عبر Gemini AI...</div>`;
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
@@ -1488,7 +1525,7 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
         let promptPayload = {
             contents: [{
                 parts: [{
-                    text: `أنت مساعد تشغيلي ذكي لمنصة "نقلة" (تحالف الحصان والباندا). المستخدم الحالي هو "${currentUserAccount}" تابع للشركة ذات المعرف "${currentCompanyId}". أجب باختصار واحترافية وباللهجة المصرية أو العربية الواضحة لمسائل اللوجستيات والشحن والأسطول. السؤال أو الأمر هو: ${text}`
+                    text: `أنت مساعد تشغيلي ذكي لمنصة "نقلة" (تحالف الحصان والباندا). المستخدم الحالي هو "${currentUserAccount}" بدور "${currentUserRole}" تابع للشركة ذات المعرف "${currentCompanyId}". أجب باختصار واحترافية لمسائل اللوجستيات والشحن والأسطول. السؤال أو الأمر هو: ${text}`
                 }]
             }]
         };
@@ -1514,31 +1551,12 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
         reply = "⚠️ حدث خطأ في الاتصال بخدمة Gemini API الخارجية: " + err.message;
     }
 } else {
-    // نظام الردود الذكية المحلي المحسن
     if (lowerText.includes('تعبان') || lowerText.includes('إرهاق') || lowerText.includes('دایخ') || lowerText.includes('مجهد')) {
         reply = `سلامتك ألف سلامة! حاسس بيك والله والضغط عالي. استهدى بالله كده، وريحلك عشر دقائق وشرب قهوتك، الشغل مستنيك!`;
     } else if (lowerText.includes('شحنة') || lowerText.includes('شحنات') || lowerText.includes('موقع')) {
         reply = `📦 يا ${currentUserAccount}، شحناتك ومقرات التحميل والتفريغ معزولة ومسجلة حصرياً لشركتك برقم (${currentCompanyId}).`;
-    } else if (lowerText.includes('عهدة') || lowerText.includes('سلفة')) {
-        reply = "💸 يمكنك تسجيل عهد السائقين والسلف النثرية وتصفيتها من قسم 'عهد السائقين والمصاريف النثرية'.";
-    } else if (lowerText.includes('تسعير') || lowerText.includes('سعر شحنة')) {
-        reply = "🧮 استخدم 'حاسبة تسعير الشحنات التلقائية' لتحديد السعر بدقة بناءً على المسافة والوزن.";
-    } else if (lowerText.includes('مقاول') || lowerText.includes('باطن')) {
-        reply = "🤝 تم توفير قسم خاص بـ 'مقاولي الباطن والشراكة' لتسجيل الشاحنات المستأجرة وحساب المستحقات.";
-    } else if (lowerText.includes('مسار') || lowerText.includes('تاريخي')) {
-        reply = "🗺️ يمكنك استرجاع إحداثيات الـ GPS ومراجعة خط السير التاريخي من نافذة 'سجل المسار التاريخي'.";
-    } else if (lowerText.includes('رداتير') || lowerText.includes('حرارة')) {
-        reply = "🌡️ نصيحة: شيك على مياه الرداتير والجركن وأنت طالع على السريع.";
-    } else if (lowerText.includes('موتور') || lowerText.includes('محرك') || lowerText.includes('صيانة')) {
-        reply = "🔧 غير الزيت في ميعاده وخلي عينك على الصيانة التنبؤية بالعداد.";
-    } else if (lowerText.includes('طقس') || lowerText.includes('جو')) {
-        reply = "🌦️ تقارير الأرصاد وحالة الطرق جاهزة في نافذة 'الطقس والطرق'.";
-    } else if (lowerText.includes('ربح') || lowerText.includes('فلوس') || lowerText.includes('حاسبة')) {
-        reply = "💰 افتح 'حاسبة الأرباح' وسجل المقبوضات والوقود والمصروفات.";
-    } else if (lowerText.includes('رخصة') || lowerText.includes('مستند') || lowerText.includes('محفظة')) {
-        reply = "💳 يمكنك حفظ جميع رخصك وتواريخ انتهائها في قسم 'المحفظة الرقمية'.";
     } else {
-        reply = `أهلاً بك يا ${currentUserAccount}! أنا معاك ومربوط بجلسة الاتصال وشركة (${currentCompanyId}) بالكامل. (💡 نصيحة: اضغط على زر '⚙️ مفتاح AI' بالأعلى لإدخال مفتاح Gemini API وتفعيل الذكاء الاصطناعي السحابي المتقدم).`;
+        reply = `أهلاً بك يا ${currentUserAccount} (${currentUserRole})! أنا معاك ومربوط بجلسة الاتصال وشركة (${currentCompanyId}) بالكامل.`;
     }
 }
 
