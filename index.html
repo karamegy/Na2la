@@ -1336,62 +1336,61 @@
             performUnifiedLogin();
         }
 
-        // دوال إدارة وبصمات الأجهزة البيومترية الجديدة
-        async function registerNewUserBiometricDevice() {
-            try {
-                if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                    alert('⚠️ متصفحك أو جهازك لا يدعم مصادقة الـ WebAuthn البيومترية المباشرة.');
-                    return;
-                }
-                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                if (!available) {
-                    alert('⚠️ لا يتوفر قارئ بصمة بيومتري نشط على هذا الجهاز.');
-                    return;
-                }
-
-                const challenge = new Uint8Array(32);
-                window.crypto.getRandomValues(challenge);
-                const userIdUint = new TextEncoder().encode(loggedInDriverName);
-
-                const publicKey = {
-                    challenge: challenge,
-                    rp: { name: "أسطورة الطريق Na2la V10" },
-                    user: {
-                        id: userIdUint,
-                        name: loggedInDriverName,
-                        displayName: loggedInDriverName
-                    },
-                    pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                    timeout: 60000,
-                    attestation: "direct"
-                };
-
-                const credential = await navigator.credentials.create({ publicKey });
-                if (credential) {
-                    const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
-                    let drv = getCurrentDriver();
-                    
-                    let newCredObj = {
-                        id: 'bio_' + Date.now(),
-                        companyId: currentCompanyId,
-                        driverId: drv.id || '1',
-                        driverName: loggedInDriverName,
-                        credentialId: credIdBase64.substring(0, 32) + '...',
-                        type: 'بصمة بيومترية (Platform Authenticator)',
-                        createdAt: new Date().toLocaleString('ar-EG')
-                    };
-
-                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
-                    alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
-                    renderBiometricManagementTable();
-                }
-            } catch (err) {
-                console.error("Biometric registration error:", err);
-                alert('فشل تسجيل البصمة البيومترية: ' + (err.message || 'تم إلغاء العملية'));
-            }
+      async function registerNewUserBiometricDevice() {
+    try {
+        if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+            alert('⚠️ متصفحك أو جهازك لا يدعم مصادقة الـ WebAuthn البيومترية المباشرة.');
+            return;
+        }
+        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        if (!available) {
+            alert('⚠️ لا يتوفر قارئ بصمة بيومتري نشط على هذا الجهاز.');
+            return;
         }
 
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+        const userIdUint = new TextEncoder().encode(loggedInDriverName);
+
+        const publicKey = {
+            challenge: challenge,
+            rp: { name: "أسطورة الطريق Na2la V10" },
+            user: {
+                id: userIdUint,
+                name: loggedInDriverName,
+                displayName: loggedInDriverName
+            },
+            pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+            timeout: 60000,
+            attestation: "direct"
+        };
+
+        const credential = await navigator.credentials.create({ publicKey });
+        if (credential) {
+            const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
+            let drv = getCurrentDriver();
+            
+            let newCredObj = {
+                id: 'bio_' + Date.now(),
+                companyId: currentCompanyId || 'company_main', // التأكد من إرفاق معرف الشركة المعزولة
+                driverId: String(drv.id || '1'),
+                driverName: loggedInDriverName,
+                credentialId: credIdBase64.substring(0, 32) + '...',
+                type: 'بصمة بيومترية (Platform Authenticator)',
+                createdAt: new Date().toLocaleString('ar-EG')
+            };
+
+            // استخدام معرف موثق لتجنب رفض قواعد الأمان
+            await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
+            alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
+            renderBiometricManagementTable();
+        }
+    } catch (err) {
+        console.error("Biometric registration error:", err);
+        alert('فشل تسجيل البصمة البيومترية بسبب الصلاحيات أو الإلغاء: ' + (err.message || 'تم إلغاء العملية'));
+    }
+}
         async function testCurrentBiometricAuth() {
             const passed = await verifyBiometricAuth();
             if (passed) {
@@ -3038,37 +3037,58 @@
         }
 
         async function printConsolidatedInvoice(id) {
-            if (currentUserRole !== 'admin') return;
-            let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
-            if (!inv) {
-                try {
-                    const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
-                    if (docSnap.exists) inv = { id: docSnap.id, ...docSnap.data() };
-                } catch (err) { console.error(err); }
+    let inv = (appData.consolidatedInvoices || []).find(i => String(i.id) === String(id));
+    
+    if (!inv) {
+        try {
+            const docSnap = await db.collection('consolidatedInvoices').doc(String(id)).get();
+            if (docSnap.exists) {
+                inv = { id: docSnap.id, ...docSnap.data() };
             }
-            if (!inv) { alert('لم يتم العثور على الفاتورة.'); return; }
-
-            let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.includes(String(s.id)));
-            let rowsHtml = '';
-            matchingShipments.forEach((s, idx) => {
-                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
-            });
-
-            const win = window.open('', '_blank');
-            win.document.write(`
-                <html lang="ar" dir="rtl">
-                <head><title>فاتورة مجمعة رقم #${inv.id}</title>
-                <style>body{font-family:Tahoma,sans-serif;padding:25px;direction:rtl;text-align:right;}table{width:100%;border-collapse:collapse;margin-top:15px;}th,td{border:1px solid #cbd5e1;padding:8px;text-align:center;font-size:12px;}th{background:#2563eb;color:#fff;}</style></head>
-                <body>
-                    <h2 style="text-align:center;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                    <p><strong>اسم العميل:</strong> ${inv.client}</p>
-                    <table><thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead><tbody>${rowsHtml}</tbody></table>
-                    <h3 style="text-align:left;color:#059669;margin-top:20px;">الإجمالي الكلي: ${inv.total} ج.م</h3>
-                </body></html>
-            `);
-            win.document.close();
-            setTimeout(() => win.print(), 300);
+        } catch (err) {
+            console.error("Error fetching invoice:", err);
         }
+    }
+
+    if (!inv) { 
+        alert('عذراً، لم يتم العثور على بيانات الفاتورة المجمعة المطلوبة.'); 
+        return; 
+    }
+
+    let matchingShipments = (appData.shipments || []).filter(s => inv.shipmentIds && inv.shipmentIds.map(String).includes(String(s.id)));
+    let rowsHtml = '';
+    
+    matchingShipments.forEach((s, idx) => {
+        rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || '-'}</td><td>${s.address || '-'}</td><td>${s.price || 0} ج.م</td></tr>`;
+    });
+
+    const win = window.open('', '_blank');
+    win.document.write(`
+        <html lang="ar" dir="rtl">
+        <head>
+            <title>فاتورة مجمعة رقم #${inv.id}</title>
+            <style>
+                body { font-family: Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 12px; }
+                th { background: #2563eb; color: #fff; }
+            </style>
+        </head>
+        <body>
+            <h2 style="text-align:center; color:#0f172a;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
+            <p><strong>اسم العميل / الشركة:</strong> ${inv.client || '-'}</p>
+            <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد'}</p>
+            <table>
+                <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${inv.total || 0} ج.م</h3>
+        </body>
+        </html>
+    `);
+    win.document.close();
+    setTimeout(() => win.print(), 300);
+}
 
         function deleteConsolidatedInvoice(id) {
             if (currentUserRole !== 'admin') return;
