@@ -1951,10 +1951,14 @@
             }, 300);
         }
 
-// دالة الاستماع السحابي المعدلة والمحسنة لتقليل القراءات وتوفير التكلفة
+let activeListeners = [];
+
 function initRealtimeListeners() {
-    if (isListenersInitialized) return;
-    isListenersInitialized = true;
+    // إلغاء أي اشتراكات سابقة لمنع تداخل بيانات الشركات القديمة والجديدة
+    if (activeListeners.length > 0) {
+        activeListeners.forEach(unsubscribe => unsubscribe());
+        activeListeners = [];
+    }
 
     const collections = [
         'shipments', 'deferredInvoices', 'consolidatedInvoices', 
@@ -1965,43 +1969,45 @@ function initRealtimeListeners() {
     collections.forEach(colName => {
         let queryRef = db.collection(colName);
         
-        // إذا لم يكن المستخدم هو "المدير" الأساسي، نقوم بالتصفية سحابياً حسب معرف الشركة الحالي
-        // هذا يمنع تحميل بيانات باقي الشركات ويوفر عمليات القراءة (Reads) بشكل جذري
+        // تصفية سحابية بناءً على الشركة الحالية (باستثناء المدير الأساسي)
         if (loggedInDriverName !== 'المدير' && currentCompanyId) {
             queryRef = queryRef.where('companyId', '==', currentCompanyId);
         }
 
-        queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+        const unsubscribe = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
             let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            // تخزين البيانات المصففة سحابياً مباشرة في الذاكرة المؤقتة
             appData[colName] = rawData;
             
             scheduleSmartRender();
 
             if (typeof renderChatMessages === 'function') renderChatMessages();
             if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab') && document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-            if (document.getElementById('reports-tab') && document.getElementById('reports-tab').classList.contains('active')) {
+            if (document.getElementById('deferred-invoices-tab')?.classList.contains('active')) loadDeferredInvoicesTable();
+            if (document.getElementById('reports-tab')?.classList.contains('active')) {
                 renderMemberSubscriptionsList();
                 renderAdminPendingCashRequests();
                 renderCompanyAdminSubscriptionView();
             }
-            if (document.getElementById('companies-tab') && document.getElementById('companies-tab').classList.contains('active')) {
+            if (document.getElementById('companies-tab')?.classList.contains('active')) {
                 renderCompaniesManagementTable();
             }
         }, error => {
             console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
         });
+
+        // تخزين دالة الإلغاء لتنظيف الذاكرة لاحقاً
+        activeListeners.push(unsubscribe);
     });
 
-    // استماع إعدادات النظام العامة
-    db.collection('systemSettings').doc('config').onSnapshot(doc => {
+    // استماع إعدادات النظام العامة وتخزين اشتراكها
+    const configUnsubscribe = db.collection('systemSettings').doc('config').onSnapshot(doc => {
         if (doc.exists && doc.data().newsText) {
             appData.newsText = doc.data().newsText;
             renderRSSTicker();
         }
     });
+    activeListeners.push(configUnsubscribe);
 }
 
 
