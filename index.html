@@ -2004,11 +2004,11 @@
             });
         }
 
-        // دالة تجميع ومزامنة العملاء تلقائياً من الشحنات والفواتير والديون
+        // دالة تجميع ومزامنة العملاء والديون حصرياً من الفواتير الآجلة لمنع أي تضارب أو ازدواجية
         function syncCustomersData() {
             let customerMap = {};
             
-            // سحب البيانات من الشحنات المسجلة
+            // 1. تسجيل عدد الشحنات وأرقام الهواتف للعملاء من جدول الشحنات
             (appData.shipments || []).forEach(s => {
                 if (s.name) {
                     let key = s.name.trim();
@@ -2016,32 +2016,21 @@
                         customerMap[key] = { id: key, name: key, phone: s.phone || '', debt: 0, shipmentsCount: 0 };
                     }
                     customerMap[key].shipmentsCount++;
-                    if (s.paymentStatus === 'deferred') {
-                        customerMap[key].debt += Number(s.price || 0);
-                    }
+                    if (s.phone && !customerMap[key].phone) customerMap[key].phone = s.phone;
                 }
             });
 
-            // سحب وتحديث المديونيات من الفواتير الآجلة
+            // 2. احتساب المديونيات حصرياً من الفواتير الآجلة غير المسددة لمنع الازدواجية أو التضارب
             (appData.deferredInvoices || []).forEach(inv => {
                 if (inv.clientName) {
                     let key = inv.clientName.trim();
                     if (!customerMap[key]) {
                         customerMap[key] = { id: key, name: key, phone: inv.clientPhone || '', debt: 0, shipmentsCount: 0 };
                     }
+                    if (inv.clientPhone && !customerMap[key].phone) customerMap[key].phone = inv.clientPhone;
                     if (inv.status !== 'paid') {
                         customerMap[key].debt += Number(inv.remainingAmount || 0);
                     }
-                }
-            });
-
-            // دمج العملاء المحفوظين مسبقاً للحفاظ على أي تعديلات يدوية
-            (appData.customers || []).forEach(c => {
-                if (c.name && customerMap[c.name.trim()]) {
-                    customerMap[c.name.trim()].debt = Math.max(customerMap[c.name.trim()].debt, Number(c.debt || 0));
-                    if(c.phone) customerMap[c.name.trim()].phone = c.phone;
-                } else if (c.name) {
-                    customerMap[c.name.trim()] = c;
                 }
             });
 
@@ -3032,6 +3021,8 @@
                     inv.status = 'paid';
                 }
                 db.collection('deferredInvoices').doc(String(inv.id)).set(inv, { merge: true });
+                syncCustomersData();
+                render();
                 alert('تم تسجيل الدفع وتحديث المديونية بنجاح! 💵');
             }
         }
@@ -3042,7 +3033,10 @@
                 return;
             }
             if (confirm('هل أنت متأكد من حذف هذه الفاتورة الآجلة؟')) {
-                db.collection('deferredInvoices').doc(String(id)).delete();
+                db.collection('deferredInvoices').doc(String(id)).delete().then(() => {
+                    syncCustomersData();
+                    render();
+                });
             }
         }
 
