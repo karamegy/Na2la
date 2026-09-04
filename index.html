@@ -1415,12 +1415,22 @@
             }
         }
 
+        let biometricUnsubscribe = null;
         function renderBiometricManagementTable() {
             const tbody = document.getElementById('biometric-credentials-table-body');
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.collection('biometricCredentials').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            if (biometricUnsubscribe) {
+                biometricUnsubscribe();
+            }
+
+            let queryRef = db.collection('biometricCredentials');
+            if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
+                queryRef = queryRef.where('companyId', '==', currentCompanyId);
+            }
+
+            biometricUnsubscribe = queryRef.onSnapshot(snapshot => {
                 tbody.innerHTML = '';
                 let list = [];
                 snapshot.forEach(doc => {
@@ -1703,12 +1713,17 @@
             }
         }
 
+        let cashReqUnsubscribe = null;
         function renderAdminPendingCashRequests() {
             if (loggedInDriverName !== 'المدير') return;
             const container = document.getElementById('admin-pending-cash-requests');
             if (!container) return;
 
-            db.collection('subscription_requests').where('status', '==', 'pending').onSnapshot(snapshot => {
+            if (cashReqUnsubscribe) {
+                cashReqUnsubscribe();
+            }
+
+            cashReqUnsubscribe = db.collection('subscription_requests').where('status', '==', 'pending').onSnapshot(snapshot => {
                 container.innerHTML = '';
                 if (snapshot.empty) {
                     container.innerHTML = '<p style="font-size:10px; opacity:0.8; text-align:center;">لا توجد طلبات تجديد كاش معلقة حالياً.</p>';
@@ -1951,7 +1966,8 @@
             }, 300);
         }
 
-        // الاستماع الفوري السحابي مع إضافة 'customers' لتحديث العملاء تلقائياً
+        // إدارة مستمعي Firebase بكفاءة لمنع استنزاف القراءات وتكرار الاتصالات
+        let activeListeners = {};
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
             isListenersInitialized = true;
@@ -1964,7 +1980,11 @@
                     queryRef = queryRef.where('companyId', '==', currentCompanyId);
                 }
                 
-                queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                if (activeListeners[colName]) {
+                    activeListeners[colName](); // إلغاء الاستماع القديم لمنع التكرار واستنزاف القراءات
+                }
+
+                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
                     if (colName === 'communityPosts') {
@@ -1995,7 +2015,10 @@
                 });
             });
 
-            db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if (activeListeners['systemSettings']) {
+                activeListeners['systemSettings']();
+            }
+            activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
                 if (doc.exists && doc.data().newsText) {
                     appData.newsText = doc.data().newsText;
                     renderRSSTicker();
@@ -3891,7 +3914,6 @@
                 reader.readAsDataURL(videoFiles[i]);
             }
         }
-
         function renderPublicPosts() {
             const feed = document.getElementById('public-posts-feed');
             if (!feed) return;
