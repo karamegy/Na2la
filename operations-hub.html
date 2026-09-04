@@ -492,7 +492,7 @@ transform: translateY(-2px);
 </div>
 </div>
 
-<!-- نافذة رفع صور وإيصالات ومستندات الأسطول (مع دعم المعرض وملفات الهاتف بدون كاميرا إجبارية) -->
+<!-- نافذة رفع صور وإيصالات ومستندات الأسطول -->
 <div class="page-modal-overlay" id="modalReceiptOCR">
 <div class="page-modal-content">
 <button class="modal-close-btn" onclick="closeModal('modalReceiptOCR')">إغلاق ✕</button>
@@ -539,7 +539,7 @@ transform: translateY(-2px);
 </div>
 </div>
 
-<!-- نافذة الصيانة التنبؤية الشاملة وتنبيهات الكيلومترات التراكمية -->
+<!-- نافذة الصيانة التنبؤية الشاملة -->
 <div class="page-modal-overlay" id="modalMaintenance">
 <div class="page-modal-content">
 <button class="modal-close-btn" onclick="closeModal('modalMaintenance')">إغلاق ✕</button>
@@ -623,12 +623,12 @@ transform: translateY(-2px);
 </div>
 </div>
 
-<!-- زر فتح مساعد غرفة العمليات العائم (تحالف الحصان والباندا Pro Max) -->
+<!-- زر فتح مساعد غرفة العمليات العائم -->
 <button onclick="toggleOpsAiChat()" style="position: fixed; bottom: 100px; left: 20px; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); color: white; border: none; width: 55px; height: 55px; border-radius: 50%; font-size: 24px; cursor: pointer; box-shadow: var(--shadow-3d); z-index: 1500; display: flex; align-items: center; justify-content: center; transition: transform 0.3s;" title="🐼 رفيقك الحصان والباندا Pro Max 🐎">
     🐼
 </button>
 
-<!-- نافذة الدردشة الخاصة بالمساعد الذكي المزود بـ Gemini API -->
+<!-- نافذة الدردشة الخاصة بالمساعد الذكي -->
 <div id="opsAiChatModal" style="position: fixed; bottom: 170px; left: 20px; width: 380px; max-width: 90vw; height: 580px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: var(--shadow-3d); z-index: 1600; display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(15px);">
     <div style="background: var(--primary-color); color: white; padding: 12px 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
         <span>🐼 الحصان والباندا Pro Max (Gemini API) 🐎</span>
@@ -697,6 +697,25 @@ let cachedLogisticsData = [];
 let cachedFinanceData = [];
 let currentLatestLat = 30.0444;
 let currentLatestLng = 31.2357;
+
+// متغيرات إلغاء المستمعات لمنع استنزاف القراءات
+let unsubFleet = null;
+let unsubLogistics = null;
+let unsubFinance = null;
+let unsubWallet = null;
+let unsubAdvances = null;
+let unsubSubs = null;
+let unsubRadio = null;
+
+window.addEventListener('beforeunload', () => {
+    if (unsubFleet) unsubFleet();
+    if (unsubLogistics) unsubLogistics();
+    if (unsubFinance) unsubFinance();
+    if (unsubWallet) unsubWallet();
+    if (unsubAdvances) unsubAdvances();
+    if (unsubSubs) unsubSubs();
+    if (unsubRadio) unsubRadio();
+});
 
 function openModal(modalId) {
 document.getElementById(modalId).classList.add('active');
@@ -1029,7 +1048,7 @@ async function loadRouteHistoryData() {
         showLiveToast("🗺️ تم استرجاع سجل المسار التاريخي بنجاح!");
     } catch(err) {
         console.error("Route history permission error:", err);
-        container.innerHTML = `<span style="color: var(--danger-color);">⚠️ تعذر جلب سجل المسار بسبب قيود صلاحيات الأمان (Firestore Rules). يرجى السماح بالقراءة لمجموعة viper_gps_live في وحدة تحكم Firebase.</span>`;
+        container.innerHTML = `<span style="color: var(--danger-color);">⚠️ تعذر جلب سجل المسار بسبب قيود صلاحيات الأمان (Firestore Rules).</span>`;
     }
 }
 
@@ -1094,7 +1113,7 @@ function makePhoneCall(phoneNumber) {
 }
 
 function triggerSosEmergency() {
-    let sosMsg = `🚨 تنبيه طوارئ عاجل من الحساب النشط (${currentUserAccount}) للشركة (${currentCompanyId})! تم تفعيل نداء الاستغاثة وسحب الإحداثيات الجغرافية للشاحنة وإخطار طاقم العمليات والطوارئ فوراً.`;
+    let sosMsg = `🚨 تنبيه طوارئ عاجل من الحساب النشط (${currentUserAccount}) للشركة (${currentCompanyId})!`;
     showLiveToast(sosMsg);
     speakBotResponse("تم إطلاق نداء الطوارئ والاستغاثة بنجاح، إحداثياتك يتم بثها الآن.");
     
@@ -1114,7 +1133,6 @@ function calculateTripProfit() {
     showLiveToast("💰 تم حساب صافي الربح بدقة.");
 }
 
-// دالة رفع ومعالجة الصور أو المستندات المختارة من المعرض أو الملفات مع ضغط آمن
 function processReceiptOCR() {
     let fileInput = document.getElementById("receiptImageInput");
     let box = document.getElementById("ocrResultBox");
@@ -1134,22 +1152,13 @@ function processReceiptOCR() {
             img.onload = function() {
                 let canvas = document.createElement('canvas');
                 let ctx = canvas.getContext('2d');
-                
-                let maxWidth = 800;
-                let maxHeight = 800;
-                let width = img.width;
-                let height = img.height;
+                let maxWidth = 800, maxHeight = 800;
+                let width = img.width, height = img.height;
 
                 if (width > height) {
-                    if (width > maxWidth) {
-                        height *= maxWidth / width;
-                        width = maxWidth;
-                    }
+                    if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
                 } else {
-                    if (height > maxHeight) {
-                        width *= maxHeight / height;
-                        height = maxHeight;
-                    }
+                    if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
                 }
 
                 canvas.width = width;
@@ -1176,23 +1185,19 @@ function processReceiptOCR() {
 
                     box.innerHTML = `
                         <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-color); padding: 10px; border-radius: 8px;">
-                            <b style="color: var(--accent-color);">✔ تم إدراج الصورة وضغطها بنجاح دون إجهاد الذاكرة!</b><br>
+                            <b style="color: var(--accent-color);">✔ تم إدراج الصورة وضغطها بنجاح!</b><br>
                             - اسم الملف: ${simulatedVendor}<br>
-                            - المبلغ المستخرج: <b style="color: var(--warning-color);">${Math.abs(simulatedCost)} ج.م (مصروف معتمد)</b><br>
-                            - تم تحديث السجلات المالية الاستباقية للشركة.
+                            - المبلغ المستخرج: <b style="color: var(--warning-color);">${Math.abs(simulatedCost)} ج.م (مصروف معتمد)</b>
                         </div>
                     `;
                     showLiveToast("📁 تم رفع ومعالجة المستند بنجاح!");
-                    if (typeof speakBotResponse === 'function') {
-                        speakBotResponse("رفعت المستند وضغطت صورته وتم إضافته للحسابات المالية.");
-                    }
+                    speakBotResponse("رفعت المستند وضغطت صورته وتم إضافته للحسابات المالية.");
                 }, 1000);
             };
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
     } else {
-        // معالجة الملفات الأخرى (مثل PDF أو المستندات)
         setTimeout(() => {
             let simulatedVendor = file.name || "مستند PDF معتمد";
             let simulatedCost = -400;
@@ -1210,16 +1215,13 @@ function processReceiptOCR() {
 
             box.innerHTML = `
                 <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-color); padding: 10px; border-radius: 8px;">
-                    <b style="color: var(--accent-color);">✔ تم رفع المستند (PDF/ملف) بنجاح!</b><br>
+                    <b style="color: var(--accent-color);">✔ تم رفع المستند بنجاح!</b><br>
                     - اسم الملف: ${simulatedVendor}<br>
-                    - المبلغ المقدر: <b style="color: var(--warning-color);">${Math.abs(simulatedCost)} ج.م</b><br>
-                    - تم تسجيل المستند في سحابة الشركة.
+                    - المبلغ المقدر: <b style="color: var(--warning-color);">${Math.abs(simulatedCost)} ج.م</b>
                 </div>
             `;
             showLiveToast("📄 تم رفع المستند بنجاح!");
-            if (typeof speakBotResponse === 'function') {
-                speakBotResponse("تم رفع المستند بنجاح وإضافته للحسابات المالية.");
-            }
+            speakBotResponse("تم رفع المستند بنجاح وإضافته للحسابات المالية.");
         }, 1000);
     }
 }
@@ -1229,13 +1231,13 @@ function checkRouteWeather() {
     let box = document.getElementById("weatherResultBox");
     let report = "";
     if (city === 'cairo') {
-        report = "🌤️ القاهرة الكبرى: الطقس مستقر، الحرارة 34°C، حركة المرور على الدائري ممتازة ولا توجد شبورة معوقة.";
+        report = "🌤️ القاهرة الكبرى: الطقس مستقر، الحرارة 34°C، حركة المرور ممتازة.";
     } else if (city === 'alex') {
-        report = "🌊 الإسكندرية والساحل: طقس صيفي لطيف، حرارة 30°C، سرعة الرياح معتدلة والطريق الساحلي مفتوح تماماً.";
+        report = "🌊 الإسكندرية والساحل: طقس صيفي لطيف، حرارة 30°C.";
     } else if (city === 'aswan') {
-        report = "☀️ أسوان والصعيد: طقس حار نهاراً (41°C)، يرجى التأكد من تبريد الرداتير ومياه المحرك بانتظام.";
+        report = "☀️ أسوان والصعيد: طقس حار نهاراً (41°C).";
     } else {
-        report = "⚠️ طريق البحر الأحمر: تحذير من هبوب رياح خفيفة وزيادة في حركة الشاحنات، يرجى الالتزام بالسرعات المقررة.";
+        report = "⚠️ طريق البحر الأحمر: تحذير من هبوب رياح خفيفة وزيادة في حركة الشاحنات.";
     }
     box.innerHTML = report;
     speakBotResponse("تم تحديث تقارير الطقس وحالة الطرق فوراً.");
@@ -1250,7 +1252,7 @@ if (activeLeafletMap) {
 activeLeafletMap = L.map('liveMapContainer').setView([30.0444, 31.2357], 7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '© Na2la Maps Pro Max (Panda & Horse OS)'
+    attribution: '© Na2la Maps Pro Max'
 }).addTo(activeLeafletMap);
 
 L.marker([31.2001, 29.9187]).addTo(activeLeafletMap).bindPopup('<b>موقع التحميل:</b> ميناء الإسكندرية').openPopup();
@@ -1261,8 +1263,17 @@ function initCloudSyncWithIsolation() {
 const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
 const dbInst = window.db;
 
-const qFleet = query(collection(dbInst, "viper_fleet_ops"), where("companyId", "==", currentCompanyId), limit(50));
-onSnapshot(qFleet, (snapshot) => {
+// إلغاء أي مستمعات قديمة سابقة لمنع التكرار
+if (unsubFleet) unsubFleet();
+if (unsubLogistics) unsubLogistics();
+if (unsubFinance) unsubFinance();
+if (unsubWallet) unsubWallet();
+if (unsubAdvances) unsubAdvances();
+if (unsubSubs) unsubSubs();
+if (unsubRadio) unsubRadio();
+
+const qFleet = query(collection(dbInst, "viper_fleet_ops"), where("companyId", "==", currentCompanyId), limit(30));
+unsubFleet = onSnapshot(qFleet, (snapshot) => {
 let container = document.getElementById("fleetContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1275,12 +1286,12 @@ snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
 list.sort((a, b) => b.timestamp - a.timestamp);
 
 list.forEach((item) => {
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${item.truck}</b>: ${item.mission} <br><small style="color:var(--accent-color);">👤 السائق: ${item.driver || 'غير محدد'} | الشركة: ${item.companyId}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_fleet_ops', '${item.id}')">حذف</button></div>`;
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${item.truck}</b>: ${item.mission} <br><small style="color:var(--accent-color);">👤 السائق: ${item.driver || 'غير محدد'}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_fleet_ops', '${item.id}')">حذف</button></div>`;
 });
-}, (err) => { console.error("Fleet snapshot error:", err); });
+});
 
-const qLogistics = query(collection(dbInst, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(50));
-onSnapshot(qLogistics, (snapshot) => {
+const qLogistics = query(collection(dbInst, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(30));
+unsubLogistics = onSnapshot(qLogistics, (snapshot) => {
 let container = document.getElementById("logisticsContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1301,20 +1312,18 @@ container.innerHTML += `<div class="item-row" style="padding:8px 0; border-botto
     <div><b>العميل:</b> ${m.client} (${m.cargo}) <br><small style="color:var(--secondary-text);">هاتف: ${m.phone || 'غير مسجل'} | التحصيل: ${m.paymentMethod || 'نقدي'}</small></div>
     <div style="color:var(--accent-color); font-size:11px;">📍 التحميل: ${m.loadLocation || 'غير محدد'}</div>
     <div style="color:var(--warning-color); font-size:11px;">🎯 التفريغ: ${m.unloadLocation || 'غير محدد'}</div>
-    <div style="color:var(--primary-color); font-size:11px;">👤 السائق المسؤول: ${m.driver || 'عام'}</div>
     <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
-        <button class="btn-submit" style="background: var(--accent-color); font-size: 10px; padding: 4px; margin:0; width:auto;" onclick="sendWhatsAppClientNotification('${m.client}', '${m.phone}', '${m.cargo}', '${m.loadLocation}', '${m.unloadLocation}')">💬 إرسال واتساب للعميل</button>
-        <button class="btn-submit" style="background: var(--primary-color); font-size: 10px; padding: 4px; margin:0; width:auto;" onclick="makePhoneCall('+201114099799')">📞 اتصال</button>
+        <button class="btn-submit" style="background: var(--accent-color); font-size: 10px; padding: 4px; margin:0; width:auto;" onclick="sendWhatsAppClientNotification('${m.client}', '${m.phone}', '${m.cargo}', '${m.loadLocation}', '${m.unloadLocation}')">💬 واتساب</button>
         <button class="btn-action-del" style="width:auto; padding:2px 8px;" onclick="deleteCloudItem('viper_logistics', '${m.id}')">حذف</button>
     </div>
 </div>`;
 });
 let scoreEl = document.getElementById("driverScoreDisplay");
 if(scoreEl) scoreEl.innerText = Math.min(99, 90 + tripCount * 2) + "%";
-}, (err) => { console.error("Logistics snapshot error:", err); });
+});
 
-const qFinance = query(collection(dbInst, "viper_finance"), where("companyId", "==", currentCompanyId), limit(50));
-onSnapshot(qFinance, (snapshot) => {
+const qFinance = query(collection(dbInst, "viper_finance"), where("companyId", "==", currentCompanyId), limit(30));
+unsubFinance = onSnapshot(qFinance, (snapshot) => {
 let container = document.getElementById("financeContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1337,28 +1346,25 @@ container.innerHTML += `<div class="item-row" style="display:flex; justify-conte
 let totalOut = document.getElementById("totalFinanceOutput");
 if(totalOut) totalOut.innerText = `صافي الحركات المالية للشركة: ${total} ج.م`;
 evaluateFinancialAnalytics(cachedFinanceData);
-}, (err) => { console.error("Finance snapshot error:", err); });
+});
 
-const qWallet = query(collection(dbInst, "viper_wallet"), where("companyId", "==", currentCompanyId), limit(20));
-onSnapshot(qWallet, (snapshot) => {
+const qWallet = query(collection(dbInst, "viper_wallet"), where("companyId", "==", currentCompanyId), limit(15));
+unsubWallet = onSnapshot(qWallet, (snapshot) => {
 let container = document.getElementById("walletContainer");
 if (!container) return;
 container.innerHTML = "";
 if (snapshot.empty) {
-container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد مستندات مسجلة في محفظتك الشخصية.</div>`;
+container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد مستندات مسجلة.</div>`;
 return;
 }
-let list = [];
-snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
-list.sort((a, b) => b.timestamp - a.timestamp);
-
-list.forEach((d) => {
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${d.name}</b> <br><small style="color:var(--warning-color);">انتهاء: ${d.expiry}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_wallet', '${d.id}')">حذف</button></div>`;
+snapshot.forEach((docSnap) => {
+let d = docSnap.data();
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>${d.name}</b> <br><small style="color:var(--warning-color);">انتهاء: ${d.expiry}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_wallet', '${docSnap.id}')">حذف</button></div>`;
 });
-}, (err) => { console.error("Wallet snapshot error:", err); });
+});
 
-const qAdvances = query(collection(dbInst, "viper_advances"), where("companyId", "==", currentCompanyId), limit(20));
-onSnapshot(qAdvances, (snapshot) => {
+const qAdvances = query(collection(dbInst, "viper_advances"), where("companyId", "==", currentCompanyId), limit(15));
+unsubAdvances = onSnapshot(qAdvances, (snapshot) => {
 let container = document.getElementById("advancesContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1366,17 +1372,14 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد سلف أو عهد نثرية مسجلة.</div>`;
 return;
 }
-let list = [];
-snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
-list.sort((a, b) => b.timestamp - a.timestamp);
-
-list.forEach((ad) => {
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>السائق: ${ad.driver}</b> - المبلغ: <span style="color:var(--warning-color);">${ad.amount} ج.م</span><br><small style="color:var(--secondary-text);">${ad.reason}</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_advances', '${ad.id}')">حذف</button></div>`;
+snapshot.forEach((docSnap) => {
+let ad = docSnap.data();
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>السائق: ${ad.driver}</b> - المبلغ: <span style="color:var(--warning-color);">${ad.amount} ج.م</span></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_advances', '${docSnap.id}')">حذف</button></div>`;
 });
-}, (err) => { console.error("Advances snapshot error:", err); });
+});
 
-const qSubs = query(collection(dbInst, "viper_subcontractors"), where("companyId", "==", currentCompanyId), limit(20));
-onSnapshot(qSubs, (snapshot) => {
+const qSubs = query(collection(dbInst, "viper_subcontractors"), where("companyId", "==", currentCompanyId), limit(15));
+unsubSubs = onSnapshot(qSubs, (snapshot) => {
 let container = document.getElementById("subContractorsContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1384,16 +1387,15 @@ if (snapshot.empty) {
 container.innerHTML = `<div style='text-align:center; color:var(--secondary-text); padding: 8px;'>لا توجد شحنات مسجلة لمقاولي باطن.</div>`;
 return;
 }
-let list = [];
-snapshot.forEach(docSnap => list.push({ id: docSnap.id, ...docSnap.data() }));
-list.sort((a, b) => b.timestamp - a.timestamp);
-
-list.forEach((sb) => {
-container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>المقاول: ${sb.name}</b> (${sb.truckNo})<br><small style="color:var(--accent-color);">المستحقات: ${sb.dues} ج.م</small></div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_subcontractors', '${sb.id}')">حذف</button></div>`;
+snapshot.forEach((docSnap) => {
+let sb = docSnap.data();
+container.innerHTML += `<div class="item-row" style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);"><div><b>المقاول: ${sb.name}</b> (${sb.truckNo})</div><button class="btn-action-del" style="width:auto; padding:3px 10px;" onclick="deleteCloudItem('viper_subcontractors', '${docSnap.id}')">حذف</button></div>`;
 });
-}, (err) => { console.error("Subcontractors snapshot error:", err); });
+});
 
-onSnapshot(collection(dbInst, "viper_radio_alerts"), (snapshot) => {
+// تقييد استماع راديو المجتمع بفلتر الشركة وحد أقصى (limit 15) بدل الاستماع المفتوح
+const qRadio = query(collection(dbInst, "viper_radio_alerts"), where("companyId", "==", currentCompanyId), limit(15));
+unsubRadio = onSnapshot(qRadio, (snapshot) => {
 let container = document.getElementById("radioContainer");
 if (!container) return;
 container.innerHTML = "";
@@ -1405,7 +1407,7 @@ snapshot.forEach((docSnap) => {
 let r = docSnap.data();
 container.innerHTML += `<div class="item-row" style="padding:8px 0; border-bottom:1px solid var(--border-color);"><div>🚨 <b>${r.alert}</b> <br><small style="color:var(--secondary-text);">بواسطة: ${r.owner || 'سائق بالأسطول'}</small></div></div>`;
 });
-}, (err) => { console.error("Radio snapshot error:", err); });
+});
 }
 
 async function deleteCloudItem(collectionName, docId) {
@@ -1448,7 +1450,7 @@ let payload = { client, phone, cargo, loadLocation, unloadLocation, driver, paym
 
 if (!navigator.onLine) {
     queueOfflineAction('viper_logistics', payload);
-    showLiveToast("💾 تم حفظ الشحنة محلياً (وضع عدم الاتصال).");
+    showLiveToast("💾 تم حفظ الشحنة محلياً.");
     document.getElementById("logisticsForm").reset();
     return;
 }
@@ -1507,15 +1509,6 @@ if ('speechSynthesis' in window) {
     utterance.lang = 'ar-EG';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
-    
-    utterance.onend = function() {
-        if (isContinuousVoiceActive) {
-            setTimeout(() => {
-                startVoiceInput();
-            }, 600);
-        }
-    };
-
     window.speechSynthesis.speak(utterance);
 }
 }
@@ -1540,7 +1533,7 @@ let btn = document.getElementById('continuousVoiceBtn');
 if (isContinuousVoiceActive) {
     btn.innerText = "🎤 المحادثة المستمرة: مفعلة";
     btn.style.background = "var(--accent-color)";
-    showLiveToast("🎙️ وضع Walkie-Talkie مفعل: تحدث وسيرد عليك ويستمع لك تلقائياً");
+    showLiveToast("🎙️ وضع Walkie-Talkie مفعل");
     startVoiceInput();
 } else {
     btn.innerText = "🎤 المحادثة المستمرة: متوقفة";
@@ -1596,8 +1589,8 @@ messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
 let reply = "";
 let apiKey = localStorage.getItem('na2la_gemini_api_key');
-
 let lowerText = text.toLowerCase();
+
 if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف')) {
     let numbers = text.match(/\d+/);
     let amount = numbers ? Number(numbers[0]) : 100;
@@ -1613,13 +1606,10 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
             timestamp: Date.now()
         });
     }
-    reply = `✔ تم تنفيذ الأمر الصوتي وتسجيل مصروف بقيمة ${amount} جنيه (${itemDesc}) في مالية شركتك!`;
-} else if (lowerText.includes('طوارئ') || lowerText.includes('sos') || lowerText.includes('الحقني')) {
-    reply = `🚨 تم تفعيل نظام الاستغاثة الفوري سحابياً للجلسة النشطة! يتم الآن إرسال إحداثيات موقعك لطاقم الطوارئ.`;
+    reply = `✔ تم تنفيذ الأمر الصوتي وتسجيل مصروف بقيمة ${amount} جنيه (${itemDesc})!`;
+} else if (lowerText.includes('طوارئ') || lowerText.includes('sos')) {
+    reply = `🚨 تم تفعيل نظام الاستغاثة الفوري سحابياً!`;
     setTimeout(() => { triggerSosEmergency(); }, 800);
-} else if (lowerText.includes('اتصل') || lowerText.includes('كلم') || lowerText.includes('رقم')) {
-    reply = `📞 جاري فتح شاشة الاتصال الهاتفي فوراً.`;
-    setTimeout(() => { makePhoneCall("+201114099799"); }, 1000);
 } else if (apiKey) {
     messagesContainer.innerHTML += `<div id="aiTypingIndicator" style="background: var(--bg-color); color: var(--secondary-text); padding: 6px 10px; border-radius: 8px; align-self: flex-start; font-size: 11px;">🤖 جاري التفكير عبر Gemini AI...</div>`;
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -1628,7 +1618,7 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
         let promptPayload = {
             contents: [{
                 parts: [{
-                    text: `أنت مساعد تشغيلي ذكي لمنصة "نقلة" (تحالف الحصان والباندا). المستخدم الحالي هو "${currentUserAccount}" بدور "${currentUserRole}" تابع للشركة ذات المعرف "${currentCompanyId}". أجب باختصار واحترافية لمسائل اللوجستيات والشحن والأسطول. السؤال أو الأمر هو: ${text}`
+                    text: `أنت مساعد تشغيلي ذكي لمنصة "نقلة". المستخدم "${currentUserAccount}" بدور "${currentUserRole}" تابع للشركة "${currentCompanyId}". السؤال: ${text}`
                 }]
             }]
         };
@@ -1646,20 +1636,18 @@ if (lowerText.includes('سجل مصروف') || lowerText.includes('مصروف'))
         if (data.candidates && data.candidates[0].content.parts[0].text) {
             reply = data.candidates[0].content.parts[0].text;
         } else {
-            reply = "عذراً، لم أستطع معالجة الرد عبر Gemini API، تأكد من صحة المفتاح.";
+            reply = "عذراً، لم أستطع معالجة الرد عبر Gemini API.";
         }
     } catch (err) {
         let typingEl = document.getElementById('aiTypingIndicator');
         if (typingEl) typingEl.remove();
-        reply = "⚠️ حدث خطأ في الاتصال بخدمة Gemini API الخارجية: " + err.message;
+        reply = "⚠️ حدث خطأ في الاتصال بخدمة Gemini API: " + err.message;
     }
 } else {
-    if (lowerText.includes('تعبان') || lowerText.includes('إرهاق') || lowerText.includes('دایخ') || lowerText.includes('مجهد')) {
-        reply = `سلامتك ألف سلامة! حاسس بيك والله والضغط عالي. استهدى بالله كده، وريحلك عشر دقائق وشرب قهوتك، الشغل مستنيك!`;
-    } else if (lowerText.includes('شحنة') || lowerText.includes('شحنات') || lowerText.includes('موقع')) {
-        reply = `📦 يا ${currentUserAccount}، شحناتك ومقرات التحميل والتفريغ معزولة ومسجلة حصرياً لشركتك برقم (${currentCompanyId}).`;
+    if (lowerText.includes('تعبان') || lowerText.includes('إرهاق')) {
+        reply = `سلامتك ألف سلامة! ريحلك عشر دقائق وشرب قهوتك، الشغل مستنيك!`;
     } else {
-        reply = `أهلاً بك يا ${currentUserAccount} (${currentUserRole})! أنا معاك ومربوط بجلسة الاتصال وشركة (${currentCompanyId}) بالكامل.`;
+        reply = `أهلاً بك يا ${currentUserAccount}! أنا معاك ومربوط بشركة (${currentCompanyId}) بالكامل.`;
     }
 }
 
