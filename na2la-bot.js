@@ -667,7 +667,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    // دالة الجلب المحدثة لضمان التوافق المستقبلي وتوفير القراءات بنظام (Cache + Where + Limit)
+    // [إصلاح رئيسي]: دالة الجلب المحدثة التي تتيح للزائر جلب الشحنات للتتبع برقمها
     window.fetchRealFirebaseData = async function(force = false) {
         let now = Date.now();
         if (!force && window._lastFirebaseFetchTime && (now - window._lastFirebaseFetchTime < 180000)) {
@@ -680,6 +680,12 @@
                 let tenant = getActiveTenantContext();
                 
                 if (tenant.activeRole === 'visitor') {
+                    try {
+                        const shipmentsSnap = await db.collection('shipments').limit(200).get();
+                        if (!shipmentsSnap.empty) {
+                            realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        }
+                    } catch(e) {}
                     window._lastFirebaseFetchTime = now;
                     return;
                 }
@@ -785,8 +791,10 @@
         return subData;
     };
 
+    // [إصلاح رئيسي]: دالة مطابقة الشركة للزوار
     window.matchesCompany = function(item) {
         let tenant = getActiveTenantContext();
+        if (tenant.activeRole === 'visitor') return true; // السماح للزائر بمطابقة البحث برقم الشحنة لأي شركة
         if (!item) return false;
         let itemComp = String(item.companyId || 'company_main').trim().toLowerCase();
         let activeComp = String(tenant.activeCompanyId || 'company_main').trim().toLowerCase();
@@ -1152,7 +1160,7 @@
             if (lower.includes('كيف') || lower.includes('شحنة') || lower.includes('تتبع')) {
                 botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
             } else {
-                botReply = `⚠️ عذراً يا زائرنا الكريم، حسابك مخصص لتتبع الشحنات برقمها فقط. يرجى إدخال <b>رقم الشحنة الصحيح</b> للاستعلام عنها.`;
+                botReply = `⚠️ عذراً يا زائرنا الكريم، لم يتم العثور على شحنة بهذا الرقم ("${text}"). يرجى التحقق من رقم الشحنة الصحيح والمحاولة مرة أخرى.`;
             }
         }
         else if (lower.includes('اختبار القيادة')) {
