@@ -2047,6 +2047,41 @@
             appData.customers = Object.values(customerMap);
         }
 
+        function collectCustomerDebt(clientName) {
+            let amount = prompt(`أدخل المبلغ المراد تحصيله من العميل (${clientName}):`);
+            if (amount !== null && !isNaN(amount) && Number(amount) > 0) {
+                let payVal = Number(amount);
+                
+                let newTreasuryId = String(Date.now());
+                let treasuryItem = {
+                    id: newTreasuryId,
+                    companyId: currentCompanyId,
+                    type: 'in',
+                    amount: payVal,
+                    desc: `تحصيل مديونية من العميل: ${clientName}`,
+                    date: new Date().toLocaleDateString('ar-EG')
+                };
+                db.collection('treasury').doc(newTreasuryId).set(treasuryItem);
+
+                (appData.deferredInvoices || []).forEach(inv => {
+                    if (inv.clientName && inv.clientName.trim() === clientName.trim() && inv.status !== 'paid') {
+                        if (payVal > 0) {
+                            let applied = Math.min(payVal, Number(inv.remainingAmount || 0));
+                            inv.paidAmount = Number(inv.paidAmount || 0) + applied;
+                            inv.remainingAmount = Math.max(0, inv.totalAmount - inv.paidAmount);
+                            if (inv.remainingAmount === 0) inv.status = 'paid';
+                            payVal -= applied;
+                            db.collection('deferredInvoices').doc(String(inv.id)).set(inv, { merge: true });
+                        }
+                    }
+                });
+
+                alert(`تم تحصيل مبلغ ${amount} ج.م من العميل (${clientName}) وإضافته للخزينة وتحديث المديونية بنجاح! ✅`);
+                syncCustomersData();
+                render();
+            }
+        }
+
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
             const query = (document.getElementById('member-sub-search')?.value || '').toLowerCase();
@@ -3230,7 +3265,7 @@
             return drv;
         }
 
-         function renderMyAccount() {
+        function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
@@ -4028,8 +4063,7 @@
             db.collection('chat').doc(newId).set(newMsg);
             input.value = '';
         }
-
-        function renderChatMessages() {
+function renderChatMessages() {
             const box = document.getElementById('chat-messages-list');
             if(!box) return;
             box.innerHTML = '';
