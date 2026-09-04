@@ -737,7 +737,7 @@
                     <option value="posts">📢 إدارة منشورات لوحة الرحلات</option>
                     <option value="trucks">🚚 إدارة الأسطول والسيارات والصيانة</option>
                     <option value="drivers">👨‍✈️ إدارة وتعيين المديرين، المشرفين والسائقين</option>
-                    <option value="customers">👥 إدارة العملاء والديون</option>
+                    <option value="customers">👥 عرض معلومات العملاء</option>
                     <option value="treasury">💵 سجل الخزينة والحركات</option>
                     <option value="expenses">⛽ سجل المصروفات</option>
                 </select>
@@ -793,10 +793,10 @@
     <section id="deferred-invoices-tab" class="app-section">
         <div class="card" style="border: 2px solid #3b82f6;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h3 style="color: #3b82f6; margin: 0;">⏳ إدارة الأجل والفواتير المتأخرة والمستحقة</h3>
+                <h3 style="color: #3b82f6; margin: 0;">⏳ إدارة الأجل والفواتير المتأخرة والمستحقة والتحصيل</h3>
                 <button type="button" class="btn-main btn-sm" onclick="openAddDeferredModal()">+ إضافة فاتورة أجل جديدة</button>
             </div>
-            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 12px;">متابعة حسابات العملاء الآجلة، فحص المتأخرات، وتصدير الفواتير:</p>
+            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 12px;">متابعة حسابات العملاء الآجلة، فحص المتأخرات، عمليات التحصيل، وتصدير الفواتير:</p>
 
             <div class="stats-grid" style="margin-bottom: 14px;">
                 <div class="stat-card" style="border-right-color: #f59e0b;">
@@ -832,7 +832,7 @@
                             <th>المبلغ المتبقي / الإجمالي</th>
                             <th>تاريخ الاستحقاق</th>
                             <th>الحالة</th>
-                            <th>إجراءات التصدير والواتساب</th>
+                            <th>إجراءات التحصيل والتصدير والواتساب</th>
                         </tr>
                     </thead>
                     <tbody id="deferredInvoicesTableBody"></tbody>
@@ -1147,13 +1147,21 @@
         </div>
     </section>
 
-    <!-- صفحة الحسابات والعملاء -->
+    <!-- صفحة الحسابات والعملاء (مخصصة لمعلومات العملاء فقط بدون أزرار تحصيل متضاربة) -->
     <section id="customers-tab" class="app-section">
-        <div class="card">
-            <h3>حسابات العملاء والديون</h3>
+        <div class="card" style="border: 2px solid var(--accent);">
+            <h3 style="color: var(--accent);">👥 دليل معلومات العملاء الشامل</h3>
+            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">يعرض هذا الجدول معلومات العملاء، عدد شحناتهم، وإجمالي مديونياتهم المرتبطة بقسم الأجل بدقة (التحصيل والسداد يتم حصرياً من قسم الأجل لعدم حدوث تضارب):</p>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>العميل</th><th>الهاتف</th><th>عدد الشحنات</th><th>المديونية</th><th>تحصيل</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>العميل</th>
+                            <th>الهاتف</th>
+                            <th>عدد الشحنات</th>
+                            <th>إجمالي المديونية الآجلة</th>
+                        </tr>
+                    </thead>
                     <tbody id="customers-list"></tbody>
                 </table>
             </div>
@@ -2004,7 +2012,7 @@
             });
         }
 
-        // دالة تجميع ومزامنة العملاء والديون حصرياً من الفواتير الآجلة لمنع أي تضارب أو ازدواجية
+        // دالة تجميع ومزامنة العملاء والديون حصرياً من الفواتير الآجلة لمنع أي تضارب أو ازدواجية (عرض فقط)
         function syncCustomersData() {
             let customerMap = {};
             
@@ -2020,7 +2028,7 @@
                 }
             });
 
-            // 2. احتساب المديونيات حصرياً من الفواتير الآجلة غير المسددة لمنع الازدواجية أو التضارب
+            // 2. احتساب المديونيات حصرياً من الفواتير الآجلة غير المسددة لمنع الازدواجية والتضارب
             (appData.deferredInvoices || []).forEach(inv => {
                 if (inv.clientName) {
                     let key = inv.clientName.trim();
@@ -2035,41 +2043,6 @@
             });
 
             appData.customers = Object.values(customerMap);
-        }
-
-        function collectCustomerDebt(clientName) {
-            let amount = prompt(`أدخل المبلغ المراد تحصيله من العميل (${clientName}):`);
-            if (amount !== null && !isNaN(amount) && Number(amount) > 0) {
-                let payVal = Number(amount);
-                
-                let newTreasuryId = String(Date.now());
-                let treasuryItem = {
-                    id: newTreasuryId,
-                    companyId: currentCompanyId,
-                    type: 'in',
-                    amount: payVal,
-                    desc: `تحصيل مديونية من العميل: ${clientName}`,
-                    date: new Date().toLocaleDateString('ar-EG')
-                };
-                db.collection('treasury').doc(newTreasuryId).set(treasuryItem);
-
-                (appData.deferredInvoices || []).forEach(inv => {
-                    if (inv.clientName && inv.clientName.trim() === clientName.trim() && inv.status !== 'paid') {
-                        if (payVal > 0) {
-                            let applied = Math.min(payVal, Number(inv.remainingAmount || 0));
-                            inv.paidAmount = Number(inv.paidAmount || 0) + applied;
-                            inv.remainingAmount = Math.max(0, inv.totalAmount - inv.paidAmount);
-                            if (inv.remainingAmount === 0) inv.status = 'paid';
-                            payVal -= applied;
-                            db.collection('deferredInvoices').doc(String(inv.id)).set(inv, { merge: true });
-                        }
-                    }
-                });
-
-                alert(`تم تحصيل مبلغ ${amount} ج.م من العميل (${clientName}) وإضافته للخزينة وتحديث المديونية بنجاح! ✅`);
-                syncCustomersData();
-                render();
-            }
         }
 
         function renderMemberSubscriptionsList() {
@@ -2400,7 +2373,7 @@
                     <button type="button" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 الشحنات</button>
                     <button type="button" onclick="switchTab('consolidated-invoices-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">📑 الفواتير المجمعة</button>
-                    <button type="button" onclick="switchTab('deferred-invoices-tab', this); toggleSidebar();" style="background:#3b82f6; color:#fff;">⏳ قسم الأجل</button>
+                    <button type="button" onclick="switchTab('deferred-invoices-tab', this); toggleSidebar();" style="background:#3b82f6; color:#fff;">⏳ قسم الأجل والتحصيل</button>
                     <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
                     <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 الشات والمحادثة</button>
                     <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
@@ -2408,7 +2381,7 @@
                     <button type="button" onclick="switchTab('fleet-tab', this); toggleSidebar();">🚚 الأسطول والصيانة</button>
                     <button type="button" onclick="switchTab('drivers-tab', this); toggleSidebar();">👨‍✈️ السائقون</button>
                     <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
-                    <button type="button" onclick="switchTab('customers-tab', this); toggleSidebar();">👥 العملاء</button>
+                    <button type="button" onclick="switchTab('customers-tab', this); toggleSidebar();">👥 معلومات العملاء</button>
                     <button type="button" onclick="switchTab('reports-tab', this); toggleSidebar();">📊 التقارير وشركات SaaS</button>
                 `;
             } else {
@@ -3020,10 +2993,23 @@
                 if (inv.remainingAmount === 0) {
                     inv.status = 'paid';
                 }
+
+                // إضافة المبلغ المحصل للخزينة تلقائياً لتحديث الخزينة
+                let newTreasuryId = String(Date.now());
+                let treasuryItem = {
+                    id: newTreasuryId,
+                    companyId: currentCompanyId,
+                    type: 'in',
+                    amount: paidNum,
+                    desc: `تحصيل فاتورة آجل رقم: ${inv.invoiceId} للعميل: ${inv.clientName}`,
+                    date: new Date().toLocaleDateString('ar-EG')
+                };
+                db.collection('treasury').doc(newTreasuryId).set(treasuryItem);
+
                 db.collection('deferredInvoices').doc(String(inv.id)).set(inv, { merge: true });
                 syncCustomersData();
                 render();
-                alert('تم تسجيل الدفع وتحديث المديونية بنجاح! 💵');
+                alert('تم تسجيل السداد وتحصيل المبلغ للخزينة وتحديث المديونية بنجاح! 💵✅');
             }
         }
 
