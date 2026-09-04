@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة تواصل السائقين والأسطول الاحترافية - V54 PRO SECURE SYNC</title>
+    <title>منصة تواصل السائقين والأسطول الاحترافية - V54 PRO OPTIMIZED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#007bff">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -100,7 +100,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc, increment, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc, increment, getDoc, setDoc, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
@@ -125,12 +125,20 @@
     window.currentCompanyId = currentCompanyId;
     window.manualAdminOverride = false;
 
+    // مصفوفة لتخزين وإلغاء الاشتراكات عند مغادرة الصفحة لتوفير القراءات ومنع التراكم
+    window._activeUnsubscribers = [];
+
+    window.addEventListener('beforeunload', () => {
+        window._activeUnsubscribers.forEach(unsub => {
+            if (typeof unsub === 'function') unsub();
+        });
+    });
+
     window.navigateToPage = function(pageName) {
         const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
         window.location.href = pageName + queryParams;
     };
 
-    // 🧠 دالة التحقق الذكي الموحدة (تدعم عربي وإنجليزي admin, driver, مدير, سائق)
     function isUserAdmin(roleValue, nameValue) {
         let role = String(roleValue || '').toLowerCase().trim();
         let name = String(nameValue || '').toLowerCase().trim();
@@ -162,7 +170,6 @@
         } catch (err) {}
     }
 
-    // قراءة الجلسة مباشرة من روابط الصفحة (URL Parameters) دون تخزين محلي
     function parseURLSession() {
         const urlParams = new URLSearchParams(window.location.search);
         let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -193,13 +200,14 @@
     }
 
     initAuth().then(() => {
-        document.getElementById("connectionStatus").innerText = `☁️ متصل سحابياً بـ Firebase (مزامنة فورية)`;
+        document.getElementById("connectionStatus").innerText = `☁️ متصل سحابياً بـ Firebase (مزامنة فورية محسنة)`;
         document.getElementById("connectionStatus").style.background = "#d4edda";
         setupRealtimeSync();
     });
 
     function setupRealtimeSync() {
-        onSnapshot(collection(db, "drivers"), (snapshot) => {
+        // استخدام limit(50) لتخفيض قراءات جدول السائقين وتخزين الـ Unsubscribe لتنظيفه
+        let unsubDrivers = onSnapshot(query(collection(db, "drivers"), limit(50)), (snapshot) => {
             let foundDriver = null;
 
             snapshot.forEach(docSnap => {
@@ -236,6 +244,8 @@
             updateAdminUIStatus();
             loadPosts();
         });
+
+        window._activeUnsubscribers.push(unsubDrivers);
     }
 
     function updateProfileUI() {
@@ -276,12 +286,12 @@
     }
 
     let allPostsData = [];
-    const postsRef = collection(db, "communityPosts");
 
     function loadPosts() {
         let superAdmin = isSuperAdmin();
         
-        onSnapshot(postsRef, (snapshot) => {
+        // استخدام limit(100) لتخفيض قراءات المنشورات وتخزين الـ Unsubscribe لتنظيفه تلقائياً
+        let unsubPosts = onSnapshot(query(collection(db, "communityPosts"), limit(100)), (snapshot) => {
             allPostsData = [];
             snapshot.forEach(docSnap => {
                 let post = docSnap.data();
@@ -295,6 +305,8 @@
             });
             renderPosts(allPostsData);
         });
+
+        window._activeUnsubscribers.push(unsubPosts);
     }
 
     window.renderPosts = function(posts) {
