@@ -318,6 +318,7 @@
         let recognition = null;
         let whiteboardCanvas, whiteboardCtx, isDrawing = false;
         const rtcConfig = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
+        
         let unsubRooms = null;
         let unsubVideoChat = null;
 
@@ -325,9 +326,7 @@
             const isAuth = localStorage.getItem('quantum_gate_authenticated');
             const gate = document.getElementById('biometric-gate');
             
-            // جلب بيانات الحساب (المدير / Admin) من قاعدة البيانات (مجموعة drivers أو البروفايل برقم ID = 1)
             await fetchAdminProfileFromFirestore();
-
             updateHeaderUserInfo();
 
             if(gate) {
@@ -342,12 +341,19 @@
             }
 
             setupDraggableFloatingButton();
-            startRealtimeRoomsSync();
+            if(isAuth === 'true') {
+                startRealtimeRoomsSync();
+            }
+        });
+
+        // تنظيف المستمعين تماماً عند إغلاق أو مغادرة الصفحة لمنع استنزاف الـ Reads والـ Listeners
+        window.addEventListener('beforeunload', () => {
+            if (unsubRooms) { unsubRooms(); unsubRooms = null; }
+            if (unsubVideoChat) { unsubVideoChat(); unsubVideoChat = null; }
         });
 
         async function fetchAdminProfileFromFirestore() {
             try {
-                // محاولة جلب بيانات المدير من مجموعة drivers (المعرف 1 كما يظهر في قاعدة البيانات لديناميكية المدير)
                 const docRef = doc(db, "drivers", "1");
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
@@ -361,7 +367,7 @@
                     if(currentUserAvatar) localStorage.setItem('quantum_gate_avatar', currentUserAvatar);
                 }
             } catch(e) {
-                console.log("استخدام البيانات المحلية الافتراضية لحساب المدير:", e);
+                console.log("استخدام البيانات المحلية الافتراضية:", e);
             }
         }
 
@@ -388,9 +394,9 @@
             if(gateCompany) gateCompany.value = currentCompanyId;
         }
 
-        /* برمجة زر الأقسام العائم المتحرك بالسحب واللمس */
         function setupDraggableFloatingButton() {
             const btn = document.getElementById('floating-sections-btn');
+            if(!btn) return;
             let isDragging = false;
             let startX, startY, initialX, initialY;
 
@@ -398,11 +404,9 @@
                 isDragging = true;
                 const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
                 const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-                startX = clientX;
-                startY = clientY;
+                startX = clientX; startY = clientY;
                 const rect = btn.getBoundingClientRect();
-                initialX = rect.left;
-                initialY = rect.top;
+                initialX = rect.left; initialY = rect.top;
                 btn.style.transition = 'none';
             };
 
@@ -410,24 +414,17 @@
                 if (!isDragging) return;
                 const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
                 const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-                const dx = clientX - startX;
-                const dy = clientY - startY;
-                
+                const dx = clientX - startX; const dy = clientY - startY;
                 btn.style.left = `${initialX + dx}px`;
                 btn.style.top = `${initialY + dy}px`;
-                btn.style.bottom = 'auto';
-                btn.style.right = 'auto';
+                btn.style.bottom = 'auto'; btn.style.right = 'auto';
             };
 
-            const dragEnd = () => {
-                isDragging = false;
-                btn.style.transition = 'all 0.2s';
-            };
+            const dragEnd = () => { isDragging = false; btn.style.transition = 'all 0.2s'; };
 
             btn.addEventListener('mousedown', dragStart);
             window.addEventListener('mousemove', dragMove);
             window.addEventListener('mouseup', dragEnd);
-
             btn.addEventListener('touchstart', dragStart, {passive: true});
             window.addEventListener('touchmove', dragMove, {passive: true});
             window.addEventListener('touchend', dragEnd);
@@ -462,7 +459,7 @@
             } catch(e) { console.error("Log error:", e); }
 
             startRealtimeRoomsSync();
-            alert(`🔓 مرحباً بك يا ${currentUserName} (${currentUserRole})! تم ربط النظام بنجاح.`);
+            alert(`🔓 مرحباً بك يا ${currentUserName}! تم ربط النظام بنجاح.`);
         };
 
         window.refreshRoomsData = function() {
@@ -487,7 +484,11 @@
         };
 
         function startRealtimeRoomsSync() {
-            if (unsubRooms) unsubRooms();
+            // إلغاء أي مستمع سابق بشكل قاطع قبل إنشاء مستمع جديد لمنع التراكم
+            if (unsubRooms) {
+                unsubRooms();
+                unsubRooms = null;
+            }
             const q = query(collection(db, "panda_webrtc_rooms"), where("companyId", "==", currentCompanyId), limit(20));
             unsubRooms = onSnapshot(q, (snapshot) => {
                 const container = document.getElementById('active-webrtc-sessions');
@@ -505,6 +506,8 @@
                         <i class="fa-solid fa-video"></i> غرفة: <span dir="ltr">${r.roomId}</span> (${r.creator || 'المدير'})
                     </button>
                 `).join('');
+            }, (error) => {
+                console.error("Rooms sync error:", error);
             });
         }
 
@@ -727,7 +730,11 @@
         };
 
         function startVideoChatSync(roomId) {
-            if (unsubVideoChat) unsubVideoChat();
+            // إلغاء مستمع الشات القديم قبل إنشاء واحد جديد لمنع تراكم الـ Listeners
+            if (unsubVideoChat) {
+                unsubVideoChat();
+                unsubVideoChat = null;
+            }
             const q = query(collection(db, "panda_chat_messages"), where("companyId", "==", currentCompanyId), limit(50));
             unsubVideoChat = onSnapshot(q, snapshot => {
                 const container = document.getElementById('video-chat-messages');
@@ -741,6 +748,8 @@
                     </div>
                 `).join('');
                 container.scrollTop = container.scrollHeight;
+            }, (error) => {
+                console.error("Chat sync error:", error);
             });
         }
 
@@ -756,10 +765,14 @@
                     timestamp: serverTimestamp()
                 });
                 input.value = '';
-            } catch(e) { alert("فشل إرسال الرسالة."); }
+            } catch(e) { alert("فشل إرسال الرسالة: تأكد من الصلاحيات."); }
         };
 
         window.goBackToIndex = function() {
+            // تنظيف المستمعين عند مغادرة الصفحة
+            if (unsubRooms) { unsubRooms(); unsubRooms = null; }
+            if (unsubVideoChat) { unsubVideoChat(); unsubVideoChat = null; }
+
             let userId = localStorage.getItem('logged_in_driver_id') || '1';
             let companyId = currentCompanyId;
             window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
