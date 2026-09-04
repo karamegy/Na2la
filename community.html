@@ -530,7 +530,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { 
             getFirestore, collection, addDoc, getDocs, doc, updateDoc, 
-            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc, where 
+            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc, limit, where 
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -563,6 +563,10 @@
         };
 
         let userLiveSyncUnsubscribe = null;
+        let feedUnsubscribe = null;
+        let chatUnsubscribe = null;
+        let driversSidebarUnsubscribe = null;
+
         let cachedPosts = [];
         let currentFilterCategory = 'الكل';
 
@@ -574,7 +578,19 @@
         let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
         let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
 
+        window.addEventListener('beforeunload', () => {
+            if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
+            if (feedUnsubscribe) feedUnsubscribe();
+            if (chatUnsubscribe) chatUnsubscribe();
+            if (driversSidebarUnsubscribe) driversSidebarUnsubscribe();
+        });
+
         window.navigateToMain = function() {
+            if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
+            if (feedUnsubscribe) feedUnsubscribe();
+            if (chatUnsubscribe) chatUnsubscribe();
+            if (driversSidebarUnsubscribe) driversSidebarUnsubscribe();
+
             let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
             window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
@@ -792,7 +808,6 @@
         window.toggleThemeModal = function() { document.getElementById('themeModal').style.display = 'flex'; }
         window.closeThemeModal = function(e) { if(e.target.id === 'themeModal') document.getElementById('themeModal').style.display = 'none'; }
 
-        // ✅ حل مشكلة الغلاف وصلاحيات فايربيس (استخدام مجموعة companySettings مع معرّف الشركة)
         window.handleCoverUpload = async function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -802,7 +817,7 @@
                     img.src = e.target.result;
                     img.onload = async function() {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 600; // ضغط قوي للغلاف لضمان عدم تجاوز الحجم المسموح
+                        const MAX_WIDTH = 600;
                         let width = img.width;
                         let height = img.height;
                         if (width > MAX_WIDTH) {
@@ -955,14 +970,17 @@
             initFleetDriversSidebar();
         }
         window.closeFullScreenChat = function() {
+            if (chatUnsubscribe) { chatUnsubscribe(); chatUnsubscribe = null; }
+            if (driversSidebarUnsubscribe) { driversSidebarUnsubscribe(); driversSidebarUnsubscribe = null; }
             document.getElementById('fullScreenChatPage').style.display = 'none';
         }
 
         function initFleetDriversSidebar() {
+            if (driversSidebarUnsubscribe) driversSidebarUnsubscribe();
             const container = document.getElementById('fleetDriversListContainer');
             const driversRef = collection(db, 'drivers');
             
-            onSnapshot(driversRef, (snapshot) => {
+            driversSidebarUnsubscribe = onSnapshot(driversRef, (snapshot) => {
                 let driversList = [];
                 snapshot.forEach(docSnap => {
                     let d = { id: docSnap.id, ...docSnap.data() };
@@ -1021,8 +1039,12 @@
         }
 
         function initRealtimeFullScreenChat() {
+            if (chatUnsubscribe) chatUnsubscribe();
             const stream = document.getElementById('fullScreenChatMessages');
-            onSnapshot(collection(db, 'chat'), (snapshot) => {
+            
+            const qChat = query(collection(db, 'chat'), limit(50));
+
+            chatUnsubscribe = onSnapshot(qChat, (snapshot) => {
                 let msgs = [];
                 snapshot.forEach(d => {
                     let m = { id: d.id, ...d.data() };
@@ -1238,7 +1260,6 @@
 
         let pendingMediaObj = null;
 
-        // ✅ حل مشكلة امتلاء فايربيس (فحص وضغط الصور والفيديوهات تلقائياً أقل من 700KB)
         window.previewSelectedMedia = function(input) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
@@ -1247,9 +1268,8 @@
                 const vidThumb = document.getElementById('videoPreviewThumb');
 
                 if (file.type.startsWith('video/')) {
-                    // فحص حجم الفيديو (أقصى حجم 700 كيلوبايت لتجنب تجاوز حد 1MB في مستند فايربيس)
                     if (file.size > 700 * 1024) {
-                        alert("⚠️ حجم الفيديو كبير جداً (" + Math.round(file.size / 1024) + " كيلوبايت).\nالحد الأقصى المسموح للفيديو في قاعدة البيانات هو 700 كيلوبايت لتجنب امتلاء مساحة فايربيس وتوقف التطبيق.\nيرجى اختيار فيديو أقصر أو أصغر حجماً.");
+                        alert("⚠️ حجم الفيديو كبير جداً (" + Math.round(file.size / 1024) + " كيلوبايت).\nالحد الأقصى المسموح للفيديو في قاعدة البيانات هو 700 كيلوبايت لتجنب امتلاء مساحة فايربيس وتوقف التطبيق.");
                         input.value = "";
                         return;
                     }
@@ -1264,7 +1284,6 @@
                     };
                     reader.readAsDataURL(file);
                 } else {
-                    // ضغط الصور بشدة لتصبح أقل بكثير من 1MB
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         const img = new Image();
@@ -1655,7 +1674,11 @@
         }
 
         function initRealtimeFeed() {
-            onSnapshot(collection(db, 'communityPosts'), (snapshot) => {
+            if (feedUnsubscribe) feedUnsubscribe();
+            
+            const qFeed = query(collection(db, 'communityPosts'), limit(30));
+
+            feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
                 try {
                     cachedPosts = [];
                     snapshot.forEach(d => {
