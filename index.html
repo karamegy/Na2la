@@ -1153,7 +1153,7 @@
             <h3>حسابات العملاء والديون</h3>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>العميل</th><th>الهاتف</th><th>المديونية</th><th>تحصيل</th></tr></thead>
+                    <thead><tr><th>العميل</th><th>الهاتف</th><th>عدد الشحنات</th><th>المديونية</th><th>تحصيل</th></tr></thead>
                     <tbody id="customers-list"></tbody>
                 </table>
             </div>
@@ -1956,7 +1956,7 @@
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'];
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
             
             collections.forEach(colName => {
                 let queryRef = db.collection(colName);
@@ -2001,6 +2001,50 @@
                     renderRSSTicker();
                 }
             });
+        }
+
+        // دالة تجميع ومزامنة العملاء تلقائياً من الشحنات والفواتير والديون
+        function syncCustomersData() {
+            let customerMap = {};
+            
+            // سحب البيانات من الشحنات المسجلة
+            (appData.shipments || []).forEach(s => {
+                if (s.name) {
+                    let key = s.name.trim();
+                    if (!customerMap[key]) {
+                        customerMap[key] = { id: key, name: key, phone: s.phone || '', debt: 0, shipmentsCount: 0 };
+                    }
+                    customerMap[key].shipmentsCount++;
+                    if (s.paymentStatus === 'deferred') {
+                        customerMap[key].debt += Number(s.price || 0);
+                    }
+                }
+            });
+
+            // سحب وتحديث المديونيات من الفواتير الآجلة
+            (appData.deferredInvoices || []).forEach(inv => {
+                if (inv.clientName) {
+                    let key = inv.clientName.trim();
+                    if (!customerMap[key]) {
+                        customerMap[key] = { id: key, name: key, phone: inv.clientPhone || '', debt: 0, shipmentsCount: 0 };
+                    }
+                    if (inv.status !== 'paid') {
+                        customerMap[key].debt += Number(inv.remainingAmount || 0);
+                    }
+                }
+            });
+
+            // دمج العملاء المحفوظين مسبقاً للحفاظ على أي تعديلات يدوية
+            (appData.customers || []).forEach(c => {
+                if (c.name && customerMap[c.name.trim()]) {
+                    customerMap[c.name.trim()].debt = Math.max(customerMap[c.name.trim()].debt, Number(c.debt || 0));
+                    if(c.phone) customerMap[c.name.trim()].phone = c.phone;
+                } else if (c.name) {
+                    customerMap[c.name.trim()] = c;
+                }
+            });
+
+            appData.customers = Object.values(customerMap);
         }
 
         function renderMemberSubscriptionsList() {
@@ -3191,7 +3235,7 @@
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
+            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير مححدد'} | الرتبة: ${drv.role || 'سائق'}`;
             
             const profileShipmentsContainer = document.getElementById('profile-user-shipments-container');
             if (profileShipmentsContainer) {
@@ -4056,7 +4100,6 @@
             input.value = '';
             alert('تم إرسال الرد بنجاح! ✈️');
         }
-
         function previewCommunityFiles(input) {
             communityFilesArr = [];
             const info = document.getElementById('community-files-preview-info');
