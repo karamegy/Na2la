@@ -536,6 +536,21 @@
         let currentCompanyId = urlCompanyIdParam.trim() !== '' ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
 
+        // متغيرات لإلغاء الـ Listeners ومنع استنزاف القراءات عند مغادرة الصفحة
+        let driversUnsub = null;
+        let shipmentsUnsub = null;
+        let chatUnsub = null;
+        let callsUnsub = null;
+        let unsubscribeWall = null;
+
+        window.addEventListener('beforeunload', () => {
+            if (driversUnsub) driversUnsub();
+            if (shipmentsUnsub) shipmentsUnsub();
+            if (chatUnsub) chatUnsub();
+            if (callsUnsub) callsUnsub();
+            if (unsubscribeWall) unsubscribeWall();
+        });
+
         function updateNavigationLinks() {
             let userId = activeExternalSessionName || '';
             let compId = currentCompanyId || 'company_main';
@@ -562,7 +577,6 @@
         let audioCtx = null;
         let ringtoneInterval = null;
 
-        // نظام الرنين القوي والمطوّر للمكالمات الواردة والصادرة
         function playAdvancedRingtone(type = 'incoming') {
             try {
                 if (!audioCtx) {
@@ -581,13 +595,11 @@
                     const gainNode = audioCtx.createGain();
 
                     if (type === 'incoming') {
-                        // نغمة رنين قوية وحماسية للمكالمة الواردة
-                        osc1.frequency.setValueAtTime(587.33, now); // D5
-                        osc2.frequency.setValueAtTime(880, now);    // A5
+                        osc1.frequency.setValueAtTime(587.33, now);
+                        osc2.frequency.setValueAtTime(880, now);
                         osc1.type = 'square';
                         osc2.type = 'sawtooth';
                     } else {
-                        // نغمة انتظار للمكالمة الصادرة
                         osc1.frequency.setValueAtTime(440, now);
                         osc1.type = 'sine';
                         osc2.frequency.setValueAtTime(554.37, now);
@@ -609,9 +621,7 @@
 
                 playToneSequence();
                 ringtoneInterval = setInterval(playToneSequence, type === 'incoming' ? 1200 : 2500);
-            } catch (e) {
-                console.log("AudioContext error:", e);
-            }
+            } catch (e) {}
         }
 
         function stopAdvancedRingtone() {
@@ -724,8 +734,9 @@
         }
         renderInitialUIInstant();
 
-        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب سائقي الشركة الحالية فقط سحابياً باستخدام where
-        db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+        // ربط السائقين
+        if (driversUnsub) driversUnsub();
+        driversUnsub = db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
                 let name = String(d.name || d.id || '').trim().toLowerCase();
                 return name !== '' && name !== 'زائر' && name !== 'مستخدم' && name !== 'guest';
@@ -734,71 +745,68 @@
             renderChatAccountsList();
         });
 
-        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب شحنات الشركة الحالية فقط سحابياً
-        db.collection('shipments').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+        // ربط الشحنات مع limit(50) لتوفير القراءات
+        if (shipmentsUnsub) shipmentsUnsub();
+        shipmentsUnsub = db.collection('shipments').where('companyId', '==', currentCompanyId).limit(50).onSnapshot(snapshot => {
             appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
         });
 
-        // 🚀 [تصحيح جذري لتوفير الـ Reads]: جلب محادثات الشركة الحالية فقط سحابياً
-        db.collection('chat').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+        // ربط الشات مع limit(40) لتوفير القراءات
+        if (chatUnsub) chatUnsub();
+        chatUnsub = db.collection('chat').where('companyId', '==', currentCompanyId).limit(40).onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderChatMessages();
             renderChatAccountsList();
         });
 
-        // نظام استقبال المكالمات المحدث مع رنين قوي ومطابق لبيانات الشركة
-        db.collection('webrtc_calls')
-          .where('companyId', '==', currentCompanyId)
-          .onSnapshot(snapshot => {
-              snapshot.docChanges().forEach(change => {
-                  if (change.type === 'added') {
-                      let callData = change.doc.data();
-                      currentCallId = change.doc.id;
-                      
-                      let loggedInUser = getLoggedInUser();
-                      let targetCallee = String(callData.callee || '').trim();
-                      let myName = String(loggedInUser.name || '').trim();
-                      let mySession = String(activeExternalSessionName || '').trim();
-                      
-                      let isForMe = (
-                          targetCallee === myName ||
-                          targetCallee === mySession ||
-                          getCleanDriverName(targetCallee) === myName ||
-                          targetCallee === 'general'
-                      );
+        // ربط المكالمات
+        if (callsUnsub) callsUnsub();
+        callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    let callData = change.doc.data();
+                    currentCallId = change.doc.id;
+                    
+                    let loggedInUser = getLoggedInUser();
+                    let targetCallee = String(callData.callee || '').trim();
+                    let myName = String(loggedInUser.name || '').trim();
+                    let mySession = String(activeExternalSessionName || '').trim();
+                    
+                    let isForMe = (
+                        targetCallee === myName ||
+                        targetCallee === mySession ||
+                        getCleanDriverName(targetCallee) === myName ||
+                        targetCallee === 'general'
+                    );
 
-                      if (isForMe && callData.caller !== myName && callData.status === 'calling') {
-                          let callerCleanName = getCleanDriverName(callData.caller);
-                          playAdvancedRingtone('incoming');
-                          if (confirm(`📞 مكالمة واردة جديدة بقوة من (${callerCleanName}). هل تريد الرد والمتابعة؟`)) {
-                              stopAdvancedRingtone();
-                              answerWebRTCCall(currentCallId, callData.isVideo);
-                          } else {
-                              stopAdvancedRingtone();
-                              db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
-                          }
-                      }
-                  }
-              });
-          });
+                    if (isForMe && callData.caller !== myName && callData.status === 'calling') {
+                        let callerCleanName = getCleanDriverName(callData.caller);
+                        playAdvancedRingtone('incoming');
+                        if (confirm(`📞 مكالمة واردة جديدة بقوة من (${callerCleanName}). هل تريد الرد والمتابعة؟`)) {
+                            stopAdvancedRingtone();
+                            answerWebRTCCall(currentCallId, callData.isVideo);
+                        } else {
+                            stopAdvancedRingtone();
+                            db.collection('webrtc_calls').doc(currentCallId).update({ status: 'rejected' });
+                        }
+                    }
+                }
+            });
+        });
 
-        let unsubscribeWall = null;
         function setupWallListener(profileId) {
             if (unsubscribeWall) unsubscribeWall();
-            // 🚀 [توفير Reads]: تصفية حائط النشر سحابياً حسب الشركة
-            unsubscribeWall = db.collection('profileWalls')
-              .where('companyId', '==', currentCompanyId)
-              .onSnapshot(snapshot => {
-                  let posts = [];
-                  snapshot.forEach(doc => {
-                      let d = doc.data();
-                      if(String(d.profileId) === String(profileId)) {
-                          posts.push({ docId: doc.id, ...d });
-                      }
-                  });
-                  renderWallPostsFromList(posts);
-              });
+            unsubscribeWall = db.collection('profileWalls').where('companyId', '==', currentCompanyId).limit(25).onSnapshot(snapshot => {
+                let posts = [];
+                snapshot.forEach(doc => {
+                    let d = doc.data();
+                    if(String(d.profileId) === String(profileId)) {
+                        posts.push({ docId: doc.id, ...d });
+                    }
+                });
+                renderWallPostsFromList(posts);
+            });
         }
 
         function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.75, callback) {
@@ -1638,7 +1646,6 @@
                 
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
-                // النقر على بطاقة السائق لعرض بروفايله مباشرة وتحديثه
                 item.onclick = () => {
                     viewingProfileId = d.id || cleanN;
                     renderMyAccount();
@@ -1671,12 +1678,9 @@
         }
 
         window.addEventListener('load', () => {
-    renderMyAccount();
-});
+            renderMyAccount();
+        });
     </script>
-<script src="na2la-bot.js"></script>
+    <script src="na2la-bot.js"></script>
 </body>
 </html>
-
-</body>
-    </html>
