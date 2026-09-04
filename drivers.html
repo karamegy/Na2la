@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إدارة الأسطول والسائقين - Global Transport Hub V54 PRO SECURE SYNC</title>
+    <title>إدارة الأسطول والسائقين - Global Transport Hub V54 PRO OPTIMIZED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1877f2">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -171,7 +171,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc, setDoc, query, where, getDocs, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
@@ -193,7 +193,15 @@
         let currentCompanyId = 'company_main';
         let currentUserIsAdmin = false;
 
-        // 🧠 دالة فحص ذكية وموحدة لجميع مسميات وصلاحيات الإدارة (عربي/إنجليزي)
+        // مصفوفة لتخزين وتفريغ دوال الـ Unsubscribe لمنع تراكم الاتصالات والقراءات
+        window._activeUnsubscribers = [];
+
+        window.addEventListener('beforeunload', () => {
+            window._activeUnsubscribers.forEach(unsub => {
+                if (typeof unsub === 'function') unsub();
+            });
+        });
+
         function isUserAdmin(roleValue, nameValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
@@ -201,7 +209,7 @@
             return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير') || name.includes('كرم');
         }
 
-        // قراءة الجلسة والشراكة حصرياً من معاملات الرابط (URL Parameters) ومزامنة فايربيس
+        // استخدام limit(50) لتخفيض قراءات الاستعلام الأولي بدلاً من جلب الجدول كاملًا
         async function parseURLSessionAndSync() {
             const urlParams = new URLSearchParams(window.location.search);
             let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
@@ -220,7 +228,7 @@
             }
 
             try {
-                const snapshot = await getDocs(collection(db, "drivers"));
+                const snapshot = await getDocs(query(collection(db, "drivers"), limit(50)));
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
                     let dId = docSnap.id.toLowerCase();
@@ -292,7 +300,8 @@
         };
 
         function initRealtimeListeners() {
-            onSnapshot(collection(db, "shipments"), (shipSnapshot) => {
+            // استخدام limit(100) على الشحنات وتخزين دالة إلغاء المتابعة
+            let unsubShipments = onSnapshot(query(collection(db, "shipments"), limit(100)), (shipSnapshot) => {
                 globalShipmentsData = [];
                 shipSnapshot.forEach(docSnap => {
                     let s = { id: docSnap.id, ...docSnap.data() };
@@ -306,8 +315,10 @@
                 });
                 filterAndRenderDrivers();
             });
+            window._activeUnsubscribers.push(unsubShipments);
 
-            onSnapshot(collection(db, "drivers"), (snapshot) => {
+            // استخدام limit(100) على السائقين وتخزين دالة إلغاء المتابعة
+            let unsubDrivers = onSnapshot(query(collection(db, "drivers"), limit(100)), (snapshot) => {
                 globalDriversData = [];
                 snapshot.forEach((docSnap) => {
                     const data = { id: docSnap.id, ...docSnap.data() };
@@ -321,6 +332,7 @@
                 });
                 filterAndRenderDrivers();
             });
+            window._activeUnsubscribers.push(unsubDrivers);
         }
 
         window.filterAndRenderDrivers = function() {
