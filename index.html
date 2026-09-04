@@ -4090,6 +4090,204 @@
                 }
             } else { info.innerText = ''; }
         }
+        function renderPublicPosts() {
+            const feed = document.getElementById('public-posts-feed');
+            if (!feed) return;
+            feed.innerHTML = '';
+            let posts = appData.posts || [];
+            if (posts.length === 0) {
+                feed.innerHTML = `<p style="text-align:center; font-size:11px; opacity:0.8;">لا توجد إعلانات حالياً.</p>`;
+                return;
+            }
+            posts.forEach(p => {
+                let mediaHtml = '';
+                if (p.media && p.media.length > 0) {
+                    mediaHtml += `<div class="load-post-media">`;
+                    p.media.forEach(m => {
+                        if (m.type === 'video') mediaHtml += `<video src="${m.src}" onclick="viewMedia('${m.src}', 'video')"></video>`;
+                        else mediaHtml += `<img src="${m.src}" onclick="viewMedia('${m.src}', 'image')"/>`;
+                    });
+                    mediaHtml += `</div>`;
+                }
+
+                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost('${p.id}')">حذف</button>` : '';
+
+                let card = document.createElement('div');
+                card.className = 'load-post-card';
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <h4 style="font-size:12px; color:var(--accent); margin:0;">📌 ${p.title}</h4>
+                        <span style="font-size:9px; opacity:0.7;">${p.date || ''} | ${p.author || 'الإدارة'}</span>
+                    </div>
+                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
+                    ${mediaHtml}
+                    <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <button type="button" class="btn-success btn-sm" onclick="openVisitorBooking()">📦 طلب رحلة</button>
+                        ${deleteBtn}
+                    </div>
+                `;
+                feed.appendChild(card);
+            });
+        }
+
+        function deletePublicPost(id) {
+            if (confirm('حذف هذا المنشور؟')) {
+                db.collection('posts').doc(String(id)).delete();
+            }
+        }
+
+        function renderChatAccountsList() {
+            const container = document.getElementById('chat-accounts-list-container');
+            if(!container) return;
+            const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase();
+            container.innerHTML = '';
+
+            let accounts = (appData.drivers || []).filter(d => d.name !== loggedInDriverName);
+            accounts.forEach(acc => {
+                const accName = acc.name || 'بدون اسم';
+                const accPhone = acc.phone || '';
+                if(accName.toLowerCase().includes(query) || accPhone.includes(query)) {
+                    let div = document.createElement('div');
+                    div.className = `chat-account-item ${currentChatTarget === accName ? 'active' : ''}`;
+                    div.onclick = () => selectChatRoom(accName);
+                    div.innerHTML = `<span>👤 ${accName}</span><small style="font-size:8px; opacity:0.8;">${acc.role || 'سائق'}</small>`;
+                    container.appendChild(div);
+                }
+            });
+        }
+
+        function selectChatRoom(targetName) {
+            currentChatTarget = targetName;
+            document.getElementById('chat-current-room-title').innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
+            renderChatAccountsList();
+            renderChatMessages();
+        }
+
+        function sendChatMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-input-text');
+            const msgText = input.value.trim();
+            if(!msgText) return;
+
+            let newId = String(Date.now());
+            let newMsg = {
+                id: newId,
+                companyId: currentCompanyId,
+                sender: loggedInDriverName,
+                target: currentChatTarget,
+                text: msgText,
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            };
+
+            db.collection('chat').doc(newId).set(newMsg);
+            input.value = '';
+        }
+
+        function renderChatMessages() {
+            const box = document.getElementById('chat-messages-list');
+            if(!box) return;
+            box.innerHTML = '';
+            let messages = appData.chat || [];
+
+            let filtered = messages.filter(m => {
+                if (currentChatTarget === 'general') return m.target === 'general' || !m.target;
+                return (m.sender === loggedInDriverName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === loggedInDriverName);
+            });
+
+            filtered.forEach(m => {
+                let div = document.createElement('div');
+                let isMe = m.sender === loggedInDriverName;
+                div.className = `chat-bubble ${isMe ? 'admin' : 'driver'}`;
+                div.innerHTML = `
+                    <div style="font-weight:bold; font-size:9px; margin-bottom:3px; opacity:0.9;">${m.sender}</div>
+                    <div>${m.text}</div>
+                    <div style="font-size:7px; text-align:left; opacity:0.7; margin-top:3px;">${m.time}</div>
+                `;
+                box.appendChild(div);
+            });
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function renderChatNotificationsInbox() {
+            const container = document.getElementById('chat-notifications-inbox');
+            if(!container) return;
+            container.innerHTML = '';
+            let messages = appData.chat || [];
+            let incoming = messages.filter(m => m.sender !== loggedInDriverName);
+
+            if(incoming.length === 0) {
+                container.innerHTML = `<p style="font-size:10px; text-align:center; opacity:0.8;">لا توجد رسائل واردة.</p>`;
+                return;
+            }
+
+            incoming.slice(-6).reverse().forEach(m => {
+                let div = document.createElement('div');
+                div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; font-size:10px;';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--accent);">
+                        <span>من: ${m.sender}</span>
+                        <span style="font-size:8px; opacity:0.7;">${m.time}</span>
+                    </div>
+                    <p style="margin-top:3px;">${m.text}</p>
+                    <button type="button" class="btn-main btn-sm" style="margin-top:6px;" onclick="selectChatRoom('${m.sender}'); switchTab('chat-tab'); closeModal('chatNotificationsModal');">فتح المحادثة 💬</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function sendQuickChatMessageFromModal() {
+            const input = document.getElementById('quick-notif-reply-text');
+            const text = input.value.trim();
+            if(!text) return;
+
+            let newId = String(Date.now());
+            let newMsg = {
+                id: newId,
+                companyId: currentCompanyId,
+                sender: loggedInDriverName,
+                target: currentChatTarget || 'general',
+                text: text,
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            };
+
+            db.collection('chat').doc(newId).set(newMsg);
+            input.value = '';
+            alert('تم إرسال الرد بنجاح! ✈️');
+        }
+        function previewCommunityFiles(input) {
+            communityFilesArr = [];
+            const info = document.getElementById('community-files-preview-info');
+            if(input.files && input.files.length > 0) {
+                info.innerText = `جاري معالجة ${input.files.length} ملفات...`;
+                let processed = 0;
+                for(let i=0; i<input.files.length; i++) {
+                    let file = input.files[i];
+                    if (file.type.startsWith('image')) {
+                        compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
+                            communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
+                        });
+                    } else if (file.type.startsWith('video')) {
+                        let reader = new FileReader();
+                        reader.onload = (e) => {
+                            communityFilesArr.push({ name: file.name, type: 'video', src: e.target.result });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
+                        };
+                        reader.readAsDataURL(file);
+                    } else {
+                        let reader = new FileReader();
+                        reader.onload = (e) => {
+                            communityFilesArr.push({ name: file.name, type: 'doc', src: e.target.result });
+                            processed++;
+                            if(processed === input.files.length) info.innerText = `تم اختيار المستندات ✅`;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+            } else { info.innerText = ''; }
+        }
         function publishCommunityPost() {
             const text = document.getElementById('community-post-text').value.trim();
             if (!text && communityFilesArr.length === 0) {
@@ -4689,4 +4887,4 @@ function render() {
 </script>
 <script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
 </body>
-</html>
+    </html>
