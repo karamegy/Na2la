@@ -737,7 +737,7 @@
                     <option value="posts">📢 إدارة منشورات لوحة الرحلات</option>
                     <option value="trucks">🚚 إدارة الأسطول والسيارات والصيانة</option>
                     <option value="drivers">👨‍✈️ إدارة وتعيين المديرين، المشرفين والسائقين</option>
-                    <option value="customers">👥 إدارة العملاء والتواصل</option>
+                    <option value="customers">👥 إدارة العملاء والديون</option>
                     <option value="treasury">💵 سجل الخزينة والحركات</option>
                     <option value="expenses">⛽ سجل المصروفات</option>
                 </select>
@@ -1150,18 +1150,10 @@
     <!-- صفحة الحسابات والعملاء -->
     <section id="customers-tab" class="app-section">
         <div class="card">
-            <h3 style="color: var(--accent);">👥 جدول العملاء والتواصل</h3>
-            <p style="font-size: 10px; opacity: 0.85; margin-bottom: 10px;">يعرض هذا القسم معلومات العملاء فقط (الاسم، الرقم، عدد الشحنات، وأيقونة تواصل واتساب):</p>
+            <h3>حسابات العملاء والشحنات</h3>
             <div class="table-responsive">
                 <table>
-                    <thead>
-                        <tr>
-                            <th>الاسم</th>
-                            <th>الرقم (الهاتف)</th>
-                            <th>عدد الشحنات</th>
-                            <th>تواصل واتساب</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>العميل</th><th>الهاتف</th><th>عدد الشحنات</th><th>التواصل واتساب</th></tr></thead>
                     <tbody id="customers-list"></tbody>
                 </table>
             </div>
@@ -1593,7 +1585,7 @@
             const txRef = document.getElementById('sub-tx-ref').value.trim();
 
             if (!phone || !txRef) {
-                alert('الرجاء كتابة رقم المحفظة المحول منها ورقم العملية المرجعي!');
+                alert('الرجاء كتابة رقم المحفظة المحوّل منها ورقم العملية المرجعي!');
                 return;
             }
 
@@ -1964,7 +1956,7 @@
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks'];
             
             collections.forEach(colName => {
                 let queryRef = db.collection(colName);
@@ -1985,7 +1977,6 @@
                         appData[colName] = rawData;
                     }
                     
-                    syncCustomersData();
                     scheduleSmartRender();
 
                     if (typeof renderChatMessages === 'function') renderChatMessages();
@@ -2010,24 +2001,6 @@
                     renderRSSTicker();
                 }
             });
-        }
-
-        // استخراج وتحديث جدول العملاء تلقائياً من الشحنات (الاسم، الهاتف، عدد الشحنات) مع فصله التام عن الفواتير والآجل
-        function syncCustomersData() {
-            let customerMap = {};
-            
-            (appData.shipments || []).forEach(s => {
-                if (s.name) {
-                    let key = s.name.trim();
-                    if (!customerMap[key]) {
-                        customerMap[key] = { id: key, name: key, phone: s.phone || '', shipmentsCount: 0 };
-                    }
-                    customerMap[key].shipmentsCount++;
-                    if (s.phone && !customerMap[key].phone) customerMap[key].phone = s.phone;
-                }
-            });
-
-            appData.customers = Object.values(customerMap);
         }
 
         function renderMemberSubscriptionsList() {
@@ -2979,8 +2952,6 @@
                     inv.status = 'paid';
                 }
                 db.collection('deferredInvoices').doc(String(inv.id)).set(inv, { merge: true });
-                syncCustomersData();
-                render();
                 alert('تم تسجيل الدفع وتحديث المديونية بنجاح! 💵');
             }
         }
@@ -2991,10 +2962,7 @@
                 return;
             }
             if (confirm('هل أنت متأكد من حذف هذه الفاتورة الآجلة؟')) {
-                db.collection('deferredInvoices').doc(String(id)).delete().then(() => {
-                    syncCustomersData();
-                    render();
-                });
+                db.collection('deferredInvoices').doc(String(id)).delete();
             }
         }
 
@@ -3218,12 +3186,12 @@
             return drv;
         }
 
-        function renderMyAccount() {
+         function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
             document.getElementById('gplus-badge-display').innerText = drv.title || 'سائق';
-            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير مححدد'} | الرتبة: ${drv.role || 'سائق'}`;
+            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${drv.companyName || 'الرئيسية'} | الهاتف: ${drv.phone || 'غير محدد'} | الرتبة: ${drv.role || 'سائق'}`;
             
             const profileShipmentsContainer = document.getElementById('profile-user-shipments-container');
             if (profileShipmentsContainer) {
@@ -3865,6 +3833,7 @@
                 alert('فشل إنشاء الحساب: ' + err.message);
             }
         }
+
         function runAIMechanicAnalysis() {
             const fault = document.getElementById('ai-fault-select').value;
             const box = document.getElementById('ai-result-box');
@@ -3995,7 +3964,27 @@
             renderChatAccountsList();
             renderChatMessages();
         }
+
         function sendChatMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-input-text');
+            const msgText = input.value.trim();
+            if(!msgText) return;
+
+            let newId = String(Date.now());
+            let newMsg = {
+                id: newId,
+                companyId: currentCompanyId,
+                sender: loggedInDriverName,
+                target: currentChatTarget,
+                text: msgText,
+                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
+            };
+
+            db.collection('chat').doc(newId).set(newMsg);
+            input.value = '';
+        }
+function sendChatMessage(e) {
             e.preventDefault();
             const input = document.getElementById('chat-input-text');
             const msgText = input.value.trim();
