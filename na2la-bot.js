@@ -569,6 +569,9 @@
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
+    
+    // متغير لتخزين وقت آخر جلب لضمان عدم تكرار القراءات
+    window._lastFirebaseFetchTime = 0;
 
     const driverQuizzes = [
         {
@@ -664,64 +667,80 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    window.fetchRealFirebaseData = async function() {
+    // دالة الجلب المحدثة لضمان التوافق المستقبلي وتوفير القراءات بنظام (Cache + Where + Limit)
+    window.fetchRealFirebaseData = async function(force = false) {
+        let now = Date.now();
+        if (!force && window._lastFirebaseFetchTime && (now - window._lastFirebaseFetchTime < 180000)) {
+            return;
+        }
+
         try {
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
+                let tenant = getActiveTenantContext();
+                
+                if (tenant.activeRole === 'visitor') {
+                    window._lastFirebaseFetchTime = now;
+                    return;
+                }
+
+                let companyId = tenant.activeCompanyId;
+
                 try {
-                    const driversSnap = await db.collection('drivers').get();
+                    const driversSnap = await db.collection('drivers').where('companyId', '==', companyId).limit(50).get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').get();
+                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', companyId).limit(100).get();
                     if (!shipmentsSnap.empty) {
                         realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const invoicesSnap = await db.collection('deferredInvoices').get();
+                    const invoicesSnap = await db.collection('deferredInvoices').where('companyId', '==', companyId).limit(50).get();
                     if (!invoicesSnap.empty) {
                         realFirebaseDeferredInvoices = invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const conInvoicesSnap = await db.collection('consolidatedInvoices').get();
+                    const conInvoicesSnap = await db.collection('consolidatedInvoices').where('companyId', '==', companyId).limit(50).get();
                     if (!conInvoicesSnap.empty) {
                         realFirebaseConsolidatedInvoices = conInvoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const treasurySnap = await db.collection('treasury').get();
+                    const treasurySnap = await db.collection('treasury').where('companyId', '==', companyId).limit(50).get();
                     if (!treasurySnap.empty) {
                         realFirebaseTreasury = treasurySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const expensesSnap = await db.collection('expenses').get();
+                    const expensesSnap = await db.collection('expenses').where('companyId', '==', companyId).limit(50).get();
                     if (!expensesSnap.empty) {
                         realFirebaseExpenses = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
                 try {
-                    const trucksSnap = await db.collection('trucks').get();
+                    const trucksSnap = await db.collection('trucks').where('companyId', '==', companyId).limit(50).get();
                     if (!trucksSnap.empty) {
                         realFirebaseTrucks = trucksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
-                let tenant = getActiveTenantContext();
                 try {
-                    const appDataSnap = await db.collection('appData').doc(tenant.activeCompanyId).get();
+                    const appDataSnap = await db.collection('appData').doc(companyId).get();
                     if (appDataSnap.exists) { realFirebaseAppData = appDataSnap.data() || {}; }
                 } catch(e) {}
+
+                window._lastFirebaseFetchTime = now;
             }
         } catch(e) {}
     };
@@ -749,29 +768,16 @@
         }
 
         try {
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم') {
-                    let driverRec = realFirebaseDrivers.find(d => d.name === tenant.activeDriver);
-                    if (!driverRec) {
-                        let querySnap = await db.collection('drivers').where('name', '==', tenant.activeDriver).get();
-                        if (!querySnap.empty) {
-                            driverRec = querySnap.docs[0].data();
-                        } else {
-                            let docDirect = await db.collection('drivers').doc(tenant.activeDriver).get();
-                            if (docDirect.exists) driverRec = docDirect.data();
-                        }
-                    }
-
-                    if (driverRec) {
-                        subData.companyName = driverRec.companyName || driverRec.title || tenant.activeCompanyName;
-                        subData.adminName = driverRec.name || tenant.activeDriver;
-                        subData.phone = driverRec.phone || driverRec.mobile || 'غير متوفر';
-                        subData.planName = driverRec.subPlan || driverRec.plan || driverRec.package || 'monthly';
-                        let st = driverRec.subStatus || driverRec.status || 'active';
-                        subData.status = (st === 'active' || st === 'نشط' || st === true) ? 'نشط ✅' : 'منتهي ⚠️';
-                        subData.expiryDate = driverRec.subExpiry || driverRec.expiryDate || driverRec.expiry || '2026-09-28';
-                    }
+            if (tenant.activeDriver && tenant.activeDriver !== 'زائر كريم') {
+                let driverRec = realFirebaseDrivers.find(d => d.name === tenant.activeDriver);
+                if (driverRec) {
+                    subData.companyName = driverRec.companyName || driverRec.title || tenant.activeCompanyName;
+                    subData.adminName = driverRec.name || tenant.activeDriver;
+                    subData.phone = driverRec.phone || driverRec.mobile || 'غير متوفر';
+                    subData.planName = driverRec.subPlan || driverRec.plan || driverRec.package || 'monthly';
+                    let st = driverRec.subStatus || driverRec.status || 'active';
+                    subData.status = (st === 'active' || st === 'نشط' || st === true) ? 'نشط ✅' : 'منتهي ⚠️';
+                    subData.expiryDate = driverRec.subExpiry || driverRec.expiryDate || driverRec.expiry || '2026-09-28';
                 }
             }
         } catch(e) {}
