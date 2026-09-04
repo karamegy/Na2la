@@ -3914,204 +3914,6 @@
                 reader.readAsDataURL(videoFiles[i]);
             }
         }
-        function renderPublicPosts() {
-            const feed = document.getElementById('public-posts-feed');
-            if (!feed) return;
-            feed.innerHTML = '';
-            let posts = appData.posts || [];
-            if (posts.length === 0) {
-                feed.innerHTML = `<p style="text-align:center; font-size:11px; opacity:0.8;">لا توجد إعلانات حالياً.</p>`;
-                return;
-            }
-            posts.forEach(p => {
-                let mediaHtml = '';
-                if (p.media && p.media.length > 0) {
-                    mediaHtml += `<div class="load-post-media">`;
-                    p.media.forEach(m => {
-                        if (m.type === 'video') mediaHtml += `<video src="${m.src}" onclick="viewMedia('${m.src}', 'video')"></video>`;
-                        else mediaHtml += `<img src="${m.src}" onclick="viewMedia('${m.src}', 'image')"/>`;
-                    });
-                    mediaHtml += `</div>`;
-                }
-
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost('${p.id}')">حذف</button>` : '';
-
-                let card = document.createElement('div');
-                card.className = 'load-post-card';
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <h4 style="font-size:12px; color:var(--accent); margin:0;">📌 ${p.title}</h4>
-                        <span style="font-size:9px; opacity:0.7;">${p.date || ''} | ${p.author || 'الإدارة'}</span>
-                    </div>
-                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
-                    ${mediaHtml}
-                    <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
-                        <button type="button" class="btn-success btn-sm" onclick="openVisitorBooking()">📦 طلب رحلة</button>
-                        ${deleteBtn}
-                    </div>
-                `;
-                feed.appendChild(card);
-            });
-        }
-
-        function deletePublicPost(id) {
-            if (confirm('حذف هذا المنشور؟')) {
-                db.collection('posts').doc(String(id)).delete();
-            }
-        }
-
-        function renderChatAccountsList() {
-            const container = document.getElementById('chat-accounts-list-container');
-            if(!container) return;
-            const query = (document.getElementById('chat-search-input')?.value || '').toLowerCase();
-            container.innerHTML = '';
-
-            let accounts = (appData.drivers || []).filter(d => d.name !== loggedInDriverName);
-            accounts.forEach(acc => {
-                const accName = acc.name || 'بدون اسم';
-                const accPhone = acc.phone || '';
-                if(accName.toLowerCase().includes(query) || accPhone.includes(query)) {
-                    let div = document.createElement('div');
-                    div.className = `chat-account-item ${currentChatTarget === accName ? 'active' : ''}`;
-                    div.onclick = () => selectChatRoom(accName);
-                    div.innerHTML = `<span>👤 ${accName}</span><small style="font-size:8px; opacity:0.8;">${acc.role || 'سائق'}</small>`;
-                    container.appendChild(div);
-                }
-            });
-        }
-
-        function selectChatRoom(targetName) {
-            currentChatTarget = targetName;
-            document.getElementById('chat-current-room-title').innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
-            renderChatAccountsList();
-            renderChatMessages();
-        }
-
-        function sendChatMessage(e) {
-            e.preventDefault();
-            const input = document.getElementById('chat-input-text');
-            const msgText = input.value.trim();
-            if(!msgText) return;
-
-            let newId = String(Date.now());
-            let newMsg = {
-                id: newId,
-                companyId: currentCompanyId,
-                sender: loggedInDriverName,
-                target: currentChatTarget,
-                text: msgText,
-                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-            };
-
-            db.collection('chat').doc(newId).set(newMsg);
-            input.value = '';
-        }
-
-        function renderChatMessages() {
-            const box = document.getElementById('chat-messages-list');
-            if(!box) return;
-            box.innerHTML = '';
-            let messages = appData.chat || [];
-
-            let filtered = messages.filter(m => {
-                if (currentChatTarget === 'general') return m.target === 'general' || !m.target;
-                return (m.sender === loggedInDriverName && m.target === currentChatTarget) || (m.sender === currentChatTarget && m.target === loggedInDriverName);
-            });
-
-            filtered.forEach(m => {
-                let div = document.createElement('div');
-                let isMe = m.sender === loggedInDriverName;
-                div.className = `chat-bubble ${isMe ? 'admin' : 'driver'}`;
-                div.innerHTML = `
-                    <div style="font-weight:bold; font-size:9px; margin-bottom:3px; opacity:0.9;">${m.sender}</div>
-                    <div>${m.text}</div>
-                    <div style="font-size:7px; text-align:left; opacity:0.7; margin-top:3px;">${m.time}</div>
-                `;
-                box.appendChild(div);
-            });
-            box.scrollTop = box.scrollHeight;
-        }
-
-        function renderChatNotificationsInbox() {
-            const container = document.getElementById('chat-notifications-inbox');
-            if(!container) return;
-            container.innerHTML = '';
-            let messages = appData.chat || [];
-            let incoming = messages.filter(m => m.sender !== loggedInDriverName);
-
-            if(incoming.length === 0) {
-                container.innerHTML = `<p style="font-size:10px; text-align:center; opacity:0.8;">لا توجد رسائل واردة.</p>`;
-                return;
-            }
-
-            incoming.slice(-6).reverse().forEach(m => {
-                let div = document.createElement('div');
-                div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; font-size:10px;';
-                div.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--accent);">
-                        <span>من: ${m.sender}</span>
-                        <span style="font-size:8px; opacity:0.7;">${m.time}</span>
-                    </div>
-                    <p style="margin-top:3px;">${m.text}</p>
-                    <button type="button" class="btn-main btn-sm" style="margin-top:6px;" onclick="selectChatRoom('${m.sender}'); switchTab('chat-tab'); closeModal('chatNotificationsModal');">فتح المحادثة 💬</button>
-                `;
-                container.appendChild(div);
-            });
-        }
-
-        function sendQuickChatMessageFromModal() {
-            const input = document.getElementById('quick-notif-reply-text');
-            const text = input.value.trim();
-            if(!text) return;
-
-            let newId = String(Date.now());
-            let newMsg = {
-                id: newId,
-                companyId: currentCompanyId,
-                sender: loggedInDriverName,
-                target: currentChatTarget || 'general',
-                text: text,
-                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-            };
-
-            db.collection('chat').doc(newId).set(newMsg);
-            input.value = '';
-            alert('تم إرسال الرد بنجاح! ✈️');
-        }
-        function previewCommunityFiles(input) {
-            communityFilesArr = [];
-            const info = document.getElementById('community-files-preview-info');
-            if(input.files && input.files.length > 0) {
-                info.innerText = `جاري معالجة ${input.files.length} ملفات...`;
-                let processed = 0;
-                for(let i=0; i<input.files.length; i++) {
-                    let file = input.files[i];
-                    if (file.type.startsWith('image')) {
-                        compressImage(file, 1200, 1000, 0.9, (compressedUrl) => {
-                            communityFilesArr.push({ name: file.name, type: 'image', src: compressedUrl });
-                            processed++;
-                            if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
-                        });
-                    } else if (file.type.startsWith('video')) {
-                        let reader = new FileReader();
-                        reader.onload = (e) => {
-                            communityFilesArr.push({ name: file.name, type: 'video', src: e.target.result });
-                            processed++;
-                            if(processed === input.files.length) info.innerText = `تم اختيار الملفات ✅`;
-                        };
-                        reader.readAsDataURL(file);
-                    } else {
-                        let reader = new FileReader();
-                        reader.onload = (e) => {
-                            communityFilesArr.push({ name: file.name, type: 'doc', src: e.target.result });
-                            processed++;
-                            if(processed === input.files.length) info.innerText = `تم اختيار المستندات ✅`;
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                }
-            } else { info.innerText = ''; }
-        }
                 function renderPublicPosts() {
             const feed = document.getElementById('public-posts-feed');
             if (!feed) return;
@@ -4180,14 +3982,16 @@
 
         function selectChatRoom(targetName) {
             currentChatTarget = targetName;
-            document.getElementById('chat-current-room-title').innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
+            const titleElem = document.getElementById('chat-current-room-title');
+            if (titleElem) titleElem.innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
             renderChatAccountsList();
             renderChatMessages();
         }
 
         function sendChatMessage(e) {
-            e.preventDefault();
+            if (e) e.preventDefault();
             const input = document.getElementById('chat-input-text');
+            if (!input) return;
             const msgText = input.value.trim();
             if(!msgText) return;
 
@@ -4259,6 +4063,7 @@
 
         function sendQuickChatMessageFromModal() {
             const input = document.getElementById('quick-notif-reply-text');
+            if (!input) return;
             const text = input.value.trim();
             if(!text) return;
 
@@ -4276,9 +4081,13 @@
             input.value = '';
             alert('تم إرسال الرد بنجاح! ✈️');
         }
+
+        let communityFilesArr = [];
+
         function previewCommunityFiles(input) {
             communityFilesArr = [];
             const info = document.getElementById('community-files-preview-info');
+            if(!info) return;
             if(input.files && input.files.length > 0) {
                 info.innerText = `جاري معالجة ${input.files.length} ملفات...`;
                 let processed = 0;
@@ -4310,8 +4119,10 @@
                 }
             } else { info.innerText = ''; }
         }
+
         function publishCommunityPost() {
-            const text = document.getElementById('community-post-text').value.trim();
+            const textField = document.getElementById('community-post-text');
+            const text = textField ? textField.value.trim() : '';
             if (!text && communityFilesArr.length === 0) {
                 alert('الرجاء كتابة نص المنشور أو إرفاق صور/ملفات أولاً!');
                 return;
@@ -4329,7 +4140,7 @@
             };
 
             db.collection('communityPosts').doc(newId).set(newPost).then(() => {
-                document.getElementById('community-post-text').value = '';
+                if (textField) textField.value = '';
                 communityFilesArr = [];
                 const info = document.getElementById('community-files-preview-info');
                 if (info) info.innerText = '';
@@ -4339,6 +4150,7 @@
                 alert('حدث خطأ أثناء النشر: ' + err.message);
             });
         }
+
         function renderCommunityPosts() {
             const container = document.getElementById('community-posts-container');
             if(!container) return;
@@ -4612,8 +4424,8 @@
 
         function render() {
             try {
-                renderDriverDropdownOptions();
-                renderRSSTicker();
+                if (typeof renderDriverDropdownOptions === 'function') renderDriverDropdownOptions();
+                if (typeof renderRSSTicker === 'function') renderRSSTicker();
                 
                 const addCompBtnMain = document.getElementById('add-company-btn-main');
                 if (addCompBtnMain) {
@@ -4629,12 +4441,12 @@
                     if (loggedInDriverName === 'المدير') {
                         masterCashCard.style.display = 'block';
                         masterSaasCard.style.display = 'block';
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
+                        if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
+                        if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
                     } else {
                         masterCashCard.style.display = 'none';
                         masterSaasCard.style.display = 'none';
-                        renderCompanyAdminSubscriptionView();
+                        if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
                     }
                 }
                 
@@ -4818,24 +4630,29 @@
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const qrContainer = document.getElementById('qrcode');
+            if (!qrContainer) return;
             qrContainer.innerHTML = '';
-            new QRCode(qrContainer, {
-                text: `https://karamegy.github.io/Na2la/?shipmentId=${s.id}`,
-                width: 160,
-                height: 160
-            });
-            document.getElementById('qr-modal').style.display = 'flex';
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrContainer, {
+                    text: `https://karamegy.github.io/Na2la/?shipmentId=${s.id}`,
+                    width: 160,
+                    height: 160
+                });
+            }
+            const qrModal = document.getElementById('qr-modal');
+            if (qrModal) qrModal.style.display = 'flex';
         }
 
         function closeQRModal() { 
-            document.getElementById('qr-modal').style.display = 'none'; 
+            const qrModal = document.getElementById('qr-modal');
+            if (qrModal) qrModal.style.display = 'none'; 
         }
 
         function updateInvoiceDropdown() {
             const select = document.getElementById('invoice-select');
             if (!select) return;
             select.innerHTML = '';
-            let list = (currentUserRole === 'driver') ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            let list = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
             list.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.id;
@@ -4846,31 +4663,39 @@
         }
 
         function renderSelectedInvoice() {
-            const id = document.getElementById('invoice-select')?.value;
+            const selectElem = document.getElementById('invoice-select');
+            const id = selectElem ? selectElem.value : null;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
-            document.getElementById('inv-id').innerText = s.id;
-            document.getElementById('inv-client').innerText = s.name || '-';
-            document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
-            document.getElementById('inv-address').innerText = s.address || '-';
-            document.getElementById('inv-item').innerText = s.item || '-';
-            document.getElementById('inv-price').innerText = s.price || 0;
-            document.getElementById('inv-status').innerText = `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`;
+            const setVal = (elId, val) => {
+                const el = document.getElementById(elId);
+                if (el) el.innerText = val;
+            };
+
+            setVal('inv-id', s.id);
+            setVal('inv-client', s.name || '-');
+            setVal('inv-phone', s.phone || 'غير مسجل');
+            setVal('inv-address', s.address || '-');
+            setVal('inv-item', s.item || '-');
+            setVal('inv-price', s.price || 0);
+            setVal('inv-status', `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`);
 
             const imgBox = document.getElementById('inv-img-preview');
-            imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
+            if (imgBox) imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
 
             const sigBox = document.getElementById('inv-sig-container');
-            sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
+            if (sigBox) sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
         }
 
         function openInvoiceStandalone() {
-            const id = document.getElementById('invoice-select').value;
+            const selectElem = document.getElementById('invoice-select');
+            const id = selectElem ? selectElem.value : null;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
             const win = window.open('', '_blank');
+            if (!win) return;
             win.document.write(`
                 <html lang="ar" dir="rtl">
                 <head>
@@ -4895,7 +4720,9 @@
         }
 
         function exportInvoiceAsImage() {
-            html2canvas(document.getElementById('print-area')).then(canvas => {
+            const printArea = document.getElementById('print-area');
+            if (!printArea || typeof html2canvas === 'undefined') return;
+            html2canvas(printArea).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `invoice-${Date.now()}.png`;
                 link.href = canvas.toDataURL();
@@ -4904,7 +4731,9 @@
         }
 
         function exportInvoiceAsPDF() {
-            html2canvas(document.getElementById('print-area')).then(canvas => {
+            const printArea = document.getElementById('print-area');
+            if (!printArea || typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') return;
+            html2canvas(printArea).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
@@ -4914,7 +4743,8 @@
         }
 
         function sendInvoiceWhatsApp() {
-            const id = document.getElementById('invoice-select').value;
+            const selectElem = document.getElementById('invoice-select');
+            const id = selectElem ? selectElem.value : null;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const msg = `🧾 *فاتورة شحنة - أسطورة الطريق*\n*العميل:* ${s.name || '-'}\n*الحمولة:* ${s.item || '-'}\n*الأجرة:* ${s.price || 0} ج.م\n*السداد:* ${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'}`;
@@ -4928,7 +4758,8 @@
         }
 
         function exportToExcel() {
-            const ws = XLSX.utils.json_to_sheet(appData.shipments);
+            if (typeof XLSX === 'undefined') return;
+            const ws = XLSX.utils.json_to_sheet(appData.shipments || []);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
             XLSX.writeFile(wb, "na2la_data.xlsx");
@@ -4937,6 +4768,7 @@
         function clearAll() {
             if (currentUserRole !== 'admin') { alert('صلاحية المدير فقط.'); return; }
             if (confirm('تنبيه: مسح كافة البيانات والمجموعات السحابية؟')) {
+                localStorage.clear();
                 location.reload();
             }
         }
