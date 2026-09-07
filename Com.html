@@ -1458,7 +1458,7 @@
                 alert(`✅ تم إرسال البلاغ (${reportType}) ونشره على خريطة شركتك بنجاح!`);
                 loadRadarsOnMap();
                 loadRadarsList();
-                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
+                loadRadarsAndGeofencesCache();
             } catch(e) {
                 alert('⚠️ تعذر إرسال البلاغ السحابي.');
             }
@@ -1682,7 +1682,7 @@
                     });
                     closeGeofenceModal();
                     alert('✅ تم حفظ النطاق الجغرافي السحابي لشركتك بنجاح!');
-                    loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
+                    loadRadarsAndGeofencesCache();
                 } catch(e) {
                     alert('⚠️ فشل الحفظ: ' + e.message);
                 }
@@ -1899,11 +1899,9 @@
                     }
                 }
 
-                // تم إيقاف الإضافة المستمرة المفرطة (addDoc) في trip_logs لحماية حصة الكتابات المجانية
-                // والاعتماد على تحديث موقع السائق بطلب واحد (setDoc merge)
                 if (window.db && window.firebaseModules && currentDriverProfile.id && currentDriverProfile.id !== 'guest') {
                     try {
-                        const { doc, setDoc } = window.firebaseModules;
+                        const { doc, setDoc, serverTimestamp } = window.firebaseModules;
                         let driverId = currentDriverProfile.id;
                         
                         await setDoc(doc(window.db, 'driver_locations', driverId), {
@@ -2332,6 +2330,7 @@
                 alert('فشل مشاركة المنشور: ' + e.message);
             }
         }
+
         function loadCommunityPosts() {
             if (!window.db || !window.firebaseModules) return;
             if (communityUnsubscribe) communityUnsubscribe();
@@ -2355,20 +2354,13 @@
                     posts.push({ id: docSnap.id, ...p });
                 });
 
-                // 🛑 تصفية صارمة: استبعاد منشورات المجتمع العامة ("نقاشات عامة") وإظهار رادارات وحالات الطرق فقط
+                // تصفية مرنة وآمنة لضمان عرض جميع منشورات الشركة دون إخفاء غير مقصود
                 posts = posts.filter(p => {
                     let cat = String(p.category || '').trim();
-                    // استبعاد أي منشور يحمل تصنيف نقاشات عامة أو مجتمعية
-                    if (cat.includes('نقاشات عامة') || cat.includes('مجتمع')) {
+                    if (cat.includes('نقاشات عامة عامة جداً')) {
                         return false;
                     }
-                    // السماح فقط بتصنيفات الرادار، الطرق، الصيانة، الطوارئ، وعروض النقل الخاصة بالشركة
-                    return cat.includes('حالات الطرق') || 
-                           cat.includes('طوارئ') || 
-                           cat.includes('رادار') || 
-                           cat.includes('صيانة') || 
-                           cat.includes('عروض ونقل') || 
-                           p.isEmergency === true;
+                    return true;
                 });
 
                 posts.sort((a, b) => {
@@ -2378,7 +2370,7 @@
                 });
 
                 if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد إشارات رادار أو حالات طرق مسجلة لهذه الشركة حالياً.</p>`;
+                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد إشارات رادار أو حالات طرق مسجلة لهذه الشركة حالياً. ابدأ بإرسال أول إشارة!</p>`;
                     return;
                 }
 
@@ -2415,7 +2407,7 @@
                         commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
                     }
 
-                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; database:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
+                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
 
                     let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || currentDriverProfile.name === 'المدير';
                     let canDelete = (p.author === currentDriverProfile.name) || isManager;
@@ -2430,7 +2422,7 @@
                     card.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <div style="display:flex; align-items:center; gap:6px;">
-                                ${avatarAuthHtml = avatarHtml}
+                                ${avatarHtml}
                                 <div>
                                     <strong style="font-size:10.5px; color:var(--text-color);">${p.author}</strong>
                                     <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
@@ -2550,7 +2542,7 @@
                 alert('تم نشر الرادار / الإضافة سحابياً لشركتك بنجاح 🛰️');
                 loadRadarsOnMap();
                 loadRadarsList();
-                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
+                loadRadarsAndGeofencesCache();
             } catch (err) {}
         }
 
@@ -2563,7 +2555,7 @@
                     alert('تم الحذف سحابياً بنجاح.');
                     loadRadarsOnMap();
                     loadRadarsList();
-                    loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
+                    loadRadarsAndGeofencesCache();
                 } catch (err) {}
             }
         }
@@ -2594,7 +2586,7 @@
                 alert('تم تعديل الرادار سحابياً بنجاح ✅');
                 loadRadarsOnMap();
                 loadRadarsList();
-                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
+                loadRadarsAndGeofencesCache();
             } catch (err) {}
         }
 
@@ -2645,7 +2637,6 @@
             });
         }
 
-        // جلب الرادارات والنطاقات محلياً مرة واحدة (منعاً لاستهلاك القراءات Reads)
         async function loadRadarsAndGeofencesCache() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, query, where } = window.firebaseModules;
@@ -2662,13 +2653,12 @@
 
         function initRadarProximityAndGeofencing() {
             if (!navigator.geolocation) return;
-            loadRadarsAndGeofencesCache(); // تحميل الكاش مرة واحدة
+            loadRadarsAndGeofencesCache();
 
             navigator.geolocation.watchPosition((position) => {
                 const userLat = position.coords.latitude;
                 const userLng = position.coords.longitude;
 
-                // فحص الرادارات محلياً من الكاش (0 قراءات سحابية جديدة!)
                 cachedRadars.forEach(radar => {
                     const distance = calculateDistance(userLat, userLng, radar.lat, radar.lng);
                     if (distance <= 0.5) {
@@ -2681,7 +2671,6 @@
                     }
                 });
 
-                // فحص النطاقات الجغرافية محلياً من الكاش (0 قراءات سحابية جديدة!)
                 cachedGeofences.forEach(zone => {
                     const distance = calculateDistance(userLat, userLng, zone.lat, zone.lng);
                     if (distance <= (zone.radiusKm || 1.0)) {
