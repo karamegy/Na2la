@@ -2145,29 +2145,33 @@
                 };
             };
         }
-
         let communityFilesArr = [];
         function previewCommunityFiles(input) {
             communityFilesArr = [];
             const info = document.getElementById('community-files-preview-info');
             if (input.files && input.files.length > 0) {
+                let processedCount = 0;
+                info.innerText = 'جاري معالجة وضغط الملفات...';
                 for (let i = 0; i < input.files.length; i++) {
                     let file = input.files[i];
                     if (file.type.startsWith('video')) {
-                        if (file.size > 700 * 1024) {
-                            alert(`⚠️ حجم الفيديو "${file.name}" كبير جداً.`);
+                        if (file.size > 500 * 1024) {
+                            alert(`⚠️ حجم الفيديو "${file.name}" كبير، يفضل اختيار فيديو أصغر لسرعة النشر.`);
                             continue;
                         }
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             communityFilesArr.push({ type: 'video', src: e.target.result });
-                            info.innerText = `تمت معالجة الفيديو بنجاح ✅`;
+                            processedCount++;
+                            info.innerText = `تمت جاهزية الملفات (${processedCount}/${input.files.length}) ✅`;
                         };
                         reader.readAsDataURL(file);
                     } else {
-                        compressImage(file, 800, 800, 0.75, (url) => {
+                        // ضغط الصور بقوة أكبر لتقليل الحجم وتسريع النقل السحابي الفوري
+                        compressImage(file, 600, 600, 0.6, (url) => {
                             communityFilesArr.push({ type: 'image', src: url });
-                            info.innerText = `تمت معالجة الملفات بنجاح ✅`;
+                            processedCount++;
+                            info.innerText = `تمت جاهزية الملفات (${processedCount}/${input.files.length}) ✅`;
                         });
                     }
                 }
@@ -2179,7 +2183,8 @@
                 alert('⚠️ قاعدة البيانات لم تكتمل.');
                 return;
             }
-            const text = document.getElementById('community-post-text').value.trim();
+            const textInput = document.getElementById('community-post-text');
+            const text = textInput.value.trim();
             let category = document.getElementById('postCategory').value;
             if (isEmergency) category = 'طوارئ واستغاثة 🆘';
 
@@ -2188,108 +2193,115 @@
                 return; 
             }
 
-            try {
-                let newId = String(Date.now());
-                const { doc, setDoc, serverTimestamp } = window.firebaseModules;
-                let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
+            // 1. تفريغ الحقول وإظهار المنشور فوراً (استجابة فورية طلقة)
+            textInput.value = '';
+            let filesToSend = [...communityFilesArr];
+            communityFilesArr = [];
+            document.getElementById('community-files-preview-info').innerText = '';
 
-                let newPost = {
-                    id: newId,
-                    author: currentDriverProfile.name || 'كابتن',
-                    authorAvatar: currentDriverProfile.avatar || '',
-                    authorTitle: currentDriverProfile.title || 'سائق معتمد',
-                    category: category,
-                    text: text,
-                    files: [...communityFilesArr],
-                    likes: 0,
-                    likedBy: [],
-                    comments: [],
-                    isEmergency: isEmergency,
-                    companyId: activeCompId,
-                    timestamp: serverTimestamp(),
-                    date: new Date().toLocaleString('ar-EG')
-                };
+            let newId = String(Date.now());
+            let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
 
-                await setDoc(doc(window.db, 'communityPosts', newId), newPost);
-                document.getElementById('community-post-text').value = '';
-                communityFilesArr = [];
-                document.getElementById('community-files-preview-info').innerText = '';
-                alert('تم نشر المنشور سحابياً لشركتك بنجاح 🚀');
-                loadCommunityPosts();
-            } catch (error) {
-                alert('فشل النشر: ' + error.message);
-            }
-        }
-
-        let commentImagesTemp = {};
-        function previewCommentFile(postId, input) {
-            if (input.files && input.files[0]) {
-                compressImage(input.files[0], 600, 600, 0.7, (url) => {
-                    commentImagesTemp[postId] = url;
-                    const infoEl = document.getElementById(`comment-preview-info-${postId}`);
-                    if(infoEl) infoEl.innerText = 'تم إرفاق الصورة ✅';
-                });
-            }
-        }
-
-        async function addComment(id) {
-            if (!window.db || !window.firebaseModules) return;
-            let input = document.getElementById(`comment-input-${id}`);
-            let text = input ? input.value.trim() : '';
-            let img = commentImagesTemp[id] || '';
-
-            if(!text && !img) {
-                alert('الرجاء كتابة تعليق أولاً.');
-                return;
-            }
-
-            let newComment = { 
-                author: currentDriverProfile.name, 
-                text: text, 
-                image: img, 
-                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) 
+            let newPost = {
+                id: newId,
+                author: currentDriverProfile.name || 'كابتن',
+                authorAvatar: currentDriverProfile.avatar || '',
+                authorTitle: currentDriverProfile.title || 'سائق معتمد',
+                category: category,
+                text: text,
+                files: filesToSend,
+                likes: 0,
+                likedBy: [],
+                comments: [],
+                isEmergency: isEmergency,
+                companyId: activeCompId,
+                date: new Date().toLocaleString('ar-EG')
             };
 
-            if(input) input.value = '';
-            commentImagesTemp[id] = '';
-            const infoEl = document.getElementById(`comment-preview-info-${id}`);
-            if(infoEl) infoEl.innerText = '';
+            // إدراج المنشور محلياً في أعلى القائمة في نفس اللحظة دون انتظار السحابة
+            prependPostToDOM(newPost);
 
-            appendCommentToDOM(id, newComment);
-
+            // 2. رفع المنشور للسحابة في الخلفية بصمت تام
             try {
-                const { doc, updateDoc, arrayUnion } = window.firebaseModules;
-                let docRef = doc(window.db, 'communityPosts', String(id));
-                await updateDoc(docRef, { comments: arrayUnion(newComment) });
-            } catch (err) {
-                alert('⚠️ فشل إرسال التعليق: ' + err.message);
+                const { doc, setDoc, serverTimestamp } = window.firebaseModules;
+                newPost.timestamp = serverTimestamp();
+                await setDoc(doc(window.db, 'communityPosts', newId), newPost);
+            } catch (error) {
+                console.error('فشل مزامنة المنشور سحابياً:', error);
             }
         }
 
-        function appendCommentToDOM(postId, c) {
-            const commentsListContainer = document.getElementById(`comments-list-${postId}`);
-            const commentCountSpan = document.getElementById(`comments-count-${postId}`);
-            if (commentsListContainer) {
-                let emptyMsg = commentsListContainer.querySelector('.no-comments-msg');
-                if (emptyMsg) emptyMsg.remove();
+        function prependPostToDOM(p) {
+            const container = document.getElementById('community-posts-container');
+            if(!container) return;
 
-                let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
-                let commentDiv = document.createElement('div');
-                commentDiv.className = 'comment-item';
-                commentDiv.innerHTML = `
-                    <div class="comment-header">
-                        <span>👤 ${c.author}</span>
-                        <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
+            // إزالة رسالة "لا توجد منشورات" إن وجدت
+            let emptyMsg = container.querySelector('p');
+            if(emptyMsg && emptyMsg.innerText.includes('لا توجد منشورات')) {
+                container.innerHTML = '';
+            }
+
+            let mediaHtml = '';
+            if (p.files && p.files.length > 0) {
+                mediaHtml += `<div class="load-post-media">`;
+                p.files.forEach(f => {
+                    if (f.type === 'video') {
+                        mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
+                    } else {
+                        mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
+                    }
+                });
+                mediaHtml += `</div>`;
+            }
+
+            let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
+
+            let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || currentDriverProfile.name === 'المدير';
+            let canDelete = (p.author === currentDriverProfile.name) || isManager;
+            let deleteBtnHtml = canDelete ? `<button class="action-icon-btn delete-btn" onclick="deleteCommunityPost('${p.id}')">🗑️ حذف</button>` : '';
+            let shareBtnHtml = `<button class="action-icon-btn" onclick="sharePostToProfile('${encodeURIComponent(p.text || '')}', ${JSON.stringify(p.files || []).replace(/"/g, '&quot;')})">🔗 مشاركة</button>`;
+
+            let card = document.createElement('div');
+            card.className = 'card';
+            card.id = `post-card-${p.id}`;
+            if(p.isEmergency) card.style.border = '2px solid var(--danger)';
+            
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        ${avatarHtml}
+                        <div>
+                            <strong style="font-size:10.5px; color:var(--text-color);">${p.author}</strong>
+                            <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
+                        </div>
                     </div>
-                    <div style="color:var(--text-color);">${c.text || ''}</div>
-                    ${commentImg}
-                `;
-                commentsListContainer.appendChild(commentDiv);
-                commentsListContainer.scrollTop = commentsListContainer.scrollHeight;
-            }
-            if (commentCountSpan) {
-                commentCountSpan.innerText = parseInt(commentCountSpan.innerText || '0') + 1;
-            }
+                    <span style="font-size:8.5px; background:rgba(59,130,246,0.15); color:var(--accent); padding:2px 6px; border-radius:8px; font-weight:bold;">${p.category}</span>
+                </div>
+                <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
+                ${mediaHtml}
+                
+                <div class="post-actions-bar">
+                    <button class="action-icon-btn" onclick="likePost(this, '${p.id}')">👍 تفاعل (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
+                    <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">0</span>)</button>
+                    ${shareBtnHtml}
+                    ${deleteBtnHtml}
+                </div>
+
+                <div id="comments-sec-${p.id}" class="comments-box">
+                    <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">
+                        <div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>
+                    </div>
+                    <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
+                        <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
+                        <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
+                            📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
+                        </label>
+                        <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}')">إرسال</button>
+                    </div>
+                    <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
+                </div>
+            `;
+            container.insertBefore(card, container.firstChild);
         }
 
         async function deleteCommunityPost(id) {
