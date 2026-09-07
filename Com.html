@@ -1020,6 +1020,8 @@
         let callsUnsubscribe = null;
         
         let activeRadarZones = new Set();
+        let cachedRadars = [];
+        let cachedGeofences = [];
 
         let leafletMap = null;
         let truckMarker = null;
@@ -1456,6 +1458,7 @@
                 alert(`✅ تم إرسال البلاغ (${reportType}) ونشره على خريطة شركتك بنجاح!`);
                 loadRadarsOnMap();
                 loadRadarsList();
+                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
             } catch(e) {
                 alert('⚠️ تعذر إرسال البلاغ السحابي.');
             }
@@ -1679,6 +1682,7 @@
                     });
                     closeGeofenceModal();
                     alert('✅ تم حفظ النطاق الجغرافي السحابي لشركتك بنجاح!');
+                    loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
                 } catch(e) {
                     alert('⚠️ فشل الحفظ: ' + e.message);
                 }
@@ -1895,9 +1899,11 @@
                     }
                 }
 
+                // تم إيقاف الإضافة المستمرة المفرطة (addDoc) في trip_logs لحماية حصة الكتابات المجانية
+                // والاعتماد على تحديث موقع السائق بطلب واحد (setDoc merge)
                 if (window.db && window.firebaseModules && currentDriverProfile.id && currentDriverProfile.id !== 'guest') {
                     try {
-                        const { doc, setDoc, collection, addDoc, serverTimestamp } = window.firebaseModules;
+                        const { doc, setDoc } = window.firebaseModules;
                         let driverId = currentDriverProfile.id;
                         
                         await setDoc(doc(window.db, 'driver_locations', driverId), {
@@ -1909,15 +1915,6 @@
                             companyId: currentCompanyId,
                             timestamp: serverTimestamp()
                         }, { merge: true });
-
-                        await addDoc(collection(window.db, 'trip_logs'), {
-                            driverId: driverId,
-                            driverName: currentDriverProfile.name,
-                            lat: lat,
-                            lng: lng,
-                            companyId: currentCompanyId,
-                            timestamp: serverTimestamp()
-                        });
                     } catch (err) {}
                 }
 
@@ -2538,6 +2535,7 @@
                 alert('تم نشر الرادار / الإضافة سحابياً لشركتك بنجاح 🛰️');
                 loadRadarsOnMap();
                 loadRadarsList();
+                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
             } catch (err) {}
         }
 
@@ -2550,6 +2548,7 @@
                     alert('تم الحذف سحابياً بنجاح.');
                     loadRadarsOnMap();
                     loadRadarsList();
+                    loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
                 } catch (err) {}
             }
         }
@@ -2580,6 +2579,7 @@
                 alert('تم تعديل الرادار سحابياً بنجاح ✅');
                 loadRadarsOnMap();
                 loadRadarsList();
+                loadRadarsAndGeofencesCache(); // تحديث الكاش المحلي فوراً
             } catch (err) {}
         }
 
@@ -2630,44 +2630,50 @@
             });
         }
 
+        // جلب الرادارات والنطاقات محلياً مرة واحدة (منعاً لاستهلاك القراءات Reads)
+        async function loadRadarsAndGeofencesCache() {
+            if (!window.db || !window.firebaseModules) return;
+            const { collection, getDocs, query, where } = window.firebaseModules;
+            try {
+                const radarSnap = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId)));
+                cachedRadars = [];
+                radarSnap.forEach(doc => cachedRadars.push(doc.data()));
+
+                const geoSnap = await getDocs(query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId)));
+                cachedGeofences = [];
+                geoSnap.forEach(doc => cachedGeofences.push(doc.data()));
+            } catch (e) {}
+        }
+
         function initRadarProximityAndGeofencing() {
             if (!navigator.geolocation) return;
+            loadRadarsAndGeofencesCache(); // تحميل الكاش مرة واحدة
 
-            navigator.geolocation.watchPosition(async (position) => {
+            navigator.geolocation.watchPosition((position) => {
                 const userLat = position.coords.latitude;
                 const userLng = position.coords.longitude;
 
-                if (window.db && window.firebaseModules) {
-                    try {
-                        const { collection, getDocs, query, where } = window.firebaseModules;
-                        
-                        const radarQuery = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId));
-                        const radarSnapshot = await getDocs(radarQuery);
-                        radarSnapshot.forEach(docSnap => {
-                            const radar = docSnap.data();
-                            const distance = calculateDistance(userLat, userLng, radar.lat, radar.lng);
-                            if (distance <= 0.5) {
-                                if (!activeRadarZones.has(radar.id)) {
-                                    activeRadarZones.add(radar.id);
-                                    triggerRadarWarning(radar.name || 'رادار الشركة');
-                                }
-                            } else if (distance > 0.8) {
-                                activeRadarZones.delete(radar.id);
-                            }
-                        });
+                // فحص الرادارات محلياً من الكاش (0 قراءات سحابية جديدة!)
+                cachedRadars.forEach(radar => {
+                    const distance = calculateDistance(userLat, userLng, radar.lat, radar.lng);
+                    if (distance <= 0.5) {
+                        if (!activeRadarZones.has(radar.id)) {
+                            activeRadarZones.add(radar.id);
+                            triggerRadarWarning(radar.name || 'رادار الشركة');
+                        }
+                    } else if (distance > 0.8) {
+                        activeRadarZones.delete(radar.id);
+                    }
+                });
 
-                        const geoQuery = query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId));
-                        const geoSnapshot = await getDocs(geoQuery);
-                        geoSnapshot.forEach(docSnap => {
-                            const zone = docSnap.data();
-                            const distance = calculateDistance(userLat, userLng, zone.lat, zone.lng);
-                            if (distance <= (zone.radiusKm || 1.0)) {
-                                addNotification(`📍 دخلت النطاق الجغرافي لشركتك: (${zone.name || 'منطقة محددة'})`);
-                            }
-                        });
+                // فحص النطاقات الجغرافية محلياً من الكاش (0 قراءات سحابية جديدة!)
+                cachedGeofences.forEach(zone => {
+                    const distance = calculateDistance(userLat, userLng, zone.lat, zone.lng);
+                    if (distance <= (zone.radiusKm || 1.0)) {
+                        addNotification(`📍 دخلت النطاق الجغرافي لشركتك: (${zone.name || 'منطقة محددة'})`);
+                    }
+                });
 
-                    } catch (err) {}
-                }
             }, (error) => {}, { enableHighAccuracy: true });
         }
 
