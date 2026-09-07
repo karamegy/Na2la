@@ -577,6 +577,7 @@
 
         let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
         let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
+        let urlRole = (urlParams.get('role') || urlParams.get('rank') || urlParams.get('badge') || '').trim();
 
         window.addEventListener('beforeunload', () => {
             if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
@@ -593,14 +594,24 @@
 
             let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
-            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
+            let role = currentDriverProfile.role || urlRole || 'driver';
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`;
         };
 
-        function isUserAdmin(roleValue, nameValue) {
+        function isUserAdmin(roleValue, nameValue, badgeValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
-            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
+            let badge = String(badgeValue || '').toLowerCase().trim();
+            let urlR = String(urlRole || '').toLowerCase().trim();
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة', 'master'];
+            
+            return adminGuesses.includes(role) || 
+                   adminGuesses.includes(name) || 
+                   adminGuesses.includes(badge) || 
+                   adminGuesses.includes(urlR) || 
+                   name.includes('المدير') || 
+                   role.includes('admin') || 
+                   urlR.includes('admin');
         }
 
         function updateUIHeaders() {
@@ -612,51 +623,60 @@
 
         async function initCloudSession() {
             try {
-                const snapshot = await getDocs(collection(db, 'drivers'));
                 let found = null;
-                let targetId = urlUserId.toLowerCase();
 
-                snapshot.forEach(docSnap => {
-                    let d = docSnap.data();
-                    let docId = String(docSnap.id || '').trim().toLowerCase();
-                    let dName = String(d.name || d.driverName || '').trim().toLowerCase();
-                    let dPhone = String(d.phone || '').trim();
+                if (urlUserId) {
+                    // 1. البحث باستخدام مستند المستحدم المباشر
+                    const driverDocRef = doc(db, 'drivers', urlUserId);
+                    const docSnap = await getDoc(driverDocRef);
 
-                    if (targetId) {
-                        if (docId === targetId || dName === targetId || dPhone === targetId || dName.includes(targetId) || targetId.includes(dName)) {
-                            found = { id: docSnap.id, ...d };
+                    if (docSnap.exists()) {
+                        found = { id: docSnap.id, ...docSnap.data() };
+                    } else {
+                        // 2. البحث بالتزامن داخل المجموعة بالاسم أو الهاتف لمنع التعارض
+                        const qDrivers = query(collection(db, 'drivers'), limit(30));
+                        const snapshot = await getDocs(qDrivers);
+                        let target = urlUserId.toLowerCase();
+
+                        snapshot.forEach(d => {
+                            let data = d.data();
+                            let name = String(data.name || data.driverName || '').toLowerCase();
+                            let phone = String(data.phone || '').toLowerCase();
+                            if (d.id.toLowerCase() === target || name === target || phone === target || name.includes(target)) {
+                                found = { id: d.id, ...data };
+                            }
+                        });
+                    }
+
+                    if (found) {
+                        if (found.companyId && String(found.companyId).trim() !== '') {
+                            currentCompanyId = String(found.companyId).trim();
+                            window.companyId = currentCompanyId;
                         }
+                        applyFoundDriverProfile(found);
+                    } else {
+                        let isAdmCheck = isUserAdmin(urlRole, urlUserId, urlRole);
+                        currentDriverProfile = {
+                            id: urlUserId,
+                            name: urlUserId,
+                            rank: isAdmCheck ? 'admin' : 'driver',
+                            role: isAdmCheck ? 'admin' : 'driver',
+                            badge: isAdmCheck ? 'admin' : 'سائق',
+                            title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
+                            permissions: isAdmCheck ? 'صلاحيات كاملة' : 'صلاحيات أساسية',
+                            phone: '',
+                            avatar: urlAvatar || '',
+                            status: 'available',
+                            companyId: currentCompanyId
+                        };
+                        updateAccountUI();
+                        initLiveUserSync(urlUserId);
                     }
-                });
-
-                if (found) {
-                    if (found.companyId && String(found.companyId).trim() !== '') {
-                        currentCompanyId = String(found.companyId).trim();
-                        window.companyId = currentCompanyId;
-                    }
-                    applyFoundDriverProfile(found);
-                } else if (urlUserId) {
-                    let isAdmCheck = isUserAdmin('', urlUserId);
-                    currentDriverProfile = {
-                        id: urlUserId,
-                        name: urlUserId,
-                        rank: isAdmCheck ? 'admin' : 'driver',
-                        role: isAdmCheck ? 'admin' : 'driver',
-                        badge: isAdmCheck ? 'admin' : 'سائق',
-                        title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
-                        permissions: 'صلاحيات أساسية',
-                        phone: '',
-                        avatar: urlAvatar || '',
-                        status: 'available',
-                        companyId: currentCompanyId
-                    };
-                    updateAccountUI();
-                    initLiveUserSync(urlUserId);
                 } else {
                     let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
                     let assignedName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
                     
-                    let isAdmCheck = isUserAdmin('', assignedName);
+                    let isAdmCheck = isUserAdmin(urlRole, assignedName, urlRole);
                     currentDriverProfile = {
                         id: assignedName,
                         name: assignedName,
@@ -675,19 +695,6 @@
                 loadCompanyCover();
                 initRealtimeFeed();
             } catch (err) {
-                currentDriverProfile = {
-                    id: urlUserId || 'guest',
-                    name: urlUserId || 'كابتن الأسطول',
-                    rank: 'driver',
-                    role: 'driver',
-                    badge: 'سائق',
-                    title: 'سائق معتمد',
-                    permissions: 'صلاحيات أساسية',
-                    phone: '',
-                    avatar: urlAvatar || '',
-                    status: 'available',
-                    companyId: currentCompanyId
-                };
                 updateAccountUI();
                 loadCompanyCover();
                 initRealtimeFeed();
@@ -695,7 +702,7 @@
         }
 
         function applyFoundDriverProfile(found) {
-            let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
+            let isAdm = isUserAdmin(found.role || found.rank || urlRole, found.name || found.driverName || urlUserId, found.badge);
             let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || urlAvatar || '';
             if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
@@ -705,7 +712,7 @@
                 phone: found.phone || '',
                 rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
                 role: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
-                badge: isAdmKey(found.badge || (isAdm ? 'admin' : 'سائق')),
+                badge: isAdm ? 'admin' : (found.badge || 'سائق'),
                 title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
                 permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                 avatar: userAvatar,
@@ -715,12 +722,6 @@
 
             updateAccountUI();
             initLiveUserSync(found.id);
-        }
-
-        function isAdmKey(val) {
-            let s = String(val || '').toLowerCase();
-            if (s === 'admin' || s === 'مدير') return 'admin';
-            return val || 'سائق';
         }
 
         function initLiveUserSync(userId) {
@@ -743,7 +744,7 @@
         window.updateAccountUI = function() {
             window.companyId = currentCompanyId;
 
-            let isAdmin = isUserAdmin(currentDriverProfile.role || currentDriverProfile.rank, currentDriverProfile.name);
+            let isAdmin = isUserAdmin(currentDriverProfile.role || currentDriverProfile.rank || urlRole, currentDriverProfile.name, currentDriverProfile.badge);
             window.isAdminMode = isAdmin;
 
             document.getElementById('postingAsAccountName').innerText = currentDriverProfile.name;
@@ -790,8 +791,8 @@
                 await setDoc(doc(db, 'drivers', currentDriverProfile.id), {
                     name: currentDriverProfile.name,
                     avatar: currentDriverProfile.avatar || '',
-                    role: currentDriverProfile.role || 'driver',
-                    badge: currentDriverProfile.badge || 'سائق',
+                    role: currentDriverProfile.role || (window.isAdminMode ? 'admin' : 'driver'),
+                    badge: currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق'),
                     status: currentDriverProfile.status || 'available',
                     companyId: currentCompanyId,
                     phone: currentDriverProfile.phone || '',
@@ -978,19 +979,17 @@
         function initFleetDriversSidebar() {
             if (driversSidebarUnsubscribe) driversSidebarUnsubscribe();
             const container = document.getElementById('fleetDriversListContainer');
-            const driversRef = collection(db, 'drivers');
             
-            driversSidebarUnsubscribe = onSnapshot(driversRef, (snapshot) => {
+            const qDrivers = query(
+                collection(db, 'drivers'),
+                where('companyId', '==', currentCompanyId),
+                limit(40)
+            );
+            
+            driversSidebarUnsubscribe = onSnapshot(qDrivers, (snapshot) => {
                 let driversList = [];
                 snapshot.forEach(docSnap => {
-                    let d = { id: docSnap.id, ...docSnap.data() };
-                    let dComp = String(d.companyId || 'company_main').trim();
-                    let targetComp = String(currentCompanyId || 'company_main').trim();
-                    let matchComp = (targetComp === 'company_main') ? (dComp === 'company_main' || !d.companyId) : (dComp === targetComp);
-
-                    if (matchComp) {
-                        driversList.push(d);
-                    }
+                    driversList.push({ id: docSnap.id, ...docSnap.data() });
                 });
 
                 if(driversList.length === 0) {
@@ -1042,20 +1041,18 @@
             if (chatUnsubscribe) chatUnsubscribe();
             const stream = document.getElementById('fullScreenChatMessages');
             
-            const qChat = query(collection(db, 'chat'), limit(50));
+            const qChat = query(
+                collection(db, 'chat'),
+                where('companyId', '==', currentCompanyId),
+                limit(50)
+            );
 
             chatUnsubscribe = onSnapshot(qChat, (snapshot) => {
                 let msgs = [];
                 snapshot.forEach(d => {
-                    let m = { id: d.id, ...d.data() };
-                    let mComp = String(m.companyId || 'company_main').trim();
-                    let targetComp = String(currentCompanyId || 'company_main').trim();
-                    let matchComp = (targetComp === 'company_main') ? (mComp === 'company_main' || !m.companyId) : (mComp === targetComp);
-
-                    if (matchComp) {
-                        msgs.push(m);
-                    }
+                    msgs.push({ id: d.id, ...d.data() });
                 });
+
                 msgs.sort((a, b) => {
                     let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
                     let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
@@ -1358,9 +1355,10 @@
 
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
             try {
+                let currentBadge = currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق');
                 await addDoc(collection(db, 'communityPosts'), {
                     author: currentDriverProfile.name,
-                    badge: currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق'),
+                    badge: currentBadge,
                     avatar: currentDriverProfile.avatar || '',
                     status: currentDriverProfile.status || 'available',
                     category: category,
@@ -1385,7 +1383,7 @@
                 clearAttachedMedia();
                 alert("🚀 تم النشر بنجاح في سحابة شركتك الخاصة!");
             } catch(e) {
-                alert("خطأ أثناء النشر (قد يكون حجم الملف كبيراً جداً على قاعدة البيانات): " + e.message);
+                alert("خطأ أثناء النشر: " + e.message);
             }
         }
 
@@ -1676,20 +1674,17 @@
         function initRealtimeFeed() {
             if (feedUnsubscribe) feedUnsubscribe();
             
-            const qFeed = query(collection(db, 'communityPosts'), limit(30));
+            const qFeed = query(
+                collection(db, 'communityPosts'),
+                where('companyId', '==', currentCompanyId),
+                limit(30)
+            );
 
             feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
                 try {
                     cachedPosts = [];
                     snapshot.forEach(d => {
-                        let data = { id: d.id, ...d.data() };
-                        let postCompany = String(data.companyId || 'company_main').trim();
-                        let targetComp = String(currentCompanyId || 'company_main').trim();
-                        let matchComp = (targetComp === 'company_main') ? (postCompany === 'company_main' || !data.companyId) : (postCompany === targetComp);
-
-                        if (matchComp) {
-                            cachedPosts.push(data);
-                        }
+                        cachedPosts.push({ id: d.id, ...d.data() });
                     });
                     
                     cachedPosts.sort((a, b) => {
@@ -1710,4 +1705,4 @@
         };
     </script>
 </body>
-    </html>
+</html>
