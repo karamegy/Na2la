@@ -327,7 +327,7 @@
         </div>
     </div>
 
-    <!-- الشريط العلوي المطور -->
+    <!-- الشريط العلوي -->
     <header class="na2la-top-bar">
         <div class="na2la-brand-area">
             <div id="topBarUserAvatar" class="na2la-user-mini-avatar">👤</div>
@@ -530,7 +530,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { 
             getFirestore, collection, addDoc, getDocs, doc, updateDoc, 
-            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc, limit, where 
+            query, orderBy, onSnapshot, setDoc, getDoc, deleteDoc, limit, where, serverTimestamp 
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -547,7 +547,26 @@
         const db = getFirestore(app);
         window.db = db;
 
-        let currentCompanyId = 'company_main';
+        const urlParams = new URLSearchParams(window.location.search);
+        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || '').trim();
+        let storedCompanyId = localStorage.getItem('na2la_company_id');
+
+        let currentCompanyId = (urlCompanyId && urlCompanyId !== 'null' && urlCompanyId !== '') 
+            ? urlCompanyId 
+            : (storedCompanyId || 'company_main');
+
+        window.companyId = currentCompanyId;
+        localStorage.setItem('na2la_company_id', currentCompanyId);
+
+        let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
+        let storedUserId = localStorage.getItem('na2la_user_id');
+        if (!urlUserId && storedUserId) {
+            urlUserId = storedUserId;
+        }
+
+        let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
+        let urlRole = (urlParams.get('role') || urlParams.get('rank') || urlParams.get('badge') || '').trim();
+
         let currentDriverProfile = {
             id: '',
             name: 'جاري التحميل...',
@@ -569,15 +588,6 @@
 
         let cachedPosts = [];
         let currentFilterCategory = 'الكل';
-
-        const urlParams = new URLSearchParams(window.location.search);
-        let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || '').trim();
-        currentCompanyId = (urlCompanyId && urlCompanyId !== 'null' && urlCompanyId !== '') ? urlCompanyId : 'company_main';
-        window.companyId = currentCompanyId;
-
-        let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
-        let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
-        let urlRole = (urlParams.get('role') || urlParams.get('rank') || urlParams.get('badge') || '').trim();
 
         window.addEventListener('beforeunload', () => {
             if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
@@ -626,14 +636,12 @@
                 let found = null;
 
                 if (urlUserId) {
-                    // 1. البحث باستخدام مستند المستحدم المباشر
                     const driverDocRef = doc(db, 'drivers', urlUserId);
                     const docSnap = await getDoc(driverDocRef);
 
                     if (docSnap.exists()) {
                         found = { id: docSnap.id, ...docSnap.data() };
                     } else {
-                        // 2. البحث بالتزامن داخل المجموعة بالاسم أو الهاتف لمنع التعارض
                         const qDrivers = query(collection(db, 'drivers'), limit(30));
                         const snapshot = await getDocs(qDrivers);
                         let target = urlUserId.toLowerCase();
@@ -652,6 +660,7 @@
                         if (found.companyId && String(found.companyId).trim() !== '') {
                             currentCompanyId = String(found.companyId).trim();
                             window.companyId = currentCompanyId;
+                            localStorage.setItem('na2la_company_id', currentCompanyId);
                         }
                         applyFoundDriverProfile(found);
                     } else {
@@ -669,6 +678,7 @@
                             status: 'available',
                             companyId: currentCompanyId
                         };
+                        localStorage.setItem('na2la_user_id', urlUserId);
                         updateAccountUI();
                         initLiveUserSync(urlUserId);
                     }
@@ -689,6 +699,7 @@
                         status: 'available',
                         companyId: currentCompanyId
                     };
+                    localStorage.setItem('na2la_user_id', assignedName);
                     updateAccountUI();
                 }
                 updateUIHeaders();
@@ -720,6 +731,7 @@
                 companyId: currentCompanyId
             };
 
+            localStorage.setItem('na2la_user_id', found.id);
             updateAccountUI();
             initLiveUserSync(found.id);
         }
@@ -735,6 +747,7 @@
                     if (dComp && dComp !== currentCompanyId) {
                         currentCompanyId = dComp;
                         window.companyId = currentCompanyId;
+                        localStorage.setItem('na2la_company_id', currentCompanyId);
                     }
                     applyFoundDriverProfile({ id: docSnap.id, ...d });
                 }
@@ -835,7 +848,7 @@
                             await setDoc(doc(db, "companySettings", currentCompanyId), { 
                                 coverUrl: compressedBase64, 
                                 companyId: currentCompanyId,
-                                updatedAt: new Date()
+                                updatedAt: serverTimestamp()
                             }, { merge: true });
                             
                             document.getElementById('communityCoverArea').style.backgroundImage = `url('${compressedBase64}')`;
@@ -1028,7 +1041,7 @@
                     avatar: currentDriverProfile.avatar || "",
                     text: text,
                     companyId: currentCompanyId,
-                    timestamp: new Date(),
+                    timestamp: serverTimestamp(),
                     time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
                 });
                 input.value = "";
@@ -1130,7 +1143,7 @@
                     caller: currentDriverProfile.name,
                     type: type,
                     companyId: currentCompanyId,
-                    timestamp: new Date()
+                    timestamp: serverTimestamp()
                 });
 
                 statusText.innerText = '● في انتظار استجابة الزملاء في الأسطول...';
@@ -1368,7 +1381,8 @@
                     poll: pollData || null,
                     isPinned: isPinned || false,
                     companyId: currentCompanyId,
-                    timestamp: new Date(),
+                    timestamp: serverTimestamp(),
+                    time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}),
                     reactions: { like: 0, love: 0, fire: 0, clap: 0 },
                     reactedUsers: {},
                     comments: []
@@ -1677,7 +1691,7 @@
             const qFeed = query(
                 collection(db, 'communityPosts'),
                 where('companyId', '==', currentCompanyId),
-                limit(30)
+                limit(50)
             );
 
             feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
@@ -1688,8 +1702,18 @@
                     });
                     
                     cachedPosts.sort((a, b) => {
-                        let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-                        let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+                        let timeA = 0;
+                        let timeB = 0;
+                        if (a.timestamp && typeof a.timestamp.toMillis === 'function') {
+                            timeA = a.timestamp.toMillis();
+                        } else if (a.timestamp && a.timestamp.seconds) {
+                            timeA = a.timestamp.seconds * 1000;
+                        }
+                        if (b.timestamp && typeof b.timestamp.toMillis === 'function') {
+                            timeB = b.timestamp.toMillis();
+                        } else if (b.timestamp && b.timestamp.seconds) {
+                            timeB = b.timestamp.seconds * 1000;
+                        }
                         return timeB - timeA;
                     });
 
