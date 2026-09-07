@@ -2332,7 +2332,6 @@
                 alert('فشل مشاركة المنشور: ' + e.message);
             }
         }
-
         function loadCommunityPosts() {
             if (!window.db || !window.firebaseModules) return;
             if (communityUnsubscribe) communityUnsubscribe();
@@ -2343,7 +2342,7 @@
             const q = query(
                 collection(window.db, 'communityPosts'), 
                 where('companyId', '==', activeCompId),
-                limit(20)
+                limit(30)
             );
             
             communityUnsubscribe = onSnapshot(q, snapshot => {
@@ -2356,6 +2355,22 @@
                     posts.push({ id: docSnap.id, ...p });
                 });
 
+                // 🛑 تصفية صارمة: استبعاد منشورات المجتمع العامة ("نقاشات عامة") وإظهار رادارات وحالات الطرق فقط
+                posts = posts.filter(p => {
+                    let cat = String(p.category || '').trim();
+                    // استبعاد أي منشور يحمل تصنيف نقاشات عامة أو مجتمعية
+                    if (cat.includes('نقاشات عامة') || cat.includes('مجتمع')) {
+                        return false;
+                    }
+                    // السماح فقط بتصنيفات الرادار، الطرق، الصيانة، الطوارئ، وعروض النقل الخاصة بالشركة
+                    return cat.includes('حالات الطرق') || 
+                           cat.includes('طوارئ') || 
+                           cat.includes('رادار') || 
+                           cat.includes('صيانة') || 
+                           cat.includes('عروض ونقل') || 
+                           p.isEmergency === true;
+                });
+
                 posts.sort((a, b) => {
                     let timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (Number(a.id) || 0);
                     let timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (Number(b.id) || 0);
@@ -2363,7 +2378,7 @@
                 });
 
                 if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات لهذه الشركة حالياً.</p>`;
+                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد إشارات رادار أو حالات طرق مسجلة لهذه الشركة حالياً.</p>`;
                     return;
                 }
 
@@ -2400,7 +2415,7 @@
                         commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
                     }
 
-                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
+                    let avatarHtml = (p.authorAvatar && p.authorAvatar !== 'undefined') ? `<img src="${p.authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; database:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${p.author ? p.author.charAt(0) : 'ك'}</div>`;
 
                     let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || currentDriverProfile.name === 'المدير';
                     let canDelete = (p.author === currentDriverProfile.name) || isManager;
@@ -2415,7 +2430,7 @@
                     card.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <div style="display:flex; align-items:center; gap:6px;">
-                                ${avatarHtml}
+                                ${avatarAuthHtml = avatarHtml}
                                 <div>
                                     <strong style="font-size:10.5px; color:var(--text-color);">${p.author}</strong>
                                     <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق'}</span>
