@@ -1,16 +1,23 @@
-const CACHE_NAME = 'na2la-hub-v3';
+const CACHE_NAME = 'na2la-hub-v4';
 
-// قائمة الصفحات والملفات الأساسية التي تريد إتاحتها أونلاين/أوفلاين
+// قائمة الصفحات، الملفات، والأيقونات الأساسية المتاحة أونلاين/أوفلاين
 const assetsToCache = [
+  './',
   './index.html',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  './na2la-bot.js',
   './cargo.html',
   './drivers.html',
   './community.html',
   './driver-profile.html',
   './drivers-community.html',
   './operations-hub.html',
-  './world.html'
+  './world.html',
+  './Panda.html',
+  './Pandan2la.html',
+  './Com.html'
 ];
 
 // تثبيت الخدمة وتخزين الملفات الأساسية
@@ -20,10 +27,10 @@ self.addEventListener('install', (e) => {
       return cache.addAll(assetsToCache);
     })
   );
-  self.skipWaiting(); // اجبار الخدمة الجديدة على التفعيل فوراً
+  self.skipWaiting();
 });
 
-// تفعيل الخدمة وحذف التخزين القديم
+// تفعيل الخدمة وتنظيف الكاش القديم
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keyList) => {
@@ -38,21 +45,25 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// جلب الملفات مع استثناء طلبات قواعد البيانات (Firebase) لضمان عدم تعطل النظام
+// جلب الملفات مع استثناء طلبات قواعد البيانات والخدمات السحابية
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // إذا كان الطلب موجهاً إلى Firebase أو خدمات خارجية، لا تقم بتخزينه في الكاش العادي
-  if (url.origin.includes('firebaseio.com') || url.origin.includes('googleapis.com') || url.pathname.includes('/__/auth/')) {
+  // استثناء طلبات Firebase وGoogle Services لضمان تدفق البيانات الحي
+  if (
+    url.origin.includes('firebaseio.com') || 
+    url.origin.includes('googleapis.com') || 
+    url.origin.includes('gstatic.com') ||
+    url.pathname.includes('/__/auth/')
+  ) {
     e.respondWith(fetch(e.request));
     return;
   }
 
-  // باقي ملفات التطبيق المحلية يتم جلبها من الكاش أولاً ثم الشبكة
+  // الاستجابة من الكاش أولاً ثم الشبكة
   e.respondWith(
     caches.match(e.request).then((response) => {
       return response || fetch(e.request).catch(() => {
-        // لو فشل الاتصال ولم يكن الملف موجوداً في الكاش، يمكنك توجيهه لصفحة الـ index
         if (e.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
