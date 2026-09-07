@@ -577,6 +577,7 @@
 
         let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
         let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
+        let urlRole = (urlParams.get('role') || urlParams.get('rank') || urlParams.get('badge') || '').trim();
 
         window.addEventListener('beforeunload', () => {
             if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
@@ -593,14 +594,24 @@
 
             let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
-            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`;
+            let role = currentDriverProfile.role || urlRole || 'driver';
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`;
         };
 
-        function isUserAdmin(roleValue, nameValue) {
+        function isUserAdmin(roleValue, nameValue, badgeValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة'];
-            return adminGuesses.includes(role) || adminGuesses.includes(name) || name.includes('المدير');
+            let badge = String(badgeValue || '').toLowerCase().trim();
+            let urlR = String(urlRole || '').toLowerCase().trim();
+            const adminGuesses = ['admin', 'مدير', 'مدير نظام', 'مشرف', 'مدير عام', 'المدير', 'مدير شركة', 'master'];
+            
+            return adminGuesses.includes(role) || 
+                   adminGuesses.includes(name) || 
+                   adminGuesses.includes(badge) || 
+                   adminGuesses.includes(urlR) || 
+                   name.includes('المدير') || 
+                   role.includes('admin') || 
+                   urlR.includes('admin');
         }
 
         function updateUIHeaders() {
@@ -612,19 +623,39 @@
 
         async function initCloudSession() {
             try {
+                let found = null;
+
                 if (urlUserId) {
+                    // 1. البحث باستخدام مستند المستحدم المباشر
                     const driverDocRef = doc(db, 'drivers', urlUserId);
                     const docSnap = await getDoc(driverDocRef);
 
                     if (docSnap.exists()) {
-                        let found = { id: docSnap.id, ...docSnap.data() };
+                        found = { id: docSnap.id, ...docSnap.data() };
+                    } else {
+                        // 2. البحث بالتزامن داخل المجموعة بالاسم أو الهاتف لمنع التعارض
+                        const qDrivers = query(collection(db, 'drivers'), limit(30));
+                        const snapshot = await getDocs(qDrivers);
+                        let target = urlUserId.toLowerCase();
+
+                        snapshot.forEach(d => {
+                            let data = d.data();
+                            let name = String(data.name || data.driverName || '').toLowerCase();
+                            let phone = String(data.phone || '').toLowerCase();
+                            if (d.id.toLowerCase() === target || name === target || phone === target || name.includes(target)) {
+                                found = { id: d.id, ...data };
+                            }
+                        });
+                    }
+
+                    if (found) {
                         if (found.companyId && String(found.companyId).trim() !== '') {
                             currentCompanyId = String(found.companyId).trim();
                             window.companyId = currentCompanyId;
                         }
                         applyFoundDriverProfile(found);
                     } else {
-                        let isAdmCheck = isUserAdmin('', urlUserId);
+                        let isAdmCheck = isUserAdmin(urlRole, urlUserId, urlRole);
                         currentDriverProfile = {
                             id: urlUserId,
                             name: urlUserId,
@@ -632,7 +663,7 @@
                             role: isAdmCheck ? 'admin' : 'driver',
                             badge: isAdmCheck ? 'admin' : 'سائق',
                             title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
-                            permissions: 'صلاحيات أساسية',
+                            permissions: isAdmCheck ? 'صلاحيات كاملة' : 'صلاحيات أساسية',
                             phone: '',
                             avatar: urlAvatar || '',
                             status: 'available',
@@ -645,7 +676,7 @@
                     let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
                     let assignedName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
                     
-                    let isAdmCheck = isUserAdmin('', assignedName);
+                    let isAdmCheck = isUserAdmin(urlRole, assignedName, urlRole);
                     currentDriverProfile = {
                         id: assignedName,
                         name: assignedName,
@@ -671,7 +702,7 @@
         }
 
         function applyFoundDriverProfile(found) {
-            let isAdm = isUserAdmin(found.role || found.rank, found.name || found.driverName);
+            let isAdm = isUserAdmin(found.role || found.rank || urlRole, found.name || found.driverName || urlUserId, found.badge);
             let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || urlAvatar || '';
             if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
@@ -681,7 +712,7 @@
                 phone: found.phone || '',
                 rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
                 role: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
-                badge: isAdmKey(found.badge || (isAdm ? 'admin' : 'سائق')),
+                badge: isAdm ? 'admin' : (found.badge || 'سائق'),
                 title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
                 permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                 avatar: userAvatar,
@@ -691,12 +722,6 @@
 
             updateAccountUI();
             initLiveUserSync(found.id);
-        }
-
-        function isAdmKey(val) {
-            let s = String(val || '').toLowerCase();
-            if (s === 'admin' || s === 'مدير') return 'admin';
-            return val || 'سائق';
         }
 
         function initLiveUserSync(userId) {
@@ -719,7 +744,7 @@
         window.updateAccountUI = function() {
             window.companyId = currentCompanyId;
 
-            let isAdmin = isUserAdmin(currentDriverProfile.role || currentDriverProfile.rank, currentDriverProfile.name);
+            let isAdmin = isUserAdmin(currentDriverProfile.role || currentDriverProfile.rank || urlRole, currentDriverProfile.name, currentDriverProfile.badge);
             window.isAdminMode = isAdmin;
 
             document.getElementById('postingAsAccountName').innerText = currentDriverProfile.name;
@@ -766,8 +791,8 @@
                 await setDoc(doc(db, 'drivers', currentDriverProfile.id), {
                     name: currentDriverProfile.name,
                     avatar: currentDriverProfile.avatar || '',
-                    role: currentDriverProfile.role || 'driver',
-                    badge: currentDriverProfile.badge || 'سائق',
+                    role: currentDriverProfile.role || (window.isAdminMode ? 'admin' : 'driver'),
+                    badge: currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق'),
                     status: currentDriverProfile.status || 'available',
                     companyId: currentCompanyId,
                     phone: currentDriverProfile.phone || '',
@@ -1330,9 +1355,10 @@
 
         async function savePostToCloud(text, category, mediaData, mediaType, pollData, isPinned) {
             try {
+                let currentBadge = currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق');
                 await addDoc(collection(db, 'communityPosts'), {
                     author: currentDriverProfile.name,
-                    badge: currentDriverProfile.badge || (window.isAdminMode ? 'admin' : 'سائق'),
+                    badge: currentBadge,
                     avatar: currentDriverProfile.avatar || '',
                     status: currentDriverProfile.status || 'available',
                     category: category,
