@@ -346,7 +346,7 @@
                 <button type="button" onclick="closeModal('addCompanyModal')" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
             </div>
             <form id="new-company-form" onsubmit="event.preventDefault(); handleCreateCompanySubmit();">
-                <input type="text" id="new-comp-name" placeholder="اسم الشركة (مثال: النجم لشحن)" required>
+                <input type="text" id="new-comp-name" placeholder="اسم الشركة (مثال: النجم للشحن)" required>
                 <input type="text" id="new-comp-admin-name" placeholder="اسم مدير الشركة الرباعي" required>
                 <input type="tel" id="new-comp-admin-phone" inputmode="tel" oninput="this.value = this.value.replace(/[^0-9+]/g, '')" placeholder="رقم هاتف المدير" required>
                 <input type="password" id="new-comp-admin-pin" placeholder="رمز المرور السري (PIN)" required>
@@ -1280,11 +1280,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // دالة مساعدة لتوليد معرفات فريدة وآمنة من الفايربيس لتجنب تضارب البيانات
-        function getSafeDocId(collectionName) {
-            return db.collection(collectionName).doc().id;
-        }
-
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         let storedPin = '01036';
         let currentUserRole = localStorage.getItem('current_user_role') || ''; 
@@ -1384,10 +1379,9 @@
                 if (credential) {
                     const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
                     let drv = getCurrentDriver();
-                    let newBioId = getSafeDocId('biometricCredentials');
                     
                     let newCredObj = {
-                        id: newBioId,
+                        id: 'bio_' + Date.now(),
                         companyId: currentCompanyId || 'company_main',
                         driverId: String(drv.id || '1'),
                         driverName: loggedInDriverName,
@@ -1396,7 +1390,7 @@
                         createdAt: new Date().toLocaleString('ar-EG')
                     };
 
-                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj, { merge: true });
+                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
                     alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
                     renderBiometricManagementTable();
                 }
@@ -1554,8 +1548,8 @@
                 return;
             }
 
-            const newCompanyId = 'comp_' + getSafeDocId('companies');
-            const newAdminId = getSafeDocId('drivers');
+            const newCompanyId = 'comp_' + Date.now();
+            const newAdminId = String(Date.now());
             
             let expiryDate = new Date();
             expiryDate.setMonth(expiryDate.getMonth() + months);
@@ -1578,7 +1572,7 @@
             };
 
             try {
-                await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin, { merge: true });
+                await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
 
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
@@ -1606,7 +1600,7 @@
             }
 
             let drv = getCurrentDriver();
-            const reqId = getSafeDocId('subscription_requests');
+            const reqId = String(Date.now());
             const reqObj = {
                 id: reqId,
                 companyId: currentCompanyId,
@@ -1620,7 +1614,7 @@
                 createdAt: new Date().toISOString()
             };
 
-            db.collection('subscription_requests').doc(reqId).set(reqObj, { merge: true }).then(() => {
+            db.collection('subscription_requests').doc(reqId).set(reqObj).then(() => {
                 closeModal('cashPayModal');
                 document.getElementById('cash-sub-form').reset();
                 alert('تم إرسال طلب تجديد الاشتراك والرمز المرجعي للماستر أدمن بنجاح! سيتم فحص التحويل وتفعيل اشتراك شركتك قريباً. 🚀');
@@ -1794,7 +1788,7 @@
                         subStatus: 'active',
                         subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                     };
-                    await db.collection('drivers').doc(newId).set(newDrv, { merge: true });
+                    await db.collection('drivers').doc(newId).set(newDrv);
                     loggedInDriverName = newDrv.name;
                 } else {
                     loggedInDriverName = existingDrv.name;
@@ -1972,62 +1966,58 @@
             }, 300);
         }
 
-        // إدارة مستمعي Firebase بكفاءة عالية لمنع استنزاف القراءات وتوفير الاستهلاك
+        // إدارة مستمعي Firebase بكفاءة لمنع استنزاف القراءات وتكرار الاتصالات
         let activeListeners = {};
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            // 1. استعلام الشات (محسّن لجلب آخر 40 رسالة فقط)
-            let chatQuery = db.collection('chat').limit(40);
-            if (currentCompanyId && currentCompanyId !== 'company_main') {
-                chatQuery = db.collection('chat').where('companyId', '==', currentCompanyId).limit(40);
-            }
-            if (activeListeners['chat']) activeListeners['chat']();
-            activeListeners['chat'] = chatQuery.onSnapshot(snapshot => {
-                appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                appData.chat.sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
-                if (typeof renderChatMessages === 'function') renderChatMessages();
-                if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            });
-
-            // 2. استعلام منشورات المجتمع (محسّن لجلب آخر 30 منشور فقط)
-            let communityQuery = db.collection('communityPosts').limit(30);
-            if (activeListeners['communityPosts']) activeListeners['communityPosts']();
-            activeListeners['communityPosts'] = communityQuery.onSnapshot(snapshot => {
-                appData.communityPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (document.getElementById('driversCommunityModal').style.display === 'flex') {
-                    renderCommunityPosts();
-                }
-            });
-
-            // 3. المجموعات الرئيسية مع تطبيق العزل وقيد القراءات (Limit)
-            const generalCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'docs', 'biometricCredentials', 'trucks', 'customers'];
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
             
-            generalCollections.forEach(colName => {
+            collections.forEach(colName => {
                 let queryRef = db.collection(colName);
-                
-                // عزل سحابي على مستوى السيرفر
                 if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
                     queryRef = queryRef.where('companyId', '==', currentCompanyId);
                 }
                 
-                // تحديد أقصى حد لجلب البيانات لتقليل القراءات والتكلفة
-                if (['shipments', 'deferredInvoices', 'treasury', 'expenses'].includes(colName)) {
-                    queryRef = queryRef.limit(100);
-                }
-
                 if (activeListeners[colName]) {
-                    activeListeners[colName]();
+                    activeListeners[colName](); // إلغاء الاستماع القديم لمنع التكرار واستنزاف القراءات
                 }
 
-                activeListeners[colName] = queryRef.onSnapshot(snapshot => {
-                    appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (colName === 'communityPosts') {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
                     scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
                 });
             });
 
-            if (activeListeners['systemSettings']) activeListeners['systemSettings']();
+            if (activeListeners['systemSettings']) {
+                activeListeners['systemSettings']();
+            }
             activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
                 if (doc.exists && doc.data().newsText) {
                     appData.newsText = doc.data().newsText;
@@ -2772,7 +2762,7 @@
             let status = 'pending';
             if (remainingAmount <= 0) status = 'paid';
 
-            const newId = getSafeDocId('deferredInvoices');
+            const newId = String(Date.now());
             const newInv = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -2788,7 +2778,7 @@
                 issueDate: new Date().toISOString().split('T')[0]
             };
 
-            db.collection('deferredInvoices').doc(newId).set(newInv, { merge: true }).then(() => {
+            db.collection('deferredInvoices').doc(newId).set(newInv).then(() => {
                 document.getElementById('deferred-invoice-form').reset();
                 closeModal('addDeferredModal');
                 alert('تم حفظ وإضافة الفاتورة الآجلة في مجموعتها المستقلة بنجاح! ⏳🚀');
@@ -3043,7 +3033,7 @@
                 if(found) totalAmount += Number(found.price || 0);
             });
 
-            const newId = getSafeDocId('consolidatedInvoices');
+            const newId = String(Date.now());
             const newConInv = {
                 id: newId,
                 invoiceNumber: newId,
@@ -3055,7 +3045,7 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            db.collection('consolidatedInvoices').doc(newId).set(newConInv, { merge: true }).then(() => {
+            db.collection('consolidatedInvoices').doc(newId).set(newConInv).then(() => {
                 document.getElementById('consolidated-invoice-form').reset();
                 alert('تم إصدار وتخزين الفاتورة المجمعة في مجموعتها المستقلة بنجاح! 📑🚀');
             });
@@ -3219,7 +3209,7 @@
             return drv;
         }
 
-        function renderMyAccount() {
+         function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
@@ -3418,10 +3408,9 @@
                 return;
             }
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-            let newPostId = getSafeDocId('profileWalls');
             
             let postData = {
-                id: newPostId,
+                id: String(Date.now()),
                 companyId: currentCompanyId,
                 profileName: activeTargetName,
                 author: loggedInDriverName,
@@ -3430,7 +3419,7 @@
                 date: new Date().toLocaleString('ar-EG')
             };
 
-            db.collection('profileWalls').doc(newPostId).set(postData, { merge: true }).then(() => {
+            db.collection('profileWalls').add(postData).then(() => {
                 document.getElementById('profile-wall-text').value = '';
                 profileWallFilesArr = [];
                 document.getElementById('profile-wall-files-info').innerText = '';
@@ -3546,7 +3535,7 @@
             const item = document.getElementById('vis-item').value.trim();
             const price = Number(document.getElementById('vis-price').value);
 
-            let newId = getSafeDocId('shipments');
+            let newId = String(Date.now());
             let newShip = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -3565,7 +3554,7 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            db.collection('shipments').doc(newId).set(newShip, { merge: true }).then(() => {
+            db.collection('shipments').doc(newId).set(newShip).then(() => {
                 closeVisitorBooking();
                 alert('تم تقديم طلبك بنجاح وسيتواصل معك فريق الإدارة! 🚀');
                 document.getElementById('visitor-shipment-form').reset();
@@ -3582,7 +3571,7 @@
             if(exists) { alert('هذا الحساب أو الهاتف مسجل بالفعل!'); return; }
 
             try {
-                let uid = getSafeDocId('drivers');
+                let uid = String(Date.now());
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid,
@@ -3602,7 +3591,7 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
 
-                await db.collection('drivers').doc(uid).set(newDrv, { merge: true });
+                await db.collection('drivers').doc(uid).set(newDrv);
 
                 closeDriverRegister();
                 alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
@@ -3627,31 +3616,22 @@
             const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            // فحص تضارب جدول السائقين المباشر عبر السيرفر لتجنب الحجز المزدوج
+            // فحص تضارب جدول السائق بدقة تامة لتجنب تضارب الشحنات
             if (assignedDriver) {
-                try {
-                    const conflictCheck = await db.collection('shipments')
-                        .where('assignedDriver', '==', assignedDriver)
-                        .where('status', 'in', ['في الانتظار', 'في الطريق'])
-                        .get();
+                let activeConflict = (appData.shipments || []).find(s => {
+                    let isSameDriver = s.assignedDriver === assignedDriver;
+                    let isActiveStatus = (s.status === 'في الانتظار' || s.status === 'في الطريق');
+                    let isNotCurrentEdit = editId ? String(s.id) !== String(editId) : true;
+                    return isSameDriver && isActiveStatus && isNotCurrentEdit;
+                });
 
-                    let hasConflict = false;
-                    conflictCheck.forEach(doc => {
-                        if (!editId || doc.id !== editId) {
-                            hasConflict = true;
-                        }
-                    });
-
-                    if (hasConflict) {
-                        let confirmOverride = confirm(`⚠️ تنبيه تضارب آمن:\nالسائق (${assignedDriver}) لديه رحلة جارية بالفعل مسجلة على السيرفر!\nهل تريد تجاوز التضارب وإسناد الرحلة له على أي حال؟`);
-                        if (!confirmOverride) return;
-                    }
-                } catch (err) {
-                    console.error("Conflict check error:", err);
+                if (activeConflict) {
+                    let confirmConflict = confirm(`⚠️ تنبيه تضارب جدول السائقين:\nالسائق (${assignedDriver}) لديه رحلة نشطة بالفعل حالياً (${activeConflict.item} - الحالة: ${activeConflict.status}).\nهل أنت متأكد من رغبتك في إسناد هذه الرحلة له وتجاوز التضارب؟`);
+                    if (!confirmConflict) return;
                 }
             }
 
-            let targetId = editId ? String(editId) : getSafeDocId('shipments');
+            let targetId = editId ? String(editId) : String(Date.now());
             let existingShip = editId ? (appData.shipments || []).find(s => String(s.id) === String(editId)) : null;
 
             let shipmentObj = {
@@ -3669,7 +3649,7 @@
             if (!editId && paymentStatus === 'deferred') {
                 let dueDateObj = new Date();
                 dueDateObj.setDate(dueDateObj.getDate() + 7);
-                let defId = getSafeDocId('deferredInvoices');
+                let defId = String(Date.now() + 1);
                 let defInv = {
                     id: defId,
                     companyId: currentCompanyId,
@@ -3684,10 +3664,10 @@
                     notes: `توليد تلقائي من الشحنة رقم #${targetId} (${item})`,
                     issueDate: new Date().toISOString().split('T')[0]
                 };
-                db.collection('deferredInvoices').doc(defId).set(defInv, { merge: true });
+                db.collection('deferredInvoices').doc(defId).set(defInv);
             }
 
-            await db.collection('shipments').doc(targetId).set(shipmentObj, { merge: true });
+            await db.collection('shipments').doc(targetId).set(shipmentObj);
 
             document.getElementById('edit-shipment-id').value = '';
             document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة';
@@ -3846,7 +3826,7 @@
             if(exists) { alert('هذا الاسم أو الهاتف مسجل بالفعل!'); return; }
 
             try {
-                let uid = getSafeDocId('drivers');
+                let uid = String(Date.now());
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid, 
@@ -3866,7 +3846,7 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
                 
-                await db.collection('drivers').doc(uid).set(newDrv, { merge: true });
+                await db.collection('drivers').doc(uid).set(newDrv);
 
                 document.getElementById('driver-profile-form').reset();
                 alert('تم إضافة الحساب السحابي بنجاح! 🚀');
@@ -3894,7 +3874,6 @@
                 box.innerHTML = `<strong>🛠️ التشخيص:</strong> انسداد الفلاتر أو مشكلة بالتيربو.<br><strong>💡 الإجراء:</strong> نظف فلتر الهواء وافحص الرشاشات.`;
             }
         }
-
         function savePublicPostHandler(e) {
             e.preventDefault();
             const title = document.getElementById('post-title').value.trim();
@@ -3907,9 +3886,9 @@
             let total = imgFiles.length + videoFiles.length;
 
             const saveToFirestore = (arr) => {
-                let newId = getSafeDocId('posts');
+                let newId = String(Date.now());
                 let newPost = { id: newId, companyId: currentCompanyId, title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
-                db.collection('posts').doc(newId).set(newPost, { merge: true }).then(() => {
+                db.collection('posts').doc(newId).set(newPost).then(() => {
                     document.getElementById('public-post-form').reset();
                     alert('تم النشر في لوحة الإعلانات بنجاح! 🚀');
                 });
@@ -4014,7 +3993,7 @@
             const msgText = input.value.trim();
             if(!msgText) return;
 
-            let newId = getSafeDocId('chat');
+            let newId = String(Date.now());
             let newMsg = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -4024,7 +4003,7 @@
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            db.collection('chat').doc(newId).set(newMsg, { merge: true });
+            db.collection('chat').doc(newId).set(newMsg);
             input.value = '';
         }
 
@@ -4085,7 +4064,7 @@
             const text = input.value.trim();
             if(!text) return;
 
-            let newId = getSafeDocId('chat');
+            let newId = String(Date.now());
             let newMsg = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -4134,14 +4113,15 @@
                 }
             } else { info.innerText = ''; }
         }
-                function publishCommunityPost() {
+
+        function publishCommunityPost() {
             const text = document.getElementById('community-post-text').value.trim();
             if (!text && communityFilesArr.length === 0) {
                 alert('الرجاء كتابة نص المنشور أو إرفاق صور/ملفات أولاً!');
                 return;
             }
 
-            let newId = getSafeDocId('communityPosts');
+            let newId = String(Date.now());
             let newPost = {
                 id: newId,
                 companyId: currentCompanyId || 'company_main',
@@ -4158,8 +4138,6 @@
                 const info = document.getElementById('community-files-preview-info');
                 if (info) info.innerText = '';
                 alert('تم نشر وتتم مزامنة منشورك في مجتمع السائقين بنجاح سحابياً! 🚀');
-                if(!appData.communityPosts) appData.communityPosts = [];
-                appData.communityPosts.unshift(newPost);
                 renderCommunityPosts();
             }).catch(err => {
                 alert('حدث خطأ أثناء النشر: ' + err.message);
@@ -4214,61 +4192,48 @@
             if(p) {
                 p.likes = (p.likes || 0) + 1;
                 db.collection('communityPosts').doc(String(p.id)).set(p, { merge: true });
-                renderCommunityPosts();
             }
         }
 
         function deleteCommunityPost(id) {
             if(confirm('حذف المنشور؟')) {
-                db.collection('communityPosts').doc(String(id)).delete().then(() => {
-                    appData.communityPosts = (appData.communityPosts || []).filter(p => String(p.id) !== String(id));
-                    renderCommunityPosts();
-                });
+                db.collection('communityPosts').doc(String(id)).delete();
             }
         }
 
         function showCommunityNotifications() { alert('لا توجد تنبيهات جديدة.'); }
 
         function saveCashHandler(e) {
-            if (e) e.preventDefault();
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
-            let newId = getSafeDocId('treasury');
-            let newCash = { id: newId, companyId: currentCompanyId || 'company_main', type, amount, desc, date: new Date().toLocaleString('ar-EG') };
+            let newId = String(Date.now());
+            let newCash = { id: newId, companyId: currentCompanyId, type, amount, desc, date: new Date().toLocaleString('ar-EG') };
 
             db.collection('treasury').doc(newId).set(newCash).then(() => {
                 document.getElementById('cash-form').reset();
-                if(!appData.treasury) appData.treasury = [];
-                appData.treasury.unshift(newCash);
-                alert('تم تسجيل الحركة بالخزينة بنجاح! 💵');
-                render();
-            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
+                alert('تم تسجيل الحركة بالخزينة في مجموعتها المستقلة بنجاح! 💵');
+            });
         }
 
         function saveTruckHandler(e) {
-            if (e) e.preventDefault();
             const num = document.getElementById('truck-num').value.trim();
             const driver = document.getElementById('driver-name').value.trim();
             const km = Number(document.getElementById('truck-km').value);
             const nextOil = Number(document.getElementById('truck-next-oil').value);
             const expiry = document.getElementById('truck-expiry').value;
 
-            let newId = getSafeDocId('trucks');
-            let newTruck = { id: newId, companyId: currentCompanyId || 'company_main', num, driver, km, nextOil, expiry };
+            let newId = String(Date.now());
+            let newTruck = { id: newId, companyId: currentCompanyId, num, driver, km, nextOil, expiry };
 
             db.collection('trucks').doc(newId).set(newTruck).then(() => {
                 document.getElementById('truck-form').reset();
-                if(!appData.trucks) appData.trucks = [];
-                appData.trucks.unshift(newTruck);
                 alert('تم حفظ بيانات المركبة بنجاح! 🚚');
-                render();
-            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
+            });
         }
 
         function saveDocHandler(e) {
-            if (e) e.preventDefault();
             const title = document.getElementById('doc-title').value.trim();
             const fileInput = document.getElementById('doc-file');
             const compressedSrc = fileInput.dataset.compressedSrc;
@@ -4276,17 +4241,13 @@
                 alert('الرجاء الانتظار قليلاً حتى يتم ضغط المستند!');
                 return;
             }
-            let newId = getSafeDocId('docs');
-            let newDoc = { id: newId, companyId: currentCompanyId || 'company_main', title, src: compressedSrc };
+            let newId = String(Date.now());
+            let newDoc = { id: newId, companyId: currentCompanyId, title, src: compressedSrc };
 
             db.collection('docs').doc(newId).set(newDoc).then(() => {
                 document.getElementById('doc-form').reset();
-                delete fileInput.dataset.compressedSrc;
-                if(!appData.docs) appData.docs = [];
-                appData.docs.unshift(newDoc);
-                alert('تم حفظ المستند بنجاح! 📂');
-                renderDocsList();
-            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
+                alert('تم حفظ المستند في مجموعة الوثائق بنجاح! 📂');
+            });
         }
 
         function renderDocsList() {
@@ -4295,7 +4256,7 @@
             container.innerHTML = '';
             (appData.docs || []).forEach(d => {
                 let div = document.createElement('div');
-                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; border:1px solid var(--border-color); font-size:10px; margin-bottom:4px;';
+                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; border:1px solid var(--border-color); font-size:10px;';
                 div.innerHTML = `
                     <span>📄 ${d.title}</span>
                     <div>
@@ -4309,47 +4270,35 @@
 
         function deleteDoc(id) {
             if(confirm('حذف المستند؟')) {
-                db.collection('docs').doc(String(id)).delete().then(() => {
-                    appData.docs = (appData.docs || []).filter(d => String(d.id) !== String(id));
-                    renderDocsList();
-                });
+                db.collection('docs').doc(String(id)).delete();
             }
         }
 
         function saveExpenseHandler(e) {
-            if (e) e.preventDefault();
             const title = document.getElementById('exp-title').value.trim();
             const amount = Number(document.getElementById('exp-amount').value);
 
-            let newId = getSafeDocId('expenses');
-            let newExp = { id: newId, companyId: currentCompanyId || 'company_main', title, amount, date: new Date().toLocaleDateString('ar-EG') };
+            let newId = String(Date.now());
+            let newExp = { id: newId, companyId: currentCompanyId, title, amount, date: new Date().toLocaleDateString('ar-EG') };
 
             db.collection('expenses').doc(newId).set(newExp).then(() => {
                 document.getElementById('expense-form').reset();
-                if(!appData.expenses) appData.expenses = [];
-                appData.expenses.unshift(newExp);
                 alert('تم تسجيل المصروف بنجاح! ⛽');
-                render();
-            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
+            });
         }
 
         function payCustomerDebt(index) {
-            let cust = (appData.customers || [])[index];
+            let cust = appData.customers[index];
             if(!cust) return;
-            let pay = prompt(`المبلغ المراد تحصيله من (${cust.name}) المتبقي (${cust.debt || 0} ج.م):`);
+            let pay = prompt(`المبلغ المراد تحصيله من (${cust.name}) المتبقي (${cust.debt} ج.م):`);
             if (pay && !isNaN(pay)) {
-                cust.debt = Math.max(0, Number(cust.debt || 0) - Number(pay));
-                cust.companyId = currentCompanyId || 'company_main';
-                let docId = String(cust.id || cust.name);
-                db.collection('customers').doc(docId).set(cust, { merge: true }).then(() => {
-                    render();
-                });
+                cust.debt = Math.max(0, Number(cust.debt) - Number(pay));
+                db.collection('customers').doc(String(cust.id || cust.name)).set(cust, { merge: true });
             }
         }
 
         function renderCRUDTable(forceSection) {
-            const sectionSelect = document.getElementById('crud-section-select');
-            const section = forceSection || (sectionSelect ? sectionSelect.value : 'shipments');
+            const section = forceSection || document.getElementById('crud-section-select').value;
             const headersRow = document.getElementById('crud-table-headers');
             const tbody = document.getElementById('crud-table-body');
             if(!headersRow || !tbody) return;
@@ -4468,8 +4417,8 @@
 
         function render() {
             try {
-                if (typeof renderDriverDropdownOptions === 'function') renderDriverDropdownOptions();
-                if (typeof renderRSSTicker === 'function') renderRSSTicker();
+                renderDriverDropdownOptions();
+                renderRSSTicker();
                 
                 const addCompBtnMain = document.getElementById('add-company-btn-main');
                 if (addCompBtnMain) {
@@ -4485,12 +4434,12 @@
                     if (loggedInDriverName === 'المدير') {
                         masterCashCard.style.display = 'block';
                         masterSaasCard.style.display = 'block';
-                        if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
-                        if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
                     } else {
                         masterCashCard.style.display = 'none';
                         masterSaasCard.style.display = 'none';
-                        if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
+                        renderCompanyAdminSubscriptionView();
                     }
                 }
                 
@@ -4674,7 +4623,6 @@
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const qrContainer = document.getElementById('qrcode');
-            if (!qrContainer) return;
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
                 text: `https://karamegy.github.io/Na2la/?shipmentId=${s.id}`,
@@ -4685,15 +4633,14 @@
         }
 
         function closeQRModal() { 
-            const modal = document.getElementById('qr-modal');
-            if (modal) modal.style.display = 'none'; 
+            document.getElementById('qr-modal').style.display = 'none'; 
         }
 
         function updateInvoiceDropdown() {
             const select = document.getElementById('invoice-select');
             if (!select) return;
             select.innerHTML = '';
-            let list = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
+            let list = (currentUserRole === 'driver') ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
             list.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.id;
@@ -4704,31 +4651,27 @@
         }
 
         function renderSelectedInvoice() {
-            const select = document.getElementById('invoice-select');
-            if (!select) return;
-            const id = select.value;
+            const id = document.getElementById('invoice-select')?.value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
-            if (document.getElementById('inv-id')) document.getElementById('inv-id').innerText = s.id;
-            if (document.getElementById('inv-client')) document.getElementById('inv-client').innerText = s.name || '-';
-            if (document.getElementById('inv-phone')) document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
-            if (document.getElementById('inv-address')) document.getElementById('inv-address').innerText = s.address || '-';
-            if (document.getElementById('inv-item')) document.getElementById('inv-item').innerText = s.item || '-';
-            if (document.getElementById('inv-price')) document.getElementById('inv-price').innerText = s.price || 0;
-            if (document.getElementById('inv-status')) document.getElementById('inv-status').innerText = `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`;
+            document.getElementById('inv-id').innerText = s.id;
+            document.getElementById('inv-client').innerText = s.name || '-';
+            document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
+            document.getElementById('inv-address').innerText = s.address || '-';
+            document.getElementById('inv-item').innerText = s.item || '-';
+            document.getElementById('inv-price').innerText = s.price || 0;
+            document.getElementById('inv-status').innerText = `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`;
 
             const imgBox = document.getElementById('inv-img-preview');
-            if (imgBox) imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
+            imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
 
             const sigBox = document.getElementById('inv-sig-container');
-            if (sigBox) sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
+            sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
         }
 
         function openInvoiceStandalone() {
-            const select = document.getElementById('invoice-select');
-            if (!select) return;
-            const id = select.value;
+            const id = document.getElementById('invoice-select').value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
@@ -4757,9 +4700,7 @@
         }
 
         function exportInvoiceAsImage() {
-            const printArea = document.getElementById('print-area');
-            if (!printArea) return;
-            html2canvas(printArea).then(canvas => {
+            html2canvas(document.getElementById('print-area')).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `invoice-${Date.now()}.png`;
                 link.href = canvas.toDataURL();
@@ -4768,9 +4709,7 @@
         }
 
         function exportInvoiceAsPDF() {
-            const printArea = document.getElementById('print-area');
-            if (!printArea) return;
-            html2canvas(printArea).then(canvas => {
+            html2canvas(document.getElementById('print-area')).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
@@ -4780,9 +4719,7 @@
         }
 
         function sendInvoiceWhatsApp() {
-            const select = document.getElementById('invoice-select');
-            if (!select) return;
-            const id = select.value;
+            const id = document.getElementById('invoice-select').value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const msg = `🧾 *فاتورة شحنة - أسطورة الطريق*\n*العميل:* ${s.name || '-'}\n*الحمولة:* ${s.item || '-'}\n*الأجرة:* ${s.price || 0} ج.م\n*السداد:* ${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'}`;
@@ -4796,26 +4733,19 @@
         }
 
         function exportToExcel() {
-            if (typeof XLSX === 'undefined') {
-                alert('مكتبة Excel غير محملة حالياً.');
-                return;
-            }
-            const ws = XLSX.utils.json_to_sheet(appData.shipments || []);
+            const ws = XLSX.utils.json_to_sheet(appData.shipments);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
             XLSX.writeFile(wb, "na2la_data.xlsx");
         }
 
         function clearAll() {
-            if (currentUserRole !== 'admin') { 
-                alert('صلاحية المدير فقط.'); 
-                return; 
-            }
-            if (confirm('هل أنت تأكد من إغلاق التقرير الحالي وإعادة إنعاش الواجهة؟')) {
+            if (currentUserRole !== 'admin') { alert('صلاحية المدير فقط.'); return; }
+            if (confirm('تنبيه: مسح كافة البيانات والمجموعات السحابية؟')) {
                 location.reload();
             }
         }
 </script>
 <script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
 </body>
-</html>
+                        </html>
