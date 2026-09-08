@@ -683,7 +683,13 @@
         <!-- قسم عرض منشورات الحساب، إشعارات الرادار و SPS (مع لايك وتعليق وإشعار SOS متفاعل) -->
         <div id="feed-sec" class="app-section active">
             <div class="card">
-                <h3>👤 منشورات الحساب على المنصة (Wall / Posts)</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; margin-bottom: 10px;">
+                    <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">👤 منشورات الحساب والبروفايل</h3>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn-sm" onclick="filterPostsByUser('all')" style="background:var(--accent); color:#fff; border:none; padding:4px 8px; font-size:9px;">الكل</button>
+                        <button class="btn-sm" onclick="filterPostsByUser('mine')" style="background:var(--bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px 8px; font-size:9px;">منشوراتي فقط</button>
+                    </div>
+                </div>
                 <div id="account-posts-container">جلب منشورات الحساب سحابياً...</div>
             </div>
 
@@ -1006,6 +1012,8 @@
 
         let currentChatTarget = 'general';
         let allDrivers = [];
+        let globalPostsCache = [];
+        let currentPostFilter = 'all';
 
         let communityUnsubscribe = null;
         let chatUnsubscribe = null;
@@ -2119,7 +2127,7 @@
             document.getElementById('remoteVideo').style.display = 'none';
         }
 
-        // جلب وعرض منشورات الحساب والبروفايل على المنصة مع ميزة اللايك والتعليق
+        // جلب وعرض منشورات الحساب والبروفايل على المنصة بشكل منفصل وبدون تضارب مع صور البروفايل الصحيحة
         async function loadAccountPosts() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
@@ -2134,106 +2142,131 @@
 
                 let posts = [];
                 snapshot.forEach(docSnap => {
-                    posts.push({ id: docSnap.id, ...docSnap.data() });
+                    posts.push({ id: docSnap.id, source: 'profileWalls', ...docSnap.data() });
                 });
 
-                if (posts.length === 0) {
-                    const qComm = query(collection(window.db, 'communityPosts'), where('companyId', '==', activeCompId));
-                    const snapComm = await getDocs(qComm);
-                    snapComm.forEach(docSnap => {
-                        posts.push({ id: docSnap.id, ...docSnap.data() });
-                    });
-                }
-
-                if (posts.length === 0) {
-                    container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات مسجلة للحساب أو المنصة حالياً.</p>`;
-                    return;
-                }
-
-                let html = '';
-                posts.forEach(p => {
-                    let mediaHtml = '';
-                    if (p.files && p.files.length > 0) {
-                        mediaHtml += `<div class="load-post-media">`;
-                        p.files.forEach(f => {
-                            if (f.type === 'video') {
-                                mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
-                            } else {
-                                mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
-                            }
-                        });
-                        mediaHtml += `</div>`;
+                const qComm = query(collection(window.db, 'communityPosts'), where('companyId', '==', activeCompId));
+                const snapComm = await getDocs(qComm);
+                snapComm.forEach(docSnap => {
+                    let data = docSnap.data();
+                    if (!posts.some(p => p.id === docSnap.id)) {
+                        posts.push({ id: docSnap.id, source: 'communityPosts', ...data });
                     }
-
-                    let authorName = p.profileName || p.author || 'حساب المستخدم';
-                    let authorAvatar = p.authorAvatar || p.avatar || '';
-                    let avatarHtml = (authorAvatar && authorAvatar !== 'undefined' && authorAvatar !== 'null') 
-                        ? `<img src="${authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` 
-                        : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${authorName.charAt(0)}</div>`;
-
-                    let commentsHtml = '';
-                    if (p.comments && p.comments.length > 0) {
-                        p.comments.forEach(c => {
-                            let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
-                            commentsHtml += `
-                                <div class="comment-item">
-                                    <div class="comment-header">
-                                        <span>👤 ${c.author}</span>
-                                        <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
-                                    </div>
-                                    <div style="color:var(--text-color);">${c.text || ''}</div>
-                                    ${commentImg}
-                                </div>`;
-                        });
-                    } else {
-                        commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
-                    }
-
-                    html += `
-                        <div class="card" id="post-card-${p.id}" style="margin-bottom:10px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    ${avatarHtml}
-                                    <div>
-                                        <strong style="font-size:11px; color:var(--text-color);">${authorName}</strong>
-                                        <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق معتمد'}</span>
-                                    </div>
-                                </div>
-                                <span style="font-size:8.5px; opacity:0.6;">${p.date || ''}</span>
-                            </div>
-                            <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text || ''}</p>
-                            ${mediaHtml}
-                            
-                            <div class="post-actions-bar">
-                                <button class="action-icon-btn" onclick="likePost(this, '${p.id}')">👍 إعجاب (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
-                                <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">${p.comments ? p.comments.length : 0}</span>)</button>
-                            </div>
-
-                            <div id="comments-sec-${p.id}" class="comments-box">
-                                <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml}</div>
-                                <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
-                                    <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
-                                    <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
-                                        📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
-                                    </label>
-                                    <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}')">إرسال</button>
-                                </div>
-                                <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
-                            </div>
-                        </div>`;
                 });
-                container.innerHTML = html;
+
+                globalPostsCache = posts;
+                renderPostsUI();
             } catch (err) {
                 container.innerHTML = `<p style="font-size:10.5px; text-align:center; color:var(--danger);">تعذر تحميل منشورات الحساب.</p>`;
             }
         }
 
-        async function likePost(btnElement, id) {
+        function filterPostsByUser(filterType) {
+            currentPostFilter = filterType;
+            renderPostsUI();
+        }
+
+        function renderPostsUI() {
+            const container = document.getElementById('account-posts-container');
+            if(!container) return;
+
+            let postsToDisplay = globalPostsCache;
+            if (currentPostFilter === 'mine') {
+                postsToDisplay = globalPostsCache.filter(p => (p.profileName || p.author || p.driverName) === currentDriverProfile.name);
+            }
+
+            if (postsToDisplay.length === 0) {
+                container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات مسجلة مطابقة للعرض حالياً.</p>`;
+                return;
+            }
+
+            let html = '';
+            postsToDisplay.forEach(p => {
+                let mediaHtml = '';
+                if (p.files && p.files.length > 0) {
+                    mediaHtml += `<div class="load-post-media">`;
+                    p.files.forEach(f => {
+                        if (f.type === 'video') {
+                            mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
+                        } else {
+                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
+                        }
+                    });
+                    mediaHtml += `</div>`;
+                }
+
+                let authorName = p.profileName || p.author || p.driverName || 'حساب المستخدم';
+                let authorAvatar = p.authorAvatar || p.avatar || p.photoUrl || '';
+                
+                // مطابقة دقيقة لصورة بروفايل المستخدم الحالي لضمان عدم ظهور صور وهمية
+                if (authorName === currentDriverProfile.name && currentDriverProfile.avatar) {
+                    authorAvatar = currentDriverProfile.avatar;
+                }
+
+                let avatarHtml = (authorAvatar && authorAvatar !== 'undefined' && authorAvatar !== 'null' && authorAvatar.trim() !== '') 
+                    ? `<img src="${authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` 
+                    : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${authorName.charAt(0)}</div>`;
+
+                let commentsHtml = '';
+                if (p.comments && p.comments.length > 0) {
+                    p.comments.forEach(c => {
+                        let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
+                        commentsHtml += `
+                            <div class="comment-item">
+                                <div class="comment-header">
+                                    <span>👤 ${c.author}</span>
+                                    <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
+                                </div>
+                                <div style="color:var(--text-color);">${c.text || ''}</div>
+                                ${commentImg}
+                            </div>`;
+                    });
+                } else {
+                    commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
+                }
+
+                html += `
+                    <div class="card" id="post-card-${p.id}" style="margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                ${avatarHtml}
+                                <div>
+                                    <strong style="font-size:11px; color:var(--text-color);">${authorName}</strong>
+                                    <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق معتمد'}</span>
+                                </div>
+                            </div>
+                            <span style="font-size:8.5px; opacity:0.6;">${p.date || ''}</span>
+                        </div>
+                        <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text || ''}</p>
+                        ${mediaHtml}
+                        
+                        <div class="post-actions-bar">
+                            <button class="action-icon-btn" onclick="likePost(this, '${p.id}', '${p.source || 'profileWalls'}')">👍 إعجاب (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
+                            <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">${p.comments ? p.comments.length : 0}</span>)</button>
+                        </div>
+
+                        <div id="comments-sec-${p.id}" class="comments-box">
+                            <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml}</div>
+                            <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
+                                <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
+                                <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
+                                    📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
+                                </label>
+                                <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}', '${p.source || 'profileWalls'}')">إرسال</button>
+                            </div>
+                            <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function likePost(btnElement, id, sourceCollection) {
             if (!window.db || !window.firebaseModules) return;
             let userName = currentDriverProfile.name || 'زائر';
             
             const { doc, getDoc, updateDoc, arrayUnion, increment } = window.firebaseModules;
-            let docRef = doc(window.db, 'profileWalls', String(id));
+            let docRef = doc(window.db, sourceCollection || 'profileWalls', String(id));
             
             try {
                 let snap = await getDoc(docRef);
@@ -2302,7 +2335,7 @@
             };
         }
 
-        async function addComment(id) {
+        async function addComment(id, sourceCollection) {
             if (!window.db || !window.firebaseModules) return;
             let input = document.getElementById(`comment-input-${id}`);
             let text = input ? input.value.trim() : '';
@@ -2329,7 +2362,7 @@
 
             try {
                 const { doc, updateDoc, arrayUnion } = window.firebaseModules;
-                let docRef = doc(window.db, 'profileWalls', String(id));
+                let docRef = doc(window.db, sourceCollection || 'profileWalls', String(id));
                 try {
                     await updateDoc(docRef, { comments: arrayUnion(newComment) });
                 } catch(e) {
@@ -2400,7 +2433,6 @@
                     snapPilots.forEach(d => spsAlerts.push({ type: 'sps', ...d.data() }));
                 } catch(e) {}
 
-                // جلب منشورات الاستغاثة SOS إن وجدت
                 try {
                     const qSos = query(collection(window.db, 'communityPosts'), where('isEmergency', '==', true));
                     const snapSos = await getDocs(qSos);
