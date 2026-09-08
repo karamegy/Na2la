@@ -673,24 +673,20 @@
 
     <div class="container" style="max-width: 800px; margin: 0 auto; padding: 0 8px;">
         <div class="space-sectors">
-            <button class="sector-btn active" onclick="switchSection('feed-sec', this)">🌐 منشورات الحساب والـ SPS</button>
+            <button class="sector-btn active" onclick="switchSection('feed-sec', this)">🌐 منشورات SOS وإحداثيات الخريطة</button>
             <button class="sector-btn" onclick="switchSection('chat-sec', this)">💬 دردشة</button>
             <button class="sector-btn" onclick="openLiveRadarMapModal()" style="border: 1px solid var(--accent); background: var(--accent-gradient); color: white;">🛰️ خريطة ماب</button>
             <button class="sector-btn" onclick="switchSection('radar-alerts-sec', this)">⚙️ رادارات الخريطة</button>
             <button class="sector-btn" onclick="switchSection('calculator-sec', this)">🧮 حاسبة</button>
         </div>
 
-        <!-- قسم عرض منشورات الحساب، إشعارات الرادار و SPS -->
+        <!-- قسم عرض منشورات SOS وإحداثيات الخريطة والرادار لكل حساب -->
         <div id="feed-sec" class="app-section active">
-            <div class="card">
+            <div class="card" style="border: 2px solid var(--danger);">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; margin-bottom: 10px;">
-                    <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">👤 منشورات الحساب والبروفايل</h3>
-                    <div style="display: flex; gap: 4px;">
-                        <button class="btn-sm" onclick="filterPostsByUser('all')" style="background:var(--accent); color:#fff; border:none; padding:4px 8px; font-size:9px;">الكل</button>
-                        <button class="btn-sm" onclick="filterPostsByUser('mine')" style="background:var(--bg); color:var(--text-color); border:1px solid var(--border-color); padding:4px 8px; font-size:9px;">منشوراتي فقط</button>
-                    </div>
+                    <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0; color: var(--danger);">🚨 منشورات SOS وإحداثيات الخريطة والرادار للأحساب</h3>
                 </div>
-                <div id="account-posts-container">جلب منشورات الحساب سحابياً...</div>
+                <div id="account-posts-container">جلب منشورات الطوارئ والإحداثيات سحابياً...</div>
             </div>
 
             <div class="card" style="border: 2px solid var(--accent);">
@@ -1013,7 +1009,6 @@
         let currentChatTarget = 'general';
         let allDrivers = [];
         let globalPostsCache = [];
-        let currentPostFilter = 'all';
 
         let communityUnsubscribe = null;
         let chatUnsubscribe = null;
@@ -2127,7 +2122,7 @@
             document.getElementById('remoteVideo').style.display = 'none';
         }
 
-        // جلب وعرض منشورات الحساب والبروفايل مع تصحيح الرتب والمسميات ديناميكياً من قائمة السائقين
+        // جلب وعرض منشورات SOS فقط مع إحداثيات الخريطة والرادار لكل حساب
         async function loadAccountPosts() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
@@ -2137,279 +2132,108 @@
             if(!container) return;
 
             try {
-                const q = query(collection(window.db, 'profileWalls'), where('companyId', '==', activeCompId));
-                const snapshot = await getDocs(q);
-
-                let posts = [];
-                snapshot.forEach(docSnap => {
-                    posts.push({ id: docSnap.id, source: 'profileWalls', ...docSnap.data() });
+                // جلب إحداثيات الخريطة للحسابات
+                let locsSnapshot = await getDocs(query(collection(window.db, 'driver_locations'), where('companyId', '==', activeCompId)));
+                let driverLocationsMap = {};
+                locsSnapshot.forEach(docSnap => {
+                    let d = docSnap.data();
+                    if (d.driverName) {
+                        driverLocationsMap[d.driverName] = { lat: d.lat, lng: d.lng, speed: d.speed };
+                    }
                 });
 
+                // جلب رادارات الخريطة
+                let radarsSnapshot = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', activeCompId)));
+                let radarsList = [];
+                radarsSnapshot.forEach(docSnap => {
+                    radarsList.push(docSnap.data());
+                });
+
+                let posts = [];
                 const qComm = query(collection(window.db, 'communityPosts'), where('companyId', '==', activeCompId));
                 const snapComm = await getDocs(qComm);
                 snapComm.forEach(docSnap => {
                     let data = docSnap.data();
-                    if (!posts.some(p => p.id === docSnap.id)) {
+                    // فلترة منشورات SOS فقط
+                    if (data.isEmergency === true || data.type === 'sos' || (data.text && data.text.includes('SOS')) || (data.category && data.category.includes('طوارئ'))) {
                         posts.push({ id: docSnap.id, source: 'communityPosts', ...data });
                     }
                 });
 
+                const qWalls = query(collection(window.db, 'profileWalls'), where('companyId', '==', activeCompId));
+                const snapWalls = await getDocs(qWalls);
+                snapWalls.forEach(docSnap => {
+                    let data = docSnap.data();
+                    if ((data.isEmergency === true || data.type === 'sos' || (data.text && data.text.includes('SOS')) || (data.category && data.category.includes('طوارئ'))) && !posts.some(p => p.id === docSnap.id)) {
+                        posts.push({ id: docSnap.id, source: 'profileWalls', ...data });
+                    }
+                });
+
                 globalPostsCache = posts;
-                renderPostsUI();
+                renderSosPostsAndCoordinatesUI(driverLocationsMap, radarsList);
             } catch (err) {
-                container.innerHTML = `<p style="font-size:10.5px; text-align:center; color:var(--danger);">تعذر تحميل منشورات الحساب.</p>`;
+                container.innerHTML = `<p style="font-size:10.5px; text-align:center; color:var(--danger);">تعذر تحميل منشورات SOS وإحداثيات الخريطة.</p>`;
             }
         }
 
-        function filterPostsByUser(filterType) {
-            currentPostFilter = filterType;
-            renderPostsUI();
-        }
-
-        function renderPostsUI() {
+        function renderSosPostsAndCoordinatesUI(driverLocationsMap, radarsList) {
             const container = document.getElementById('account-posts-container');
             if(!container) return;
 
-            let postsToDisplay = globalPostsCache;
-            if (currentPostFilter === 'mine') {
-                postsToDisplay = globalPostsCache.filter(p => (p.profileName || p.author || p.driverName) === currentDriverProfile.name);
-            }
+            let html = `
+                <div style="margin-bottom: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent); padding: 10px; border-radius: 8px;">
+                    <h4 style="color: var(--accent); font-size: 11px; margin-bottom: 6px;">📍 إحداثيات الخريطة الحية والرادار لكل حساب:</h4>
+            `;
 
-            if (postsToDisplay.length === 0) {
-                container.innerHTML = `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات مسجلة مطابقة للعرض حالياً.</p>`;
-                return;
-            }
-
-            let html = '';
-            postsToDisplay.forEach(p => {
-                let mediaHtml = '';
-                if (p.files && p.files.length > 0) {
-                    mediaHtml += `<div class="load-post-media">`;
-                    p.files.forEach(f => {
-                        if (f.type === 'video') {
-                            mediaHtml += `<video src="${f.src}" controls style="width:200px; height:130px; object-fit:cover; border-radius:8px; border:1px solid var(--border-color); flex-shrink:0; background:#000;"></video>`;
-                        } else {
-                            mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}')"/>`;
-                        }
-                    });
-                    mediaHtml += `</div>`;
-                }
-
-                let authorName = p.profileName || p.author || p.driverName || 'حساب المستخدم';
-                let authorAvatar = p.authorAvatar || p.avatar || p.photoUrl || '';
-                
-                if (authorName === currentDriverProfile.name && currentDriverProfile.avatar) {
-                    authorAvatar = currentDriverProfile.avatar;
-                }
-
-                // [تعديل جذري لتصحيح الرتب والمسميات بناءً على قائمة السائقين والمديرين الحية لضمان عدم ظهور "سائق معتمد" خطأً للحسابات الإدارية]
-                let matchedDriver = allDrivers.find(d => (d.name || d.driverName || '').trim() === authorName.trim());
-                let dynamicTitle = 'سائق معتمد';
-
-                if (matchedDriver) {
-                    let isAdm = isUserAdmin(matchedDriver.role || matchedDriver.rank, matchedDriver.name || matchedDriver.driverName);
-                    dynamicTitle = matchedDriver.title || (isAdm ? 'مدير شركة' : 'سائق معتمد');
-                } else if (isUserAdmin('', authorName)) {
-                    dynamicTitle = 'مدير شركة';
-                } else {
-                    dynamicTitle = p.authorTitle || 'سائق معتمد';
-                }
-
-                let avatarHtml = (authorAvatar && authorAvatar !== 'undefined' && authorAvatar !== 'null' && authorAvatar.trim() !== '') 
-                    ? `<img src="${authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--accent);">` 
-                    : `<div style="width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${authorName.charAt(0)}</div>`;
-
-                let commentsHtml = '';
-                if (p.comments && p.comments.length > 0) {
-                    p.comments.forEach(c => {
-                        let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
-                        commentsHtml += `
-                            <div class="comment-item">
-                                <div class="comment-header">
-                                    <span>👤 ${c.author}</span>
-                                    <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
-                                </div>
-                                <div style="color:var(--text-color);">${c.text || ''}</div>
-                                ${commentImg}
-                            </div>`;
-                    });
-                } else {
-                    commentsHtml = `<div class="no-comments-msg" style="font-size:10px; opacity:0.6; text-align:center; padding:4px;">لا توجد تعليقات بعد.</div>`;
-                }
-
-                html += `
-                    <div class="card" id="post-card-${p.id}" style="margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                ${avatarHtml}
-                                <div>
-                                    <strong style="font-size:11px; color:var(--text-color);">${authorName}</strong>
-                                    <span style="font-size:8.5px; display:block; color:var(--accent);">${dynamicTitle}</span>
-                                </div>
-                            </div>
-                            <span style="font-size:8.5px; opacity:0.6;">${p.date || ''}</span>
-                        </div>
-                        <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text || ''}</p>
-                        ${mediaHtml}
-                        
-                        <div class="post-actions-bar">
-                            <button class="action-icon-btn" onclick="likePost(this, '${p.id}', '${p.source || 'profileWalls'}')">👍 إعجاب (<span id="likes-count-${p.id}">${p.likes || 0}</span>)</button>
-                            <button class="action-icon-btn" onclick="toggleCommentsSection('${p.id}')">💬 تعليق (<span id="comments-count-${p.id}">${p.comments ? p.comments.length : 0}</span>)</button>
-                        </div>
-
-                        <div id="comments-sec-${p.id}" class="comments-box">
-                            <div id="comments-list-${p.id}" style="max-height: 140px; overflow-y: auto; margin-bottom: 6px;">${commentsHtml}</div>
-                            <div style="display: flex; gap: 4px; align-items: center; margin-bottom: 2px;">
-                                <input type="text" id="comment-input-${p.id}" placeholder="اكتب تعليقاً..." style="margin-bottom:0; flex:1; padding:6px 8px; border-radius:6px;">
-                                <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 6px; font-size: 9.5px; cursor: pointer; margin-bottom:0;" title="صورة">
-                                    📷 <input type="file" id="comment-file-${p.id}" accept="image/*" hidden onchange="previewCommentFile('${p.id}', this)">
-                                </label>
-                                <button class="btn-success" style="width:60px; padding:6px; font-size:9.5px; margin-bottom:0; border-radius:6px;" onclick="addComment('${p.id}', '${p.source || 'profileWalls'}')">إرسال</button>
-                            </div>
-                            <div id="comment-preview-info-${p.id}" style="font-size:8.5px; color:var(--success); font-weight:bold;"></div>
-                        </div>
+            if (Object.keys(driverLocationsMap).length > 0) {
+                for (let [driverName, loc] of Object.entries(driverLocationsMap)) {
+                    html += `<div style="font-size: 10px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 4px;">
+                        <span>👤 <strong>${driverName}</strong></span>
+                        <span style="color: var(--success); font-weight: bold;">العرض: ${Number(loc.lat || 0).toFixed(4)} | الطول: ${Number(loc.lng || 0).toFixed(4)} (${loc.speed || 0} كم/س)</span>
                     </div>`;
-            });
-            container.innerHTML = html;
-        }
-
-        async function likePost(btnElement, id, sourceCollection) {
-            if (!window.db || !window.firebaseModules) return;
-            let userName = currentDriverProfile.name || 'زائر';
-            
-            const { doc, getDoc, updateDoc, arrayUnion, increment } = window.firebaseModules;
-            let docRef = doc(window.db, sourceCollection || 'profileWalls', String(id));
-            
-            try {
-                let snap = await getDoc(docRef);
-                if (!snap.exists()) {
-                    docRef = doc(window.db, 'communityPosts', String(id));
-                    snap = await getDoc(docRef);
                 }
-
-                if (snap.exists()) {
-                    let data = snap.data();
-                    let likedBy = data.likedBy || [];
-                    
-                    if (likedBy.includes(userName)) {
-                        alert('⚠️ لقد قمت بالتفاعل على هذا المنشور مسبقاً.');
-                        return;
-                    }
-                    
-                    await updateDoc(docRef, {
-                        likes: increment(1),
-                        likedBy: arrayUnion(userName)
-                    });
-                    
-                    let countSpan = document.getElementById(`likes-count-${id}`);
-                    if (countSpan) {
-                        countSpan.innerText = (data.likes || 0) + 1;
-                    }
-                    alert('❤️ تم تسجيل إعجابك بنجاح!');
-                }
-            } catch (err) {}
-        }
-
-        function toggleCommentsSection(id) {
-            let box = document.getElementById(`comments-sec-${id}`);
-            if(box) {
-                box.style.display = box.style.display === 'block' ? 'none' : 'block';
+            } else {
+                html += `<div style="font-size: 10px; opacity: 0.7;">لا توجد إحداثيات حية مسجلة للحسابات حالياً.</div>`;
             }
-        }
 
-        let commentImagesTemp = {};
-        function previewCommentFile(postId, input) {
-            if (input.files && input.files[0]) {
-                compressImage(input.files[0], 500, 500, 0.5, (url) => {
-                    commentImagesTemp[postId] = url;
-                    const infoEl = document.getElementById(`comment-preview-info-${postId}`);
-                    if(infoEl) infoEl.innerText = 'تم إرفاق الصورة ✅';
+            if (radarsList.length > 0) {
+                html += `<h4 style="color: var(--danger); font-size: 11px; margin-top: 10px; margin-bottom: 4px;">📡 رادارات الشركة المسجلة:</h4>`;
+                radarsList.forEach(r => {
+                    html += `<div style="font-size: 9.5px; margin-bottom: 3px; opacity: 0.9;">• <strong>${r.name}</strong>: (${Number(r.lat || 0).toFixed(4)}, ${Number(r.lng || 0).toFixed(4)})</div>`;
                 });
             }
-        }
 
-        function compressImage(file, maxWidth = 500, maxHeight = 500, quality = 0.5, callback) {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = function (event) {
-                const img = new Image();
-                img.src = event.target.result;
-                img.onload = function () {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width, height = img.height;
-                    if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; } }
-                    else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
-                    canvas.width = width; canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    callback(canvas.toDataURL('image/jpeg', quality));
-                };
-            };
-        }
+            html += `</div>`;
 
-        async function addComment(id, sourceCollection) {
-            if (!window.db || !window.firebaseModules) return;
-            let input = document.getElementById(`comment-input-${id}`);
-            let text = input ? input.value.trim() : '';
-            let img = commentImagesTemp[id] || '';
+            if (globalPostsCache.length === 0) {
+                html += `<p style="font-size:10.5px; text-align:center; opacity:0.7; padding:12px;">لا توجد منشورات استغاثة (SOS) مسجلة حالياً.</p>`;
+            } else {
+                html += `<h4 style="color: var(--danger); font-size: 11px; margin-bottom: 8px;">🚨 سجل منشورات الطوارئ (SOS) النشطة:</h4>`;
+                globalPostsCache.forEach(p => {
+                    let authorName = p.profileName || p.author || p.driverName || 'حساب المستخدم';
+                    let authorAvatar = p.authorAvatar || p.avatar || '';
+                    
+                    let avatarHtml = (authorAvatar && authorAvatar !== 'undefined' && authorAvatar !== 'null' && authorAvatar.trim() !== '') 
+                        ? `<img src="${authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--danger);">` 
+                        : `<div style="width:32px; height:32px; border-radius:50%; background:var(--danger); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${authorName.charAt(0)}</div>`;
 
-            if(!text && !img) {
-                alert('الرجاء كتابة تعليق أولاً.');
-                return;
+                    html += `
+                        <div class="card" style="border: 1px solid var(--danger); margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    ${avatarHtml}
+                                    <div>
+                                        <strong style="font-size:11px; color:var(--text-color);">${authorName}</strong>
+                                        <span style="font-size:8.5px; display:block; color:var(--danger);">🚨 إشعار طوارئ SOS</span>
+                                    </div>
+                                </div>
+                                <span style="font-size:8.5px; opacity:0.6;">${p.date || ''}</span>
+                            </div>
+                            <p style="font-size:10.5px; line-height:1.4; margin-bottom:6px;">${p.text || ''}</p>
+                        </div>`;
+                });
             }
-
-            let newComment = { 
-                author: currentDriverProfile.name, 
-                text: text, 
-                image: img, 
-                time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'}) 
-            };
-
-            if(input) input.value = '';
-            commentImagesTemp[id] = '';
-            const infoEl = document.getElementById(`comment-preview-info-${id}`);
-            if(infoEl) infoEl.innerText = '';
-
-            appendCommentToDOM(id, newComment);
-
-            try {
-                const { doc, updateDoc, arrayUnion } = window.firebaseModules;
-                let docRef = doc(window.db, sourceCollection || 'profileWalls', String(id));
-                try {
-                    await updateDoc(docRef, { comments: arrayUnion(newComment) });
-                } catch(e) {
-                    docRef = doc(window.db, 'communityPosts', String(id));
-                    await updateDoc(docRef, { comments: arrayUnion(newComment) });
-                }
-            } catch (err) {
-                alert('⚠️ فشل إرسال التعليق: ' + err.message);
-            }
-        }
-
-        function appendCommentToDOM(postId, c) {
-            const commentsListContainer = document.getElementById(`comments-list-${postId}`);
-            const commentCountSpan = document.getElementById(`comments-count-${postId}`);
-            if (commentsListContainer) {
-                let emptyMsg = commentsListContainer.querySelector('.no-comments-msg');
-                if (emptyMsg) emptyMsg.remove();
-
-                let commentImg = c.image ? `<img src="${c.image}" style="max-width:100px; max-height:80px; border-radius:6px; display:block; margin-top:4px; cursor:pointer;" onclick="viewMedia('${c.image}')"/>` : '';
-                let commentDiv = document.createElement('div');
-                commentDiv.className = 'comment-item';
-                commentDiv.innerHTML = `
-                    <div class="comment-header">
-                        <span>👤 ${c.author}</span>
-                        <span style="font-size:8px; opacity:0.6;">${c.time || ''}</span>
-                    </div>
-                    <div style="color:var(--text-color);">${c.text || ''}</div>
-                    ${commentImg}
-                `;
-                commentsListContainer.appendChild(commentDiv);
-                commentsListContainer.scrollTop = commentsListContainer.scrollHeight;
-            }
-            if (commentCountSpan) {
-                commentCountSpan.innerText = parseInt(commentCountSpan.innerText || '0') + 1;
-            }
+            container.innerHTML = html;
         }
 
         async function loadSpsAndRadarNotifications() {
@@ -2428,26 +2252,10 @@
                 const snapRadars = await getDocs(qRadars);
                 snapRadars.forEach(d => radarAlerts.push({ type: 'radar', ...d.data() }));
 
-                const qRadioAlerts = query(collection(window.db, 'viper_radio_alerts'));
-                const snapRadio = await getDocs(qRadioAlerts);
-                snapRadio.forEach(d => radarAlerts.push({ type: 'radar', ...d.data() }));
-
                 try {
                     const qSps = query(collection(window.db, 'space_network_posts'));
                     const snapSps = await getDocs(qSps);
                     snapSps.forEach(d => spsAlerts.push({ type: 'sps', ...d.data() }));
-                } catch(e) {}
-
-                try {
-                    const qPilots = query(collection(window.db, 'spacePilots'));
-                    const snapPilots = await getDocs(qPilots);
-                    snapPilots.forEach(d => spsAlerts.push({ type: 'sps', ...d.data() }));
-                } catch(e) {}
-
-                try {
-                    const qSos = query(collection(window.db, 'communityPosts'), where('isEmergency', '==', true));
-                    const snapSos = await getDocs(qSos);
-                    snapSos.forEach(d => spsAlerts.push({ type: 'sos', ...d.data() }));
                 } catch(e) {}
 
                 if (radarAlerts.length === 0 && spsAlerts.length === 0) {
@@ -2463,26 +2271,7 @@
                         html += `
                             <div style="background:var(--bg); border:1px solid var(--danger); padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:10.5px;">
                                 <strong style="color:var(--danger);">📡 ${r.name || r.title || 'رادار ميداني'}</strong>
-                                <div style="font-size:9px; opacity:0.8; margin-top:2px;">الإحداثيات: (${r.lat || 'غير محدد'}, ${r.lng || 'غير محدد'}) | ${r.date || ''}</div>
-                            </div>`;
-                    });
-                }
-
-                if (spsAlerts.length > 0) {
-                    html += `<h4 style="font-size:11px; color:var(--accent); margin-top:10px; margin-bottom:6px;">🛰️ إشعارات ونظام محطة الفضاء (SPS & SOS):</h4>`;
-                    spsAlerts.forEach(s => {
-                        let isSos = s.type === 'sos' || s.isEmergency || (s.category && s.category.includes('طوارئ'));
-                        let badgeColor = isSos ? 'var(--danger)' : 'var(--accent)';
-                        let authorName = s.author || s.profileName || 'مشرف النظام';
-                        let authorAvatar = s.authorAvatar || s.avatar || '';
-
-                        html += `
-                            <div onclick="openSosModal('${encodeURIComponent(authorName)}', '${encodeURIComponent(authorAvatar)}', '${encodeURIComponent(s.text || s.description || s.title || '')}', '${s.date || ''}')" style="background:var(--bg); border:1px solid ${badgeColor}; padding:8px 10px; border-radius:6px; margin-bottom:6px; font-size:10.5px; cursor:pointer; transition:all 0.2s;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <strong style="color:${badgeColor};">${isSos ? '🆘 إشعار طوارئ SOS' : '🛰️ إشعار SPS نظامي'}</strong>
-                                    <span style="font-size:8px; opacity:0.7;">انقر للعرض 🔍</span>
-                                </div>
-                                <p style="font-size:10px; margin-top:4px; opacity:0.9;">${s.text || s.description || s.title || 'تحديث محطة الفضاء والشبكة اللوجستية المتكاملة'}</p>
+                                <div style="font-size:9px; opacity:0.8; margin-top:2px;">الإحداثيات: (${Number(r.lat || 0).toFixed(4)}, ${Number(r.lng || 0).toFixed(4)}) | ${r.date || ''}</div>
                             </div>`;
                     });
                 }
@@ -2491,34 +2280,6 @@
             } catch (err) {
                 container.innerHTML = `<p style="font-size:10.5px; text-align:center; color:var(--danger);">تعذر جلب إشعارات الرادار و SPS.</p>`;
             }
-        }
-
-        function openSosModal(nameEnc, avatarEnc, textEnc, dateStr) {
-            let name = decodeURIComponent(nameEnc);
-            let avatar = decodeURIComponent(avatarEnc);
-            let text = decodeURIComponent(textEnc);
-
-            let avatarHtml = (avatar && avatar !== 'undefined' && avatar !== 'null') 
-                ? `<img src="${avatar}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid var(--danger);">` 
-                : `<div style="width:40px; height:40px; border-radius:50%; background:var(--danger); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:14px;">${name.charAt(0)}</div>`;
-
-            let contentHtml = `
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; background:var(--bg); padding:8px; border-radius:8px; border:1px solid var(--border-color);">
-                    ${avatarHtml}
-                    <div>
-                        <strong style="font-size:12px; color:var(--text-color); display:block;">${name}</strong>
-                        <span style="font-size:9px; opacity:0.7;">تاريخ الاستغاثة: ${dateStr || 'الآن'}</span>
-                    </div>
-                </div>
-                <p style="font-size:11px; line-height:1.5; background:var(--bg); padding:10px; border-radius:8px; border:1px solid var(--border-color);">${text}</p>
-            `;
-
-            document.getElementById('sosModalContent').innerHTML = contentHtml;
-            document.getElementById('sosDetailModal').style.display = 'flex';
-        }
-
-        function closeSosModal() {
-            document.getElementById('sosDetailModal').style.display = 'none';
         }
 
         async function loadRadarsList() {
@@ -2557,7 +2318,7 @@
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:var(--accent);">📡 ${r.name}</strong>
-                                    <div style="font-size:8.5px; opacity:0.7; margin-top:1px;">الإحداثيات: (${r.lat}, ${r.lng}) | أضيف بواسطة: ${r.addedBy || 'عام'}</div>
+                                    <div style="font-size:8.5px; opacity:0.7; margin-top:1px;">الإحداثيات: (${Number(r.lat || 0).toFixed(4)}, ${Number(r.lng || 0).toFixed(4)}) | أضيف بواسطة: ${r.addedBy || 'عام'}</div>
                                 </div>
                                 <span style="font-size:8.5px; background:rgba(16,185,129,0.15); color:var(--success); padding:2px 6px; border-radius:6px; font-weight:bold;">سحابي معزول 🟢</span>
                             </div>
@@ -2648,7 +2409,7 @@
                     allDrivers.push({ id: docSnap.id, ...d });
                 });
                 renderChatUsersList();
-                renderPostsUI();
+                loadAccountPosts();
             }, err => {
                 getDocs(collection(window.db, 'drivers')).then(allSnap => {
                     allDrivers = [];
@@ -2659,7 +2420,7 @@
                         }
                     });
                     renderChatUsersList();
-                    renderPostsUI();
+                    loadAccountPosts();
                 }).catch(e => {});
             });
         }
