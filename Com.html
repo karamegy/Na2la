@@ -680,7 +680,7 @@
             <button class="sector-btn" onclick="switchSection('calculator-sec', this)">🧮 حاسبة</button>
         </div>
 
-        <!-- قسم عرض منشورات الحساب، إشعارات الرادار و SPS (مع لايك وتعليق وإشعار SOS متفاعل) -->
+        <!-- قسم عرض منشورات الحساب، إشعارات الرادار و SPS -->
         <div id="feed-sec" class="app-section active">
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; margin-bottom: 10px;">
@@ -2127,7 +2127,7 @@
             document.getElementById('remoteVideo').style.display = 'none';
         }
 
-        // جلب وعرض منشورات الحساب والبروفايل على المنصة بشكل منفصل وبدون تضارب مع صور البروفايل الصحيحة
+        // جلب وعرض منشورات الحساب والبروفايل مع تصحيح الرتب والمسميات ديناميكياً من قائمة السائقين
         async function loadAccountPosts() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
@@ -2198,9 +2198,21 @@
                 let authorName = p.profileName || p.author || p.driverName || 'حساب المستخدم';
                 let authorAvatar = p.authorAvatar || p.avatar || p.photoUrl || '';
                 
-                // مطابقة دقيقة لصورة بروفايل المستخدم الحالي لضمان عدم ظهور صور وهمية
                 if (authorName === currentDriverProfile.name && currentDriverProfile.avatar) {
                     authorAvatar = currentDriverProfile.avatar;
+                }
+
+                // [تعديل جذري لتصحيح الرتب والمسميات بناءً على قائمة السائقين والمديرين الحية لضمان عدم ظهور "سائق معتمد" خطأً للحسابات الإدارية]
+                let matchedDriver = allDrivers.find(d => (d.name || d.driverName || '').trim() === authorName.trim());
+                let dynamicTitle = 'سائق معتمد';
+
+                if (matchedDriver) {
+                    let isAdm = isUserAdmin(matchedDriver.role || matchedDriver.rank, matchedDriver.name || matchedDriver.driverName);
+                    dynamicTitle = matchedDriver.title || (isAdm ? 'مدير شركة' : 'سائق معتمد');
+                } else if (isUserAdmin('', authorName)) {
+                    dynamicTitle = 'مدير شركة';
+                } else {
+                    dynamicTitle = p.authorTitle || 'سائق معتمد';
                 }
 
                 let avatarHtml = (authorAvatar && authorAvatar !== 'undefined' && authorAvatar !== 'null' && authorAvatar.trim() !== '') 
@@ -2232,7 +2244,7 @@
                                 ${avatarHtml}
                                 <div>
                                     <strong style="font-size:11px; color:var(--text-color);">${authorName}</strong>
-                                    <span style="font-size:8.5px; display:block; color:var(--accent);">${p.authorTitle || 'سائق معتمد'}</span>
+                                    <span style="font-size:8.5px; display:block; color:var(--accent);">${dynamicTitle}</span>
                                 </div>
                             </div>
                             <span style="font-size:8.5px; opacity:0.6;">${p.date || ''}</span>
@@ -2400,7 +2412,6 @@
             }
         }
 
-        // جلب وعرض إشعارات الرادار ونظام SPS مع عرض صورة بروفايل الناشر بجوار اسمه عند النقر على إشعار SOS
         async function loadSpsAndRadarNotifications() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
@@ -2637,6 +2648,7 @@
                     allDrivers.push({ id: docSnap.id, ...d });
                 });
                 renderChatUsersList();
+                renderPostsUI();
             }, err => {
                 getDocs(collection(window.db, 'drivers')).then(allSnap => {
                     allDrivers = [];
@@ -2647,6 +2659,7 @@
                         }
                     });
                     renderChatUsersList();
+                    renderPostsUI();
                 }).catch(e => {});
             });
         }
