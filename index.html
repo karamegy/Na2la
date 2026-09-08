@@ -346,7 +346,7 @@
                 <button type="button" onclick="closeModal('addCompanyModal')" class="btn-danger btn-sm" style="width:auto;">✕ إغلاق</button>
             </div>
             <form id="new-company-form" onsubmit="event.preventDefault(); handleCreateCompanySubmit();">
-                <input type="text" id="new-comp-name" placeholder="اسم الشركة (مثال: النجم للشحن)" required>
+                <input type="text" id="new-comp-name" placeholder="اسم الشركة (مثال: النجم لشحن)" required>
                 <input type="text" id="new-comp-admin-name" placeholder="اسم مدير الشركة الرباعي" required>
                 <input type="tel" id="new-comp-admin-phone" inputmode="tel" oninput="this.value = this.value.replace(/[^0-9+]/g, '')" placeholder="رقم هاتف المدير" required>
                 <input type="password" id="new-comp-admin-pin" placeholder="رمز المرور السري (PIN)" required>
@@ -1953,7 +1953,7 @@
         const driverTitlesList = [
             "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
             "وسام الأمان الأول", "درع القيادة الآمنة", "سفير السلامة", "خبير توفير الوقود", "فاحص محترف",
-            "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "اللتزام التام",
+            "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "الالتزام التام",
             "سيد المسافات الطويلة", "الاستجابة الفورية", "رجل المهام الليلية", "دينامو العمل", "المرن المبدع",
             "ابتسامة العملاء", "سفير الأخلاق", "حلّال المشاكل", "الأمانة المطلقة", "المظهر الاحترافي",
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
@@ -2259,7 +2259,7 @@
             const pin = document.getElementById('login-pin-input').value.trim();
 
             if (!identifier || !pin) {
-                alert('الرجاء إدخل (الاسم أو رقم الهاتف) مع (الرقم السري PIN) للمطابقة الصحيحة!');
+                alert('الرجاء إدخال (الاسم أو رقم الهاتف) مع (الرقم السري PIN) للمطابقة الصحيحة!');
                 return;
             }
 
@@ -3219,7 +3219,7 @@
             return drv;
         }
 
-         function renderMyAccount() {
+        function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
@@ -4027,7 +4027,8 @@
             db.collection('chat').doc(newId).set(newMsg, { merge: true });
             input.value = '';
         }
-                function renderChatMessages() {
+
+        function renderChatMessages() {
             const box = document.getElementById('chat-messages-list');
             if(!box) return;
             box.innerHTML = '';
@@ -4133,8 +4134,7 @@
                 }
             } else { info.innerText = ''; }
         }
-
-        function publishCommunityPost() {
+                function publishCommunityPost() {
             const text = document.getElementById('community-post-text').value.trim();
             if (!text && communityFilesArr.length === 0) {
                 alert('الرجاء كتابة نص المنشور أو إرفاق صور/ملفات أولاً!');
@@ -4158,6 +4158,8 @@
                 const info = document.getElementById('community-files-preview-info');
                 if (info) info.innerText = '';
                 alert('تم نشر وتتم مزامنة منشورك في مجتمع السائقين بنجاح سحابياً! 🚀');
+                if(!appData.communityPosts) appData.communityPosts = [];
+                appData.communityPosts.unshift(newPost);
                 renderCommunityPosts();
             }).catch(err => {
                 alert('حدث خطأ أثناء النشر: ' + err.message);
@@ -4212,32 +4214,41 @@
             if(p) {
                 p.likes = (p.likes || 0) + 1;
                 db.collection('communityPosts').doc(String(p.id)).set(p, { merge: true });
+                renderCommunityPosts();
             }
         }
 
         function deleteCommunityPost(id) {
             if(confirm('حذف المنشور؟')) {
-                db.collection('communityPosts').doc(String(id)).delete();
+                db.collection('communityPosts').doc(String(id)).delete().then(() => {
+                    appData.communityPosts = (appData.communityPosts || []).filter(p => String(p.id) !== String(id));
+                    renderCommunityPosts();
+                });
             }
         }
 
         function showCommunityNotifications() { alert('لا توجد تنبيهات جديدة.'); }
 
         function saveCashHandler(e) {
+            if (e) e.preventDefault();
             const type = document.getElementById('cash-type').value;
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
             let newId = getSafeDocId('treasury');
-            let newCash = { id: newId, companyId: currentCompanyId, type, amount, desc, date: new Date().toLocaleString('ar-EG') };
+            let newCash = { id: newId, companyId: currentCompanyId || 'company_main', type, amount, desc, date: new Date().toLocaleString('ar-EG') };
 
             db.collection('treasury').doc(newId).set(newCash).then(() => {
                 document.getElementById('cash-form').reset();
-                alert('تم تسجيل الحركة بالخزينة في مجموعتها المستقلة بنجاح! 💵');
-            });
+                if(!appData.treasury) appData.treasury = [];
+                appData.treasury.unshift(newCash);
+                alert('تم تسجيل الحركة بالخزينة بنجاح! 💵');
+                render();
+            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
         }
 
         function saveTruckHandler(e) {
+            if (e) e.preventDefault();
             const num = document.getElementById('truck-num').value.trim();
             const driver = document.getElementById('driver-name').value.trim();
             const km = Number(document.getElementById('truck-km').value);
@@ -4245,15 +4256,19 @@
             const expiry = document.getElementById('truck-expiry').value;
 
             let newId = getSafeDocId('trucks');
-            let newTruck = { id: newId, companyId: currentCompanyId, num, driver, km, nextOil, expiry };
+            let newTruck = { id: newId, companyId: currentCompanyId || 'company_main', num, driver, km, nextOil, expiry };
 
             db.collection('trucks').doc(newId).set(newTruck).then(() => {
                 document.getElementById('truck-form').reset();
+                if(!appData.trucks) appData.trucks = [];
+                appData.trucks.unshift(newTruck);
                 alert('تم حفظ بيانات المركبة بنجاح! 🚚');
-            });
+                render();
+            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
         }
 
         function saveDocHandler(e) {
+            if (e) e.preventDefault();
             const title = document.getElementById('doc-title').value.trim();
             const fileInput = document.getElementById('doc-file');
             const compressedSrc = fileInput.dataset.compressedSrc;
@@ -4262,12 +4277,16 @@
                 return;
             }
             let newId = getSafeDocId('docs');
-            let newDoc = { id: newId, companyId: currentCompanyId, title, src: compressedSrc };
+            let newDoc = { id: newId, companyId: currentCompanyId || 'company_main', title, src: compressedSrc };
 
             db.collection('docs').doc(newId).set(newDoc).then(() => {
                 document.getElementById('doc-form').reset();
-                alert('تم حفظ المستند في مجموعة الوثائق بنجاح! 📂');
-            });
+                delete fileInput.dataset.compressedSrc;
+                if(!appData.docs) appData.docs = [];
+                appData.docs.unshift(newDoc);
+                alert('تم حفظ المستند بنجاح! 📂');
+                renderDocsList();
+            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
         }
 
         function renderDocsList() {
@@ -4276,7 +4295,7 @@
             container.innerHTML = '';
             (appData.docs || []).forEach(d => {
                 let div = document.createElement('div');
-                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; border:1px solid var(--border-color); font-size:10px;';
+                div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--bg); padding:6px; border-radius:6px; border:1px solid var(--border-color); font-size:10px; margin-bottom:4px;';
                 div.innerHTML = `
                     <span>📄 ${d.title}</span>
                     <div>
@@ -4290,35 +4309,47 @@
 
         function deleteDoc(id) {
             if(confirm('حذف المستند؟')) {
-                db.collection('docs').doc(String(id)).delete();
+                db.collection('docs').doc(String(id)).delete().then(() => {
+                    appData.docs = (appData.docs || []).filter(d => String(d.id) !== String(id));
+                    renderDocsList();
+                });
             }
         }
 
         function saveExpenseHandler(e) {
+            if (e) e.preventDefault();
             const title = document.getElementById('exp-title').value.trim();
             const amount = Number(document.getElementById('exp-amount').value);
 
             let newId = getSafeDocId('expenses');
-            let newExp = { id: newId, companyId: currentCompanyId, title, amount, date: new Date().toLocaleDateString('ar-EG') };
+            let newExp = { id: newId, companyId: currentCompanyId || 'company_main', title, amount, date: new Date().toLocaleDateString('ar-EG') };
 
             db.collection('expenses').doc(newId).set(newExp).then(() => {
                 document.getElementById('expense-form').reset();
+                if(!appData.expenses) appData.expenses = [];
+                appData.expenses.unshift(newExp);
                 alert('تم تسجيل المصروف بنجاح! ⛽');
-            });
+                render();
+            }).catch(err => alert('خطأ في الحفظ: ' + err.message));
         }
 
         function payCustomerDebt(index) {
-            let cust = appData.customers[index];
+            let cust = (appData.customers || [])[index];
             if(!cust) return;
-            let pay = prompt(`المبلغ المراد تحصيله من (${cust.name}) المتبقي (${cust.debt} ج.م):`);
+            let pay = prompt(`المبلغ المراد تحصيله من (${cust.name}) المتبقي (${cust.debt || 0} ج.م):`);
             if (pay && !isNaN(pay)) {
-                cust.debt = Math.max(0, Number(cust.debt) - Number(pay));
-                db.collection('customers').doc(String(cust.id || cust.name)).set(cust, { merge: true });
+                cust.debt = Math.max(0, Number(cust.debt || 0) - Number(pay));
+                cust.companyId = currentCompanyId || 'company_main';
+                let docId = String(cust.id || cust.name);
+                db.collection('customers').doc(docId).set(cust, { merge: true }).then(() => {
+                    render();
+                });
             }
         }
 
         function renderCRUDTable(forceSection) {
-            const section = forceSection || document.getElementById('crud-section-select').value;
+            const sectionSelect = document.getElementById('crud-section-select');
+            const section = forceSection || (sectionSelect ? sectionSelect.value : 'shipments');
             const headersRow = document.getElementById('crud-table-headers');
             const tbody = document.getElementById('crud-table-body');
             if(!headersRow || !tbody) return;
@@ -4437,8 +4468,8 @@
 
         function render() {
             try {
-                renderDriverDropdownOptions();
-                renderRSSTicker();
+                if (typeof renderDriverDropdownOptions === 'function') renderDriverDropdownOptions();
+                if (typeof renderRSSTicker === 'function') renderRSSTicker();
                 
                 const addCompBtnMain = document.getElementById('add-company-btn-main');
                 if (addCompBtnMain) {
@@ -4454,12 +4485,12 @@
                     if (loggedInDriverName === 'المدير') {
                         masterCashCard.style.display = 'block';
                         masterSaasCard.style.display = 'block';
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
+                        if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
+                        if (typeof renderAdminPendingCashRequests === 'function') renderAdminPendingCashRequests();
                     } else {
                         masterCashCard.style.display = 'none';
                         masterSaasCard.style.display = 'none';
-                        renderCompanyAdminSubscriptionView();
+                        if (typeof renderCompanyAdminSubscriptionView === 'function') renderCompanyAdminSubscriptionView();
                     }
                 }
                 
@@ -4643,6 +4674,7 @@
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const qrContainer = document.getElementById('qrcode');
+            if (!qrContainer) return;
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
                 text: `https://karamegy.github.io/Na2la/?shipmentId=${s.id}`,
@@ -4653,14 +4685,15 @@
         }
 
         function closeQRModal() { 
-            document.getElementById('qr-modal').style.display = 'none'; 
+            const modal = document.getElementById('qr-modal');
+            if (modal) modal.style.display = 'none'; 
         }
 
         function updateInvoiceDropdown() {
             const select = document.getElementById('invoice-select');
             if (!select) return;
             select.innerHTML = '';
-            let list = (currentUserRole === 'driver') ? appData.shipments.filter(s => s.assignedDriver === loggedInDriverName) : appData.shipments;
+            let list = (currentUserRole === 'driver') ? (appData.shipments || []).filter(s => s.assignedDriver === loggedInDriverName) : (appData.shipments || []);
             list.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.id;
@@ -4671,27 +4704,31 @@
         }
 
         function renderSelectedInvoice() {
-            const id = document.getElementById('invoice-select')?.value;
+            const select = document.getElementById('invoice-select');
+            if (!select) return;
+            const id = select.value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
-            document.getElementById('inv-id').innerText = s.id;
-            document.getElementById('inv-client').innerText = s.name || '-';
-            document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
-            document.getElementById('inv-address').innerText = s.address || '-';
-            document.getElementById('inv-item').innerText = s.item || '-';
-            document.getElementById('inv-price').innerText = s.price || 0;
-            document.getElementById('inv-status').innerText = `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`;
+            if (document.getElementById('inv-id')) document.getElementById('inv-id').innerText = s.id;
+            if (document.getElementById('inv-client')) document.getElementById('inv-client').innerText = s.name || '-';
+            if (document.getElementById('inv-phone')) document.getElementById('inv-phone').innerText = s.phone || 'غير مسجل';
+            if (document.getElementById('inv-address')) document.getElementById('inv-address').innerText = s.address || '-';
+            if (document.getElementById('inv-item')) document.getElementById('inv-item').innerText = s.item || '-';
+            if (document.getElementById('inv-price')) document.getElementById('inv-price').innerText = s.price || 0;
+            if (document.getElementById('inv-status')) document.getElementById('inv-status').innerText = `${s.status} (${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'})`;
 
             const imgBox = document.getElementById('inv-img-preview');
-            imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
+            if (imgBox) imgBox.innerHTML = s.img ? `<img src="${s.img}" style="max-width:250px; border-radius:8px; border:1px solid #cbd5e1;"/>` : '';
 
             const sigBox = document.getElementById('inv-sig-container');
-            sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
+            if (sigBox) sigBox.innerHTML = s.sig ? `<p style="font-size:9px; font-weight:bold;">توقيع المستلم:</p><img src="${s.sig}" style="height:45px; border-bottom:1px solid #000;"/>` : '';
         }
 
         function openInvoiceStandalone() {
-            const id = document.getElementById('invoice-select').value;
+            const select = document.getElementById('invoice-select');
+            if (!select) return;
+            const id = select.value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
 
@@ -4720,7 +4757,9 @@
         }
 
         function exportInvoiceAsImage() {
-            html2canvas(document.getElementById('print-area')).then(canvas => {
+            const printArea = document.getElementById('print-area');
+            if (!printArea) return;
+            html2canvas(printArea).then(canvas => {
                 const link = document.createElement('a');
                 link.download = `invoice-${Date.now()}.png`;
                 link.href = canvas.toDataURL();
@@ -4729,7 +4768,9 @@
         }
 
         function exportInvoiceAsPDF() {
-            html2canvas(document.getElementById('print-area')).then(canvas => {
+            const printArea = document.getElementById('print-area');
+            if (!printArea) return;
+            html2canvas(printArea).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
@@ -4739,7 +4780,9 @@
         }
 
         function sendInvoiceWhatsApp() {
-            const id = document.getElementById('invoice-select').value;
+            const select = document.getElementById('invoice-select');
+            if (!select) return;
+            const id = select.value;
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
             if (!s) return;
             const msg = `🧾 *فاتورة شحنة - أسطورة الطريق*\n*العميل:* ${s.name || '-'}\n*الحمولة:* ${s.item || '-'}\n*الأجرة:* ${s.price || 0} ج.م\n*السداد:* ${s.paymentStatus === 'deferred' ? 'آجل' : 'مسدد'}`;
@@ -4753,15 +4796,22 @@
         }
 
         function exportToExcel() {
-            const ws = XLSX.utils.json_to_sheet(appData.shipments);
+            if (typeof XLSX === 'undefined') {
+                alert('مكتبة Excel غير محملة حالياً.');
+                return;
+            }
+            const ws = XLSX.utils.json_to_sheet(appData.shipments || []);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
             XLSX.writeFile(wb, "na2la_data.xlsx");
         }
 
         function clearAll() {
-            if (currentUserRole !== 'admin') { alert('صلاحية المدير فقط.'); return; }
-            if (confirm('تنبيه: مسح كافة البيانات والمجموعات السحابية؟')) {
+            if (currentUserRole !== 'admin') { 
+                alert('صلاحية المدير فقط.'); 
+                return; 
+            }
+            if (confirm('هل أنت تأكد من إغلاق التقرير الحالي وإعادة إنعاش الواجهة؟')) {
                 location.reload();
             }
         }
