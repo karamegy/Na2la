@@ -2329,6 +2329,69 @@
             });
         }
 
+        async function addNewRadarCheckpoint() {
+            if (!window.db || !window.firebaseModules) return;
+            const nameInput = document.getElementById('radarNameInput');
+            const latInput = document.getElementById('radarLatInput');
+            const lngInput = document.getElementById('radarLngInput');
+
+            let name = nameInput.value.trim();
+            let lat = parseFloat(latInput.value);
+            let lng = parseFloat(lngInput.value);
+
+            if (!name || isNaN(lat) || isNaN(lng)) {
+                alert('الرجاء إدخال اسم الرادار وخطوط العرض والطول بشكل صحيح.');
+                return;
+            }
+
+            try {
+                let radarId = String(Date.now());
+                const { doc, setDoc, serverTimestamp } = window.firebaseModules;
+                await setDoc(doc(window.db, 'radars', radarId), {
+                    id: radarId,
+                    name: name,
+                    lat: lat,
+                    lng: lng,
+                    companyId: currentCompanyId,
+                    addedBy: currentDriverProfile.name,
+                    timestamp: serverTimestamp(),
+                    date: new Date().toLocaleString('ar-EG')
+                });
+
+                nameInput.value = '';
+                latInput.value = '';
+                lngInput.value = '';
+                alert('✅ تم حفظ نقطة الرادار الجغرافية ونشرها سحابياً بنجاح!');
+                loadRadarsOnMap();
+                loadRadarsList();
+                loadRadarsAndGeofencesCache();
+            } catch (e) {
+                alert('⚠️ فشل حفظ الرادار: ' + e.message);
+            }
+        }
+
+        function fillCurrentLocationForRadar() {
+            if (!navigator.geolocation) {
+                alert('خدمة تحديد الموقع غير مدعومة في متصفحك.');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const latInput = document.getElementById('radarLatInput');
+                    const lngInput = document.getElementById('radarLngInput');
+                    if (latInput) latInput.value = lat;
+                    if (lngInput) lngInput.value = lng;
+                    alert(`✅ تم جلب إحداثيات موقعك الحالي بنجاح:\nخط العرض: ${lat.toFixed(4)}\nخط الطول: ${lng.toFixed(4)}`);
+                },
+                (error) => {
+                    alert('⚠️ تعذر تحديد موقعك الحالي. تأكد من تفعيل صلاحيات الموقع (GPS).');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
         async function loadRadarsAndGeofencesCache() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, getDocs, query, where } = window.firebaseModules;
