@@ -1280,6 +1280,11 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
+        // دالة مساعدة لتوليد معرفات فريدة وآمنة من الفايربيس لتجنب تضارب البيانات
+        function getSafeDocId(collectionName) {
+            return db.collection(collectionName).doc().id;
+        }
+
         let currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
         let storedPin = '01036';
         let currentUserRole = localStorage.getItem('current_user_role') || ''; 
@@ -1379,9 +1384,10 @@
                 if (credential) {
                     const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
                     let drv = getCurrentDriver();
+                    let newBioId = getSafeDocId('biometricCredentials');
                     
                     let newCredObj = {
-                        id: 'bio_' + Date.now(),
+                        id: newBioId,
                         companyId: currentCompanyId || 'company_main',
                         driverId: String(drv.id || '1'),
                         driverName: loggedInDriverName,
@@ -1390,7 +1396,7 @@
                         createdAt: new Date().toLocaleString('ar-EG')
                     };
 
-                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
+                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj, { merge: true });
                     alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
                     renderBiometricManagementTable();
                 }
@@ -1548,8 +1554,8 @@
                 return;
             }
 
-            const newCompanyId = 'comp_' + Date.now();
-            const newAdminId = String(Date.now());
+            const newCompanyId = 'comp_' + getSafeDocId('companies');
+            const newAdminId = getSafeDocId('drivers');
             
             let expiryDate = new Date();
             expiryDate.setMonth(expiryDate.getMonth() + months);
@@ -1572,7 +1578,7 @@
             };
 
             try {
-                await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
+                await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin, { merge: true });
 
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
@@ -1600,7 +1606,7 @@
             }
 
             let drv = getCurrentDriver();
-            const reqId = String(Date.now());
+            const reqId = getSafeDocId('subscription_requests');
             const reqObj = {
                 id: reqId,
                 companyId: currentCompanyId,
@@ -1614,7 +1620,7 @@
                 createdAt: new Date().toISOString()
             };
 
-            db.collection('subscription_requests').doc(reqId).set(reqObj).then(() => {
+            db.collection('subscription_requests').doc(reqId).set(reqObj, { merge: true }).then(() => {
                 closeModal('cashPayModal');
                 document.getElementById('cash-sub-form').reset();
                 alert('تم إرسال طلب تجديد الاشتراك والرمز المرجعي للماستر أدمن بنجاح! سيتم فحص التحويل وتفعيل اشتراك شركتك قريباً. 🚀');
@@ -1788,7 +1794,7 @@
                         subStatus: 'active',
                         subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                     };
-                    await db.collection('drivers').doc(newId).set(newDrv);
+                    await db.collection('drivers').doc(newId).set(newDrv, { merge: true });
                     loggedInDriverName = newDrv.name;
                 } else {
                     loggedInDriverName = existingDrv.name;
@@ -1947,7 +1953,7 @@
         const driverTitlesList = [
             "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
             "وسام الأمان الأول", "درع القيادة الآمنة", "سفير السلامة", "خبير توفير الوقود", "فاحص محترف",
-            "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "الالتزام التام",
+            "منقذ الطوارئ", "ملك المرتفعات", "السرعة والدقة", "بطل المهام الشاقة", "اللتزام التام",
             "سيد المسافات الطويلة", "الاستجابة الفورية", "رجل المهام الليلية", "دينامو العمل", "المرن المبدع",
             "ابتسامة العملاء", "سفير الأخلاق", "حلّال المشاكل", "الأمانة المطلقة", "المظهر الاحترافي",
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
@@ -1966,58 +1972,62 @@
             }, 300);
         }
 
-        // إدارة مستمعي Firebase بكفاءة لمنع استنزاف القراءات وتكرار الاتصالات
+        // إدارة مستمعي Firebase بكفاءة عالية لمنع استنزاف القراءات وتوفير الاستهلاك
         let activeListeners = {};
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
             isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
+            // 1. استعلام الشات (محسّن لجلب آخر 40 رسالة فقط)
+            let chatQuery = db.collection('chat').limit(40);
+            if (currentCompanyId && currentCompanyId !== 'company_main') {
+                chatQuery = db.collection('chat').where('companyId', '==', currentCompanyId).limit(40);
+            }
+            if (activeListeners['chat']) activeListeners['chat']();
+            activeListeners['chat'] = chatQuery.onSnapshot(snapshot => {
+                appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                appData.chat.sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+                if (typeof renderChatMessages === 'function') renderChatMessages();
+                if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+            });
+
+            // 2. استعلام منشورات المجتمع (محسّن لجلب آخر 30 منشور فقط)
+            let communityQuery = db.collection('communityPosts').limit(30);
+            if (activeListeners['communityPosts']) activeListeners['communityPosts']();
+            activeListeners['communityPosts'] = communityQuery.onSnapshot(snapshot => {
+                appData.communityPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (document.getElementById('driversCommunityModal').style.display === 'flex') {
+                    renderCommunityPosts();
+                }
+            });
+
+            // 3. المجموعات الرئيسية مع تطبيق العزل وقيد القراءات (Limit)
+            const generalCollections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'docs', 'biometricCredentials', 'trucks', 'customers'];
             
-            collections.forEach(colName => {
+            generalCollections.forEach(colName => {
                 let queryRef = db.collection(colName);
+                
+                // عزل سحابي على مستوى السيرفر
                 if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
                     queryRef = queryRef.where('companyId', '==', currentCompanyId);
                 }
                 
-                if (activeListeners[colName]) {
-                    activeListeners[colName](); // إلغاء الاستماع القديم لمنع التكرار واستنزاف القراءات
+                // تحديد أقصى حد لجلب البيانات لتقليل القراءات والتكلفة
+                if (['shipments', 'deferredInvoices', 'treasury', 'expenses'].includes(colName)) {
+                    queryRef = queryRef.limit(100);
                 }
 
-                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    if (colName === 'communityPosts') {
-                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
-                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
-                    } else if (currentCompanyId) {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-                    } else {
-                        appData[colName] = rawData;
-                    }
-                    
-                    scheduleSmartRender();
+                if (activeListeners[colName]) {
+                    activeListeners[colName]();
+                }
 
-                    if (typeof renderChatMessages === 'function') renderChatMessages();
-                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-                    if (document.getElementById('reports-tab').classList.contains('active')) {
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
-                        renderCompanyAdminSubscriptionView();
-                    }
-                    if (document.getElementById('companies-tab').classList.contains('active')) {
-                        renderCompaniesManagementTable();
-                    }
-                }, error => {
-                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                activeListeners[colName] = queryRef.onSnapshot(snapshot => {
+                    appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    scheduleSmartRender();
                 });
             });
 
-            if (activeListeners['systemSettings']) {
-                activeListeners['systemSettings']();
-            }
+            if (activeListeners['systemSettings']) activeListeners['systemSettings']();
             activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
                 if (doc.exists && doc.data().newsText) {
                     appData.newsText = doc.data().newsText;
@@ -2249,7 +2259,7 @@
             const pin = document.getElementById('login-pin-input').value.trim();
 
             if (!identifier || !pin) {
-                alert('الرجاء إدخال (الاسم أو رقم الهاتف) مع (الرقم السري PIN) للمطابقة الصحيحة!');
+                alert('الرجاء إدخل (الاسم أو رقم الهاتف) مع (الرقم السري PIN) للمطابقة الصحيحة!');
                 return;
             }
 
@@ -2762,7 +2772,7 @@
             let status = 'pending';
             if (remainingAmount <= 0) status = 'paid';
 
-            const newId = String(Date.now());
+            const newId = getSafeDocId('deferredInvoices');
             const newInv = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -2778,7 +2788,7 @@
                 issueDate: new Date().toISOString().split('T')[0]
             };
 
-            db.collection('deferredInvoices').doc(newId).set(newInv).then(() => {
+            db.collection('deferredInvoices').doc(newId).set(newInv, { merge: true }).then(() => {
                 document.getElementById('deferred-invoice-form').reset();
                 closeModal('addDeferredModal');
                 alert('تم حفظ وإضافة الفاتورة الآجلة في مجموعتها المستقلة بنجاح! ⏳🚀');
@@ -3033,7 +3043,7 @@
                 if(found) totalAmount += Number(found.price || 0);
             });
 
-            const newId = String(Date.now());
+            const newId = getSafeDocId('consolidatedInvoices');
             const newConInv = {
                 id: newId,
                 invoiceNumber: newId,
@@ -3045,7 +3055,7 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            db.collection('consolidatedInvoices').doc(newId).set(newConInv).then(() => {
+            db.collection('consolidatedInvoices').doc(newId).set(newConInv, { merge: true }).then(() => {
                 document.getElementById('consolidated-invoice-form').reset();
                 alert('تم إصدار وتخزين الفاتورة المجمعة في مجموعتها المستقلة بنجاح! 📑🚀');
             });
@@ -3408,9 +3418,10 @@
                 return;
             }
             let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+            let newPostId = getSafeDocId('profileWalls');
             
             let postData = {
-                id: String(Date.now()),
+                id: newPostId,
                 companyId: currentCompanyId,
                 profileName: activeTargetName,
                 author: loggedInDriverName,
@@ -3419,7 +3430,7 @@
                 date: new Date().toLocaleString('ar-EG')
             };
 
-            db.collection('profileWalls').add(postData).then(() => {
+            db.collection('profileWalls').doc(newPostId).set(postData, { merge: true }).then(() => {
                 document.getElementById('profile-wall-text').value = '';
                 profileWallFilesArr = [];
                 document.getElementById('profile-wall-files-info').innerText = '';
@@ -3535,7 +3546,7 @@
             const item = document.getElementById('vis-item').value.trim();
             const price = Number(document.getElementById('vis-price').value);
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('shipments');
             let newShip = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -3554,7 +3565,7 @@
                 date: new Date().toLocaleDateString('ar-EG')
             };
 
-            db.collection('shipments').doc(newId).set(newShip).then(() => {
+            db.collection('shipments').doc(newId).set(newShip, { merge: true }).then(() => {
                 closeVisitorBooking();
                 alert('تم تقديم طلبك بنجاح وسيتواصل معك فريق الإدارة! 🚀');
                 document.getElementById('visitor-shipment-form').reset();
@@ -3571,7 +3582,7 @@
             if(exists) { alert('هذا الحساب أو الهاتف مسجل بالفعل!'); return; }
 
             try {
-                let uid = String(Date.now());
+                let uid = getSafeDocId('drivers');
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid,
@@ -3591,7 +3602,7 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
 
-                await db.collection('drivers').doc(uid).set(newDrv);
+                await db.collection('drivers').doc(uid).set(newDrv, { merge: true });
 
                 closeDriverRegister();
                 alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
@@ -3616,22 +3627,31 @@
             const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            // فحص تضارب جدول السائق بدقة تامة لتجنب تضارب الشحنات
+            // فحص تضارب جدول السائقين المباشر عبر السيرفر لتجنب الحجز المزدوج
             if (assignedDriver) {
-                let activeConflict = (appData.shipments || []).find(s => {
-                    let isSameDriver = s.assignedDriver === assignedDriver;
-                    let isActiveStatus = (s.status === 'في الانتظار' || s.status === 'في الطريق');
-                    let isNotCurrentEdit = editId ? String(s.id) !== String(editId) : true;
-                    return isSameDriver && isActiveStatus && isNotCurrentEdit;
-                });
+                try {
+                    const conflictCheck = await db.collection('shipments')
+                        .where('assignedDriver', '==', assignedDriver)
+                        .where('status', 'in', ['في الانتظار', 'في الطريق'])
+                        .get();
 
-                if (activeConflict) {
-                    let confirmConflict = confirm(`⚠️ تنبيه تضارب جدول السائقين:\nالسائق (${assignedDriver}) لديه رحلة نشطة بالفعل حالياً (${activeConflict.item} - الحالة: ${activeConflict.status}).\nهل أنت متأكد من رغبتك في إسناد هذه الرحلة له وتجاوز التضارب؟`);
-                    if (!confirmConflict) return;
+                    let hasConflict = false;
+                    conflictCheck.forEach(doc => {
+                        if (!editId || doc.id !== editId) {
+                            hasConflict = true;
+                        }
+                    });
+
+                    if (hasConflict) {
+                        let confirmOverride = confirm(`⚠️ تنبيه تضارب آمن:\nالسائق (${assignedDriver}) لديه رحلة جارية بالفعل مسجلة على السيرفر!\nهل تريد تجاوز التضارب وإسناد الرحلة له على أي حال؟`);
+                        if (!confirmOverride) return;
+                    }
+                } catch (err) {
+                    console.error("Conflict check error:", err);
                 }
             }
 
-            let targetId = editId ? String(editId) : String(Date.now());
+            let targetId = editId ? String(editId) : getSafeDocId('shipments');
             let existingShip = editId ? (appData.shipments || []).find(s => String(s.id) === String(editId)) : null;
 
             let shipmentObj = {
@@ -3649,7 +3669,7 @@
             if (!editId && paymentStatus === 'deferred') {
                 let dueDateObj = new Date();
                 dueDateObj.setDate(dueDateObj.getDate() + 7);
-                let defId = String(Date.now() + 1);
+                let defId = getSafeDocId('deferredInvoices');
                 let defInv = {
                     id: defId,
                     companyId: currentCompanyId,
@@ -3664,10 +3684,10 @@
                     notes: `توليد تلقائي من الشحنة رقم #${targetId} (${item})`,
                     issueDate: new Date().toISOString().split('T')[0]
                 };
-                db.collection('deferredInvoices').doc(defId).set(defInv);
+                db.collection('deferredInvoices').doc(defId).set(defInv, { merge: true });
             }
 
-            await db.collection('shipments').doc(targetId).set(shipmentObj);
+            await db.collection('shipments').doc(targetId).set(shipmentObj, { merge: true });
 
             document.getElementById('edit-shipment-id').value = '';
             document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة';
@@ -3826,7 +3846,7 @@
             if(exists) { alert('هذا الاسم أو الهاتف مسجل بالفعل!'); return; }
 
             try {
-                let uid = String(Date.now());
+                let uid = getSafeDocId('drivers');
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
                     id: uid, 
@@ -3846,7 +3866,7 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
                 
-                await db.collection('drivers').doc(uid).set(newDrv);
+                await db.collection('drivers').doc(uid).set(newDrv, { merge: true });
 
                 document.getElementById('driver-profile-form').reset();
                 alert('تم إضافة الحساب السحابي بنجاح! 🚀');
@@ -3874,6 +3894,7 @@
                 box.innerHTML = `<strong>🛠️ التشخيص:</strong> انسداد الفلاتر أو مشكلة بالتيربو.<br><strong>💡 الإجراء:</strong> نظف فلتر الهواء وافحص الرشاشات.`;
             }
         }
+
         function savePublicPostHandler(e) {
             e.preventDefault();
             const title = document.getElementById('post-title').value.trim();
@@ -3886,9 +3907,9 @@
             let total = imgFiles.length + videoFiles.length;
 
             const saveToFirestore = (arr) => {
-                let newId = String(Date.now());
+                let newId = getSafeDocId('posts');
                 let newPost = { id: newId, companyId: currentCompanyId, title, desc, media: arr, author: loggedInDriverName, date: new Date().toLocaleString('ar-EG') };
-                db.collection('posts').doc(newId).set(newPost).then(() => {
+                db.collection('posts').doc(newId).set(newPost, { merge: true }).then(() => {
                     document.getElementById('public-post-form').reset();
                     alert('تم النشر في لوحة الإعلانات بنجاح! 🚀');
                 });
@@ -3993,7 +4014,7 @@
             const msgText = input.value.trim();
             if(!msgText) return;
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('chat');
             let newMsg = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -4003,11 +4024,10 @@
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            db.collection('chat').doc(newId).set(newMsg);
+            db.collection('chat').doc(newId).set(newMsg, { merge: true });
             input.value = '';
         }
-
-        function renderChatMessages() {
+                function renderChatMessages() {
             const box = document.getElementById('chat-messages-list');
             if(!box) return;
             box.innerHTML = '';
@@ -4064,7 +4084,7 @@
             const text = input.value.trim();
             if(!text) return;
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('chat');
             let newMsg = {
                 id: newId,
                 companyId: currentCompanyId,
@@ -4121,7 +4141,7 @@
                 return;
             }
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('communityPosts');
             let newPost = {
                 id: newId,
                 companyId: currentCompanyId || 'company_main',
@@ -4208,7 +4228,7 @@
             const amount = Number(document.getElementById('cash-amount').value);
             const desc = document.getElementById('cash-desc').value.trim();
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('treasury');
             let newCash = { id: newId, companyId: currentCompanyId, type, amount, desc, date: new Date().toLocaleString('ar-EG') };
 
             db.collection('treasury').doc(newId).set(newCash).then(() => {
@@ -4224,7 +4244,7 @@
             const nextOil = Number(document.getElementById('truck-next-oil').value);
             const expiry = document.getElementById('truck-expiry').value;
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('trucks');
             let newTruck = { id: newId, companyId: currentCompanyId, num, driver, km, nextOil, expiry };
 
             db.collection('trucks').doc(newId).set(newTruck).then(() => {
@@ -4241,7 +4261,7 @@
                 alert('الرجاء الانتظار قليلاً حتى يتم ضغط المستند!');
                 return;
             }
-            let newId = String(Date.now());
+            let newId = getSafeDocId('docs');
             let newDoc = { id: newId, companyId: currentCompanyId, title, src: compressedSrc };
 
             db.collection('docs').doc(newId).set(newDoc).then(() => {
@@ -4278,7 +4298,7 @@
             const title = document.getElementById('exp-title').value.trim();
             const amount = Number(document.getElementById('exp-amount').value);
 
-            let newId = String(Date.now());
+            let newId = getSafeDocId('expenses');
             let newExp = { id: newId, companyId: currentCompanyId, title, amount, date: new Date().toLocaleDateString('ar-EG') };
 
             db.collection('expenses').doc(newId).set(newExp).then(() => {
