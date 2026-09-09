@@ -1962,63 +1962,78 @@
             "واجهة الشركة", "مدرب الجدد", "المستشار الفني", "سائق العام الذهبي", "أسطورة الطريق"
         ];
 
-    let activeListeners = {};
-function initRealtimeListeners() {
-    if (isListenersInitialized) return;
-    isListenersInitialized = true;
-
-    const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
-    
-    collections.forEach(colName => {
-        // إزالة شرط where من مستوى السيرفر لضمان جلب البيانات القديمة التي لا تحتوي على companyId ثم تصفيتها برمجياً
-        let queryRef = db.collection(colName);
-        
-        if (activeListeners[colName]) {
-            activeListeners[colName]();
+        let isListenersInitialized = false;
+        let _renderTimer = null;
+        function scheduleSmartRender() {
+            if (_renderTimer) return;
+            _renderTimer = setTimeout(() => {
+                _renderTimer = null;
+                const activeTag = document.activeElement ? document.activeElement.tagName : '';
+                if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+                    render();
+                }
+            }, 300);
         }
 
-        activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // الفلترة البرمجية المرنة التي تقبل المستندات التي تفتقد لـ companyId أو تطابقه
-            if (colName === 'communityPosts') {
-                appData[colName] = rawData;
-            } else if (loggedInDriverName === 'المدير' || currentCompanyId === 'company_main' || currentCompanyId === 'Company_main') {
-                appData[colName] = rawData; // المدير يرى كل شيء
-            } else if (currentCompanyId) {
-                appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-            } else {
-                appData[colName] = rawData;
-            }
-            
-            scheduleSmartRender();
+        // إدارة مستمعي Firebase بكفاءة مع الاستفادة الكاملة من المصادقة الآمنة والعزل
+        let activeListeners = {};
+        function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-            if (typeof renderChatMessages === 'function') renderChatMessages();
-            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-            if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-            if (document.getElementById('reports-tab').classList.contains('active')) {
-                renderMemberSubscriptionsList();
-                renderAdminPendingCashRequests();
-                renderCompanyAdminSubscriptionView();
-            }
-            if (document.getElementById('companies-tab').classList.contains('active')) {
-                renderCompaniesManagementTable();
-            }
-        }, error => {
-            console.error(`خطأ مزامنة المجموعات الآمنة: ${colName}`, error);
-        });
-    });
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
+            
+            collections.forEach(colName => {
+                let queryRef = db.collection(colName);
+                if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
+                    queryRef = queryRef.where('companyId', '==', currentCompanyId);
+                }
+                
+                if (activeListeners[colName]) {
+                    activeListeners[colName]();
+                }
 
-    if (activeListeners['systemSettings']) {
-        activeListeners['systemSettings']();
-    }
-    activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
-        if (doc.exists && doc.data().newsText) {
-            appData.newsText = doc.data().newsText;
-            renderRSSTicker();
+                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (colName === 'communityPosts') {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات الآمنة: ${colName}`, error);
+                });
+            });
+
+            if (activeListeners['systemSettings']) {
+                activeListeners['systemSettings']();
+            }
+            activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
         }
-    });
-}
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
