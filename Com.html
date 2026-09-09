@@ -918,6 +918,7 @@
         </div>
     </div>
 
+    <!-- نافذة تعديل بيانات نقطة الرادار -->
     <div id="editRadarModal" class="custom-modal" onclick="closeEditRadarModal()">
         <div class="card" style="width: 100%; max-width: 340px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--accent);">✏️ تعديل بيانات نقطة الرادار الجغرافية</h3>
@@ -939,6 +940,7 @@
         </div>
     </div>
 
+    <!-- نافذة بروفايل الحساب -->
     <div id="profileModal" class="custom-modal" onclick="closeProfileModal()">
         <div class="card" style="width: 100%; max-width: 340px; margin: auto;" onclick="event.stopPropagation()">
             <h3 style="color: var(--accent);">👤 بروفايل الحساب والصلاحيات (سحابي بالكامل)</h3>
@@ -1172,13 +1174,12 @@
 
         async function fetchCloudSessionFromURL() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, limit } = window.firebaseModules;
 
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
-                // استعلام معزول للحسابات الخاصة بشركتك فقط
-                const qDriversComp = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId));
+                const qDriversComp = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId), limit(50));
                 const snapshot = await getDocs(qDriversComp);
                 let found = null;
                 allDrivers = [];
@@ -1340,6 +1341,20 @@
         function openProfileModal() { document.getElementById('profileModal').style.display = 'flex'; }
         function closeProfileModal() { document.getElementById('profileModal').style.display = 'none'; }
 
+        function openSosModal(text, date, author) {
+            const modal = document.getElementById('sosDetailModal');
+            const content = document.getElementById('sosModalContent');
+            if (content) {
+                content.innerHTML = `<strong>المرسل:</strong> ${author || 'مجهول'}<br><strong>التاريخ:</strong> ${date || ''}<br><br><p style="font-size:12px; line-height:1.6;">${text || ''}</p>`;
+            }
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeSosModal() {
+            const modal = document.getElementById('sosDetailModal');
+            if (modal) modal.style.display = 'none';
+        }
+
         function openLiveRadarMapModal() {
             const modal = document.getElementById('liveRadarMapModal');
             modal.style.display = 'block';
@@ -1419,7 +1434,7 @@
             serviceStationsLayer = L.layerGroup().addTo(leafletMap);
 
             leafletMap.on('dragstart', () => { isMapFollowing = false; });
-            leafletMap.on('rotate', (e) => { updateCompassNeedle(leafletMap.getBearing()); });
+            leafletMap.on('rotate', () => { updateCompassNeedle(leafletMap.getBearing()); });
         }
 
         function updateCompassNeedle(bearing) {
@@ -1790,9 +1805,9 @@
             if (!window.db || !window.firebaseModules) return;
 
             try {
-                const { collection, getDocs, query, where } = window.firebaseModules;
+                const { collection, getDocs, query, where, limit } = window.firebaseModules;
                 let driverId = currentDriverProfile.id || urlUserId;
-                const q = query(collection(window.db, 'trip_logs'), where('driverId', '==', driverId), where('companyId', '==', currentCompanyId));
+                const q = query(collection(window.db, 'trip_logs'), where('driverId', '==', driverId), where('companyId', '==', currentCompanyId), limit(100));
                 const snapshot = await getDocs(q);
                 
                 replayPointsCache = [];
@@ -1945,8 +1960,8 @@
             radarMarkersLayer.clearLayers();
 
             try {
-                const { collection, getDocs, query, where } = window.firebaseModules;
-                const q = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId));
+                const { collection, getDocs, query, where, limit } = window.firebaseModules;
+                const q = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId), limit(50));
                 const snapshot = await getDocs(q);
                 let count = 0;
 
@@ -2039,9 +2054,9 @@
 
         function listenToIncomingCalls() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
+            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
             try {
-                const q = query(collection(window.db, 'calls'), where('receiver', '==', currentDriverProfile.name), where('status', '==', 'ringing'), where('companyId', '==', currentCompanyId));
+                const q = query(collection(window.db, 'calls'), where('receiver', '==', currentDriverProfile.name), where('status', '==', 'ringing'), where('companyId', '==', currentCompanyId), limit(5));
                 onSnapshot(q, snapshot => {
                     snapshot.forEach(async docSnap => {
                         const callData = docSnap.data();
@@ -2128,18 +2143,74 @@
             document.getElementById('remoteVideo').style.display = 'none';
         }
 
-        // جلب وعرض منشورات SOS فقط مع إحداثيات الخريطة والرادار لكل حساب معزول
+        function openEditRadarModal(id, encodedName, lat, lng) {
+            document.getElementById('editRadarId').value = id;
+            document.getElementById('editRadarNameInput').value = decodeURIComponent(encodedName);
+            document.getElementById('editRadarLatInput').value = lat;
+            document.getElementById('editRadarLngInput').value = lng;
+            document.getElementById('editRadarModal').style.display = 'flex';
+        }
+
+        function closeEditRadarModal() {
+            document.getElementById('editRadarModal').style.display = 'none';
+        }
+
+        async function saveRadarChanges() {
+            let id = document.getElementById('editRadarId').value;
+            let name = document.getElementById('editRadarNameInput').value.trim();
+            let lat = parseFloat(document.getElementById('editRadarLatInput').value);
+            let lng = parseFloat(document.getElementById('editRadarLngInput').value);
+
+            if (!id || !name || isNaN(lat) || isNaN(lng)) {
+                alert('الرجاء كتابة اسم الرادار وتحديد الإحداثيات بشكل صحيح.');
+                return;
+            }
+
+            if (window.db && window.firebaseModules) {
+                try {
+                    const { doc, updateDoc } = window.firebaseModules;
+                    await updateDoc(doc(window.db, 'radars', id), {
+                        name: name,
+                        lat: lat,
+                        lng: lng
+                    });
+                    closeEditRadarModal();
+                    alert('✅ تم تعديل بيانات الرادار سحابياً بنجاح!');
+                    loadRadarsOnMap();
+                    loadRadarsList();
+                    loadRadarsAndGeofencesCache();
+                } catch(e) {
+                    alert('⚠️ تعذر تعديل الرادار: ' + e.message);
+                }
+            }
+        }
+
+        async function deleteRadarCheckpoint(id) {
+            if (!confirm('هل أنت متأكد من حذف نقطة الرادار هذه نهائياً؟')) return;
+            if (window.db && window.firebaseModules) {
+                try {
+                    const { doc, deleteDoc } = window.firebaseModules;
+                    await deleteDoc(doc(window.db, 'radars', id));
+                    alert('🗑️ تم حذف نقطة الرادار بنجاح!');
+                    loadRadarsOnMap();
+                    loadRadarsList();
+                    loadRadarsAndGeofencesCache();
+                } catch(e) {
+                    alert('⚠️ فشل الحذف: ' + e.message);
+                }
+            }
+        }
+
         async function loadAccountPosts() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, limit } = window.firebaseModules;
 
             const container = document.getElementById('account-posts-container');
             if(!container) return;
 
             try {
-                // جلب إحداثيات الخريطة للحسابات الخاصة بالشركة
-                let locsSnapshot = await getDocs(query(collection(window.db, 'driver_locations'), where('companyId', '==', activeCompId)));
+                let locsSnapshot = await getDocs(query(collection(window.db, 'driver_locations'), where('companyId', '==', activeCompId), limit(30)));
                 let driverLocationsMap = {};
                 locsSnapshot.forEach(docSnap => {
                     let d = docSnap.data();
@@ -2148,25 +2219,23 @@
                     }
                 });
 
-                // جلب رادارات الشركة
-                let radarsSnapshot = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', activeCompId)));
+                let radarsSnapshot = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', activeCompId), limit(30)));
                 let radarsList = [];
                 radarsSnapshot.forEach(docSnap => {
                     radarsList.push(docSnap.data());
                 });
 
                 let posts = [];
-                const qComm = query(collection(window.db, 'communityPosts'), where('companyId', '==', activeCompId));
+                const qComm = query(collection(window.db, 'communityPosts'), where('companyId', '==', activeCompId), limit(30));
                 const snapComm = await getDocs(qComm);
                 snapComm.forEach(docSnap => {
                     let data = docSnap.data();
-                    // فلترة منشورات SOS فقط
                     if (data.isEmergency === true || data.type === 'sos' || (data.text && data.text.includes('SOS')) || (data.category && data.category.includes('طوارئ'))) {
                         posts.push({ id: docSnap.id, source: 'communityPosts', ...data });
                     }
                 });
 
-                const qWalls = query(collection(window.db, 'profileWalls'), where('companyId', '==', activeCompId));
+                const qWalls = query(collection(window.db, 'profileWalls'), where('companyId', '==', activeCompId), limit(30));
                 const snapWalls = await getDocs(qWalls);
                 snapWalls.forEach(docSnap => {
                     let data = docSnap.data();
@@ -2223,8 +2292,11 @@
                         ? `<img src="${authorAvatar}" style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:2px solid var(--danger);">` 
                         : `<div style="width:32px; height:32px; border-radius:50%; background:var(--danger); color:#fff; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px;">${authorName.charAt(0)}</div>`;
 
+                    let safeText = (p.text || '').replace(/'/g, "\\'").replace(/\n/g, ' ');
+                    let safeAuthor = authorName.replace(/'/g, "\\'");
+
                     html += `
-                        <div class="card" style="border: 1px solid var(--danger); margin-bottom:10px;">
+                        <div class="card" style="border: 1px solid var(--danger); margin-bottom:10px; cursor:pointer;" onclick="openSosModal('${safeText}', '${p.date || ''}', '${safeAuthor}')">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                                 <div style="display:flex; align-items:center; gap:8px;">
                                     ${avatarHtml}
@@ -2245,7 +2317,7 @@
         async function loadSpsAndRadarNotifications() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, limit } = window.firebaseModules;
 
             const container = document.getElementById('sps-radar-notifications-container');
             if(!container) return;
@@ -2254,12 +2326,12 @@
                 let radarAlerts = [];
                 let spsAlerts = [];
 
-                const qRadars = query(collection(window.db, 'radars'), where('companyId', '==', activeCompId));
+                const qRadars = query(collection(window.db, 'radars'), where('companyId', '==', activeCompId), limit(20));
                 const snapRadars = await getDocs(qRadars);
                 snapRadars.forEach(d => radarAlerts.push({ type: 'radar', ...d.data() }));
 
                 try {
-                    const qSps = query(collection(window.db, 'space_network_posts'), where('companyId', '==', activeCompId));
+                    const qSps = query(collection(window.db, 'space_network_posts'), where('companyId', '==', activeCompId), limit(20));
                     const snapSps = await getDocs(qSps);
                     snapSps.forEach(d => spsAlerts.push({ type: 'sps', ...d.data() }));
                 } catch(e) {}
@@ -2292,8 +2364,8 @@
             if (!window.db || !window.firebaseModules) return;
             if (radarsUnsubscribe) radarsUnsubscribe();
 
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
-            const q = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId));
+            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
+            const q = query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId), limit(50));
 
             radarsUnsubscribe = onSnapshot(q, snapshot => {
                 const container = document.getElementById('radars-list-container');
@@ -2315,8 +2387,8 @@
                     let isManager = isUserAdmin(currentDriverProfile.rank, currentDriverProfile.name) || r.addedBy === currentDriverProfile.name;
                     let adminButtons = isManager ? `
                         <div style="display:flex; gap:4px; margin-top:4px;">
-                            <button class="action-icon-btn" style="padding:3px 8px; font-size:8.5px;" onclick="openEditRadarModal('${r.id}', '${encodeURIComponent(r.name || '')}', ${r.lat}, ${r.lng})">✏️ تعديل</button>
-                            <button class="action-icon-btn delete-btn" style="padding:3px 8px; font-size:8.5px;" onclick="deleteRadarCheckpoint('${r.id}')">🗑️ حذف</button>
+                            <button type="button" class="action-icon-btn" style="padding:3px 8px; font-size:8.5px;" onclick="openEditRadarModal('${r.id}', '${encodeURIComponent(r.name || '')}', ${r.lat}, ${r.lng})">✏️ تعديل</button>
+                            <button type="button" class="action-icon-btn delete-btn" style="padding:3px 8px; font-size:8.5px;" onclick="deleteRadarCheckpoint('${r.id}')">🗑️ حذف</button>
                         </div>` : '';
 
                     html += `
@@ -2400,13 +2472,13 @@
 
         async function loadRadarsAndGeofencesCache() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs, query, where } = window.firebaseModules;
+            const { collection, getDocs, query, where, limit } = window.firebaseModules;
             try {
-                const radarSnap = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId)));
+                const radarSnap = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', currentCompanyId), limit(100)));
                 cachedRadars = [];
                 radarSnap.forEach(doc => cachedRadars.push(doc.data()));
 
-                const geoSnap = await getDocs(query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId)));
+                const geoSnap = await getDocs(query(collection(window.db, 'geofences'), where('companyId', '==', currentCompanyId), limit(50)));
                 cachedGeofences = [];
                 geoSnap.forEach(doc => cachedGeofences.push(doc.data()));
             } catch (e) {}
@@ -2468,8 +2540,8 @@
             if (!window.db || !window.firebaseModules) return;
             if (driversUnsubscribe) driversUnsubscribe();
 
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
-            const q = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId));
+            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
+            const q = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId), limit(50));
 
             driversUnsubscribe = onSnapshot(q, snapshot => {
                 allDrivers = [];
@@ -2535,8 +2607,8 @@
             if (!window.db || !window.firebaseModules) return;
             if (chatUnsubscribe) chatUnsubscribe();
 
-            const { collection, onSnapshot, query, where } = window.firebaseModules;
-            const q = query(collection(window.db, 'chat'), where('companyId', '==', currentCompanyId));
+            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
+            const q = query(collection(window.db, 'chat'), where('companyId', '==', currentCompanyId), limit(50));
 
             chatUnsubscribe = onSnapshot(q, snapshot => {
                 const box = document.getElementById('chat-messages-box');
@@ -2563,7 +2635,7 @@
                 let html = '';
                 filtered.forEach(m => {
                     let isMine = m.sender === currentDriverProfile.name;
-                    html += `<div class="chat-bubble ${isMine ? 'mine' : 'other'}"><span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time}</span></div>`;
+                    html += `<div class="chat-bubble ${isMine ? 'mine' : 'other'}"><span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time || ''}</span></div>`;
                 });
                 box.innerHTML = html;
                 box.scrollTop = box.scrollHeight;
