@@ -26,6 +26,7 @@
         const db = getFirestore(app);
 
         window.db = db;
+        window.auth = auth;
         window.firebaseModules = { collection, getDocs, addDoc, setDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, limit };
 
         signInAnonymously(auth).then(() => {
@@ -247,7 +248,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <h2 style="font-size: 18px; font-weight: 900; color: var(--primary-orange);">🏛️ لوحة القيادة والثروة المالية الحية</h2>
-                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">اتصال مباشر ولحظي بالسحابة بدون أي تخزين محلي.</p>
+                        <p style="font-size: 12px; color: var(--secondary-text); margin-top: 4px;">اتصال مباشر ولحظي بالسحابة مع عزل الشركات التام.</p>
                     </div>
                     <div style="background: rgba(0,242,254,0.15); color: var(--primary-blue); padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 900;" id="sync-status-badge">
                         🟢 متصل بالإنترنت سحابياً
@@ -581,7 +582,7 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي المُحسن والمعزول سحابياً (مع منع استنزاف القراءات وتفعيل Unsubscribe) -->
+    <!-- السكريبت البرمجي المُحسن والمعزول سحابياً بصرامة -->
     <script>
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
 
@@ -605,10 +606,15 @@
         // مصفوفة لتخزين دوال إلغاء الاستماع (Unsubscribe) لمنع تراكم الاتصالات واستنزاف القراءات
         window._activeUnsubscribers = [];
 
-        window.addEventListener('beforeunload', () => {
+        function clearAllUnsubscribers() {
             window._activeUnsubscribers.forEach(unsub => {
                 if (typeof unsub === 'function') unsub();
             });
+            window._activeUnsubscribers = [];
+        }
+
+        window.addEventListener('beforeunload', () => {
+            clearAllUnsubscribers();
         });
 
         window.addEventListener('firebase-ready', () => { 
@@ -640,7 +646,7 @@
         }
         window.isSupervisor = isSupervisor;
 
-        // تحسين دالة التحقق لتعتمد على استعلام مقيد (Query with where & limit) لتوفير القراءات
+        // دالة التحقق مع استعلام مقيد بسيرفر Firestore للشركة والهاتف
         async function verifyPhoneAndPIN() {
             let phoneInput = document.getElementById("authPhoneInput").value.trim();
             let pinInput = document.getElementById("authPinInput").value.trim();
@@ -662,7 +668,7 @@
             let matchedUser = null;
 
             try {
-                // استعلام مقيد بدلاً من جلب الجدول كاملاً (يوفر آلاف القراءات)
+                // استعلام مقيد لمنع جلب حسابات الشركات الأخرى
                 const q = query(collection(window.db, "drivers"), where("phone", "==", phoneInput), limit(1));
                 let querySnapshot = await getDocs(q);
                 
@@ -674,7 +680,6 @@
                     }
                 });
 
-                // إذا لم يتم العثور في جدول drivers، جرب جدول users مع استعلام مقيد بالهاتف
                 if (!matchedUser) {
                     const qUsers = query(collection(window.db, "users"), where("phone", "==", phoneInput), limit(1));
                     let snapUsers = await getDocs(qUsers);
@@ -760,14 +765,17 @@
             });
         }
 
-        // دالة المزامنة السحابية المُحسنة مع تفعيل حدود القراءات (Limit) وتخزين المستمعات لتنظيفها
+        // المزامنة السحابية الصارمة على مستوى السيرفر (Server-Side Isolation Query)
         function initLiveFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
             const { collection, onSnapshot, doc, query, where, limit } = window.firebaseModules;
 
-            // استماع مقيد لبيانات الأعضاء مع حد أقصى
+            clearAllUnsubscribers();
+
+            // استماع مقيد بأعضاء الشركة الحالية فقط
             ['drivers', 'users', 'team'].forEach(colName => {
-                let unsubMembers = onSnapshot(query(collection(window.db, colName), limit(50)), (snapshot) => {
+                let qMembers = query(collection(window.db, colName), where("companyId", "==", currentCompanyId), limit(50));
+                let unsubMembers = onSnapshot(qMembers, (snapshot) => {
                     snapshot.forEach(docSnap => {
                         let data = docSnap.data();
                         let docId = docSnap.id;
@@ -777,7 +785,7 @@
                         if (data.phone) window._globalMembersMap[data.phone] = memberName;
                     });
                     renderAllFinancials();
-                }, err => {});
+                }, err => console.log("Members isolation query log:", err));
                 window._activeUnsubscribers.push(unsubMembers);
             });
 
@@ -806,17 +814,11 @@
             Object.keys(collectionsMap).forEach(targetKey => {
                 let colName = collectionsMap[targetKey];
                 
-                // استخدام limit لتخفيض القراءات وتخزين دالة الإلغاء
-                let unsubCol = onSnapshot(query(collection(window.db, colName), limit(100)), (snapshot) => {
-                    let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                // تصفية جدارية حاسمة بشرط companyId على السيرفر مباشر لجميع المجموعات
+                let qCol = query(collection(window.db, colName), where("companyId", "==", currentCompanyId), limit(100));
 
-                    colItems = colItems.filter(item => {
-                        let itemComp = String(item.companyId || 'company_main').trim();
-                        let targetComp = String(currentCompanyId || 'company_main').trim();
-                        
-                        let matchComp = (targetComp === 'company_main') ? (itemComp === 'company_main' || !item.companyId) : (itemComp === targetComp);
-                        return matchComp;
-                    });
+                let unsubCol = onSnapshot(qCol, (snapshot) => {
+                    let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
                     if (!superAdmin && !supervisor) {
                         let currentName = String(window.currentLoggedInUser?.name || '').trim();
@@ -833,7 +835,7 @@
                     renderAllFinancials();
                     if(targetKey === 'communityPosts') renderCommunityPosts();
                 }, err => {
-                    console.error(`خطأ في استماع المجموعة ${colName}:`, err);
+                    console.error(`خطأ في استماع المجموعة المعزولة ${colName}:`, err);
                 });
                 
                 window._activeUnsubscribers.push(unsubCol);
@@ -842,29 +844,25 @@
 
         function initLiveEmergencyListener() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, query, limit } = window.firebaseModules;
+            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
 
-            let unsubEmergency = onSnapshot(query(collection(window.db, "viper_logistics"), limit(50)), (snapshot) => {
+            let qEmergency = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(50));
+
+            let unsubEmergency = onSnapshot(qEmergency, (snapshot) => {
                 let alerts = [];
                 let superAdmin = isSuperAdmin();
                 let supervisor = isSupervisor();
                 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    let itemComp = String(d.companyId || 'company_main').trim();
-                    let targetComp = String(currentCompanyId || 'company_main').trim();
-                    let matchComp = (targetComp === 'company_main') ? (itemComp === 'company_main' || !d.companyId) : (itemComp === targetComp);
-
-                    if (matchComp) {
-                        if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
-                            alerts.push({ id: docSnap.id, ...d });
-                        }
+                    if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
+                        alerts.push({ id: docSnap.id, ...d });
                     }
                 });
                 alerts.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
                 appData.emergencyAlerts = alerts;
                 renderEmergencyAlertsUI(alerts);
-            }, (err) => console.error(err));
+            }, (err) => console.error("Emergency isolation query:", err));
 
             window._activeUnsubscribers.push(unsubEmergency);
         }
@@ -898,7 +896,7 @@
 
             if (tbody) {
                 if (alerts.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ نشطة.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--success-color); font-weight:bold; padding:20px;">✅ لا توجد بلاغات طوارئ نشطة لشركتك.</td></tr>`;
                 } else {
                     tbody.innerHTML = alerts.map(a => `
                         <tr>
@@ -986,7 +984,7 @@
             syncItemToCollection('expenses', expObj);
             document.getElementById("expDesc").value = "";
             document.getElementById("expAmount").value = "";
-            alert("تم حفظ المصروف وترحيله سحابياً بنجاح!");
+            alert("تم حفظ المصروف وترحيله للسحابة 🚀");
         }
 
         function treasuryAction(type) {
@@ -1146,7 +1144,7 @@
                 link.download = `Invoice_${item.id || Date.now()}.png`;
                 link.href = canvas.toDataURL("image/png");
                 link.click();
-            } catch (err) { alert("خطأ."); }
+            } catch (err) { alert("خطأ في تصدير الصورة."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
         window.downloadInvoiceAsImage = downloadInvoiceAsImage;
@@ -1162,7 +1160,7 @@
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 pdf.addImage(imgData, 'PNG', 10, 10, 190, (canvas.height * 190) / canvas.width);
                 pdf.save(`Invoice_${item.id || Date.now()}.pdf`);
-            } catch (err) { alert("خطأ."); }
+            } catch (err) { alert("خطأ في تصدير الـ PDF."); }
             template.style.top = "-9999px"; template.style.left = "-9999px";
         }
         window.downloadInvoiceAsPDF = downloadInvoiceAsPDF;
@@ -1240,7 +1238,7 @@
         function renderCommunityPosts() {
             let container = document.getElementById('communityPostsContainer');
             if(!container) return;
-            let posts = (appData.communityPosts || []).filter(p => isSuperAdmin() || isSupervisor() || !p.companyId || p.companyId === currentCompanyId);
+            let posts = (appData.communityPosts || []);
             container.innerHTML = posts.map(p => `
                 <div style="background:var(--bg-color); padding:10px; border-radius:10px; border:1px solid var(--border-color); font-size:12px;">
                     <div style="display:flex; justify-content:space-between; color:var(--primary-blue); font-size:10px; margin-bottom:4px;">
@@ -1248,7 +1246,7 @@
                     </div>
                     <p>${p.description || ''}</p>
                 </div>
-            `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات سحابية</p>';
+            `).join('') || '<p style="text-align:center; color:var(--secondary-text);">لا توجد منشورات سحابية لشركتك</p>';
         }
 
         function applyUserPermissionsUI() {
