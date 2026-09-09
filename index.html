@@ -561,7 +561,7 @@
             <button type="button" onclick="openModal('driversCommunityModal')" class="btn-sm" style="background:#0284c7; color:#fff;">👥 مجتمع</button>
             <button type="button" onclick="lockSystem()" class="btn-sm" style="background:var(--danger); color:#fff;">🔒 قفل</button>
             <button type="button" onclick="toggleDarkMode()" class="btn-sm" style="background:#475569; color:#fff;">🌙/☀️</button>
-            <span class="cloud-badge" id="cloud-status">Strict Cloud & Isolated V10 ☁️⚡</span>
+            <span class="cloud-badge" id="cloud-status">Enterprise Auth & Isolated V10 ☁️⚡</span>
         </div>
     </header>
 
@@ -1555,36 +1555,45 @@
             expiryDate.setMonth(expiryDate.getMonth() + months);
             const expiryStr = expiryDate.toISOString().split('T')[0];
 
-            const newCompanyAdmin = {
-                id: newAdminId,
-                companyId: newCompanyId,
-                companyName: companyName,
-                name: adminName,
-                phone: adminPhone,
-                pin: adminPin,
-                role: 'admin',
-                title: 'مدير شركة - ' + companyName,
-                status: 'متاح 🟢',
-                subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
-                subStatus: 'active',
-                subExpiry: expiryStr,
-                createdAt: new Date().toISOString()
-            };
+            // إنشاء حساب Firebase Auth حقيقي لمدير الشركة الجديد لضمان أمان الـ Enterprise
+            const authEmail = 'comp_' + adminPhone.replace(/[^0-9]/g, '') + '@na2la.net';
+            const authPassword = adminPin + '_Na2laSecure2026!';
 
             try {
-                await db.collection('drivers').doc(newAdminId).set(newCompanyAdmin);
+                let userCredential = await auth.createUserWithEmailAndPassword(authEmail, authPassword).catch(async () => {
+                    return await auth.signInWithEmailAndPassword(authEmail, authPassword);
+                });
+                let authUid = userCredential.user ? userCredential.user.uid : newAdminId;
+
+                const newCompanyAdmin = {
+                    id: authUid,
+                    companyId: newCompanyId,
+                    companyName: companyName,
+                    name: adminName,
+                    phone: adminPhone,
+                    pin: adminPin,
+                    role: 'admin',
+                    title: 'مدير شركة - ' + companyName,
+                    status: 'متاح 🟢',
+                    subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
+                    subStatus: 'active',
+                    subExpiry: expiryStr,
+                    createdAt: new Date().toISOString()
+                };
+
+                await db.collection('drivers').doc(authUid).set(newCompanyAdmin);
 
                 closeModal('addCompanyModal');
                 document.getElementById('new-company-form').reset();
                 
-                alert(`تم إنشاء شركة (${companyName}) معزولة بنجاح تام! 🎉\nمعرف الشركة: ${newCompanyId}\nتاريخ انتهاء الاشتراك: ${expiryStr}`);
+                alert(`تم إنشاء شركة (${companyName}) معزولة وموثقة بنجاح تام! 🎉\nمعرف الشركة: ${newCompanyId}\nتاريخ انتهاء الاشتراك: ${expiryStr}`);
                 
                 if (typeof renderMemberSubscriptionsList === 'function') renderMemberSubscriptionsList();
                 if (typeof renderCompaniesManagementTable === 'function') renderCompaniesManagementTable();
                 if (typeof renderDriversListTable === 'function') renderDriversListTable();
                 render();
             } catch (err) {
-                alert('حدث خطأ أثناء إضافة الشركة سحابياً: ' + err.message);
+                alert('حدث خطأ أثناء إنشاء الشركة سحابياً: ' + err.message);
             }
         }
 
@@ -1760,8 +1769,8 @@
 
                 snapshot.forEach(doc => {
                     let d = doc.data();
-                    if ((userPhone && d.phone === userPhone) || (userEmail && d.email === userEmail) || (userPhone && d.phone && d.phone.slice(-9) === userPhone.slice(-9))) {
-                        existingDrv = d;
+                    if (doc.id === user.uid || (userPhone && d.phone === userPhone) || (userEmail && d.email === userEmail) || (userPhone && d.phone && d.phone.slice(-9) === userPhone.slice(-9))) {
+                        existingDrv = { id: doc.id, ...d };
                     }
                 });
 
@@ -1823,7 +1832,7 @@
                 
                 render();
                 initRealtimeListeners();
-                alert('تمت مزامنة بيانات الحساب والبروفايل بنجاح سحابياً! 📱🌐🚀');
+                alert('تمت مزامنة بيانات الحساب والبروفايل بنجاح سحابياً وموثقاً! 📱🌐🔐');
             } catch (err) {
                 alert('خطأ أثناء مزامنة بيانات الحساب: ' + err.message);
             }
@@ -1966,7 +1975,7 @@
             }, 300);
         }
 
-        // إدارة مستمعي Firebase بكفاءة لمنع استنزاف القراءات وتكرار الاتصالات
+        // إدارة مستمعي Firebase بكفاءة مع الاستفادة الكاملة من المصادقة الآمنة والعزل
         let activeListeners = {};
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
@@ -1981,7 +1990,7 @@
                 }
                 
                 if (activeListeners[colName]) {
-                    activeListeners[colName](); // إلغاء الاستماع القديم لمنع التكرار واستنزاف القراءات
+                    activeListeners[colName]();
                 }
 
                 activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
@@ -2011,7 +2020,7 @@
                         renderCompaniesManagementTable();
                     }
                 }, error => {
-                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                    console.error(`خطأ مزامنة المجموعات الآمنة: ${colName}`, error);
                 });
             });
 
@@ -2260,7 +2269,7 @@
                 snapshot.forEach(doc => {
                     let d = doc.data();
                     if ((d.name === identifier || d.phone === identifier || d.companyId === identifier) && String(d.pin).trim() === pin) {
-                        matchedUser = d;
+                        matchedUser = { id: doc.id, ...d };
                     }
                 });
 
@@ -2268,14 +2277,30 @@
                     currentUserRole = 'admin';
                     loggedInDriverName = 'المدير';
                     currentCompanyId = 'company_main';
+                    
+                    // المصادقة الفعلية عبر Firebase Auth للمدير العام
+                    const adminEmail = 'admin@na2la.net';
+                    const adminPass = pin + '_Na2laSecure2026!';
+                    await auth.signInWithEmailAndPassword(adminEmail, adminPass).catch(async () => {
+                        return await auth.createUserWithEmailAndPassword(adminEmail, adminPass);
+                    });
+
                     finishSuccessfulLogin();
                     return;
                 }
 
                 if (!matchedUser) {
-                    alert('⚠️ خطأ في المطابقة: الحساب غير مسجل في قاعدة البيانات السحابية أو الرقم السري (PIN) غير صحيح! لا يمكن الدخول بحساب وهمي.');
+                    alert('⚠️ خطأ في المطابقة: الحساب غير مسجل في قاعدة البيانات السحابية أو الرقم السري (PIN) غير صحيح!');
                     return;
                 }
+
+                // تسجيل الدخول الحقيقي عبر Firebase Auth لضمان تمرير `request.auth` وصلاحيات العزل
+                const authEmail = 'user_' + (matchedUser.phone ? matchedUser.phone.replace(/[^0-9]/g, '') : matchedUser.id) + '@na2la.net';
+                const authPass = pin + '_Na2laSecure2026!';
+                
+                await auth.signInWithEmailAndPassword(authEmail, authPass).catch(async () => {
+                    return await auth.createUserWithEmailAndPassword(authEmail, authPass);
+                });
 
                 loggedInDriverName = matchedUser.name;
                 currentCompanyId = matchedUser.companyId || 'company_main';
@@ -2290,7 +2315,7 @@
 
                 finishSuccessfulLogin();
             } catch (err) {
-                alert('خطأ في الاتصال بالسحابة للتحقق من الحساب: ' + err.message);
+                alert('خطأ في المصادقة الأمنية أو الاتصال بالسحابة: ' + err.message);
             }
         }
 
@@ -2312,7 +2337,7 @@
             
             render();
             initRealtimeListeners();
-            alert('تم الاتصال بالسحابة والتحقق من الحساب بالبصمة بنجاح 🚀👆');
+            alert('تم الاتصال بالسحابة الموثقة والتحقق من الحساب بالبصمة بنجاح 🚀👆🔐');
         }
 
         function setupNavigation() {
@@ -3598,9 +3623,17 @@
 
             try {
                 let uid = String(Date.now());
+                const authEmail = 'user_' + phone.replace(/[^0-9]/g, '') + '@na2la.net';
+                const authPass = pin + '_Na2laSecure2026!';
+
+                let userCredential = await auth.createUserWithEmailAndPassword(authEmail, authPass).catch(async () => {
+                    return await auth.signInWithEmailAndPassword(authEmail, authPass);
+                });
+                let authUid = userCredential.user ? userCredential.user.uid : uid;
+
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
-                    id: uid,
+                    id: authUid,
                     companyId: currentCompanyId,
                     companyName: (currentAdminDrv && currentAdminDrv.companyName) ? currentAdminDrv.companyName : 'أسطورة الطريق الرئيسية',
                     name: name,
@@ -3617,10 +3650,10 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
 
-                await db.collection('drivers').doc(uid).set(newDrv);
+                await db.collection('drivers').doc(authUid).set(newDrv);
 
                 closeDriverRegister();
-                alert('تم تسجيل حساب السائق سحابياً بنجاح! 🚀');
+                alert('تم تسجيل حساب السائق سحابياً وموثقاً بنجاح! 🚀');
                 document.getElementById('public-driver-form').reset();
                 render();
             } catch (err) {
@@ -3853,9 +3886,17 @@
 
             try {
                 let uid = String(Date.now());
+                const authEmail = 'user_' + phone.replace(/[^0-9]/g, '') + '@na2la.net';
+                const authPass = pin + '_Na2laSecure2026!';
+
+                let userCredential = await auth.createUserWithEmailAndPassword(authEmail, authPass).catch(async () => {
+                    return await auth.signInWithEmailAndPassword(authEmail, authPass);
+                });
+                let authUid = userCredential.user ? userCredential.user.uid : uid;
+
                 let currentAdminDrv = getCurrentDriver();
                 let newDrv = {
-                    id: uid, 
+                    id: authUid, 
                     companyId: currentCompanyId,
                     companyName: (currentAdminDrv && currentAdminDrv.companyName) ? currentAdminDrv.companyName : 'أسطورة الطريق الرئيسية',
                     name: name,
@@ -3872,10 +3913,10 @@
                     subExpiry: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
                 };
                 
-                await db.collection('drivers').doc(uid).set(newDrv);
+                await db.collection('drivers').doc(authUid).set(newDrv);
 
                 document.getElementById('driver-profile-form').reset();
-                alert('تم إضافة الحساب السحابي بنجاح! 🚀');
+                alert('تم إضافة الحساب السحابي الموثق بنجاح! 🚀');
                 renderDriversListTable();
                 render();
             } catch (err) {
@@ -4083,8 +4124,7 @@
                 container.appendChild(div);
             });
         }
-
-        function sendQuickChatMessageFromModal() {
+                function sendQuickChatMessageFromModal() {
             const input = document.getElementById('quick-notif-reply-text');
             const text = input.value.trim();
             if(!text) return;
@@ -4092,16 +4132,22 @@
             let newId = String(Date.now());
             let newMsg = {
                 id: newId,
-                companyId: currentCompanyId,
-                sender: loggedInDriverName,
+                companyId: currentCompanyId || 'company_main',
+                sender: loggedInDriverName || 'سائق معتمد',
                 target: currentChatTarget || 'general',
                 text: text,
                 time: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            db.collection('chat').doc(newId).set(newMsg);
-            input.value = '';
-            alert('تم إرسال الرد بنجاح! ✈️');
+            db.collection('chat').doc(newId).set(newMsg).then(() => {
+                input.value = '';
+                alert('تم إرسال الرد بنجاح! ✈️');
+                closeModal('chatNotificationsModal');
+                if (typeof renderChatMessages === 'function') renderChatMessages();
+                if (typeof renderChatNotificationsInbox === 'function') renderChatNotificationsInbox();
+            }).catch(err => {
+                alert('حدث خطأ أثناء إرسال الرد: ' + err.message);
+            });
         }
 
         function previewCommunityFiles(input) {
@@ -4168,6 +4214,7 @@
                 alert('حدث خطأ أثناء النشر: ' + err.message);
             });
         }
+
         function renderCommunityPosts() {
             const container = document.getElementById('community-posts-container');
             if(!container) return;
@@ -4224,6 +4271,7 @@
                 db.collection('communityPosts').doc(String(id)).delete();
             }
         }
+
         function showCommunityNotifications() { alert('لا توجد تنبيهات جديدة.'); }
 
         function saveCashHandler(e) {
@@ -4795,7 +4843,7 @@
                 location.reload();
             }
         }
-</script>
-<script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
+    </script>
+    <script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
 </body>
 </html>
