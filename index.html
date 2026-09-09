@@ -1040,7 +1040,7 @@
     <!-- صفحة الخزنة النقدية -->
     <section id="treasury-tab" class="app-section">
         <div class="card">
-            <h3>إدارة حركة النقدية والمقبوضات</h3>
+            <h3 id="treasury-form-title">إدارة حركة النقدية والمقبوضات الشخصية / العامة</h3>
             <form id="cash-form" onsubmit="event.preventDefault(); saveCashHandler(event);">
                 <select id="cash-type">
                     <option value="in">إيداع / تحصيل نقدي (+)</option>
@@ -1052,7 +1052,7 @@
             </form>
         </div>
         <div class="card">
-            <h3>سجل حركة الخزنة</h3>
+            <h3>سجل حركة الخزينة (الخاصة بك)</h3>
             <div class="table-responsive">
                 <table>
                     <thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>إجراءات التحكم</th></tr></thead>
@@ -1129,7 +1129,7 @@
     <!-- صفحة المصروفات -->
     <section id="expenses-tab" class="app-section">
         <div class="card">
-            <h3>تسجيل المصروفات التشغيلية</h3>
+            <h3>تسجيل المصروفات التشغيلية والشخصية</h3>
             <form id="expense-form" onsubmit="event.preventDefault(); saveExpenseHandler(event);">
                 <input type="text" id="exp-title" placeholder="بيان المصروف" required>
                 <input type="number" id="exp-amount" placeholder="المبلغ (ج.م)" required>
@@ -1137,7 +1137,7 @@
             </form>
         </div>
         <div class="card">
-            <h3>سجل المصروفات التشغيلية</h3>
+            <h3>سجل المصروفات (الخاصة بك)</h3>
             <div class="table-responsive">
                 <table>
                     <thead><tr><th>البيان</th><th>المبلغ</th><th>التاريخ</th><th>إجراءات التحكم</th></tr></thead>
@@ -2369,11 +2369,11 @@
                 nav.innerHTML = `
                     <button type="button" class="active" onclick="switchTab('account-tab', this); toggleSidebar();" style="background:var(--accent); color:white;">👤 بروفايلي الشخصي</button>
                     <button type="button" onclick="switchTab('shipments-tab', this); toggleSidebar();">📦 شحناتي ومهماتي</button>
+                    <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 خزينتي وحركاتي</button>
+                    <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ مصروفاتي الشخصية</button>
                     <button type="button" onclick="switchTab('ai-mechanic-tab', this); toggleSidebar();" style="background:var(--purple); color:#fff;">🤖 مساعد الذكاء الاصطناعي</button>
                     <button type="button" onclick="switchTab('chat-tab', this); toggleSidebar();" style="background:var(--success); color:#fff;">💬 غرفة المحادثة والتواصل</button>
                     <button type="button" onclick="switchTab('map-tab', this); toggleSidebar();">🗺️ الخريطة الحية</button>
-                    <button type="button" onclick="switchTab('treasury-tab', this); toggleSidebar();">💵 الخزينة</button>
-                    <button type="button" onclick="switchTab('expenses-tab', this); toggleSidebar();">⛽ المصروفات</button>
                 `;
             }
         }
@@ -2625,21 +2625,6 @@
         function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
         function switchTab(tabId, btn) {
-            if (tabId === 'biometric-tab' && loggedInDriverName !== 'المدير') {
-                alert('عذراً، هذا القسم مخصص للمدير (الماستر أدمن) فقط.');
-                return;
-            }
-
-            if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير') {
-                alert('عذراً، لوحة إدارة الشركات مخصصة للماستر أدمن الأساسي (المدير) فقط.');
-                return;
-            }
-
-            if ((tabId === 'consolidated-invoices-tab' || tabId === 'deferred-invoices-tab') && currentUserRole !== 'admin') {
-                alert('عذراً، هذا القسم مخصص لمدير النظام فقط.');
-                return;
-            }
-
             document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.sidebar-nav-list button').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
@@ -2707,6 +2692,10 @@
         function editTreasury(id) {
             let t = (appData.treasury || []).find(item => String(item.id) === String(id));
             if(!t) return;
+            if (currentUserRole === 'driver' && t.driver !== loggedInDriverName) {
+                alert('غير مسموح لك بتعديل حركة لا تخص حسابك الشخصي!');
+                return;
+            }
             let newDesc = prompt('تعديل بيان الخزينة:', t.desc);
             let newAmount = prompt('تعديل المبلغ:', t.amount);
             if(newDesc !== null && newAmount !== null && !isNaN(newAmount)) {
@@ -2717,6 +2706,12 @@
         }
 
         function deleteTreasury(id) {
+            let t = (appData.treasury || []).find(item => String(item.id) === String(id));
+            if(!t) return;
+            if (currentUserRole === 'driver' && t.driver !== loggedInDriverName) {
+                alert('غير مسموح لك بحذف حركة لا تخص حسابك الشخصي!');
+                return;
+            }
             if(confirm('هل أنت متأكد من حذف هذه الحركة النقدية؟')) {
                 db.collection('treasury').doc(String(id)).delete();
             }
@@ -2725,6 +2720,10 @@
         function editExpense(id) {
             let e = (appData.expenses || []).find(item => String(item.id) === String(id));
             if(!e) return;
+            if (currentUserRole === 'driver' && e.driver !== loggedInDriverName) {
+                alert('غير مسموح لك بتعديل مصروف لا يخص حسابك الشخصي!');
+                return;
+            }
             let newTitle = prompt('تعديل بيان المصروف:', e.title);
             let newAmount = prompt('تعديل المبلغ:', e.amount);
             if(newTitle !== null && newAmount !== null && !isNaN(newAmount)) {
@@ -2735,6 +2734,12 @@
         }
 
         function deleteExpense(id) {
+            let e = (appData.expenses || []).find(item => String(item.id) === String(id));
+            if(!e) return;
+            if (currentUserRole === 'driver' && e.driver !== loggedInDriverName) {
+                alert('غير مسموح لك بحذف مصروف لا يخص حسابك الشخصي!');
+                return;
+            }
             if(confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
                 db.collection('expenses').doc(String(id)).delete();
             }
@@ -3856,7 +3861,6 @@
                 alert('فشل إنشاء الحساب: ' + err.message);
             }
         }
-
         function runAIMechanicAnalysis() {
             const fault = document.getElementById('ai-fault-select').value;
             const box = document.getElementById('ai-result-box');
