@@ -673,11 +673,14 @@
                 }
             }
 
+            // تصحيح الرتبة الافتراضية لمنع إعطاء صلاحيات الماستر أدمن بالخطأ للمستخدمين غير المعرفين
+            let isMasterAdminSession = sessionName === '01114099799' || sessionName === 'المدير' || sessionName.toLowerCase() === 'admin';
+
             return {
                 id: sessionName || 'guest',
-                name: getCleanDriverName(sessionName || 'المدير'),
-                role: 'admin',
-                title: 'مدير عام النظام',
+                name: getCleanDriverName(sessionName || (isMasterAdminSession ? 'المدير' : 'سائق')),
+                role: isMasterAdminSession ? 'admin' : 'driver',
+                title: isMasterAdminSession ? 'مدير عام النظام' : 'سائق معتمد',
                 status: 'متاح 🟢',
                 advances: 0,
                 companyId: currentCompanyId
@@ -837,24 +840,24 @@
             let targetDrv = getTargetViewingDriver();
             let isViewingSelf = String(targetDrv.id) === String(loggedInUser.id) || targetDrv.name === loggedInUser.name;
 
-            let displayName = targetDrv.name || 'المدير';
+            let displayName = targetDrv.name || 'السائق';
             document.getElementById('gplus-name-display').innerText = displayName;
             document.getElementById('gplus-badge-display').innerText = targetDrv.role === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
-            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || '+201114099799'} | الرتبة: ${targetDrv.role || 'admin'}`;
+            document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || 'غير مسجل'} | الرتبة: ${targetDrv.role || 'driver'}`;
             
+            // تصحيح العزل الصارم للشحنات: عرض الشحنات الخاصة بالسائق المستهدف فقط دون عرض شحنات الشركة كاملة
             let targetShipments = (appData.shipments || []).filter(s => {
                 let drvName = (targetDrv.name || '').trim();
+                let drvPhone = (targetDrv.phone || '').trim();
                 let assigned = (s.assignedDriver || s.driver || '').trim();
-                let clientName = (s.name || s.client || '').trim();
                 
-                if (loggedInUser.role === 'admin') {
-                    return true;
-                }
-                return assigned === drvName || clientName === drvName || s.driverId === targetDrv.id;
+                return (assigned && assigned === drvName) ||
+                       (s.driverId && String(s.driverId) === String(targetDrv.id)) ||
+                       (s.phone && drvPhone && s.phone === drvPhone);
             });
 
             document.getElementById('gplus-stat-shipments').innerText = targetShipments.length;
-            document.getElementById('gplus-stat-role').innerText = targetDrv.role || 'admin';
+            document.getElementById('gplus-stat-role').innerText = targetDrv.role || 'driver';
             document.getElementById('gplus-stat-status').innerText = targetDrv.status || 'متاح 🟢';
 
             renderAccountShipmentsList(targetShipments);
@@ -915,7 +918,7 @@
             document.getElementById('cover-height-label').innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
-            avatarPreview.innerHTML = targetDrv.avatar ? `<img src="${targetDrv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : (displayName ? displayName.charAt(0) : 'م');
+            avatarPreview.innerHTML = targetDrv.avatar ? `<img src="${targetDrv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : (displayName ? displayName.charAt(0) : 'س');
 
             setupWallListener(targetDrv.id || targetDrv.name);
             renderProfileDriverSearch();
@@ -1269,7 +1272,7 @@
             if(!text) return;
 
             let loggedInUser = getLoggedInUser();
-            let realSenderName = loggedInUser.name || 'المدير';
+            let realSenderName = loggedInUser.name || 'سائق';
 
             let newMsg = {
                 id: String(Date.now()),
