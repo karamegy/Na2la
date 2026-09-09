@@ -581,20 +581,18 @@
         </div>
     </div>
 
-    <!-- السكريبت البرمجي الموحد مع التخزين المحلي والمزامنة -->
+    <!-- السكريبت البرمجي الموحد مع التخزين المحلي والمزامنة المرنة -->
     <script>
         const supervisorsList = ['supervisor', 'المشرف', 'مشرف'];
 
         window._globalMembersMap = {};
         let currentLoggedInUser = null;
         
-        // 1. استخراج وتوحيد الجلسة ومفاتيح localStorage مع world.html
         const urlParams = new URLSearchParams(window.location.search);
         let urlComp = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c');
         let storedComp = localStorage.getItem('current_company_id') || localStorage.getItem('na2la_company_id');
         let currentCompanyId = (urlComp && urlComp.trim() !== '' && urlComp !== 'null') ? urlComp.trim() : (storedComp || 'company_main');
 
-        // حفظ ثنائي في localStorage لضمان التوافق بين الصفحات
         localStorage.setItem('current_company_id', currentCompanyId);
         localStorage.setItem('na2la_company_id', currentCompanyId);
 
@@ -668,12 +666,11 @@
                 return;
             }
 
-            const { collection, getDocs, query, where, limit } = window.firebaseModules;
+            const { collection, getDocs, query, limit } = window.firebaseModules;
             let matchedUser = null;
 
             try {
-                // استعلام مرن يبحث برقم الهاتف أو المعرف
-                const q = query(collection(window.db, "drivers"), where("companyId", "==", currentCompanyId), limit(50));
+                const q = query(collection(window.db, "drivers"), limit(100));
                 let querySnapshot = await getDocs(q);
                 
                 querySnapshot.forEach(docSnap => {
@@ -718,7 +715,6 @@
                 currentCompanyId = String(foundDoc.companyId).trim();
             }
             
-            // حفظ موحد للجلسة
             localStorage.setItem('current_company_id', currentCompanyId);
             localStorage.setItem('na2la_company_id', currentCompanyId);
             localStorage.setItem('logged_in_driver_name', foundDoc.name || foundDoc.id);
@@ -742,7 +738,6 @@
             startGPSLocationLogging();
         }
 
-        // إرسال الموقع اللحظي للسائق ليظهر على الخريطة في world.html
         function startGPSLocationLogging() {
             if (navigator.geolocation && window.currentLoggedInUser && window.db && window.firebaseModules) {
                 navigator.geolocation.watchPosition(pos => {
@@ -789,24 +784,26 @@
             });
         }
 
+        // دالة الاستماع المحدثة والمرنة لتجنب الأصفار وجلب البيانات القديمة والجديدة
         function initLiveFirestoreSync() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, doc, query, where, limit } = window.firebaseModules;
+            const { collection, onSnapshot, doc, query, limit } = window.firebaseModules;
 
             clearAllUnsubscribers();
 
-            ['drivers', 'users'].forEach(colName => {
-                let qMembers = query(collection(window.db, colName), where("companyId", "==", currentCompanyId), limit(50));
+            ['drivers', 'users', 'team'].forEach(colName => {
+                let qMembers = query(collection(window.db, colName), limit(100));
                 let unsubMembers = onSnapshot(qMembers, (snapshot) => {
                     snapshot.forEach(docSnap => {
                         let data = docSnap.data();
                         let docId = docSnap.id;
-                        let memberName = data.name || data.driverName || docId;
+                        let memberName = data.name || data.fullName || data.accountOwner || data.username || docId;
+                        
                         window._globalMembersMap[docId] = memberName;
                         if (data.phone) window._globalMembersMap[data.phone] = memberName;
                     });
                     renderAllFinancials();
-                }, err => {});
+                }, err => console.log("Members query log:", err));
                 window._activeUnsubscribers.push(unsubMembers);
             });
 
@@ -834,10 +831,17 @@
 
             Object.keys(collectionsMap).forEach(targetKey => {
                 let colName = collectionsMap[targetKey];
-                let qCol = query(collection(window.db, colName), where("companyId", "==", currentCompanyId), limit(100));
+                
+                let qCol = query(collection(window.db, colName), limit(150));
 
                 let unsubCol = onSnapshot(qCol, (snapshot) => {
                     let colItems = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // تصفية مرنة تشمل البيانات التي لا تحتوي على companyId والبيانات المطابقة للشركة
+                    colItems = colItems.filter(item => {
+                        let itemComp = String(item.companyId || '').trim();
+                        return !itemComp || itemComp === currentCompanyId || currentCompanyId === 'company_main';
+                    });
 
                     if (!superAdmin && !supervisor) {
                         let currentName = String(window.currentLoggedInUser?.name || '').trim();
@@ -853,7 +857,9 @@
                     appData[targetKey] = colItems;
                     renderAllFinancials();
                     if(targetKey === 'communityPosts') renderCommunityPosts();
-                }, err => {});
+                }, err => {
+                    console.error(`خطأ في استماع المجموعة ${colName}:`, err);
+                });
                 
                 window._activeUnsubscribers.push(unsubCol);
             });
@@ -861,9 +867,9 @@
 
         function initLiveEmergencyListener() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, onSnapshot, query, where, limit } = window.firebaseModules;
+            const { collection, onSnapshot, query, limit } = window.firebaseModules;
 
-            let qEmergency = query(collection(window.db, "viper_logistics"), where("companyId", "==", currentCompanyId), limit(50));
+            let qEmergency = query(collection(window.db, "viper_logistics"), limit(50));
 
             let unsubEmergency = onSnapshot(qEmergency, (snapshot) => {
                 let alerts = [];
@@ -872,8 +878,11 @@
                 
                 snapshot.forEach(docSnap => {
                     let d = docSnap.data();
-                    if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
-                        alerts.push({ id: docSnap.id, ...d });
+                    let itemComp = String(d.companyId || '').trim();
+                    if (!itemComp || itemComp === currentCompanyId || currentCompanyId === 'company_main') {
+                        if (superAdmin || supervisor || String(d.driverName || d.name || '') === String(window.currentLoggedInUser?.name || '')) {
+                            alerts.push({ id: docSnap.id, ...d });
+                        }
                     }
                 });
                 alerts.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
