@@ -35,6 +35,7 @@
         const db = getFirestore(app);
 
         window.db = db;
+        window.auth = auth;
         window.firebaseModules = { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, where, getDoc, setDoc, increment, arrayUnion, serverTimestamp, limit };
 
         signInAnonymously(auth).then(() => {
@@ -727,7 +728,7 @@
         <div id="radar-alerts-sec" class="app-section">
             <div class="card" style="border: 2px solid var(--accent);">
                 <h3 style="color: var(--accent);">📡 إدارة ومزامنة رادارات الخريطة والتنبيهات الميدانية</h3>
-                <p style="font-size: 10px; opacity: 0.8; margin-bottom: 8px;">أي نقطة رادار أو دار تتم إضافتها هنا يتم تخزين إحداثياتها الجغرافية في سحابة Firebase ومرتبطة حصرياً بشركتك الحالية لضمان التنبيه التلقائي وعزل الحسابات.</p>
+                <p style="font-size: 10px; opacity: 0.8; margin-bottom: 8px;">أي نقطة رادار يتم إضافتها هنا يتم تخزين إحداثياتها الجغرافية في سحابة Firebase ومرتبطة حصرياً بشركتك الحالية لضمان التنبيه التلقائي وعزل الحسابات.</p>
                 
                 <div style="margin-bottom: 10px; text-align: center;">
                     <button type="button" class="btn-success" onclick="openLiveRadarMapModal()" style="padding: 10px; font-size: 11px;">🛰️ فتح خريطة ماب التفاعلية المطابقة</button>
@@ -1132,7 +1133,10 @@
             if (window.db && window.firebaseModules && currentDriverProfile.id && currentDriverProfile.id !== 'guest') {
                 try {
                     const { doc, updateDoc } = window.firebaseModules;
-                    await updateDoc(doc(window.db, 'drivers', String(currentDriverProfile.id)), { theme: themeName });
+                    await updateDoc(doc(window.db, 'drivers', String(currentDriverProfile.id)), { 
+                        theme: themeName,
+                        companyId: currentCompanyId
+                    });
                 } catch (e) {}
             }
         }
@@ -1168,12 +1172,14 @@
 
         async function fetchCloudSessionFromURL() {
             if (!window.db || !window.firebaseModules) return;
-            const { collection, getDocs } = window.firebaseModules;
+            const { collection, getDocs, query, where } = window.firebaseModules;
 
             document.getElementById('companyIdLabel').innerText = currentCompanyId;
 
             try {
-                const snapshot = await getDocs(collection(window.db, 'drivers'));
+                // استعلام معزول للحسابات الخاصة بشركتك فقط
+                const qDriversComp = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId));
+                const snapshot = await getDocs(qDriversComp);
                 let found = null;
                 allDrivers = [];
                 let targetId = urlUserId.toLowerCase();
@@ -2122,7 +2128,7 @@
             document.getElementById('remoteVideo').style.display = 'none';
         }
 
-        // جلب وعرض منشورات SOS فقط مع إحداثيات الخريطة والرادار لكل حساب
+        // جلب وعرض منشورات SOS فقط مع إحداثيات الخريطة والرادار لكل حساب معزول
         async function loadAccountPosts() {
             if (!window.db || !window.firebaseModules) return;
             let activeCompId = localStorage.getItem('na2la_company_id') || currentCompanyId || 'company_main';
@@ -2132,7 +2138,7 @@
             if(!container) return;
 
             try {
-                // جلب إحداثيات الخريطة للحسابات
+                // جلب إحداثيات الخريطة للحسابات الخاصة بالشركة
                 let locsSnapshot = await getDocs(query(collection(window.db, 'driver_locations'), where('companyId', '==', activeCompId)));
                 let driverLocationsMap = {};
                 locsSnapshot.forEach(docSnap => {
@@ -2142,7 +2148,7 @@
                     }
                 });
 
-                // جلب رادارات الخريطة
+                // جلب رادارات الشركة
                 let radarsSnapshot = await getDocs(query(collection(window.db, 'radars'), where('companyId', '==', activeCompId)));
                 let radarsList = [];
                 radarsSnapshot.forEach(docSnap => {
@@ -2253,7 +2259,7 @@
                 snapRadars.forEach(d => radarAlerts.push({ type: 'radar', ...d.data() }));
 
                 try {
-                    const qSps = query(collection(window.db, 'space_network_posts'));
+                    const qSps = query(collection(window.db, 'space_network_posts'), where('companyId', '==', activeCompId));
                     const snapSps = await getDocs(qSps);
                     snapSps.forEach(d => spsAlerts.push({ type: 'sps', ...d.data() }));
                 } catch(e) {}
@@ -2462,7 +2468,7 @@
             if (!window.db || !window.firebaseModules) return;
             if (driversUnsubscribe) driversUnsubscribe();
 
-            const { collection, onSnapshot, query, where, getDocs } = window.firebaseModules;
+            const { collection, onSnapshot, query, where } = window.firebaseModules;
             const q = query(collection(window.db, 'drivers'), where('companyId', '==', currentCompanyId));
 
             driversUnsubscribe = onSnapshot(q, snapshot => {
@@ -2473,19 +2479,7 @@
                 });
                 renderChatUsersList();
                 loadAccountPosts();
-            }, err => {
-                getDocs(collection(window.db, 'drivers')).then(allSnap => {
-                    allDrivers = [];
-                    allSnap.forEach(docSnap => {
-                        let d = docSnap.data();
-                        if (!d.companyId || d.companyId === currentCompanyId) {
-                            allDrivers.push({ id: docSnap.id, ...d });
-                        }
-                    });
-                    renderChatUsersList();
-                    loadAccountPosts();
-                }).catch(e => {});
-            });
+            }, err => {});
         }
 
         function renderChatUsersList() {
@@ -2541,7 +2535,7 @@
             if (!window.db || !window.firebaseModules) return;
             if (chatUnsubscribe) chatUnsubscribe();
 
-            const { collection, onSnapshot, query, where, getDocs } = window.firebaseModules;
+            const { collection, onSnapshot, query, where } = window.firebaseModules;
             const q = query(collection(window.db, 'chat'), where('companyId', '==', currentCompanyId));
 
             chatUnsubscribe = onSnapshot(q, snapshot => {
@@ -2573,27 +2567,7 @@
                 });
                 box.innerHTML = html;
                 box.scrollTop = box.scrollHeight;
-            }, err => {
-                getDocs(collection(window.db, 'chat')).then(allSnap => {
-                    const box = document.getElementById('chat-messages-box');
-                    if(!box) return;
-                    let msgs = [];
-                    allSnap.forEach(docSnap => {
-                        let d = docSnap.data();
-                        if (!d.companyId || d.companyId === currentCompanyId) msgs.push(d);
-                    });
-                    msgs.sort((a, b) => Number(a.id) - Number(b.id));
-                    let filtered = msgs.filter(m => currentChatTarget === 'general' ? m.receiver === 'general' : (m.sender === currentDriverProfile.name && m.receiver === currentChatTarget) || (m.sender === currentChatTarget && m.receiver === currentDriverProfile.name));
-                    
-                    let html = '';
-                    filtered.forEach(m => {
-                        let isMine = m.sender === currentDriverProfile.name;
-                        html += `<div class="chat-bubble ${isMine ? 'mine' : 'other'}"><span>${m.text}</span><span style="font-size:7.5px; opacity:0.7; margin-top:2px; text-align:left;">${m.time}</span></div>`;
-                    });
-                    box.innerHTML = html;
-                    box.scrollTop = box.scrollHeight;
-                }).catch(e => {});
-            });
+            }, err => {});
         }
 
         function calculateTrip() {
