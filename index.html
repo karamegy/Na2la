@@ -1965,61 +1965,66 @@
                 }
             }, 300);
         }
-        let isListenersInitialized = false;
-let activeListeners = {};
 
-function initRealtimeListeners() {
-    if (isListenersInitialized) return;
-    isListenersInitialized = true;
+        // إدارة مستمعي Firebase بكفاءة لمنع استنزاف القراءات وتكرار الاتصالات
+        let activeListeners = {};
+        function initRealtimeListeners() {
+            if (isListenersInitialized) return;
+            isListenersInitialized = true;
 
-    // المجموعات الحية الضرورية للمتابعة الفورية
-    const liveCollections = ['shipments', 'chat', 'communityPosts', 'subscription_requests'];
-    
-    liveCollections.forEach(colName => {
-        let queryRef = db.collection(colName);
-        if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
-            queryRef = queryRef.where('companyId', '==', currentCompanyId);
-        }
-        
-        if (activeListeners[colName]) {
-            activeListeners[colName]();
-        }
+            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
+            
+            collections.forEach(colName => {
+                let queryRef = db.collection(colName);
+                if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
+                    queryRef = queryRef.where('companyId', '==', currentCompanyId);
+                }
+                
+                if (activeListeners[colName]) {
+                    activeListeners[colName](); // إلغاء الاستماع القديم لمنع التكرار واستنزاف القراءات
+                }
 
-        activeListeners[colName] = queryRef.onSnapshot(snapshot => {
-            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            appData[colName] = rawData;
-            scheduleSmartRender();
-            if (colName === 'chat') {
-                if (typeof renderChatMessages === 'function') renderChatMessages();
-                if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
+                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    
+                    if (colName === 'communityPosts') {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
+                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
+                    } else if (currentCompanyId) {
+                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
+                    } else {
+                        appData[colName] = rawData;
+                    }
+                    
+                    scheduleSmartRender();
+
+                    if (typeof renderChatMessages === 'function') renderChatMessages();
+                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
+                    if (document.getElementById('reports-tab').classList.contains('active')) {
+                        renderMemberSubscriptionsList();
+                        renderAdminPendingCashRequests();
+                        renderCompanyAdminSubscriptionView();
+                    }
+                    if (document.getElementById('companies-tab').classList.contains('active')) {
+                        renderCompaniesManagementTable();
+                    }
+                }, error => {
+                    console.error(`خطأ مزامنة المجموعات: ${colName}`, error);
+                });
+            });
+
+            if (activeListeners['systemSettings']) {
+                activeListeners['systemSettings']();
             }
-        }, error => {
-            console.error(`خطأ في مستمع المجموعة ${colName}:`, error);
-        });
-    });
-
-    // الجداول الثابتة
-    const staticCollections = ['drivers', 'trucks', 'customers', 'treasury', 'expenses', 'deferredInvoices', 'consolidatedInvoices', 'docs'];
-    staticCollections.forEach(colName => {
-        let queryRef = db.collection(colName);
-        if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
-            queryRef = queryRef.where('companyId', '==', currentCompanyId);
+            activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
+                if (doc.exists && doc.data().newsText) {
+                    appData.newsText = doc.data().newsText;
+                    renderRSSTicker();
+                }
+            });
         }
-        queryRef.get().then(snapshot => {
-            appData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            scheduleSmartRender();
-        });
-    });
-
-    // إعدادات النظام
-    db.collection('systemSettings').doc('config').onSnapshot(doc => {
-        if (doc.exists && doc.data().newsText) {
-            appData.newsText = doc.data().newsText;
-            renderRSSTicker();
-        }
-    });
-}
-
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
@@ -3622,49 +3627,82 @@ function initRealtimeListeners() {
                 alert('فشل التسجيل السحابي: ' + err.message);
             }
         }
-        function saveCashHandler(e) {
-    const type = document.getElementById('cash-type').value;
-    const amount = Number(document.getElementById('cash-amount').value);
-    const desc = document.getElementById('cash-desc').value.trim();
 
-    let newId = String(Date.now());
-    let newCash = { 
-        id: newId, 
-        companyId: currentCompanyId || 'company_main',
-        driverName: loggedInDriverName, // <-- ربط الحركة باسم السائق الحالي
-        driverId: loggedInDriverName,
-        type, 
-        amount, 
-        desc, 
-        date: new Date().toLocaleString('ar-EG') 
-    };
+        async function saveShipmentHandler(e) {
+            e.preventDefault();
+            const editId = document.getElementById('edit-shipment-id').value;
+            const name = document.getElementById('ship-name').value.trim();
+            const phone = document.getElementById('ship-phone').value.trim();
+            const address = document.getElementById('ship-address').value.trim();
+            const item = document.getElementById('ship-item').value.trim();
+            const price = Number(document.getElementById('ship-price').value);
+            const fuelCost = Number(document.getElementById('ship-fuel-cost').value || 0);
+            const extraCost = Number(document.getElementById('ship-extra-cost').value || 0);
+            const assignedDriver = document.getElementById('ship-assigned-driver').value;
+            const paymentStatus = document.getElementById('ship-payment-status').value;
+            const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-    db.collection('treasury').doc(newId).set(newCash).then(() => {
-        document.getElementById('cash-form').reset();
-        alert('تم تسجيل الحركة بالخزينة في مجموعتك المعزولة بنجاح! 💵');
-    });
-}
+            // فحص تضارب جدول السائق بدقة تامة لتجنب تضارب الشحنات
+            if (assignedDriver) {
+                let activeConflict = (appData.shipments || []).find(s => {
+                    let isSameDriver = s.assignedDriver === assignedDriver;
+                    let isActiveStatus = (s.status === 'في الانتظار' || s.status === 'في الطريق');
+                    let isNotCurrentEdit = editId ? String(s.id) !== String(editId) : true;
+                    return isSameDriver && isActiveStatus && isNotCurrentEdit;
+                });
 
-function saveExpenseHandler(e) {
-    const title = document.getElementById('exp-title').value.trim();
-    const amount = Number(document.getElementById('exp-amount').value);
+                if (activeConflict) {
+                    let confirmConflict = confirm(`⚠️ تنبيه تضارب جدول السائقين:\nالسائق (${assignedDriver}) لديه رحلة نشطة بالفعل حالياً (${activeConflict.item} - الحالة: ${activeConflict.status}).\nهل أنت متأكد من رغبتك في إسناد هذه الرحلة له وتجاوز التضارب؟`);
+                    if (!confirmConflict) return;
+                }
+            }
 
-    let newId = String(Date.now());
-    let newExp = { 
-        id: newId, 
-        companyId: currentCompanyId || 'company_main',
-        driverName: loggedInDriverName, // <-- ربط المصروف باسم السائق الحالي
-        driverId: loggedInDriverName,
-        title, 
-        amount, 
-        date: new Date().toLocaleDateString('ar-EG') 
-    };
+            let targetId = editId ? String(editId) : String(Date.now());
+            let existingShip = editId ? (appData.shipments || []).find(s => String(s.id) === String(editId)) : null;
 
-    db.collection('expenses').doc(newId).set(newExp).then(() => {
-        document.getElementById('expense-form').reset();
-        alert('تم تسجيل المصروف في مجموعتك المعزولة بنجاح! ⛽');
-    });
-}
+            let shipmentObj = {
+                id: targetId,
+                companyId: currentCompanyId,
+                name, phone, address, item, price, fuelCost, extraCost,
+                assignedDriver, paymentStatus,
+                status: existingShip ? existingShip.status : 'في الانتظار',
+                gps: currentGPS || (existingShip ? existingShip.gps : ''),
+                img: uploadedImgBase64 || (existingShip ? existingShip.img : ''),
+                sig: sigData !== '' ? sigData : (existingShip ? existingShip.sig : ''),
+                date: existingShip ? existingShip.date : new Date().toLocaleDateString('ar-EG')
+            };
+
+            if (!editId && paymentStatus === 'deferred') {
+                let dueDateObj = new Date();
+                dueDateObj.setDate(dueDateObj.getDate() + 7);
+                let defId = String(Date.now() + 1);
+                let defInv = {
+                    id: defId,
+                    companyId: currentCompanyId,
+                    invoiceId: `INV-${targetId}`,
+                    clientName: name,
+                    clientPhone: phone,
+                    totalAmount: price,
+                    paidAmount: 0,
+                    remainingAmount: price,
+                    dueDate: dueDateObj.toISOString().split('T')[0],
+                    status: 'pending',
+                    notes: `توليد تلقائي من الشحنة رقم #${targetId} (${item})`,
+                    issueDate: new Date().toISOString().split('T')[0]
+                };
+                db.collection('deferredInvoices').doc(defId).set(defInv);
+            }
+
+            await db.collection('shipments').doc(targetId).set(shipmentObj);
+
+            document.getElementById('edit-shipment-id').value = '';
+            document.getElementById('form-title-heading').innerText = 'تسجيل رحلة جديدة';
+            document.getElementById('shipment-form').reset();
+            clearSignature();
+            currentGPS = ''; uploadedImgBase64 = '';
+            document.getElementById('gps-status').innerText = '';
+            alert(paymentStatus === 'deferred' ? 'تم حفظ الرحلة وتوليد فاتورة آجل لها بنجاح مع التحقق من الجدول ⏳🚀' : 'تم حفظ الرحلة (مسددة) وتأكيد جدول السائق بنجاح 💾');
+        }
 
         function editShipment(id) {
             const s = (appData.shipments || []).find(item => String(item.id) === String(id));
