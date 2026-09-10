@@ -1301,28 +1301,36 @@
             newsText: '🌟 نظام سحابي آمن بالكامل مع العزل التام للشركات ومصادقة البصمة البيومترية الإصدار العاشر 🚀'
         };
 
-        // دقق المصادقة البيومترية (بصمة الإصبع / WebAuthn)
+        // دالة حماية النصوص ضد ثغرات XSS
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // دقق المصادقة البيومترية الآمنة (WebAuthn) بدون تجاوز وهمي
         async function verifyBiometricAuth() {
             try {
-                if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                    if (available) {
-                        const challenge = new Uint8Array(32);
-                        window.crypto.getRandomValues(challenge);
-                        const credential = await navigator.credentials.get({
-                            publicKey: {
-                                challenge: challenge,
-                                timeout: 60000,
-                                userVerification: "required"
-                            }
-                        }).catch(() => null);
-                        if (credential) return true;
-                    }
+                if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
+                    const challenge = new Uint8Array(32);
+                    window.crypto.getRandomValues(challenge);
+                    const credential = await navigator.credentials.get({
+                        publicKey: {
+                            challenge: challenge,
+                            timeout: 60000,
+                            userVerification: "required"
+                        }
+                    });
+                    return !!credential;
+                } else {
+                    alert("⚠️ هذا الجهاز لا يدعم قارئ البصمة البيومترية بشكل مباشر أو تم إلغاؤه.");
+                    return false;
                 }
             } catch (err) {
-                console.log("Biometric API note:", err);
+                console.error("Biometric Verification Failed:", err);
+                return false;
             }
-            return confirm("👆 يرجى تأكيد بصمة الإصبع أو التحقق البيومتري للمتابعة الآمنة لنظام أسطورة الطريق V10:");
         }
 
         async function performUnifiedLoginWithBiometric() {
@@ -1448,10 +1456,10 @@
                 list.forEach(item => {
                     let tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td style="font-weight:bold;">${item.driverName}</td>
-                        <td><code>${item.credentialId}</code></td>
-                        <td>${item.type}</td>
-                        <td>${item.createdAt}</td>
+                        <td style="font-weight:bold;">${escapeHTML(item.driverName)}</td>
+                        <td><code>${escapeHTML(item.credentialId)}</code></td>
+                        <td>${escapeHTML(item.type)}</td>
+                        <td>${escapeHTML(item.createdAt)}</td>
                         <td><button type="button" class="btn-danger btn-sm" onclick="deleteBiometricCredential('${item.id}')">حذف البصمة 🗑️</button></td>
                     `;
                     tbody.appendChild(tr);
@@ -1501,15 +1509,15 @@
                 let statusBadge = status === 'active' ? '<span class="badge" style="background:#10b981;">نشط ✅</span>' : '<span class="badge" style="background:#ef4444;">منتهي ⚠️</span>';
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-weight:bold;">${d.companyName || 'شركة أسطورة الطريق'}</td>
-                    <td>${d.name || '-'}</td>
-                    <td>${d.phone || '-'}</td>
-                    <td><strong>${d.subPlan || 'monthly'}</strong></td>
-                    <td style="color:var(--danger);">${d.subExpiry || 'غير محدد'}</td>
+                    <td style="font-weight:bold;">${escapeHTML(d.companyName || 'شركة أسطورة الطريق')}</td>
+                    <td>${escapeHTML(d.name || '-')}</td>
+                    <td>${escapeHTML(d.phone || '-')}</td>
+                    <td><strong>${escapeHTML(d.subPlan || 'monthly')}</strong></td>
+                    <td style="color:var(--danger);">${escapeHTML(d.subExpiry || 'غير محدد')}</td>
                     <td>${statusBadge}</td>
                     <td>
-                        <button type="button" class="btn-success btn-sm" onclick="updateMemberSub('${d.id}')">تجديد 🚀</button>
-                        <select id="plan-select-${d.id}" style="font-size:9px; padding:2px; display:inline-block; width:auto; margin-bottom:0;">
+                        <button type="button" class="btn-success btn-sm" onclick="updateMemberSub('${escapeHTML(d.id)}')">تجديد 🚀</button>
+                        <select id="plan-select-${escapeHTML(d.id)}" style="font-size:9px; padding:2px; display:inline-block; width:auto; margin-bottom:0;">
                             <option value="monthly">شهري</option>
                             <option value="quarterly">ربع سنوي</option>
                             <option value="yearly">سنوي</option>
@@ -1555,7 +1563,6 @@
             expiryDate.setMonth(expiryDate.getMonth() + months);
             const expiryStr = expiryDate.toISOString().split('T')[0];
 
-            // إنشاء حساب Firebase Auth حقيقي لمدير الشركة الجديد لضمان أمان الـ Enterprise
             const authEmail = 'comp_' + adminPhone.replace(/[^0-9]/g, '') + '@na2la.net';
             const authPassword = adminPin + '_Na2laSecure2026!';
 
@@ -1659,11 +1666,11 @@
                     let div = document.createElement('div');
                     div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px;';
                     div.innerHTML = `
-                        <p><strong>المرسل:</strong> ${m.driverName} (${m.senderPhone})</p>
-                        <p><strong>كود العملية المرجعي:</strong> <span style="color:var(--accent); font-weight:bold;">${m.transactionRef}</span></p>
-                        <p><strong>المحفظة المستهدفة:</strong> ${m.targetWallet}</p>
+                        <p><strong>المرسل:</strong> ${escapeHTML(m.driverName)} (${escapeHTML(m.senderPhone)})</p>
+                        <p><strong>كود العملية المرجعي:</strong> <span style="color:var(--accent); font-weight:bold;">${escapeHTML(m.transactionRef)}</span></p>
+                        <p><strong>المحفظة المستهدفة:</strong> ${escapeHTML(m.targetWallet)}</p>
                         <p><strong>مدة الاشتراك المطلوبة:</strong> ${m.months} شهور | <strong>الحالة:</strong> ${st}</p>
-                        ${m.status === 'pending' ? `<button type="button" class="btn-success btn-sm" onclick="approveSubscriptionRequest('${m.id}', '${m.driverId}', ${m.months})">تأكيد الاستلام وتفعيل الاشتراك فوراً 🚀</button>` : ''}
+                        ${m.status === 'pending' ? `<button type="button" class="btn-success btn-sm" onclick="approveSubscriptionRequest('${escapeHTML(m.id)}', '${escapeHTML(m.driverId)}', ${m.months})">تأكيد الاستلام وتفعيل الاشتراك فوراً 🚀</button>` : ''}
                     `;
                     container.appendChild(div);
                 });
@@ -1745,11 +1752,11 @@
                     div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; margin-bottom:6px; font-size:10px;';
                     div.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong>👤 ${m.driverName} (${m.senderPhone})</strong>
-                            <span style="color:var(--accent); font-weight:bold;">كود: ${m.transactionRef}</span>
+                            <strong>👤 ${escapeHTML(m.driverName)} (${escapeHTML(m.senderPhone)})</strong>
+                            <span style="color:var(--accent); font-weight:bold;">كود: ${escapeHTML(m.transactionRef)}</span>
                         </div>
-                        <p style="margin-top:4px;">المحفظة: ${m.targetWallet} | الباقة: ${m.months} أشهر</p>
-                        <button type="button" class="btn-success btn-sm" style="margin-top:4px;" onclick="approveSubscriptionRequest('${doc.id}', '${m.driverId}', ${m.months})">موافقة وتفعيل 🚀</button>
+                        <p style="margin-top:4px;">المحفظة: ${escapeHTML(m.targetWallet)} | الباقة: ${m.months} أشهر</p>
+                        <button type="button" class="btn-success btn-sm" style="margin-top:4px;" onclick="approveSubscriptionRequest('${escapeHTML(doc.id)}', '${escapeHTML(m.driverId)}', ${m.months})">موافقة وتفعيل 🚀</button>
                     `;
                     container.appendChild(div);
                 });
@@ -1975,7 +1982,6 @@
             }, 300);
         }
 
-        // إدارة مستمعي Firebase بكفاءة مع الاستفادة الكاملة من المصادقة الآمنة والعزل
         let activeListeners = {};
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
@@ -2060,26 +2066,26 @@
                 let expiry = d.subExpiry || 'لم يُحدد';
                 let status = d.subStatus || 'active';
                 let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
-                let compNameLabel = d.companyName ? `🏢 الشركة: <strong>${d.companyName}</strong>` : `🏢 الحساب الرئيسي`;
+                let compNameLabel = d.companyName ? `🏢 الشركة: <strong>${escapeHTML(d.companyName)}</strong>` : `🏢 الحساب الرئيسي`;
 
                 let itemDiv = document.createElement('div');
                 itemDiv.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:10px; border-radius:8px; margin-bottom:8px; font-size:11px;';
                 itemDiv.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                        <strong>👤 ${d.name || 'بدون اسم'} (${d.role || 'سائق'})</strong>
+                        <strong>👤 ${escapeHTML(d.name || 'بدون اسم')} (${escapeHTML(d.role || 'سائق')})</strong>
                         <span style="font-size:9px;">${statusBadge}</span>
                     </div>
                     <p style="font-size:10px; opacity:0.85; margin-bottom:4px;">${compNameLabel}</p>
-                    <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${d.phone || 'غير مسجل'} | الباقة: <strong>${plan}</strong> | الانتهاء: <span style="color:var(--danger);">${expiry}</span></p>
+                    <p style="font-size:10px; opacity:0.8; margin-bottom:6px;">الهاتف: ${escapeHTML(d.phone || 'غير مسجل')} | الباقة: <strong>${escapeHTML(plan)}</strong> | الانتهاء: <span style="color:var(--danger);">${escapeHTML(expiry)}</span></p>
                     <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                        <select id="plan-select-${d.id}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
+                        <select id="plan-select-${escapeHTML(d.id)}" style="flex:1; margin-bottom:0; font-size:10px; padding:4px;">
                             <option value="monthly" ${plan==='monthly'?'selected':''}>اشتراك شهري (30 يوم) 🗓️</option>
                             <option value="quarterly" ${plan==='quarterly'?'selected':''}>اشتراك ربع سنوي (90 يوم) 📊</option>
                             <option value="yearly" ${plan==='yearly'?'selected':''}>اشتراك سنوي (365 يوم) 🌟</option>
                             <option value="lifetime" ${plan==='lifetime'?'selected':''}>ترخيص دائم ♾️</option>
                             <option value="trial" ${plan==='trial'?'selected':''}>تجريبي (7 أيام) ⏳</option>
                         </select>
-                        <button type="button" class="btn-success btn-sm" style="width:auto; margin-bottom:0;" onclick="updateMemberSub('${d.id}')">تفعيل الباقة 🚀</button>
+                        <button type="button" class="btn-success btn-sm" style="width:auto; margin-bottom:0;" onclick="updateMemberSub('${escapeHTML(d.id)}')">تفعيل الباقة 🚀</button>
                     </div>
                 `;
                 container.appendChild(itemDiv);
@@ -2100,11 +2106,11 @@
                 let statusBadge = status === 'active' ? '<span style="color:var(--success);">نشط ✅</span>' : '<span style="color:var(--danger);">منتهي ⚠️</span>';
 
                 infoBox.innerHTML = `
-                    <p><strong>اسم الشركة:</strong> ${currentDrv.companyName || currentDrv.name}</p>
-                    <p><strong>مدير الشركة:</strong> ${currentDrv.name}</p>
-                    <p><strong>الهاتف:</strong> ${currentDrv.phone || 'غير مسجل'}</p>
-                    <p><strong>الباقة الحالية:</strong> ${plan} | <strong>الحالة:</strong> ${statusBadge}</p>
-                    <p><strong>تاريخ انتهاء الصلاحية:</strong> <span style="color:var(--danger); font-weight:bold;">${expiry}</span></p>
+                    <p><strong>اسم الشركة:</strong> ${escapeHTML(currentDrv.companyName || currentDrv.name)}</p>
+                    <p><strong>مدير الشركة:</strong> ${escapeHTML(currentDrv.name)}</p>
+                    <p><strong>الهاتف:</strong> ${escapeHTML(currentDrv.phone || 'غير مسجل')}</p>
+                    <p><strong>الباقة الحالية:</strong> ${escapeHTML(plan)} | <strong>الحالة:</strong> ${statusBadge}</p>
+                    <p><strong>تاريخ انتهاء الصلاحية:</strong> <span style="color:var(--danger); font-weight:bold;">${escapeHTML(expiry)}</span></p>
                 `;
             } else {
                 card.style.display = 'none';
@@ -2278,7 +2284,6 @@
                     loggedInDriverName = 'المدير';
                     currentCompanyId = 'company_main';
                     
-                    // المصادقة الفعلية عبر Firebase Auth للمدير العام
                     const adminEmail = 'admin@na2la.net';
                     const adminPass = pin + '_Na2laSecure2026!';
                     await auth.signInWithEmailAndPassword(adminEmail, adminPass).catch(async () => {
@@ -2294,7 +2299,6 @@
                     return;
                 }
 
-                // تسجيل الدخول الحقيقي عبر Firebase Auth لضمان تمرير `request.auth` وصلاحيات العزل
                 const authEmail = 'user_' + (matchedUser.phone ? matchedUser.phone.replace(/[^0-9]/g, '') : matchedUser.id) + '@na2la.net';
                 const authPass = pin + '_Na2laSecure2026!';
                 
@@ -2408,7 +2412,7 @@
             if (currentPass === storedPin || currentUserRole === 'admin' || currentUserRole === 'supervisor') {
                 const newPass = prompt('أدخل كلمة السر الجديدة (رمز PIN):');
                 if (newPass && newPass.trim() !== '') {
-                    storedPin = newPass;
+                    storedPass = newPass;
                     let adminDrv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
                     if (adminDrv) { 
                         adminDrv.pin = newPass; 
@@ -2472,7 +2476,7 @@
                 let html = `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>الأجرة</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
                     let defBtnModal = (currentUserRole === 'admin') ? `<button type="button" class="btn-main btn-sm" style="background:#3b82f6; padding:2px 6px; font-size:9px;" onclick="convertToDeferred('${s.id}')" title="تحويل لقسم الأجل">⏳ أجل</button>` : '';
-                    html += `<tr><td>${s.name || '-'}</td><td>${s.item || '-'}</td><td>${s.price || 0} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${s.status}</span></td><td>${defBtnModal}</td></tr>`;
+                    html += `<tr><td>${escapeHTML(s.name || '-')}</td><td>${escapeHTML(s.item || '-')}</td><td>${escapeHTML(s.price || 0)} ج.م</td><td><span class="badge bg-${s.status === 'مكتملة' ? 'delivered' : 'pending'}">${escapeHTML(s.status)}</span></td><td>${defBtnModal}</td></tr>`;
                 });
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
@@ -2482,7 +2486,7 @@
                 let html = `<p style="margin-bottom:8px; font-weight:bold; color:var(--success);">إجمالي الإيرادات الكلية: ${totalRev} ج.م</p>`;
                 html += `<div class="table-responsive"><table><thead><tr><th>العميل</th><th>الحمولة</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>`;
                 shipments.forEach(s => {
-                    html += `<tr><td>${s.name || '-'}</td><td>${s.item || '-'}</td><td>${s.price || 0} ج.م</td><td>${s.date || 'حالي'}</td></tr>`;
+                    html += `<tr><td>${escapeHTML(s.name || '-')}</td><td>${escapeHTML(s.item || '-')}</td><td>${escapeHTML(s.price || 0)} ج.م</td><td>${escapeHTML(s.date || 'حالي')}</td></tr>`;
                 });
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
@@ -2505,7 +2509,7 @@
                 let html = `<p style="margin-bottom:8px; font-weight:bold;">رصيد الخزينة الحالي: <span style="color:var(--success);">${totalCash} ج.م</span></p>`;
                 html += `<div class="table-responsive"><table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th></tr></thead><tbody>`;
                 treasury.forEach(t => {
-                    html += `<tr><td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${t.amount} ج.م</td><td>${t.desc}</td><td>${t.date || '-'}</td></tr>`;
+                    html += `<tr><td>${t.type === 'in' ? 'إيداع (+)' : 'سحب (-)'}</td><td>${escapeHTML(t.amount)} ج.م</td><td>${escapeHTML(t.desc)}</td><td>${escapeHTML(t.date || '-')}</td></tr>`;
                 });
                 html += `</tbody></table></div>`;
                 bodyEl.innerHTML = html;
@@ -2516,7 +2520,7 @@
                 html += `<div class="table-responsive"><table><thead><tr><th>رقم الفاتورة / العميل</th><th>الهاتف</th><th>المبلغ المستحق</th><th>الحالة</th></tr></thead><tbody>`;
                 deferredInvoices.forEach(inv => {
                     if(inv.status !== 'paid') {
-                        html += `<tr><td>${inv.invoiceId} - ${inv.clientName}</td><td>${inv.clientPhone || '-'}</td><td style="color:var(--danger); font-weight:bold;">${inv.remainingAmount} ج.م</td><td><span class="badge bg-pending">${inv.status}</span></td></tr>`;
+                        html += `<tr><td>${escapeHTML(inv.invoiceId)} - ${escapeHTML(inv.clientName)}</td><td>${escapeHTML(inv.clientPhone || '-')}</td><td style="color:var(--danger); font-weight:bold;">${escapeHTML(inv.remainingAmount)} ج.م</td><td><span class="badge bg-pending">${escapeHTML(inv.status)}</span></td></tr>`;
                     }
                 });
                 html += `</tbody></table></div>`;
@@ -2571,9 +2575,9 @@
             const content = document.getElementById('mediaViewerContent');
             content.innerHTML = '';
             if (type === 'video') {
-                content.innerHTML = `<video controls autoplay src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px;"></video>`;
+                content.innerHTML = `<video controls autoplay src="${escapeHTML(src)}" style="max-width:100%; max-height:85vh; border-radius:8px;"></video>`;
             } else {
-                content.innerHTML = `<img src="${src}" style="max-width:100%; max-height:85vh; border-radius:8px; object-fit:contain;"/>`;
+                content.innerHTML = `<img src="${escapeHTML(src)}" style="max-width:100%; max-height:85vh; border-radius:8px; object-fit:contain;"/>`;
             }
             modal.style.display = 'flex';
         }
@@ -2599,173 +2603,168 @@
                     const coords = s.gps.split(',');
                     if(coords.length === 2) {
                         L.marker([parseFloat(coords[0]), parseFloat(coords[1])]).addTo(leafletMap)
-                         .bindPopup(`<b>${s.name}</b><br>${s.item} (${s.status})`);
+                         .bindPopup(`<b>${escapeHTML(s.name)}</b><br>${escapeHTML(s.item)} (${escapeHTML(s.status)})`);
                     }
                 }
             });
         }
         let lastValidGPS = null;
-let lastTimestamp = 0;
+        let lastTimestamp = 0;
 
-function captureGPS() {
-    if (navigator.geolocation) {
-        document.getElementById('gps-status').innerText = 'جاري التحديد بدقة...';
-        navigator.geolocation.getCurrentPosition(pos => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy; // الدقة بالأمتار
-            const now = Date.now();
+        function captureGPS() {
+            if (navigator.geolocation) {
+                document.getElementById('gps-status').innerText = 'جاري التحديد بدقة...';
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const accuracy = pos.coords.accuracy;
+                    const now = Date.now();
 
-            // 1. استبعاد القراءات الضعيفة التي تزيد دقتها عن 50 متر
-            if (accuracy > 50) {
-                document.getElementById('gps-status').innerText = `إشارة ضعيفة (دقة ${Math.round(accuracy)}م)، أعد المحاولة...`;
+                    if (accuracy > 50) {
+                        document.getElementById('gps-status').innerText = `إشارة ضعيفة (دقة ${Math.round(accuracy)}م)، أعد المحاولة...`;
+                        return;
+                    }
+
+                    if (lastValidGPS && lastTimestamp) {
+                        const distance = calculateDistance(lastValidGPS.lat, lastValidGPS.lng, lat, lng);
+                        const timeDiff = (now - lastTimestamp) / 1000;
+                        const speed = distance / (timeDiff || 1);
+
+                        if (speed > 50) {
+                            console.warn("تم تجاهل قفزة GPS مفاجئة:", speed);
+                            document.getElementById('gps-status').innerText = 'تم تجاهل قفزة وهمية، أعد التحديد...';
+                            return;
+                        }
+                    }
+
+                    lastValidGPS = { lat, lng };
+                    lastTimestamp = now;
+                    currentGPS = `${lat},${lng}`;
+                    document.getElementById('gps-status').innerText = 'تم التحديد بدقة وثبات ✅';
+                }, (err) => { 
+                    alert('تعذر الحصول على الموقع الجغرافي: ' + err.message); 
+                    document.getElementById('gps-status').innerText = 'فشل التحديد ❌';
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            }
+        }
+
+        function captureVisitorGPS() {
+            if (navigator.geolocation) {
+                document.getElementById('vis-gps-status').innerText = 'جاري تحديد موقعك بدقة...';
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const accuracy = pos.coords.accuracy;
+
+                    if (accuracy > 50) {
+                        document.getElementById('vis-gps-status').innerText = `إشارة ضعيفة (دقة ${Math.round(accuracy)}م)، أعد المحاولة...`;
+                        return;
+                    }
+
+                    visitorGPS = `${lat},${lng}`;
+                    document.getElementById('vis-gps-status').innerText = 'تم تحديد موقعك بدقة وثبات ✅';
+                }, (err) => { 
+                    alert('تعذر الحصول على الموقع الجغرافي: ' + err.message);
+                    document.getElementById('vis-gps-status').innerText = 'فشل التحديد ❌';
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            }
+        }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        const canvas = document.getElementById('signature-pad');
+        const ctx = canvas ? canvas.getContext('2d') : null;
+        let isDrawing = false;
+        function resizeCanvas() {
+            if (canvas) {
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = 80 * ratio;
+                if (ctx) ctx.scale(ratio, ratio);
+            }
+        }
+        if (canvas) {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('touchstart', (e) => { startDrawing(e.touches[0]); e.preventDefault(); }, {passive: false});
+            canvas.addEventListener('touchmove', (e) => { draw(e.touches[0]); e.preventDefault(); }, {passive: false});
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+        function startDrawing(e) { isDrawing = true; if(!ctx) return; ctx.beginPath(); const rect = canvas.getBoundingClientRect(); ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top); }
+        function draw(e) { if (!isDrawing || !ctx) return; const rect = canvas.getBoundingClientRect(); ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top); ctx.stroke(); }
+        function stopDrawing() { isDrawing = false; }
+        function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+        function switchTab(tabId, btn) {
+            if (tabId === 'biometric-tab' && loggedInDriverName !== 'المدير') {
+                alert('عذراً، هذا القسم مخصص للمدير (الماستر أدمن) فقط.');
                 return;
             }
 
-            // 2. فحص المسافة والسرعة المفاجئة إذا وجد إحداثي سابق
-            if (lastValidGPS && lastTimestamp) {
-                const distance = calculateDistance(lastValidGPS.lat, lastValidGPS.lng, lat, lng);
-                const timeDiff = (now - lastTimestamp) / 1000;
-                const speed = distance / (timeDiff || 1);
-
-                // إذا كانت السرعة المحسوبة غير منطقية (أكبر من 50 متر/ثانية أو 180 كم/س)
-                if (speed > 50) {
-                    console.warn("تم تجاهل قفزة GPS مفاجئة:", speed);
-                    document.getElementById('gps-status').innerText = 'تم تجاهل قفزة وهمية، أعد التحديد...';
-                    return;
-                }
-            }
-
-            // اعتماد النقطة كقراءة سليمة وثابتة
-            lastValidGPS = { lat, lng };
-            lastTimestamp = now;
-            currentGPS = `${lat},${lng}`;
-            document.getElementById('gps-status').innerText = 'تم التحديد بدقة وثبات ✅';
-        }, (err) => { 
-            alert('تعذر الحصول على الموقع الجغرافي: ' + err.message); 
-            document.getElementById('gps-status').innerText = 'فشل التحديد ❌';
-        }, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        });
-    }
-}
-
-function captureVisitorGPS() {
-    if (navigator.geolocation) {
-        document.getElementById('vis-gps-status').innerText = 'جاري تحديد موقعك بدقة...';
-        navigator.geolocation.getCurrentPosition(pos => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy;
-
-            if (accuracy > 50) {
-                document.getElementById('vis-gps-status').innerText = `إشارة ضعيفة (دقة ${Math.round(accuracy)}م)، أعد المحاولة...`;
+            if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير') {
+                alert('عذراً، لوحة إدارة الشركات مخصصة للماستر أدمن الأساسي (المدير) فقط.');
                 return;
             }
 
-            visitorGPS = `${lat},${lng}`;
-            document.getElementById('vis-gps-status').innerText = 'تم تحديد موقعك بدقة وثبات ✅';
-        }, (err) => { 
-            alert('تعذر الحصول على الموقع الجغرافي: ' + err.message);
-            document.getElementById('vis-gps-status').innerText = 'فشل التحديد ❌';
-        }, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-        });
-    }
-}
-
-// دالة مساعدة لحساب المسافة بين نقطتين جغرافيتين (Haversine Formula)
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // نصف قطر الأرض بالمتر
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
-const canvas = document.getElementById('signature-pad');
-const ctx = canvas ? canvas.getContext('2d') : null;
-let isDrawing = false;
-function resizeCanvas() {
-    if (canvas) {
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = canvas.offsetWidth * ratio;
-        canvas.height = 80 * ratio;
-        if (ctx) ctx.scale(ratio, ratio);
-    }
-}
-if (canvas) {
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('touchstart', (e) => { startDrawing(e.touches[0]); e.preventDefault(); }, {passive: false});
-    canvas.addEventListener('touchmove', (e) => { draw(e.touches[0]); e.preventDefault(); }, {passive: false});
-    canvas.addEventListener('touchend', stopDrawing);
-}
-function startDrawing(e) { isDrawing = true; if(!ctx) return; ctx.beginPath(); const rect = canvas.getBoundingClientRect(); ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top); }
-function draw(e) { if (!isDrawing || !ctx) return; const rect = canvas.getBoundingClientRect(); ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top); ctx.stroke(); }
-function stopDrawing() { isDrawing = false; }
-function clearSignature() { if(ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); }
-
-function switchTab(tabId, btn) {
-    if (tabId === 'biometric-tab' && loggedInDriverName !== 'المدير') {
-        alert('عذراً، هذا القسم مخصص للمدير (الماستر أدمن) فقط.');
-        return;
-    }
-
-    if (tabId === 'companies-tab' && loggedInDriverName !== 'المدير') {
-        alert('عذراً، لوحة إدارة الشركات مخصصة للماستر أدمن الأساسي (المدير) فقط.');
-        return;
-    }
-
-    if ((tabId === 'consolidated-invoices-tab' || tabId === 'deferred-invoices-tab') && currentUserRole !== 'admin') {
-        alert('عذراً، هذا القسم مخصص لمدير النظام فقط.');
-        return;
-    }
-
-    document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.sidebar-nav-list button').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
-    
-    document.getElementById(tabId).classList.add('active');
-    if(btn) {
-        btn.classList.add('active');
-    } else {
-        document.querySelectorAll('.bottom-nav-btn').forEach(b => {
-            if(b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId)) {
-                b.classList.add('active');
+            if ((tabId === 'consolidated-invoices-tab' || tabId === 'deferred-invoices-tab') && currentUserRole !== 'admin') {
+                alert('عذراً، هذا القسم مخصص لمدير النظام فقط.');
+                return;
             }
-        });
-    }
 
-    if(tabId === 'map-tab') setTimeout(initMap, 200);
-    if(tabId === 'biometric-tab') renderBiometricManagementTable();
-    if(tabId === 'reports-tab') {
-        updateInvoiceDropdown();
-        renderMemberSubscriptionsList();
-        renderAdminPendingCashRequests();
-        renderCompanyAdminSubscriptionView();
-    }
-    if(tabId === 'companies-tab') {
-        renderCompaniesManagementTable();
-    }
-    if(tabId === 'consolidated-invoices-tab') renderConsolidatedInvoicesSection();
-    if(tabId === 'deferred-invoices-tab') loadDeferredInvoicesTable();
-    if(tabId === 'crud-tab' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) renderCRUDTable();
-    if(tabId === 'drivers-monitor-tab') renderDriversMonitor();
-    if(tabId === 'account-tab') renderMyAccount();
-    if(tabId === 'public-feed-tab') renderPublicPosts();
-    if(tabId === 'drivers-tab') renderDriversListTable();
-    if(tabId === 'chat-tab') renderChatAccountsList();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+            document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.sidebar-nav-list button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            if(btn) {
+                btn.classList.add('active');
+            } else {
+                document.querySelectorAll('.bottom-nav-btn').forEach(b => {
+                    if(b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId)) {
+                        b.classList.add('active');
+                    }
+                });
+            }
+
+            if(tabId === 'map-tab') setTimeout(initMap, 200);
+            if(tabId === 'biometric-tab') renderBiometricManagementTable();
+            if(tabId === 'reports-tab') {
+                updateInvoiceDropdown();
+                renderMemberSubscriptionsList();
+                renderAdminPendingCashRequests();
+                renderCompanyAdminSubscriptionView();
+            }
+            if(tabId === 'companies-tab') {
+                renderCompaniesManagementTable();
+            }
+            if(tabId === 'consolidated-invoices-tab') renderConsolidatedInvoicesSection();
+            if(tabId === 'deferred-invoices-tab') loadDeferredInvoicesTable();
+            if(tabId === 'crud-tab' && (currentUserRole === 'admin' || currentUserRole === 'supervisor')) renderCRUDTable();
+            if(tabId === 'drivers-monitor-tab') renderDriversMonitor();
+            if(tabId === 'account-tab') renderMyAccount();
+            if(tabId === 'public-feed-tab') renderPublicPosts();
+            if(tabId === 'drivers-tab') renderDriversListTable();
+            if(tabId === 'chat-tab') renderChatAccountsList();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         function handleShipmentImage(input) {
             const file = input.files[0];
@@ -2794,9 +2793,6 @@ function switchTab(tabId, btn) {
             }
         }
 
-        // ==========================================
-        // التعديل الأمني للخزينة (مع عزل السائقين)
-        // ==========================================
         function editTreasury(id) {
             let t = (appData.treasury || []).find(item => String(item.id) === String(id));
             if(!t) return;
@@ -2825,9 +2821,6 @@ function switchTab(tabId, btn) {
             }
         }
 
-        // ==========================================
-        // التعديل الأمني للمصروفات (مع عزل السائقين)
-        // ==========================================
         function editExpense(id) {
             let e = (appData.expenses || []).find(item => String(item.id) === String(id));
             if(!e) return;
@@ -2973,21 +2966,21 @@ function switchTab(tabId, btn) {
 
                     html += `
                         <tr style="border-bottom:1px solid var(--border-color);">
-                            <td style="font-weight:bold;">${inv.invoiceId}</td>
-                            <td>${inv.clientName}<br><span style="font-size:8px; opacity:0.7;">${inv.clientPhone || ''}</span></td>
+                            <td style="font-weight:bold;">${escapeHTML(inv.invoiceId)}</td>
+                            <td>${escapeHTML(inv.clientName)}<br><span style="font-size:8px; opacity:0.7;">${escapeHTML(inv.clientPhone || '')}</span></td>
                             <td>
                                 <strong style="color:var(--accent);">${Number(inv.remainingAmount).toLocaleString()} ج.م</strong><br>
                                 <span style="font-size:8px; opacity:0.7;">الإجمالي: ${Number(inv.totalAmount).toLocaleString()} | المدفوع: ${Number(inv.paidAmount||0).toLocaleString()}</span>
                             </td>
-                            <td style="${dueDate < today && currentStatus !== 'paid' ? 'color:var(--danger); font-weight:bold;' : ''}">${inv.dueDate}</td>
+                            <td style="${dueDate < today && currentStatus !== 'paid' ? 'color:var(--danger); font-weight:bold;' : ''}">${escapeHTML(inv.dueDate)}</td>
                             <td>${statusBadge}</td>
                             <td>
                                 <div style="display:flex; gap:3px; flex-wrap:wrap; justify-content:center;">
-                                    <button type="button" class="btn-success btn-sm" onclick="recordDeferredPayment('${inv.id}')">سداد 💵</button>
-                                    <button type="button" class="btn-main btn-sm" style="background:#25d366;" onclick="sendDeferredInvoiceWhatsApp('${inv.id}')">واتساب 📱</button>
-                                    <button type="button" class="btn-warning btn-sm" onclick="exportDeferredInvoiceImage('${inv.id}')">📷 صوره</button>
-                                    <button type="button" class="btn-purple btn-sm" onclick="exportDeferredInvoicePDF('${inv.id}')">📄 PDF</button>
-                                    <button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice('${inv.id}')">حذف</button>
+                                    <button type="button" class="btn-success btn-sm" onclick="recordDeferredPayment('${escapeHTML(inv.id)}')">سداد 💵</button>
+                                    <button type="button" class="btn-main btn-sm" style="background:#25d366;" onclick="sendDeferredInvoiceWhatsApp('${escapeHTML(inv.id)}')">واتساب 📱</button>
+                                    <button type="button" class="btn-warning btn-sm" onclick="exportDeferredInvoiceImage('${escapeHTML(inv.id)}')">📷 صوره</button>
+                                    <button type="button" class="btn-purple btn-sm" onclick="exportDeferredInvoicePDF('${escapeHTML(inv.id)}')">📄 PDF</button>
+                                    <button type="button" class="btn-danger btn-sm" onclick="deleteDeferredInvoice('${escapeHTML(inv.id)}')">حذف</button>
                                 </div>
                             </td>
                         </tr>
@@ -3119,8 +3112,8 @@ function switchTab(tabId, btn) {
                     let div = document.createElement('div');
                     div.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:10px;';
                     div.innerHTML = `
-                        <input type="checkbox" value="${s.id}" id="chk-ship-${s.id}" style="width:auto; margin:0;">
-                        <label for="chk-ship-${s.id}" style="cursor:pointer; flex:1;"><strong>${s.name || 'بدون اسم'}</strong> - ${s.item || '-'} (${s.price || 0} ج.م) [${s.status}]</label>
+                        <input type="checkbox" value="${escapeHTML(s.id)}" id="chk-ship-${escapeHTML(s.id)}" style="width:auto; margin:0;">
+                        <label for="chk-ship-${escapeHTML(s.id)}" style="cursor:pointer; flex:1;"><strong>${escapeHTML(s.name || 'بدون اسم')}</strong> - ${escapeHTML(s.item || '-')} (${escapeHTML(s.price || 0)} ج.م) [${escapeHTML(s.status)}]</label>
                     `;
                     container.appendChild(div);
                 });
@@ -3184,14 +3177,14 @@ function switchTab(tabId, btn) {
                 let shortDisplay = String(displayId).slice(-6);
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-weight:bold;">#${shortDisplay}</td>
-                    <td>${inv.client || inv.clientName || '-'}</td>
+                    <td style="font-weight:bold;">#${escapeHTML(shortDisplay)}</td>
+                    <td>${escapeHTML(inv.client || inv.clientName || '-')}</td>
                     <td>${(inv.shipmentIds || inv.shipments || []).length} شحنات</td>
-                    <td style="color:var(--success); font-weight:bold;">${inv.total || inv.totalAmount || 0} ج.م</td>
-                    <td>${inv.date || '-'}</td>
+                    <td style="color:var(--success); font-weight:bold;">${escapeHTML(inv.total || inv.totalAmount || 0)} ج.م</td>
+                    <td>${escapeHTML(inv.date || '-')}</td>
                     <td>
-                        <button type="button" class="btn-main btn-sm" onclick="printConsolidatedInvoice('${inv.id || inv.invoiceNumber}')">🖨️ طباعة</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteConsolidatedInvoice('${inv.id}')">حذف</button>
+                        <button type="button" class="btn-main btn-sm" onclick="printConsolidatedInvoice('${escapeHTML(inv.id || inv.invoiceNumber)}')">🖨️ طباعة</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteConsolidatedInvoice('${escapeHTML(inv.id)}')">حذف</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -3243,18 +3236,18 @@ function switchTab(tabId, btn) {
 
             let rowsHtml = '';
             matchingShipments.forEach((s, idx) => {
-                rowsHtml += `<tr><td>${idx+1}</td><td>${s.item || s.description || '-'}</td><td>${s.address || s.destination || '-'}</td><td>${s.price || s.cost || 0} ج.م</td></tr>`;
+                rowsHtml += `<tr><td>${idx+1}</td><td>${escapeHTML(s.item || s.description || '-')}</td><td>${escapeHTML(s.address || s.destination || '-')}</td><td>${escapeHTML(s.price || s.cost || 0)} ج.م</td></tr>`;
             });
 
             if (rowsHtml === '') {
-                rowsHtml = `<tr><td>1</td><td>${inv.notes || 'شحنات مجمعة'}</td><td>-</td><td>${inv.total || inv.totalAmount || 0} ج.م</td></tr>`;
+                rowsHtml = `<tr><td>1</td><td>${escapeHTML(inv.notes || 'شحنات مجمعة')}</td><td>-</td><td>${escapeHTML(inv.total || inv.totalAmount || 0)} ج.م</td></tr>`;
             }
 
             const win = window.open('', '_blank');
             win.document.write(`
                 <html lang="ar" dir="rtl">
                 <head>
-                    <title>فاتورة مجمعة رقم #${inv.invoiceNumber || inv.id || cleanId}</title>
+                    <title>فاتورة مجمعة رقم #${escapeHTML(String(inv.invoiceNumber || inv.id || cleanId))}</title>
                     <style>
                         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
                         body { font-family: 'Cairo', Tahoma, sans-serif; padding: 25px; direction: rtl; text-align: right; color: #1e293b; }
@@ -3265,14 +3258,14 @@ function switchTab(tabId, btn) {
                 </head>
                 <body>
                     <h2 style="text-align:center; color:#0f172a;">🐎 أسطورة الطريق - فاتورة مجمعة رسمية</h2>
-                    <p><strong>رقم الفاتورة:</strong> #${String(inv.invoiceNumber || inv.id || cleanId).slice(-6)}</p>
-                    <p><strong>اسم العميل / الشركة:</strong> ${inv.client || inv.clientName || '-'}</p>
-                    <p><strong>ملاحظات:</strong> ${inv.notes || 'لا توجد'}</p>
+                    <p><strong>رقم الفاتورة:</strong> #${escapeHTML(String(inv.invoiceNumber || inv.id || cleanId).slice(-6))}</p>
+                    <p><strong>اسم العميل / الشركة:</strong> ${escapeHTML(inv.client || inv.clientName || '-')}</p>
+                    <p><strong>ملاحظات:</strong> ${escapeHTML(inv.notes || 'لا توجد')}</p>
                     <table>
                         <thead><tr><th>#</th><th>الحمولة</th><th>جهة التوصيل</th><th>المبلغ</th></tr></thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
-                    <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${inv.total || inv.totalAmount || 0} ج.م</h3>
+                    <h3 style="text-align:left; color:#059669; margin-top:20px;">الإجمالي الكلي: ${escapeHTML(inv.total || inv.totalAmount || 0)} ج.م</h3>
                 </body>
                 </html>
             `);
@@ -3325,7 +3318,7 @@ function switchTab(tabId, btn) {
             return drv;
         }
 
-         function renderMyAccount() {
+        function renderMyAccount() {
             let drv = getCurrentDriver();
 
             document.getElementById('gplus-name-display').innerText = drv.name || 'بدون اسم';
@@ -3365,17 +3358,17 @@ function switchTab(tabId, btn) {
                         div.style.cssText = 'background: var(--bg); border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 8px; margin-bottom: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.02);';
                         div.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
-                                <span style="color: var(--accent); font-size: 10px; font-weight: bold; direction: ltr; unicode-bidi: embed;">📦 #${s.id || '---'}</span>
-                                <span class="badge ${badgeClass}" style="font-size: 8px; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: #fff; font-weight: bold;">${s.status || 'قيد التنفيذ'}</span>
+                                <span style="color: var(--accent); font-size: 10px; font-weight: bold; direction: ltr; unicode-bidi: embed;">📦 #${escapeHTML(s.id || '---')}</span>
+                                <span class="badge ${badgeClass}" style="font-size: 8px; padding: 2px 6px; border-radius: 4px; background: ${badgeBg}; color: #fff; font-weight: bold;">${escapeHTML(s.status || 'قيد التنفيذ')}</span>
                             </div>
                             <div style="font-size: 10px; display: flex; flex-direction: column; gap: 3px;">
                                 <div style="display: flex; justify-content: space-between;">
-                                    <span style="opacity: 0.75;">العميل: <strong style="color: var(--text-color);">${s.name || s.client || '-'}</strong></span>
-                                    <span style="opacity: 0.75;">الحمولة: <strong style="color: var(--text-color);">${s.item || s.cargo || '-'}</strong></span>
+                                    <span style="opacity: 0.75;">العميل: <strong style="color: var(--text-color);">${escapeHTML(s.name || s.client || '-')}</strong></span>
+                                    <span style="opacity: 0.75;">الحمولة: <strong style="color: var(--text-color);">${escapeHTML(s.item || s.cargo || '-')}</strong></span>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px; padding-top: 4px; border-top: 1px dashed var(--border-color);">
-                                    <span style="color: var(--success); font-weight: bold; font-size: 11px;">💰 ${s.price || 0} ج.م</span>
-                                    <span style="opacity: 0.75; font-size: 9px;">👤 السائق: ${s.assignedDriver || 'غير محدد'}</span>
+                                    <span style="color: var(--success); font-weight: bold; font-size: 11px;">💰 ${escapeHTML(s.price || 0)} ج.م</span>
+                                    <span style="opacity: 0.75; font-size: 9px;">👤 السائق: ${escapeHTML(s.assignedDriver || 'غير محدد')}</span>
                                 </div>
                             </div>
                         `;
@@ -3424,14 +3417,14 @@ function switchTab(tabId, btn) {
             let currentH = drv.coverHeight || 180;
             if (coverBanner) {
                 coverBanner.style.height = currentH + 'px';
-                coverBanner.style.backgroundImage = drv.cover ? `url('${drv.cover}')` : 'none';
+                coverBanner.style.backgroundImage = drv.cover ? `url('${escapeHTML(drv.cover)}')` : 'none';
             }
             const heightLabel = document.getElementById('cover-height-label');
             if(heightLabel) heightLabel.innerText = currentH + 'px';
 
             const avatarPreview = document.getElementById('gplus-avatar-img-preview');
             if (avatarPreview) {
-                avatarPreview.innerHTML = drv.avatar ? `<img src="${drv.avatar}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
+                avatarPreview.innerHTML = drv.avatar ? `<img src="${escapeHTML(drv.avatar)}" style="width:100%; height:100%; object-fit:cover;">` : 'صورة';
             }
 
             if (drv.name) loadAndRenderProfileWall(drv.name);
@@ -3586,22 +3579,22 @@ function switchTab(tabId, btn) {
                       if(p.files && p.files.length > 0) {
                           mediaHtml += `<div class="load-post-media">`;
                           p.files.forEach(f => {
-                              if(f.type === 'video') mediaHtml += `<video src="${f.src}" onclick="viewMedia('${f.src}', 'video')"></video>`;
-                              else mediaHtml += `<img src="${f.src}" onclick="viewMedia('${f.src}', 'image')">`;
+                              if(f.type === 'video') mediaHtml += `<video src="${escapeHTML(f.src)}" onclick="viewMedia('${escapeHTML(f.src)}', 'video')"></video>`;
+                              else mediaHtml += `<img src="${escapeHTML(f.src)}" onclick="viewMedia('${escapeHTML(f.src)}', 'image')">`;
                           });
                           mediaHtml += `</div>`;
                       }
 
-                      let deleteBtnHtml = (!p.isShipmentAuto && (currentUserRole === 'admin' || p.author === loggedInDriverName)) ? `<button type="button" class="btn-danger btn-sm" onclick="deleteProfileWallPostDoc('${p.docId}', '${profileName}')">حذف</button>` : '';
+                      let deleteBtnHtml = (!p.isShipmentAuto && (currentUserRole === 'admin' || p.author === loggedInDriverName)) ? `<button type="button" class="btn-danger btn-sm" onclick="deleteProfileWallPostDoc('${escapeHTML(p.docId)}', '${escapeHTML(profileName)}')">حذف</button>` : '';
 
                       let div = document.createElement('div');
                       div.className = 'card';
                       div.innerHTML = `
                           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                              <strong style="font-size:11px; color:var(--accent);">✍️ ${p.author}</strong>
-                              <span style="font-size:9px; opacity:0.7;">${p.date}</span>
+                              <strong style="font-size:11px; color:var(--accent);">✍️ ${escapeHTML(p.author)}</strong>
+                              <span style="font-size:9px; opacity:0.7;">${escapeHTML(p.date)}</span>
                           </div>
-                          <p style="font-size:11px; line-height:1.4; margin-bottom:6px;">${p.text}</p>
+                          <p style="font-size:11px; line-height:1.4; margin-bottom:6px;">${escapeHTML(p.text)}</p>
                           ${mediaHtml}
                           <div style="display:flex; justify-content:flex-end; margin-top:6px;">${deleteBtnHtml}</div>
                       `;
@@ -3629,15 +3622,15 @@ function switchTab(tabId, btn) {
             });
             
             filtered.forEach(d => {
-                let avatarHtml = d.avatar ? `<img src="${d.avatar}">` : `<span>${(d.name || 'D').charAt(0)}</span>`;
+                let avatarHtml = d.avatar ? `<img src="${escapeHTML(d.avatar)}">` : `<span>${escapeHTML((d.name || 'D').charAt(0))}</span>`;
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
                 item.onclick = () => { viewingProfileName = d.name; renderMyAccount(); window.scrollTo({top: 0, behavior: 'smooth'}); };
                 item.innerHTML = `
                     <div class="driver-card-avatar">${avatarHtml}</div>
                     <div style="overflow:hidden;">
-                        <h4 style="font-size:11px; font-weight:bold; color:var(--text-color);">${d.name || 'بدون اسم'}</h4>
-                        <p style="font-size:9px; opacity:0.8;">${d.title || d.role || 'سائق'} | ${d.phone || 'غير مسجل'}</p>
+                        <h4 style="font-size:11px; font-weight:bold; color:var(--text-color);">${escapeHTML(d.name || 'بدون اسم')}</h4>
+                        <p style="font-size:9px; opacity:0.8;">${escapeHTML(d.title || d.role || 'سائق')} | ${escapeHTML(d.phone || 'غير مسجل')}</p>
                     </div>
                 `;
                 container.appendChild(item);
@@ -3740,7 +3733,6 @@ function switchTab(tabId, btn) {
             const paymentStatus = document.getElementById('ship-payment-status').value;
             const sigData = (canvas && ctx) ? canvas.toDataURL() : '';
 
-            // فحص تضارب جدول السائق بدقة تامة لتجنب تضارب الشحنات
             if (assignedDriver) {
                 let activeConflict = (appData.shipments || []).find(s => {
                     let isSameDriver = s.assignedDriver === assignedDriver;
@@ -3854,23 +3846,23 @@ function switchTab(tabId, btn) {
             tbody.innerHTML = '';
 
             (appData.drivers || []).forEach(d => {
-                let optionsTitle = driverTitlesList.map(t => `<option value="${t}" ${d.title === t ? 'selected' : ''}>${t}</option>`).join('');
+                let optionsTitle = driverTitlesList.map(t => `<option value="${escapeHTML(t)}" ${d.title === t ? 'selected' : ''}>${escapeHTML(t)}</option>`).join('');
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-weight:bold;">${d.name || 'بدون اسم'}</td>
-                    <td>${d.phone || 'غير مسجل'}</td>
-                    <td><span class="badge" style="background:var(--accent);">${d.role || 'سائق'}</span></td>
-                    <td><select onchange="updateDriverTitle('${d.id}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">${optionsTitle}</select></td>
+                    <td style="font-weight:bold;">${escapeHTML(d.name || 'بدون اسم')}</td>
+                    <td>${escapeHTML(d.phone || 'غير مسجل')}</td>
+                    <td><span class="badge" style="background:var(--accent);">${escapeHTML(d.role || 'سائق')}</span></td>
+                    <td><select onchange="updateDriverTitle('${escapeHTML(d.id)}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">${optionsTitle}</select></td>
                     <td>
-                        <select onchange="updateDriverStatus('${d.id}', this.value)" style="font-size:10px; padding:3px;">
+                        <select onchange="updateDriverStatus('${escapeHTML(d.id)}', this.value)" style="font-size:10px; padding:3px;">
                             <option value="متاح 🟢" ${d.status === 'متاح 🟢' ? 'selected' : ''}>متاح 🟢</option>
                             <option value="في رحلة 🚛" ${d.status === 'في رحلة 🚛' ? 'selected' : ''}>في رحلة 🚛</option>
                             <option value="مشغول 🔴" ${d.status === 'مشغول 🔴' ? 'selected' : ''}>مشغول 🔴</option>
                         </select>
                     </td>
                     <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${d.id}')">🔑 PIN</button>
-                        <button type="button" class="btn-main btn-sm" onclick="viewingProfileName='${d.name}'; switchTab('account-tab');">👁️ البروفايل</button>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${escapeHTML(d.id)}')">🔑 PIN</button>
+                        <button type="button" class="btn-main btn-sm" onclick="viewingProfileName='${escapeHTML(d.name)}'; switchTab('account-tab');">👁️ البروفايل</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -3901,21 +3893,21 @@ function switchTab(tabId, btn) {
             (appData.drivers || []).forEach(d => {
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-weight:bold;">${d.name || 'بدون اسم'}</td>
-                    <td>${d.phone || 'غير مسجل'}</td>
+                    <td style="font-weight:bold;">${escapeHTML(d.name || 'بدون اسم')}</td>
+                    <td>${escapeHTML(d.phone || 'غير مسجل')}</td>
                     <td>
-                        <select onchange="updateDriverRoleByAdmin('${d.id}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">
+                        <select onchange="updateDriverRoleByAdmin('${escapeHTML(d.id)}', this.value)" style="font-size:10px; padding:3px; font-weight:bold;">
                             <option value="سائق" ${d.role === 'سائق' ? 'selected' : ''}>سائق عادي</option>
                             <option value="مشرف" ${d.role === 'مشرف' ? 'selected' : ''}>مشرف</option>
                             <option value="مدير مساعد" ${d.role === 'مدير مساعد' ? 'selected' : ''}>مدير مساعد</option>
                             <option value="admin" ${d.role === 'admin' ? 'selected' : ''}>مدير أساسي (admin)</option>
                         </select>
                     </td>
-                    <td>${d.title || 'سائق'}</td>
-                    <td><code>${d.pin || '****'}</code></td>
+                    <td>${escapeHTML(d.title || 'سائق')}</td>
+                    <td><code>${escapeHTML(d.pin || '****')}</code></td>
                     <td>
-                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${d.id}')">🔑 تغيير PIN</button>
-                        <button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount('${d.id}')">🗑️ حذف</button>
+                        <button type="button" class="btn-warning btn-sm" onclick="changeUserPinByAdmin('${escapeHTML(d.id)}')">🔑 تغيير PIN</button>
+                        <button type="button" class="btn-danger btn-sm" onclick="deleteDriverAccount('${escapeHTML(d.id)}')">🗑️ حذف</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -4006,6 +3998,7 @@ function switchTab(tabId, btn) {
                 box.innerHTML = `<strong>🛠️ التشخيص:</strong> انسداد الفلاتر أو مشكلة بالتيربو.<br><strong>💡 الإجراء:</strong> نظف فلتر الهواء وافحص الرشاشات.`;
             }
         }
+
         function savePublicPostHandler(e) {
             e.preventDefault();
             const title = document.getElementById('post-title').value.trim();
@@ -4060,22 +4053,22 @@ function switchTab(tabId, btn) {
                 if (p.media && p.media.length > 0) {
                     mediaHtml += `<div class="load-post-media">`;
                     p.media.forEach(m => {
-                        if (m.type === 'video') mediaHtml += `<video src="${m.src}" onclick="viewMedia('${m.src}', 'video')"></video>`;
-                        else mediaHtml += `<img src="${m.src}" onclick="viewMedia('${m.src}', 'image')"/>`;
+                        if (m.type === 'video') mediaHtml += `<video src="${escapeHTML(m.src)}" onclick="viewMedia('${escapeHTML(m.src)}', 'video')"></video>`;
+                        else mediaHtml += `<img src="${escapeHTML(m.src)}" onclick="viewMedia('${escapeHTML(m.src)}', 'image')"/>`;
                     });
                     mediaHtml += `</div>`;
                 }
 
-                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost('${p.id}')">حذف</button>` : '';
+                let deleteBtn = (currentUserRole === 'admin' || currentUserRole === 'supervisor') ? `<button type="button" class="btn-danger btn-sm" onclick="deletePublicPost('${escapeHTML(p.id)}')">حذف</button>` : '';
 
                 let card = document.createElement('div');
                 card.className = 'load-post-card';
                 card.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <h4 style="font-size:12px; color:var(--accent); margin:0;">📌 ${p.title}</h4>
-                        <span style="font-size:9px; opacity:0.7;">${p.date || ''} | ${p.author || 'الإدارة'}</span>
+                        <h4 style="font-size:12px; color:var(--accent); margin:0;">📌 ${escapeHTML(p.title)}</h4>
+                        <span style="font-size:9px; opacity:0.7;">${escapeHTML(p.date || '')} | ${escapeHTML(p.author || 'الإدارة')}</span>
                     </div>
-                    <p style="font-size:11px; line-height:1.4;">${p.desc}</p>
+                    <p style="font-size:11px; line-height:1.4;">${escapeHTML(p.desc)}</p>
                     ${mediaHtml}
                     <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
                         <button type="button" class="btn-success btn-sm" onclick="openVisitorBooking()">📦 طلب رحلة</button>
@@ -4106,12 +4099,11 @@ function switchTab(tabId, btn) {
                     let div = document.createElement('div');
                     div.className = `chat-account-item ${currentChatTarget === accName ? 'active' : ''}`;
                     div.onclick = () => selectChatRoom(accName);
-                    div.innerHTML = `<span>👤 ${accName}</span><small style="font-size:8px; opacity:0.8;">${acc.role || 'سائق'}</small>`;
+                    div.innerHTML = `<span>👤 ${escapeHTML(accName)}</span><small style="font-size:8px; opacity:0.8;">${escapeHTML(acc.role || 'سائق')}</small>`;
                     container.appendChild(div);
                 }
             });
         }
-
         function selectChatRoom(targetName) {
             currentChatTarget = targetName;
             document.getElementById('chat-current-room-title').innerText = targetName === 'general' ? 'المحادثة العامة للأسطول' : `محادثة خاصة مع: ${targetName}`;
