@@ -1265,7 +1265,7 @@
 
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -1309,7 +1309,6 @@
             );
         }
 
-        // دقق المصادقة البيومترية الآمنة (WebAuthn) بدون تجاوز وهمي
         async function verifyBiometricAuth() {
             try {
                 if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
@@ -1433,10 +1432,7 @@
                 biometricUnsubscribe();
             }
 
-            let queryRef = db.collection('biometricCredentials');
-            if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
-                queryRef = queryRef.where('companyId', '==', currentCompanyId);
-            }
+            let queryRef = db.collection('biometricCredentials').where('companyId', '==', currentCompanyId).limit(50);
 
             biometricUnsubscribe = queryRef.onSnapshot(snapshot => {
                 tbody.innerHTML = '';
@@ -1646,7 +1642,7 @@
 
             container.innerHTML = '<p style="opacity:0.7;">جاري الاستعلام في Firestore...</p>';
 
-            db.collection('subscription_requests').where('companyId', '==', currentCompanyId).get().then(snapshot => {
+            db.collection('subscription_requests').where('companyId', '==', currentCompanyId).limit(50).get().then(snapshot => {
                 container.innerHTML = '';
                 let matches = [];
                 snapshot.forEach(doc => {
@@ -1688,7 +1684,7 @@
                 const reqData = reqDoc.exists ? reqDoc.data() : null;
 
                 let targetDriverDoc = null;
-                const driversSnapshot = await db.collection('drivers').get();
+                const driversSnapshot = await db.collection('drivers').where('companyId', '==', currentCompanyId).limit(100).get();
                 
                 driversSnapshot.forEach(doc => {
                     let d = doc.data();
@@ -1739,7 +1735,7 @@
                 cashReqUnsubscribe();
             }
 
-            cashReqUnsubscribe = db.collection('subscription_requests').where('status', '==', 'pending').onSnapshot(snapshot => {
+            cashReqUnsubscribe = db.collection('subscription_requests').where('status', '==', 'pending').where('companyId', '==', currentCompanyId).limit(50).onSnapshot(snapshot => {
                 container.innerHTML = '';
                 if (snapshot.empty) {
                     container.innerHTML = '<p style="font-size:10px; opacity:0.8; text-align:center;">لا توجد طلبات تجديد كاش معلقة حالياً.</p>';
@@ -1771,7 +1767,7 @@
             const userEmail = user.email || '';
 
             try {
-                const snapshot = await db.collection('drivers').get();
+                const snapshot = await db.collection('drivers').limit(100).get();
                 let existingDrv = null;
 
                 snapshot.forEach(doc => {
@@ -1983,6 +1979,8 @@
         }
 
         let activeListeners = {};
+        
+        // دالة التهيئة المحسنة والمقيدة لتجنب القراءات المفاجئة والضخمة
         function initRealtimeListeners() {
             if (isListenersInitialized) return;
             isListenersInitialized = true;
@@ -1990,10 +1988,8 @@
             const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
             
             collections.forEach(colName => {
-                let queryRef = db.collection(colName);
-                if (loggedInDriverName !== 'المدير' || currentCompanyId !== 'company_main') {
-                    queryRef = queryRef.where('companyId', '==', currentCompanyId);
-                }
+                // تطبيق الفلترة الصارمة بـ where و limit لتوفير الكوتا والقراءات تماماً
+                let queryRef = db.collection(colName).where('companyId', '==', currentCompanyId).limit(100);
                 
                 if (activeListeners[colName]) {
                     activeListeners[colName]();
@@ -2002,15 +1998,7 @@
                 activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
                     let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    if (colName === 'communityPosts') {
-                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === currentCompanyId || d.companyId === 'company_main' || (currentCompanyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-                    } else if (loggedInDriverName === 'المدير' && (currentCompanyId === 'company_main' || currentCompanyId === 'Company_main')) {
-                        appData[colName] = rawData.filter(d => !d.companyId || d.companyId === 'company_main' || d.companyId === 'Company_main' || d.companyId.toLowerCase() === 'company_main');
-                    } else if (currentCompanyId) {
-                        appData[colName] = rawData.filter(d => d.companyId === currentCompanyId || (d.companyId && d.companyId.toLowerCase() === currentCompanyId.toLowerCase()));
-                    } else {
-                        appData[colName] = rawData;
-                    }
+                    appData[colName] = rawData;
                     
                     scheduleSmartRender();
 
@@ -2152,7 +2140,7 @@
         async function verifyAndUpdateUserRole(driverName) {
             if (!driverName) return;
             try {
-                const snapshot = await db.collection('drivers').get();
+                const snapshot = await db.collection('drivers').where('companyId', '==', currentCompanyId).limit(50).get();
                 let matchedUser = null;
                 snapshot.forEach(doc => {
                     let d = doc.data();
@@ -2269,7 +2257,7 @@
             }
 
             try {
-                const snapshot = await db.collection('drivers').get();
+                const snapshot = await db.collection('drivers').limit(100).get();
                 let matchedUser = null;
                 
                 snapshot.forEach(doc => {
@@ -3211,7 +3199,7 @@
                     if (docSnap.exists) {
                         inv = { id: docSnap.id, ...docSnap.data() };
                     } else {
-                        const querySnap = await db.collection('consolidatedInvoices').get();
+                        const querySnap = await db.collection('consolidatedInvoices').where('companyId', '==', currentCompanyId).limit(50).get();
                         querySnap.forEach(doc => {
                             let d = doc.data();
                             if (doc.id.endsWith(cleanId) || String(d.invoiceNumber) === cleanId) {
@@ -3544,6 +3532,8 @@
 
             db.collection('profileWalls')
               .where('profileName', '==', profileName)
+              .where('companyId', '==', currentCompanyId)
+              .limit(50)
               .get()
               .then((querySnapshot) => {
                   container.innerHTML = '';
@@ -4038,7 +4028,6 @@
                 reader.readAsDataURL(videoFiles[i]);
             }
         }
-
         function renderPublicPosts() {
             const feed = document.getElementById('public-posts-feed');
             if (!feed) return;
