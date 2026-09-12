@@ -321,6 +321,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, setDoc, doc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -334,6 +335,7 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
         let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
         let systemPricing = JSON.parse(localStorage.getItem('na2la_system_pricing') || '{"monthly": 300, "quarterly": 800, "yearly": 2500}');
@@ -379,6 +381,9 @@
             }
 
             try {
+                // Ensure authentication session for Firestore rules
+                await signInAnonymously(auth).catch(() => {});
+
                 const userRef = doc(db, 'drivers', String(currentUserId));
                 const userSnap = await getDoc(userRef);
 
@@ -403,6 +408,8 @@
         async function fetchCompanyIsolatedData(companyId) {
             showToast("🔄 جاري مزامنة بيانات الشركة والاشتراكات...", "warning");
             try {
+                await signInAnonymously(auth).catch(() => {});
+
                 const today = new Date();
                 today.setHours(0,0,0,0);
 
@@ -452,7 +459,7 @@
         }
         window.fetchAllDataFromCloud = fetchAllDataFromCloud;
 
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
             if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
             document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName}`;
             
@@ -463,7 +470,7 @@
             const activeUserId = localStorage.getItem('logged_in_driver_id') || '1';
             const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
             
-            enforceStrictCompanySync(activeUserId, activeCompanyId);
+            await enforceStrictCompanySync(activeUserId, activeCompanyId);
         });
 
         async function savePricingConfiguration() {
@@ -475,6 +482,7 @@
             localStorage.setItem('na2la_system_pricing', JSON.stringify(systemPricing));
 
             try {
+                await signInAnonymously(auth).catch(() => {});
                 await setDoc(doc(db, 'systemSettings', 'pricing'), systemPricing);
                 updateStatistics();
                 showToast('✅ تم حفظ وتحديث أسعار الباقات والإيرادات بنجاح!');
@@ -619,83 +627,120 @@
                 return;
             }
 
-            const newCompanyId = 'comp_' + Date.now();
-            const newAdminId = String(Date.now());
-            
-            let expiryDate = new Date();
-            expiryDate.setMonth(expiryDate.getMonth() + months);
+            try {
+                await signInAnonymously(auth).catch(() => {});
 
-            let bonusDays = 0;
-            if (promoCode && appData.promoCodes[promoCode]) {
-                bonusDays = appData.promoCodes[promoCode];
-                expiryDate.setDate(expiryDate.getDate() + bonusDays);
+                const newCompanyId = 'comp_' + Date.now();
+                const newAdminId = String(Date.now());
+                
+                let expiryDate = new Date();
+                expiryDate.setMonth(expiryDate.getMonth() + months);
+
+                let bonusDays = 0;
+                if (promoCode && appData.promoCodes[promoCode]) {
+                    bonusDays = appData.promoCodes[promoCode];
+                    expiryDate.setDate(expiryDate.getDate() + bonusDays);
+                }
+
+                const authEmail = 'comp_' + adminPhone.replace(/[^0-9]/g, '') + '@na2la.net';
+                const authPassword = adminPin + '_Na2laSecure2026!';
+                let authUid = newAdminId;
+
+                try {
+                    let userCredential = await createUserWithEmailAndPassword(auth, authEmail, authPassword).catch(async () => {
+                        return await signInWithEmailAndPassword(auth, authEmail, authPassword);
+                    });
+                    if (userCredential && userCredential.user) {
+                        authUid = userCredential.user.uid;
+                    }
+                } catch (authErr) {
+                    console.warn("Auth note during company creation:", authErr);
+                }
+
+                const newAdminData = {
+                    id: authUid,
+                    companyId: newCompanyId,
+                    companyName: companyName,
+                    name: adminName,
+                    phone: adminPhone,
+                    pin: adminPin,
+                    branch: branch,
+                    role: 'admin',
+                    subStatus: 'active',
+                    subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
+                    subExpiry: expiryDate.toISOString().split('T')[0],
+                    createdAt: new Date().toISOString()
+                };
+
+                await setDoc(doc(db, 'drivers', authUid), newAdminData);
+                await logAuditAction('إضافة شركة', `تم إنشاء شركة ${companyName} (${adminName})`);
+                
+                closeModal('addCompanyModal');
+                document.getElementById('new-company-form').reset();
+                showToast('✅ تم إنشاء الشركة وتفعيلها بنجاح!');
+                await fetchAllDataFromCloud();
+            } catch (err) {
+                console.error("Firestore Error:", err);
+                showToast('خطأ في قاعدة البيانات: ' + err.message, 'error');
             }
-
-            const newAdminData = {
-                id: newAdminId,
-                companyId: newCompanyId,
-                companyName: companyName,
-                name: adminName,
-                phone: adminPhone,
-                pin: adminPin,
-                branch: branch,
-                role: 'admin',
-                subStatus: 'active',
-                subPlan: months === 12 ? 'yearly' : (months === 3 ? 'quarterly' : 'monthly'),
-                subExpiry: expiryDate.toISOString().split('T')[0],
-                createdAt: new Date().toISOString()
-            };
-
-            await setDoc(doc(db, 'drivers', newAdminId), newAdminData);
-            await logAuditAction('إضافة شركة', `تم إنشاء شركة ${companyName} (${adminName})`);
-            
-            closeModal('addCompanyModal');
-            document.getElementById('new-company-form').reset();
-            showToast('✅ تم إنشاء الشركة وتفعيلها بنجاح!');
-            fetchAllDataFromCloud();
         }
         window.handleCreateCompanySubmit = handleCreateCompanySubmit;
 
         async function approveSubscriptionRequest(reqId, driverId, months) {
-            let reqItem = appData.subscriptionRequests.find(r => String(r.id) === String(reqId));
-            let targetDrv = appData.drivers.find(d => String(d.id) === String(driverId) || (reqItem && d.phone === reqItem.senderPhone));
-            
-            if (!targetDrv) {
-                showToast('لم يتم العثور على الحساب المستهدف!', 'error');
-                return;
+            try {
+                await signInAnonymously(auth).catch(() => {});
+                let reqItem = appData.subscriptionRequests.find(r => String(r.id) === String(reqId));
+                let targetDrv = appData.drivers.find(d => String(d.id) === String(driverId) || (reqItem && d.phone === reqItem.senderPhone));
+                
+                if (!targetDrv) {
+                    showToast('لم يتم العثور على الحساب المستهدف!', 'error');
+                    return;
+                }
+
+                let exp = targetDrv.subExpiry ? new Date(targetDrv.subExpiry) : new Date();
+                if (exp < new Date()) exp = new Date();
+                exp.setMonth(exp.getMonth() + Number(months));
+                let newExpStr = exp.toISOString().split('T')[0];
+
+                await setDoc(doc(db, 'drivers', String(targetDrv.id)), { subExpiry: newExpStr, subStatus: 'active' }, { merge: true });
+                await setDoc(doc(db, 'subscription_requests', String(reqId)), { status: 'approved' }, { merge: true });
+                
+                await logAuditAction('موافقة كاش', `تم تجديد اشتراك ${targetDrv.companyName || targetDrv.name} لمدة ${months} أشهر`);
+                showToast('✅ تمت الموافقة وتفعيل الاشتراك بنجاح!');
+                await fetchAllDataFromCloud();
+            } catch (err) {
+                showToast('خطأ في الموافقة: ' + err.message, 'error');
             }
-
-            let exp = targetDrv.subExpiry ? new Date(targetDrv.subExpiry) : new Date();
-            if (exp < new Date()) exp = new Date();
-            exp.setMonth(exp.getMonth() + Number(months));
-            let newExpStr = exp.toISOString().split('T')[0];
-
-            await setDoc(doc(db, 'drivers', String(targetDrv.id)), { subExpiry: newExpStr, subStatus: 'active' }, { merge: true });
-            await setDoc(doc(db, 'subscription_requests', String(reqId)), { status: 'approved' }, { merge: true });
-            
-            await logAuditAction('موافقة كاش', `تم تجديد اشتراك ${targetDrv.companyName || targetDrv.name} لمدة ${months} أشهر`);
-            showToast('✅ تمت الموافقة وتفعيل الاشتراك بنجاح!');
-            fetchAllDataFromCloud();
         }
         window.approveSubscriptionRequest = approveSubscriptionRequest;
 
         async function updateMemberSub(driverId) {
-            let driver = appData.drivers.find(d => String(d.id) === String(driverId));
-            if (!driver) return;
-            let newExpiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            await setDoc(doc(db, 'drivers', String(driver.id)), { subExpiry: newExpiryDate, subStatus: 'active' }, { merge: true });
-            await logAuditAction('تجديد اشتراك', `تم تجديد اشتراك ${driver.companyName || driver.name} لمدة شهر إضافي`);
-            showToast('✅ تم التجديد بنجاح حتى ' + newExpiryDate);
-            fetchAllDataFromCloud();
+            try {
+                await signInAnonymously(auth).catch(() => {});
+                let driver = appData.drivers.find(d => String(d.id) === String(driverId));
+                if (!driver) return;
+                let newExpiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                await setDoc(doc(db, 'drivers', String(driver.id)), { subExpiry: newExpiryDate, subStatus: 'active' }, { merge: true });
+                await logAuditAction('تجديد اشتراك', `تم تجديد اشتراك ${driver.companyName || driver.name} لمدة شهر إضافي`);
+                showToast('✅ تم التجديد بنجاح حتى ' + newExpiryDate);
+                await fetchAllDataFromCloud();
+            } catch (err) {
+                showToast('خطأ في التجديد: ' + err.message, 'error');
+            }
         }
         window.updateMemberSub = updateMemberSub;
 
         async function deleteCompanyAccount(driverId, name) {
             if (!confirm(`⚠️ هل أنت متأكد من حذف الحساب والشركة (${name})؟`)) return;
-            await deleteDoc(doc(db, 'drivers', String(driverId)));
-            await logAuditAction('حذف شركة', `تم حذف الحساب والشركة (${name})`);
-            showToast('✅ تم الحذف بنجاح');
-            fetchAllDataFromCloud();
+            try {
+                await signInAnonymously(auth).catch(() => {});
+                await deleteDoc(doc(db, 'drivers', String(driverId)));
+                await logAuditAction('حذف شركة', `تم حذف الحساب والشركة (${name})`);
+                showToast('✅ تم الحذف بنجاح');
+                await fetchAllDataFromCloud();
+            } catch (err) {
+                showToast('خطأ في الحذف: ' + err.message, 'error');
+            }
         }
         window.deleteCompanyAccount = deleteCompanyAccount;
 
@@ -706,6 +751,7 @@
             let shipmentsCount = 0;
             if (companyId) {
                 try {
+                    await signInAnonymously(auth).catch(() => {});
                     const qShip = query(collection(db, 'shipments'), where('companyId', '==', companyId));
                     const shipSnap = await getDocs(qShip);
                     shipmentsCount = shipSnap.size;
@@ -804,6 +850,7 @@
 
         async function logAuditAction(action, details) {
             try {
+                await signInAnonymously(auth).catch(() => {});
                 const currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
                 await addDoc(collection(db, 'audit_logs'), {
                     companyId: currentCompanyId,
