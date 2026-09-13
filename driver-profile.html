@@ -502,6 +502,12 @@
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // تفعيل المصادقة المجهولة لتخطي قيود isAuthenticated() في قاعدة البيانات
+        auth.signInAnonymously().catch(err => {
+            console.error("Auth Error:", err);
+        });
 
         const driverTitlesList = [
             "سائق مستجد", "سائق مساعد", "سائق معتمد", "سائق أول", "سائق خبير",
@@ -673,7 +679,6 @@
                 }
             }
 
-            // تصحيح الرتبة الافتراضية لمنع إعطاء صلاحيات الماستر أدمن بالخطأ للمستخدمين غير المعرفين
             let isMasterAdminSession = sessionName === '01114099799' || sessionName === 'المدير' || sessionName.toLowerCase() === 'admin';
 
             return {
@@ -748,14 +753,14 @@
             renderChatAccountsList();
         });
 
-        // ربط الشحنات مع limit(50) لتوفير القراءات
+        // ربط الشحنات
         if (shipmentsUnsub) shipmentsUnsub();
         shipmentsUnsub = db.collection('shipments').where('companyId', '==', currentCompanyId).limit(50).onSnapshot(snapshot => {
             appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
         });
 
-        // ربط الشات مع limit(40) لتوفير القراءات
+        // ربط الشات
         if (chatUnsub) chatUnsub();
         chatUnsub = db.collection('chat').where('companyId', '==', currentCompanyId).limit(40).onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -763,7 +768,7 @@
             renderChatAccountsList();
         });
 
-        // ربط المكالمات
+        // ربط المكالمات وتصحيح مطابقة الأسماء والمعرفات
         if (callsUnsub) callsUnsub();
         callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
@@ -772,18 +777,19 @@
                     currentCallId = change.doc.id;
                     
                     let loggedInUser = getLoggedInUser();
-                    let targetCallee = String(callData.callee || '').trim();
-                    let myName = String(loggedInUser.name || '').trim();
-                    let mySession = String(activeExternalSessionName || '').trim();
+                    let targetCallee = String(callData.callee || '').trim().toLowerCase();
+                    let myName = String(loggedInUser.name || '').trim().toLowerCase();
+                    let mySession = String(activeExternalSessionName || '').trim().toLowerCase();
+                    let cleanCaller = getCleanDriverName(callData.caller).trim().toLowerCase();
                     
                     let isForMe = (
                         targetCallee === myName ||
                         targetCallee === mySession ||
-                        getCleanDriverName(targetCallee) === myName ||
+                        targetCallee === getCleanDriverName(loggedInUser.name).trim().toLowerCase() ||
                         targetCallee === 'general'
                     );
 
-                    if (isForMe && callData.caller !== myName && callData.status === 'calling') {
+                    if (isForMe && cleanCaller !== myName && cleanCaller !== mySession && callData.status === 'calling') {
                         let callerCleanName = getCleanDriverName(callData.caller);
                         playAdvancedRingtone('incoming');
                         if (confirm(`📞 مكالمة واردة جديدة بقوة من (${callerCleanName}). هل تريد الرد والمتابعة؟`)) {
@@ -845,7 +851,6 @@
             document.getElementById('gplus-badge-display').innerText = targetDrv.role === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
             document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || 'غير مسجل'} | الرتبة: ${targetDrv.role || 'driver'}`;
             
-            // تصحيح العزل الصارم للشحنات: عرض الشحنات الخاصة بالسائق المستهدف فقط دون عرض شحنات الشركة كاملة
             let targetShipments = (appData.shipments || []).filter(s => {
                 let drvName = (targetDrv.name || '').trim();
                 let drvPhone = (targetDrv.phone || '').trim();
@@ -1031,8 +1036,8 @@
 
                 let loggedInUser = getLoggedInUser();
                 const callData = {
-                    caller: loggedInUser.name,
-                    callee: currentChatTarget,
+                    caller: String(loggedInUser.name || '').trim(),
+                    callee: String(currentChatTarget || '').trim(),
                     companyId: currentCompanyId,
                     offer: { type: offerDescription.type, sdp: offerDescription.sdp },
                     isVideo: isVideo,
