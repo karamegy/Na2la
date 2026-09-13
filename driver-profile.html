@@ -643,9 +643,10 @@
             }
         }
 
+        // خوادم STUN محسنة وموسعة لتجاوز حجب شبكات الجوال NAT
         const rtcConfig = {
             iceServers: [
-                { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }
+                { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stunprotocol.org:3478', 'stun:openrelay.metered.ca:80'] }
             ]
         };
 
@@ -770,11 +771,17 @@
             renderChatAccountsList();
         });
 
+        // مراقبة المكالمات مع فلترة زمنية للمستندات لمنع تداخل المكالمات القديمة
+        const oneMinuteAgoTime = Date.now() - 60000;
         if (callsUnsub) callsUnsub();
         callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
                 if (change.type === 'added') {
                     let callData = change.doc.data();
+                    let callTime = callData.timestamp && callData.timestamp.toMillis ? callData.timestamp.toMillis() : (callData.timestamp ? new Date(callData.timestamp).getTime() : Date.now());
+                    
+                    if (callTime < oneMinuteAgoTime) return; // تجاهل المكالمات القديمة
+
                     currentCallId = change.doc.id;
                     
                     let loggedInUser = getLoggedInUser();
@@ -852,7 +859,6 @@
             document.getElementById('gplus-badge-display').innerText = targetDrv.role === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
             document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || 'غير مسجل'} | الرتبة: ${targetDrv.role || 'driver'}`;
             
-            // --- التعديل المحدث هنا لضمان مزامنة وترشيح الشحنات بدقة ---
             let targetShipments = (appData.shipments || []).filter(s => {
                 let drvName = (targetDrv.name || '').trim().toLowerCase();
                 let drvPhone = (targetDrv.phone || '').trim();
@@ -988,7 +994,7 @@
         }
 
         // ==========================================
-        // 🛠️ دوال معالجة WebRTC المحسنة لمنع الشاشة السوداء
+        // 🛠️ دوال معالجة WebRTC المحسنة لمنع الشاشة السوداء وضمان المزامنة
         // ==========================================
         function setupPeerConnectionEvents(pc, callDocRef, isInitiator) {
             const offerCandidates = callDocRef.collection('offerCandidates');
@@ -1004,7 +1010,16 @@
                 }
             };
 
-            // التعديل الجذري هنا لمنع الشاشة السوداء وضمان عمل الفيديو بكفاءة
+            // مراقبة حالة اتصال ICE للتشخيص الفوري وتجنب الشاشة السوداء
+            pc.oniceconnectionstatechange = () => {
+                console.log("ICE Connection State:", pc.iceConnectionState);
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
+                } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                    document.getElementById('call-modal-status').innerText = '⚠️ تعذر ربط الشبكة (NAT Blocked)';
+                }
+            };
+
             pc.ontrack = event => {
                 stopAdvancedRingtone();
                 const remoteVideoElem = document.getElementById('remoteVideo');
@@ -1083,7 +1098,13 @@
                 localVideoElem.play().catch(e => {});
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
-                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                
+                if (localStream) {
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                } else {
+                    peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+                    if (isVideo) peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+                }
 
                 const callDocRef = db.collection('webrtc_calls').doc();
                 currentCallId = callDocRef.id;
@@ -1157,7 +1178,13 @@
                 localVideoElem.play().catch(e => {});
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
-                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                
+                if (localStream) {
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+                } else {
+                    peerConnection.addTransceiver('audio', { direction: 'sendrecv' });
+                    if (isVideo) peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+                }
 
                 const callDocRef = db.collection('webrtc_calls').doc(callId);
                 currentCallId = callId;
