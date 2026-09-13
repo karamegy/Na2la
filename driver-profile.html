@@ -447,7 +447,7 @@
             </div>
 
             <div style="position: relative; width: 100%; height: 380px; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px; border: 2px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.6);">
-                <video id="remoteVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                <video id="remoteVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; background: #000;"></video>
                 <video id="localVideo" autoplay muted playsinline style="position: absolute; bottom: 12px; left: 12px; width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 2px solid #fff; background: #222; box-shadow: 0 5px 15px rgba(0,0,0,0.5);"></video>
             </div>
 
@@ -504,7 +504,6 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // تفعيل المصادقة المجهولة لتخطي قيود isAuthenticated() في قاعدة البيانات
         auth.signInAnonymously().catch(err => {
             console.error("Auth Error:", err);
         });
@@ -542,7 +541,6 @@
         let currentCompanyId = urlCompanyIdParam.trim() !== '' ? urlCompanyIdParam.trim() : 'company_main';
         window.currentCompanyId = currentCompanyId;
 
-        // متغيرات لإلغاء الـ Listeners ومنع استنزاف القراءات عند مغادرة الصفحة
         let driversUnsub = null;
         let shipmentsUnsub = null;
         let chatUnsub = null;
@@ -577,8 +575,10 @@
 
         let peerConnection = null;
         let localStream = null;
+        let remoteStream = null;
         let currentCallId = null;
         let currentFacingMode = 'user';
+        let remoteCandidateQueue = [];
 
         let audioCtx = null;
         let ringtoneInterval = null;
@@ -593,40 +593,46 @@
                 }
                 stopAdvancedRingtone();
 
-                const playToneSequence = () => {
+                const playArabicMelody = () => {
                     if (!audioCtx) return;
                     const now = audioCtx.currentTime;
-                    const osc1 = audioCtx.createOscillator();
-                    const osc2 = audioCtx.createOscillator();
-                    const gainNode = audioCtx.createGain();
+                    
+                    const notes = type === 'incoming' ? [
+                        { freq: 293.66, duration: 0.22 },
+                        { freq: 349.23, duration: 0.22 },
+                        { freq: 392.00, duration: 0.22 },
+                        { freq: 440.00, duration: 0.45 },
+                        { freq: 523.25, duration: 0.22 },
+                        { freq: 587.33, duration: 0.65 }
+                    ] : [
+                        { freq: 440.00, duration: 0.3 },
+                        { freq: 392.00, duration: 0.3 }
+                    ];
 
-                    if (type === 'incoming') {
-                        osc1.frequency.setValueAtTime(587.33, now);
-                        osc2.frequency.setValueAtTime(880, now);
-                        osc1.type = 'square';
-                        osc2.type = 'sawtooth';
-                    } else {
-                        osc1.frequency.setValueAtTime(440, now);
-                        osc1.type = 'sine';
-                        osc2.frequency.setValueAtTime(554.37, now);
-                        osc2.type = 'sine';
-                    }
+                    let timeOffset = 0;
+                    notes.forEach(note => {
+                        const startTime = now + timeOffset;
+                        const osc = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
 
-                    gainNode.gain.setValueAtTime(0.25, now);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(note.freq, startTime);
 
-                    osc1.connect(gainNode);
-                    osc2.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
+                        gainNode.gain.setValueAtTime(0.35, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + note.duration);
 
-                    osc1.start(now);
-                    osc2.start(now);
-                    osc1.stop(now + 0.8);
-                    osc2.stop(now + 0.8);
+                        osc.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+
+                        osc.start(startTime);
+                        osc.stop(startTime + note.duration);
+
+                        timeOffset += note.duration + 0.06;
+                    });
                 };
 
-                playToneSequence();
-                ringtoneInterval = setInterval(playToneSequence, type === 'incoming' ? 1200 : 2500);
+                playArabicMelody();
+                ringtoneInterval = setInterval(playArabicMelody, type === 'incoming' ? 2400 : 3000);
             } catch (e) {}
         }
 
@@ -639,8 +645,7 @@
 
         const rtcConfig = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
+                { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }
             ]
         };
 
@@ -742,7 +747,6 @@
         }
         renderInitialUIInstant();
 
-        // ربط السائقين
         if (driversUnsub) driversUnsub();
         driversUnsub = db.collection('drivers').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             appData.drivers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(d => {
@@ -753,14 +757,12 @@
             renderChatAccountsList();
         });
 
-        // ربط الشحنات
         if (shipmentsUnsub) shipmentsUnsub();
         shipmentsUnsub = db.collection('shipments').where('companyId', '==', currentCompanyId).limit(50).onSnapshot(snapshot => {
             appData.shipments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderMyAccount();
         });
 
-        // ربط الشات
         if (chatUnsub) chatUnsub();
         chatUnsub = db.collection('chat').where('companyId', '==', currentCompanyId).limit(40).onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -768,7 +770,6 @@
             renderChatAccountsList();
         });
 
-        // ربط المكالمات وتصحيح مطابقة الأسماء والمعرفات
         if (callsUnsub) callsUnsub();
         callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
@@ -851,13 +852,19 @@
             document.getElementById('gplus-badge-display').innerText = targetDrv.role === 'admin' ? 'مدير عام النظام' : 'سائق معتمد';
             document.getElementById('gplus-tagline-display').innerText = `الشركة: ${targetDrv.companyName || currentCompanyId} | الهاتف: ${targetDrv.phone || 'غير مسجل'} | الرتبة: ${targetDrv.role || 'driver'}`;
             
+            // --- التعديل المحدث هنا لضمان مزامنة وترشيح الشحنات بدقة ---
             let targetShipments = (appData.shipments || []).filter(s => {
-                let drvName = (targetDrv.name || '').trim();
+                let drvName = (targetDrv.name || '').trim().toLowerCase();
                 let drvPhone = (targetDrv.phone || '').trim();
-                let assigned = (s.assignedDriver || s.driver || '').trim();
+                let assigned = (s.assignedDriver || s.driver || '').trim().toLowerCase();
+                let clientName = (s.name || s.client || '').trim().toLowerCase();
                 
-                return (assigned && assigned === drvName) ||
-                       (s.driverId && String(s.driverId) === String(targetDrv.id)) ||
+                if (targetDrv.role === 'admin' || loggedInUser.name === 'المدير') {
+                    return true;
+                }
+
+                return (assigned && assigned === drvName) || 
+                       (clientName && clientName === drvName) ||
                        (s.phone && drvPhone && s.phone === drvPhone);
             });
 
@@ -980,6 +987,70 @@
             document.getElementById('chatModal').style.display = 'none'; 
         }
 
+        // ==========================================
+        // 🛠️ دوال معالجة WebRTC المحسنة لمنع الشاشة السوداء
+        // ==========================================
+        function setupPeerConnectionEvents(pc, callDocRef, isInitiator) {
+            const offerCandidates = callDocRef.collection('offerCandidates');
+            const answerCandidates = callDocRef.collection('answerCandidates');
+
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    if (isInitiator) {
+                        offerCandidates.add(event.candidate.toJSON());
+                    } else {
+                        answerCandidates.add(event.candidate.toJSON());
+                    }
+                }
+            };
+
+            // التعديل الجذري هنا لمنع الشاشة السوداء وضمان عمل الفيديو بكفاءة
+            pc.ontrack = event => {
+                stopAdvancedRingtone();
+                const remoteVideoElem = document.getElementById('remoteVideo');
+                
+                if (event.streams && event.streams[0]) {
+                    remoteVideoElem.srcObject = event.streams[0];
+                } else {
+                    let inboundStream = new MediaStream();
+                    inboundStream.addTrack(event.track);
+                    remoteVideoElem.srcObject = inboundStream;
+                }
+
+                remoteVideoElem.play().catch(e => {
+                    console.warn("Autoplay blocked, retrying with muted:", e);
+                    remoteVideoElem.muted = true;
+                    remoteVideoElem.play().catch(err => console.error("Remote video play failed:", err));
+                });
+                
+                document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
+            };
+        }
+
+        async function handleIncomingCandidates(snapshot, pc) {
+            snapshot.docChanges().forEach(async change => {
+                if (change.type === 'added') {
+                    const candidate = new RTCIceCandidate(change.doc.data());
+                    if (pc.remoteDescription && pc.remoteDescription.type) {
+                        try {
+                            await pc.addIceCandidate(candidate);
+                        } catch (e) { console.error("Error adding received ICE candidate", e); }
+                    } else {
+                        remoteCandidateQueue.push(candidate);
+                    }
+                }
+            });
+        }
+
+        async function flushCandidateQueue(pc) {
+            while (remoteCandidateQueue.length > 0) {
+                let cand = remoteCandidateQueue.shift();
+                try {
+                    await pc.addIceCandidate(cand);
+                } catch (e) { console.error("Error flushing queued ICE candidate", e); }
+            }
+        }
+
         async function startWebRTCCall(isVideo) {
             if (currentChatTarget === 'general') {
                 alert('⚠️ يرجى اختيار حساب شخصي محدد من القائمة الجانبية لإجراء المكالمة.');
@@ -991,6 +1062,7 @@
             document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون وبدء الرنين...';
             
             playAdvancedRingtone('outgoing');
+            remoteCandidateQueue = [];
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('⚠️ متصفحك لا يدعم الوصول للكاميرا والميكروفون.');
@@ -1013,23 +1085,10 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                peerConnection.ontrack = event => {
-                    stopAdvancedRingtone();
-                    const remoteVideoElem = document.getElementById('remoteVideo');
-                    remoteVideoElem.srcObject = event.streams[0];
-                    remoteVideoElem.play().catch(e => {});
-                    document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
-                };
-
                 const callDocRef = db.collection('webrtc_calls').doc();
                 currentCallId = callDocRef.id;
 
-                const offerCandidates = callDocRef.collection('offerCandidates');
-                const answerCandidates = callDocRef.collection('answerCandidates');
-
-                peerConnection.onicecandidate = event => {
-                    if (event.candidate) offerCandidates.add(event.candidate.toJSON());
-                };
+                setupPeerConnectionEvents(peerConnection, callDocRef, true);
 
                 const offerDescription = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offerDescription);
@@ -1047,12 +1106,13 @@
 
                 await callDocRef.set(callData);
 
-                callDocRef.onSnapshot(snapshot => {
+                callDocRef.onSnapshot(async snapshot => {
                     const data = snapshot.data();
                     if (data && data.answer && !peerConnection.currentRemoteDescription) {
                         stopAdvancedRingtone();
                         const answerDescription = new RTCSessionDescription(data.answer);
-                        peerConnection.setRemoteDescription(answerDescription);
+                        await peerConnection.setRemoteDescription(answerDescription);
+                        await flushCandidateQueue(peerConnection);
                     }
                     if (data && (data.status === 'rejected' || data.status === 'ended')) {
                         stopAdvancedRingtone();
@@ -1060,13 +1120,8 @@
                     }
                 });
 
-                answerCandidates.onSnapshot(snapshot => {
-                    snapshot.docChanges().forEach(change => {
-                        if (change.type === 'added') {
-                            const candidate = new RTCIceCandidate(change.doc.data());
-                            peerConnection.addIceCandidate(candidate);
-                        }
-                    });
+                callDocRef.collection('answerCandidates').onSnapshot(snapshot => {
+                    handleIncomingCandidates(snapshot, peerConnection);
                 });
 
             } catch (err) {
@@ -1081,6 +1136,7 @@
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو واردة (HD)' : '📞 مكالمة صوتية واردة';
             document.getElementById('call-modal-status').innerText = 'جاري ربط الاتصال...';
+            remoteCandidateQueue = [];
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('⚠️ متصفحك لا يدعم الوصول للكاميرا والميكروفون.');
@@ -1103,25 +1159,17 @@
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
 
-                peerConnection.ontrack = event => {
-                    const remoteVideoElem = document.getElementById('remoteVideo');
-                    remoteVideoElem.srcObject = event.streams[0];
-                    remoteVideoElem.play().catch(e => {});
-                    document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
-                };
-
                 const callDocRef = db.collection('webrtc_calls').doc(callId);
-                const offerCandidates = callDocRef.collection('offerCandidates');
-                const answerCandidates = callDocRef.collection('answerCandidates');
+                currentCallId = callId;
 
-                peerConnection.onicecandidate = event => {
-                    if (event.candidate) answerCandidates.add(event.candidate.toJSON());
-                };
+                setupPeerConnectionEvents(peerConnection, callDocRef, false);
 
                 const callSnapshot = await callDocRef.get();
                 const callData = callSnapshot.data();
 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer));
+                await flushCandidateQueue(peerConnection);
+
                 const answerDescription = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answerDescription);
 
@@ -1137,13 +1185,8 @@
                     }
                 });
 
-                offerCandidates.onSnapshot(snapshot => {
-                    snapshot.docChanges().forEach(change => {
-                        if (change.type === 'added') {
-                            const candidate = new RTCIceCandidate(change.doc.data());
-                            peerConnection.addIceCandidate(candidate);
-                        }
-                    });
+                callDocRef.collection('offerCandidates').onSnapshot(snapshot => {
+                    handleIncomingCandidates(snapshot, peerConnection);
                 });
 
             } catch (err) {
@@ -1191,6 +1234,10 @@
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(track => track.stop());
+                remoteStream = null;
+            }
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
@@ -1199,6 +1246,7 @@
                 db.collection('webrtc_calls').doc(currentCallId).update({ status: 'ended' }).catch(() => {});
                 currentCallId = null;
             }
+            remoteCandidateQueue = [];
             document.getElementById('activeCallModal').style.display = 'none';
             document.getElementById('remoteVideo').srcObject = null;
             document.getElementById('localVideo').srcObject = null;
