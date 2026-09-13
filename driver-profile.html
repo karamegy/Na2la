@@ -583,6 +583,7 @@
         let audioCtx = null;
         let ringtoneInterval = null;
 
+        // دالة نغمة الاستقبال العربية الطربية (مقام شرقي أصيل عبر Web Audio API)
         function playAdvancedRingtone(type = 'incoming') {
             try {
                 if (!audioCtx) {
@@ -593,40 +594,47 @@
                 }
                 stopAdvancedRingtone();
 
-                const playToneSequence = () => {
+                const playArabicMelody = () => {
                     if (!audioCtx) return;
                     const now = audioCtx.currentTime;
-                    const osc1 = audioCtx.createOscillator();
-                    const osc2 = audioCtx.createOscillator();
-                    const gainNode = audioCtx.createGain();
+                    
+                    // نغمات شرقية (مقام بياتي/رست) لنغمة رنين عربية متناسقة ومميزة
+                    const notes = type === 'incoming' ? [
+                        { freq: 293.66, duration: 0.22 }, // D4
+                        { freq: 349.23, duration: 0.22 }, // F4
+                        { freq: 392.00, duration: 0.22 }, // G4
+                        { freq: 440.00, duration: 0.45 }, // A4
+                        { freq: 523.25, duration: 0.22 }, // C5
+                        { freq: 587.33, duration: 0.65 }  // D5
+                    ] : [
+                        { freq: 440.00, duration: 0.3 },
+                        { freq: 392.00, duration: 0.3 }
+                    ];
 
-                    if (type === 'incoming') {
-                        osc1.frequency.setValueAtTime(587.33, now);
-                        osc2.frequency.setValueAtTime(880, now);
-                        osc1.type = 'square';
-                        osc2.type = 'sawtooth';
-                    } else {
-                        osc1.frequency.setValueAtTime(440, now);
-                        osc1.type = 'sine';
-                        osc2.frequency.setValueAtTime(554.37, now);
-                        osc2.type = 'sine';
-                    }
+                    let timeOffset = 0;
+                    notes.forEach(note => {
+                        const startTime = now + timeOffset;
+                        const osc = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
 
-                    gainNode.gain.setValueAtTime(0.25, now);
-                    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+                        osc.type = 'triangle'; // صوت ناعم وطربي شبيه بالآلات الشرقية (الناي أو القانون)
+                        osc.frequency.setValueAtTime(note.freq, startTime);
 
-                    osc1.connect(gainNode);
-                    osc2.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
+                        gainNode.gain.setValueAtTime(0.35, startTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + note.duration);
 
-                    osc1.start(now);
-                    osc2.start(now);
-                    osc1.stop(now + 0.8);
-                    osc2.stop(now + 0.8);
+                        osc.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+
+                        osc.start(startTime);
+                        osc.stop(startTime + note.duration);
+
+                        timeOffset += note.duration + 0.06;
+                    });
                 };
 
-                playToneSequence();
-                ringtoneInterval = setInterval(playToneSequence, type === 'incoming' ? 1200 : 2500);
+                playArabicMelody();
+                ringtoneInterval = setInterval(playArabicMelody, type === 'incoming' ? 2400 : 3000);
             } catch (e) {}
         }
 
@@ -768,7 +776,7 @@
             renderChatAccountsList();
         });
 
-        // ربط المكالمات وتصحيح مطابقة الأسماء والمعرفات
+        // ربط المكالمات مع تطابق دقيق للمستقبل والمتصل واستدعاء النغمة العربية عند الاستقبال
         if (callsUnsub) callsUnsub();
         callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
             snapshot.docChanges().forEach(change => {
