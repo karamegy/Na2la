@@ -1,4 +1,4 @@
-const CACHE_NAME = 'na2la-hub-v7';
+const CACHE_NAME = 'na2la-hub-v24';
 
 // قائمة الصفحات، الملفات، والأيقونات الأساسية المتاحة أونلاين/أوفلاين
 const assetsToCache = [
