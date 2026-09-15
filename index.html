@@ -1621,31 +1621,46 @@
         }
 
         async function submitCashSubscription() {
+    const months = Number(document.getElementById('sub-plan-months')?.value || 1);
+    const walletEl = document.getElementById('sub-target-wallet');
+    const wallet = walletEl ? walletEl.value : 'الدعم الفني والحسابات';
     const phone = document.getElementById('sub-sender-phone')?.value.trim();
     const txRef = document.getElementById('sub-tx-ref')?.value.trim();
-    const targetVal = document.getElementById('sub-plan-months')?.value || '1';
 
     if (!phone || !txRef) {
         alert('الرجاء كتابة رقم الهاتف وتفاصيل الاستفسار أولاً!');
         return;
     }
 
+    const currentUid = auth.currentUser ? auth.currentUser.uid : null;
+    let drvId = (typeof loggedInDriverId !== 'undefined' && loggedInDriverId) 
+        ? loggedInDriverId 
+        : (currentUid || 'guest_' + Date.now());
+
+    let drvName = (typeof loggedInDriverName !== 'undefined' && loggedInDriverName) 
+        ? loggedInDriverName 
+        : 'زائر / زبون';
+
+    let compId = (typeof currentCompanyId !== 'undefined' && currentCompanyId) 
+        ? currentCompanyId 
+        : 'company_main';
+
     const reqId = String(Date.now());
     const reqObj = {
         id: reqId,
-        companyId: 'company_main',
-        driverId: 'guest_' + reqId,
-        driverName: 'زائر / طلب جديد',
-        targetWallet: 'الدعم الفني والخدمات',
+        type: 'support_ticket', // تحديد نوع المستند كطلب دعم/شكوى
+        companyId: compId,
+        driverId: drvId,
+        driverName: drvName,
+        targetWallet: wallet,
         senderPhone: phone,
         transactionRef: txRef,
-        months: Number(targetVal) || 1,
+        months: months,
         status: 'pending',
         createdAt: new Date().toISOString()
     };
 
     try {
-        // تسجيل دخول مجهول سريع لتخطي حظر الفايربيس
         if (!auth.currentUser) {
             await auth.signInAnonymously().catch(() => {});
         }
@@ -1654,17 +1669,12 @@
         
         closeModal('cashPayModal');
         if (document.getElementById('cash-sub-form')) document.getElementById('cash-sub-form').reset();
-        
-        alert('تم إرسال طلبك بنجاح وسيطهر فوراً للإدارة! 🚀');
+        alert('تم إرسال الشكوى/الاستفسار إلى الدعم الفني بنجاح! 🚀');
     } catch (err) {
-        console.error("Firestore Error:", err);
-        // في حال وجود عائق في الفايربيس، يتم فتح واتساب مباشرة لضمان وصول الرسالة
-        const whatsappMsg = `طلب تواصل جديد من التطبيق:\n📱 الهاتف: ${phone}\n💬 الاستفسار: ${txRef}`;
-        window.open(`https://wa.me/201114099799?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
-        closeModal('cashPayModal');
+        console.error("Firestore Save Error:", err);
+        alert('فشل حفظ الطلب في السحابة: ' + (err.message || 'تأكد من الاتصال بالإنترنت'));
     }
 }
-
 
         function enquirePaymentCode() {
             const query = (document.getElementById('master-code-search-input').value || '').trim().toLowerCase();
