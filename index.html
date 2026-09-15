@@ -1749,40 +1749,45 @@
                 alert('حدث خطأ أثناء تفعيل الاشتراك: ' + err.message);
             }
         }
-
         let cashReqUnsubscribe = null;
-        function renderAdminPendingCashRequests() {
-            if (loggedInDriverName !== 'المدير') return;
-            const container = document.getElementById('admin-pending-cash-requests');
-            if (!container) return;
+function renderAdminPendingCashRequests() {
+    if (currentUserRole !== 'admin' && loggedInDriverName !== 'المدير') return;
+    const container = document.getElementById('admin-pending-cash-requests');
+    if (!container) return;
 
-            if (cashReqUnsubscribe) {
-                cashReqUnsubscribe();
+    if (cashReqUnsubscribe) {
+        cashReqUnsubscribe();
+    }
+
+    // جلب كافة الطلبات المعلقة للماستر أدمن دون التقييد بـ companyId
+    cashReqUnsubscribe = db.collection('subscription_requests')
+        .where('status', '==', 'pending')
+        .limit(50)
+        .onSnapshot(snapshot => {
+            container.innerHTML = '';
+            if (snapshot.empty) {
+                container.innerHTML = '<p style="font-size:10px; opacity:0.8; text-align:center;">لا توجد طلبات تواصل أو استفسارات معلقة حالياً.</p>';
+                return;
             }
 
-            cashReqUnsubscribe = db.collection('subscription_requests').where('status', '==', 'pending').where('companyId', '==', currentCompanyId).limit(50).onSnapshot(snapshot => {
-                container.innerHTML = '';
-                if (snapshot.empty) {
-                    container.innerHTML = '<p style="font-size:10px; opacity:0.8; text-align:center;">لا توجد طلبات تجديد كاش معلقة حالياً.</p>';
-                    return;
-                }
-
-                snapshot.forEach(doc => {
-                    let m = doc.data();
-                    let div = document.createElement('div');
-                    div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; margin-bottom:6px; font-size:10px;';
-                    div.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <strong>👤 ${escapeHTML(m.driverName)} (${escapeHTML(m.senderPhone)})</strong>
-                            <span style="color:var(--accent); font-weight:bold;">كود: ${escapeHTML(m.transactionRef)}</span>
-                        </div>
-                        <p style="margin-top:4px;">المحفظة: ${escapeHTML(m.targetWallet)} | الباقة: ${m.months} أشهر</p>
-                        <button type="button" class="btn-success btn-sm" style="margin-top:4px;" onclick="approveSubscriptionRequest('${escapeHTML(doc.id)}', '${escapeHTML(m.driverId)}', ${m.months})">موافقة وتفعيل 🚀</button>
-                    `;
-                    container.appendChild(div);
-                });
+            snapshot.forEach(doc => {
+                let m = doc.data();
+                let div = document.createElement('div');
+                div.style.cssText = 'background:var(--bg); border:1px solid var(--border-color); padding:8px; border-radius:8px; margin-bottom:6px; font-size:10px;';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong>👤 ${escapeHTML(m.driverName || 'زائر')} (${escapeHTML(m.senderPhone || '-')})</strong>
+                        <span style="color:var(--accent); font-weight:bold;">البيان: ${escapeHTML(m.transactionRef || '-')}</span>
+                    </div>
+                    <p style="margin-top:4px;">القسم: ${escapeHTML(m.targetWallet || 'الدعم الفني')}</p>
+                    <button type="button" class="btn-success btn-sm" style="margin-top:4px;" onclick="approveSubscriptionRequest('${escapeHTML(doc.id)}', '${escapeHTML(m.driverId)}', ${m.months || 1})">تأكيد التواصل والتفعيل 🚀</button>
+                `;
+                container.appendChild(div);
             });
-        }
+        }, err => {
+            console.error("خطأ في جلب الطلبات:", err);
+        });
+}
 
         async function finishOAuthLogin(user, role) {
             currentUserRole = role;
