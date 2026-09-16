@@ -1352,86 +1352,80 @@
             }
         }
 
-        async function performUnifiedLoginWithBiometric() {
-            const biometricPassed = await verifyBiometricAuth();
-            if (!biometricPassed) {
-                alert('⚠️ فشل التحقق البيومتري أو تم إلغاء بصمة الإصبع. تعذر تسجيل الدخول.');
-                return;
-            }
-            performUnifiedLogin();
+        async function performUnifiedLogin() {
+    const identifier = document.getElementById('login-identifier').value.trim();
+    const pin = document.getElementById('login-pin-input').value.trim();
+
+    if (!identifier || !pin) {
+        alert('الرجاء إدخال (الاسم أو رقم الهاتف) مع (الرقم السري PIN) للمطابقة الصحيحة!');
+        return;
+    }
+
+    try {
+        // 1. تحديد البريد الإلكتروني الافتراضي بناءً على المدخل
+        let authEmail = '';
+        const authPass = pin + '_Na2laSecure2026!';
+
+        if (identifier === 'المدير' || identifier === 'admin' || identifier === '01114099799') {
+            authEmail = 'admin@na2la.net';
+        } else {
+            authEmail = 'user_' + identifier.replace(/[^0-9]/g, '') + '@na2la.net';
         }
 
-        let isBiometricProcessing = false;
-
-        async function registerNewUserBiometricDevice() {
-            if (isBiometricProcessing) {
-                alert('⚠️ هناك طلب بصمة قيد التنفيذ بالفعل في المتصفح، يرجى الانتظار لحين اكتماله أو إلغاؤه.');
-                return;
-            }
-
-            try {
-                isBiometricProcessing = true;
-
-                if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-                    alert('⚠️ متصفحك أو جهازك لا يدعم مصادقة الـ WebAuthn البيومترية المباشرة.');
-                    isBiometricProcessing = false;
-                    return;
-                }
-                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                if (!available) {
-                    alert('⚠️ لا يتوفر قارئ بصمة بيومتري نشط على هذا الجهاز.');
-                    isBiometricProcessing = false;
-                    return;
-                }
-
-                const challenge = new Uint8Array(32);
-                window.crypto.getRandomValues(challenge);
-                const userIdUint = new TextEncoder().encode(loggedInDriverName);
-
-                const publicKey = {
-                    challenge: challenge,
-                    rp: { name: "أسطورة الطريق Na2la V10" },
-                    user: {
-                        id: userIdUint,
-                        name: loggedInDriverName,
-                        displayName: loggedInDriverName
-                    },
-                    pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-                    timeout: 60000,
-                    attestation: "direct"
-                };
-
-                const credential = await navigator.credentials.create({ publicKey });
-                if (credential) {
-                    const credIdBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId)));
-                    let drv = getCurrentDriver();
-                    
-                    let newCredObj = {
-                        id: 'bio_' + Date.now(),
-                        companyId: currentCompanyId || 'company_main',
-                        driverId: String(drv.id || '1'),
-                        driverName: loggedInDriverName,
-                        credentialId: credIdBase64.substring(0, 32) + '...',
-                        type: 'بصمة بيومترية (Platform Authenticator)',
-                        createdAt: new Date().toLocaleString('ar-EG')
-                    };
-
-                    await db.collection('biometricCredentials').doc(newCredObj.id).set(newCredObj);
-                    alert('تم تسجيل وربط بصمة الإصبع البيومترية بنجاح تام بالحساب سحابياً! 👆🔐');
-                    renderBiometricManagementTable();
-                }
-            } catch (err) {
-                console.error("Biometric registration error:", err);
-                if (err.name === 'InvalidStateError' || (err.message && err.message.includes('already pending'))) {
-                    alert('⚠️ يوجد طلب بصمة آخر قيد التنفيذ حالياً. أغلق أي نافذة منبثقة سابقة وحاول مرة أخرى.');
-                } else {
-                    alert('فشل تسجيل البصمة البيومترية بسبب الصلاحيات أو الإلغاء: ' + (err.message || 'تم إلغاء العملية'));
-                }
-            } finally {
-                isBiometricProcessing = false;
+        // 2. تسجيل الدخول في Firebase Auth أولاً للحصول على الصلاحية (isAuthenticated)
+        let userCredential;
+        try {
+            userCredential = await auth.signInWithEmailAndPassword(authEmail, authPass);
+        } catch (authErr) {
+            // إذا كان حساب المدير غير موجود في Auth، نقوم بإنشائه تلقائياً
+            if (identifier === 'المدير' || identifier === 'admin' || identifier === '01114099799') {
+                userCredential = await auth.createUserWithEmailAndPassword(authEmail, authPass);
+            } else {
+                throw new Error('فشل تسجيل الدخول: بيانات الحساب أو الرقم السري غير صحيح.');
             }
         }
+
+        // 3. بعد نجاح المصادقة وتفعيل الـ Auth، أصبح بإمكاننا قراءة البيانات بأمان تام
+        const snapshot = await db.collection('drivers').limit(100).get();
+        let matchedUser = null;
+        
+        snapshot.forEach(doc => {
+            let d = doc.data();
+            if ((d.name === identifier || d.phone === identifier || d.companyId === identifier) && String(d.pin).trim() === pin) {
+                matchedUser = { id: doc.id, ...d };
+            }
+        });
+
+        if (!matchedUser && (identifier === 'المدير' || identifier === '01114099799' || identifier === 'admin')) {
+            currentUserRole = 'admin';
+            loggedInDriverName = 'المدير';
+            currentCompanyId = 'company_main';
+            finishSuccessfulLogin();
+            return;
+        }
+
+        if (!matchedUser) {
+            alert('⚠️ الحساب غير موجود في قاعدة البيانات السحابية أو الرقم السري (PIN) غير صحيح!');
+            return;
+        }
+
+        loggedInDriverName = matchedUser.name;
+        currentCompanyId = matchedUser.companyId || 'company_main';
+        
+        if (matchedUser.name === 'المدير' || matchedUser.role === 'admin' || matchedUser.role === 'مدير نظام') {
+            currentUserRole = 'admin';
+        } else if (matchedUser.role === 'مشرف') {
+            currentUserRole = 'supervisor';
+        } else {
+            currentUserRole = 'driver';
+        }
+
+        finishSuccessfulLogin();
+    } catch (err) {
+        alert('خطأ في المصادقة الأمنية أو الاتصال بالسحابة: ' + err.message);
+    }
+}
+
 
         async function testCurrentBiometricAuth() {
             const passed = await verifyBiometricAuth();
@@ -4987,4 +4981,4 @@ function renderAdminPendingCashRequests() {
     </script>
     <script src="na2la-bot.js?v=2026-force-update-v5" defer></script>
 </body>
-    </html>
+           </html>
