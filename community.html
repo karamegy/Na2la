@@ -643,7 +643,7 @@
         }
 
         // =========================================================================
-        // ⚡ 2. المزامنة الذكية للحساب مع قاعدة بيانات فايربيس (Cloud Sync)
+        // ⚡ 2. المزامنة الذكية للحساب مع قاعدة بيانات فايربيس (Cloud Sync مع القواعد)
         // =========================================================================
         async function initCloudSession() {
             try {
@@ -651,17 +651,25 @@
                     await signInAnonymously(auth);
                 }
 
+                // الـ UID الحقيقي الصادر من Firebase Auth ليتوافق مع request.auth.uid
+                const authUid = auth.currentUser.uid;
                 let found = null;
 
-                if (urlUserId) {
-                    // 1. محاولة الجلب المباشر عبر Document ID
+                // 1. فحص أولاً بالمستند المربوط بـ Auth UID لضمان التوافق مع قواعد الأمان
+                const authDocRef = doc(db, 'drivers', authUid);
+                const authDocSnap = await getDoc(authDocRef);
+
+                if (authDocSnap.exists()) {
+                    found = { id: authDocSnap.id, ...authDocSnap.data() };
+                } else if (urlUserId) {
+                    // 2. المحاولة بـ Document ID الممرر
                     const driverDocRef = doc(db, 'drivers', urlUserId);
                     const docSnap = await getDoc(driverDocRef);
 
                     if (docSnap.exists()) {
                         found = { id: docSnap.id, ...docSnap.data() };
                     } else {
-                        // 2. البحث الشامل بالهاتف أو الاسم
+                        // 3. البحث بالهاتف أو الاسم
                         const qByPhone = query(collection(db, 'drivers'), where('phone', '==', urlUserId), limit(1));
                         const phoneSnap = await getDocs(qByPhone);
                         if (!phoneSnap.empty) {
@@ -674,54 +682,40 @@
                             }
                         }
                     }
+                }
 
-                    if (found) {
-                        if (found.companyId && String(found.companyId).trim() !== '') {
-                            currentCompanyId = String(found.companyId).trim();
-                            window.companyId = currentCompanyId;
-                            localStorage.setItem('na2la_company_id', currentCompanyId);
-                        }
-                        applyFoundDriverProfile(found);
-                    } else {
-                        let isAdmCheck = isUserAdmin(urlRole, urlName || urlUserId, urlRole);
-                        currentDriverProfile = {
-                            id: urlUserId,
-                            name: urlName || urlUserId,
-                            rank: isAdmCheck ? 'admin' : 'driver',
-                            role: isAdmCheck ? 'admin' : 'driver',
-                            badge: isAdmCheck ? 'admin' : 'سائق',
-                            title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
-                            permissions: isAdmCheck ? 'صلاحيات كاملة' : 'صلاحيات أساسية',
-                            phone: urlUserId.match(/^\d+$/) ? urlUserId : '',
-                            avatar: urlAvatar || '',
-                            status: 'available',
-                            companyId: currentCompanyId
-                        };
-                        localStorage.setItem('na2la_user_id', urlUserId);
-                        updateAccountUI();
-                        syncUserProfileToCloud();
-                        initLiveUserSync(urlUserId);
+                if (found) {
+                    if (found.companyId && String(found.companyId).trim() !== '') {
+                        currentCompanyId = String(found.companyId).trim();
+                        window.companyId = currentCompanyId;
+                        localStorage.setItem('na2la_company_id', currentCompanyId);
                     }
+                    applyFoundDriverProfile(found);
                 } else {
-                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو رقم الهاتف للبدء:", "سائق جديد");
-                    let assignedName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
-                    
-                    let isAdmCheck = isUserAdmin(urlRole, assignedName, urlRole);
+                    let defaultName = urlName || urlUserId;
+                    if (!defaultName) {
+                        let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو رقم الهاتف للبدء:", "سائق جديد");
+                        defaultName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
+                    }
+
+                    let isAdmCheck = isUserAdmin(urlRole, defaultName, urlRole);
                     currentDriverProfile = {
-                        id: assignedName,
-                        name: assignedName,
+                        id: urlUserId || defaultName,
+                        name: defaultName,
                         rank: isAdmCheck ? 'admin' : 'driver',
                         role: isAdmCheck ? 'admin' : 'driver',
                         badge: isAdmCheck ? 'admin' : 'سائق',
                         title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
-                        phone: '',
+                        permissions: isAdmCheck ? 'صلاحيات كاملة' : 'صلاحيات أساسية',
+                        phone: (urlUserId && urlUserId.match(/^\d+$/)) ? urlUserId : '',
                         avatar: urlAvatar || '',
                         status: 'available',
                         companyId: currentCompanyId
                     };
-                    localStorage.setItem('na2la_user_id', assignedName);
+                    localStorage.setItem('na2la_user_id', currentDriverProfile.id);
                     updateAccountUI();
-                    syncUserProfileToCloud();
+                    await syncUserProfileToCloud();
+                    initLiveUserSync(authUid);
                 }
 
                 updateUIHeaders();
@@ -741,7 +735,7 @@
             if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
             currentDriverProfile = {
-                id: found.id,
+                id: found.customId || found.id,
                 name: found.name || found.driverName || urlName || 'سائق معتمد',
                 phone: found.phone || '',
                 rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
@@ -754,16 +748,19 @@
                 companyId: currentCompanyId
             };
 
-            localStorage.setItem('na2la_user_id', found.id);
+            localStorage.setItem('na2la_user_id', currentDriverProfile.id);
             updateAccountUI();
-            initLiveUserSync(found.id);
+            if (auth.currentUser) {
+                syncUserProfileToCloud();
+                initLiveUserSync(auth.currentUser.uid);
+            }
         }
 
-        function initLiveUserSync(userId) {
-            if (!db || !userId) return;
+        function initLiveUserSync(authUid) {
+            if (!db || !authUid) return;
             if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
 
-            userLiveSyncUnsubscribe = onSnapshot(doc(db, 'drivers', String(userId)), docSnap => {
+            userLiveSyncUnsubscribe = onSnapshot(doc(db, 'drivers', String(authUid)), docSnap => {
                 if (docSnap.exists()) {
                     let d = docSnap.data();
                     let dComp = String(d.companyId || '').trim();
@@ -818,13 +815,15 @@
             updateUIHeaders();
         }
 
+        // حفظ مستند المستخدم باسم request.auth.uid ليتوافق مع قواعد الأمان
         async function syncUserProfileToCloud() {
             try {
-                if (!currentDriverProfile.id || currentDriverProfile.id === 'temp_user_id') {
-                    const newDriverRef = doc(collection(db, 'drivers'));
-                    currentDriverProfile.id = newDriverRef.id;
-                }
-                await setDoc(doc(db, 'drivers', currentDriverProfile.id), {
+                if (!auth.currentUser) return;
+                const uid = auth.currentUser.uid;
+                
+                await setDoc(doc(db, 'drivers', uid), {
+                    uid: uid,
+                    customId: currentDriverProfile.id || uid,
                     name: currentDriverProfile.name,
                     avatar: currentDriverProfile.avatar || '',
                     role: currentDriverProfile.role || (window.isAdminMode ? 'admin' : 'driver'),
@@ -834,7 +833,9 @@
                     phone: currentDriverProfile.phone || '',
                     title: currentDriverProfile.title || 'سائق معتمد'
                 }, { merge: true });
-            } catch(e) {}
+            } catch(e) {
+                console.error("خطأ حفظ الحساب بالسحابة:", e);
+            }
         }
 
         window.setAppTheme = function(themeName) {
@@ -976,8 +977,9 @@
         }
         window.closeBottomSheet = function(e) { if(e.target.id === 'bottomSheetModal') document.getElementById('bottomSheetModal').style.display = 'none'; }
 
+        // 🗑️ دالة حذف المنشور (تسمح بالحذف للكاتب وللمشرف ومتوافق مع Security Rules)
         window.deletePostByAdmin = async function(postId) {
-            if (confirm("🛡️ (صلاحيات المدير): هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
+            if (confirm("هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
                 try {
                     await deleteDoc(doc(db, 'communityPosts', postId));
                     alert("✔ تم حذف المنشور بنجاح.");
@@ -987,8 +989,9 @@
             }
         }
 
+        // 🗑️ دالة حذف التعليق
         window.deleteCommentByAdmin = async function(postId, commentIndex) {
-            if (confirm("🛡️ (صلاحيات المدير): هل تريد حذف هذا التعليق؟")) {
+            if (confirm("هل تريد حذف هذا التعليق؟")) {
                 try {
                     let post = cachedPosts.find(p => p.id === postId);
                     if (!post) return;
@@ -1101,12 +1104,9 @@
                 }
                 stream.innerHTML = msgs.map(m => {
                     let isMe = m.sender === currentDriverProfile.name;
+                    let canDeleteChat = isMe || window.isAdminMode;
                     let av = m.avatar ? `background-image:url('${m.avatar}'); background-size: cover; background-position: center;` : '';
-                    // الكود المحدث (يسمح للصاحب + الأدمن بالحذف):
-                 let canDeletePost = (p.author === currentDriverProfile.name || window.isAdminMode);
-                   let adminPostDeleteBtn = canDeletePost ? `
-                   <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color); padding: 3px 8px; font-size: 0.65rem;" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف</button>
-                   ` : '';
+                    let adminDeleteChatBtn = canDeleteChat ? `<button onclick="deleteChatMessage('${m.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.65rem; margin-right:8px;" title="${(window.isAdminMode && !isMe) ? 'حذف إداري' : 'حذف'}">🗑️</button>` : '';
                     return `
                         <div class="chat-bubble-advanced ${isMe ? 'sent' : 'received'}">
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
@@ -1125,7 +1125,7 @@
         }
 
         window.deleteChatMessage = async function(msgId) {
-            if(confirm("🛡️ حذف هذه الرسالة من الشات العام؟")) {
+            if(confirm("حذف هذه الرسالة من الشات العام؟")) {
                 try {
                     await deleteDoc(doc(db, 'chat', msgId));
                 } catch(e) {}
@@ -1661,12 +1661,13 @@
                         </div>
                     `;
                 }).join('');
-                
-                // الكود المحدث (يسمح للصاحب + الأدمن بالحذف):
+
+                // إمكانية الحذف لكاتب المنشور بنفسه + الأدمن/المشرف (متوافق مع Security Rules)
                 let canDeletePost = (p.author === currentDriverProfile.name || window.isAdminMode);
                 let adminPostDeleteBtn = canDeletePost ? `
-                <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color); padding: 3px 8px; font-size: 0.65rem;" onclick="deletePostByAdmin('${p.id}')">🗑️ حذف</button>
+                    <button class="post-action-btn" style="background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: var(--danger-color); padding: 3px 8px; font-size: 0.65rem;" onclick="deletePostByAdmin('${p.id}')">${(window.isAdminMode && p.author !== currentDriverProfile.name) ? '🗑️ حذف إداري' : '🗑️ حذف'}</button>
                 ` : '';
+
                 return `
                     <div class="post-card ${p.isPinned ? 'pinned' : ''}">
                         ${p.isPinned ? '<div class="pin-badge">📌 إعلان رسمي مثبت</div>' : ''}
