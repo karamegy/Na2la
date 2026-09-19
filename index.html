@@ -312,9 +312,9 @@
             <input type="text" id="login-identifier" placeholder="أدخل اسم المستخدم المسجل أو رقم الهاتف..." autocomplete="off">
             <input type="password" id="login-pin-input" maxlength="15" placeholder="أدخل الرقم السري (PIN)...">
             
-            <div class="login-btn-group">
-                <button type="button" class="btn-main" onclick="performUnifiedLoginWithBiometric()">تسجيل الدخول الآمن بالبصمة والسحابة 🔐👆</button>
-                
+            <!-- التعديل: تغيير اسم الدالة إلى performUnifiedLogin() -->
+            <button type="button" class="btn-main" onclick="performUnifiedLogin()">تسجيل الدخول الآمن بالبصمة والسحابة 🔐👆</button>
+
             
                 <button type="button" onclick="signInWithGoogle()" style="background: linear-gradient(135deg, #db4437, #b91c1c); color: white;">
                     🌐 تسجيل الدخول باستخدام جوجل (Google)
@@ -1362,30 +1362,29 @@
     }
 
     try {
-        // 1. تحديد البريد الإلكتروني الافتراضي بناءً على المدخل
+        // 1. تحديد بريد المصادقة الافتراضي بناءً على المدخلات
         let authEmail = '';
         const authPass = pin + '_Na2laSecure2026!';
 
-        if (identifier === 'كرم حمدي' || identifier === 'admin' || identifier === '01114099799') {
+        if (identifier === 'كرم عجاج' || identifier === 'كرم حمدي' || identifier === 'admin' || identifier === '01114099799') {
             authEmail = 'haretg@gmail.com';
         } else {
-            authEmail = 'user_' + identifier.replace(/[^0-9]/g, '') + '@na2la.net';
+            const cleanPhone = identifier.replace(/[^0-9]/g, '');
+            authEmail = 'user_' + (cleanPhone || 'id') + '@na2la.net';
         }
 
-        // 2. تسجيل الدخول في Firebase Auth أولاً للحصول على الصلاحية (isAuthenticated)
-        let userCredential;
+        // 2. تسجيل الدخول لدى Firebase Auth أولاً لتفعيل isAuthenticated()
         try {
-            userCredential = await auth.signInWithEmailAndPassword(authEmail, authPass);
+            await auth.signInWithEmailAndPassword(authEmail, authPass);
         } catch (authErr) {
-            // إذا كان حساب المدير غير موجود في Auth، نقوم بإنشائه تلقائياً
-            if (identifier === 'كرم حمدي' || identifier === 'admin' || identifier === '01114099799') {
-                userCredential = await auth.createUserWithEmailAndPassword(authEmail, authPass);
+            if (identifier === 'كرم عجاج' || identifier === 'كرم حمدي' || identifier === 'admin' || identifier === '01114099799') {
+                await auth.createUserWithEmailAndPassword(authEmail, authPass);
             } else {
-                throw new Error('فشل تسجيل الدخول: بيانات الحساب أو الرقم السري غير صحيح.');
+                throw new Error('بيانات الحساب أو الرقم السري (PIN) غير صحيح.');
             }
         }
 
-        // 3. بعد نجاح المصادقة وتفعيل الـ Auth، أصبح بإمكاننا قراءة البيانات بأمان تام
+        // 3. قراءة البيانات بعد نجاح المصادقة
         const snapshot = await db.collection('drivers').limit(100).get();
         let matchedUser = null;
         
@@ -1396,9 +1395,9 @@
             }
         });
 
-        if (!matchedUser && (identifier === 'كرم حمدي' || identifier === '01114099799' || identifier === 'admin')) {
+        if (!matchedUser && (identifier === 'كرم عجاج' || identifier === 'كرم حمدي' || identifier === '01114099799' || identifier === 'admin')) {
             currentUserRole = 'admin';
-            loggedInDriverName = 'كرم حمدي';
+            loggedInDriverName = 'كرم عجاج';
             currentCompanyId = 'company_main';
             finishSuccessfulLogin();
             return;
@@ -1412,7 +1411,7 @@
         loggedInDriverName = matchedUser.name;
         currentCompanyId = matchedUser.companyId || 'company_main';
         
-        if (matchedUser.name === 'كرم حمدي' || matchedUser.role === 'admin' || matchedUser.role === 'مدير نظام') {
+        if (matchedUser.name === 'كرم عجاج' || matchedUser.role === 'admin' || matchedUser.role === 'مدير نظام') {
             currentUserRole = 'admin';
         } else if (matchedUser.role === 'مشرف') {
             currentUserRole = 'supervisor';
@@ -1425,7 +1424,6 @@
         alert('خطأ في المصادقة الأمنية أو الاتصال بالسحابة: ' + err.message);
     }
 }
-
 
         async function testCurrentBiometricAuth() {
             const passed = await verifyBiometricAuth();
@@ -2486,22 +2484,23 @@ function renderAdminPendingCashRequests() {
         }
 
         function changeAdminPinPrompt() {
-            const currentPass = prompt('أدخل كلمة السر (رمز PIN) الحالية للتأكيد:');
-            if (currentPass === storedPin || currentUserRole === 'admin' || currentUserRole === 'supervisor') {
-                const newPass = prompt('أدخل كلمة السر الجديدة (رمز PIN):');
-                if (newPass && newPass.trim() !== '') {
-                    storedPass = newPass;
-                    let adminDrv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
-                    if (adminDrv) { 
-                        adminDrv.pin = newPass; 
-                        db.collection('drivers').doc(String(adminDrv.id)).set(adminDrv, { merge: true });
-                    }
-                    alert('تم تغيير كلمة السر بنجاح!');
-                }
-            } else {
-                alert('كلمة السر الحالية غير صحيحة!');
+    const currentPass = prompt('أدخل كلمة السر (رمز PIN) الحالية للتأكيد:');
+    if (currentPass === storedPin || currentUserRole === 'admin' || currentUserRole === 'supervisor') {
+        const newPass = prompt('أدخل كلمة السر الجديدة (رمز PIN):');
+        if (newPass && newPass.trim() !== '') {
+            storedPin = newPass; // تصحيح اسم المتغير إلى storedPin
+            let adminDrv = (appData.drivers || []).find(d => d.name === loggedInDriverName);
+            if (adminDrv) { 
+                adminDrv.pin = newPass; 
+                db.collection('drivers').doc(String(adminDrv.id)).set(adminDrv, { merge: true });
             }
+            alert('تم تغيير كلمة السر بنجاح!');
         }
+    } else {
+        alert('كلمة السر الحالية غير صحيحة!');
+    }
+}
+
 
         function changeUserPinByAdmin(id) {
             if (currentUserRole !== 'admin' && currentUserRole !== 'supervisor') {
