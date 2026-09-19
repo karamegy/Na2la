@@ -1699,42 +1699,49 @@
         }
 
         function initRealtimeFeed() {
-            if (feedUnsubscribe) feedUnsubscribe();
+    if (feedUnsubscribe) feedUnsubscribe();
+    
+    // جلب منشورات الشركة بدون شرط الترتيب المعقد لضمان سرعة الاستجابة وعدم الحاجة لفهارس معقدة
+    const qFeed = query(
+        collection(db, 'communityPosts'),
+        where('companyId', '==', currentCompanyId),
+        limit(50)
+    );
+
+    feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
+        try {
+            cachedPosts = [];
+            snapshot.forEach(d => {
+                cachedPosts.push({ id: d.id, ...d.data() });
+            });
             
-            const qFeed = query(
-                collection(db, 'communityPosts'),
-                where('companyId', '==', currentCompanyId),
-                limit(50)
-            );
+            // ترتيب المنشورات برمجياً بالوقت
+            cachedPosts.sort((a, b) => {
+                let timeA = 0;
+                let timeB = 0;
+                if (a.timestamp && typeof a.timestamp.toMillis === 'function') {
+                    timeA = a.timestamp.toMillis();
+                } else if (a.timestamp && a.timestamp.seconds) {
+                    timeA = a.timestamp.seconds * 1000;
+                }
+                if (b.timestamp && typeof b.timestamp.toMillis === 'function') {
+                    timeB = b.timestamp.toMillis();
+                } else if (b.timestamp && b.timestamp.seconds) {
+                    timeB = b.timestamp.seconds * 1000;
+                }
+                return timeB - timeA;
+            });
 
-            feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
-                try {
-                    cachedPosts = [];
-                    snapshot.forEach(d => {
-                        cachedPosts.push({ id: d.id, ...d.data() });
-                    });
-                    
-                    cachedPosts.sort((a, b) => {
-                        let timeA = 0;
-                        let timeB = 0;
-                        if (a.timestamp && typeof a.timestamp.toMillis === 'function') {
-                            timeA = a.timestamp.toMillis();
-                        } else if (a.timestamp && a.timestamp.seconds) {
-                            timeA = a.timestamp.seconds * 1000;
-                        }
-                        if (b.timestamp && typeof b.timestamp.toMillis === 'function') {
-                            timeB = b.timestamp.toMillis();
-                        } else if (b.timestamp && b.timestamp.seconds) {
-                            timeB = b.timestamp.seconds * 1000;
-                        }
-                        return timeB - timeA;
-                    });
-
-                    cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
-                    filterWallPosts();
-                } catch(err) {}
-            }, (error) => {});
+            cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
+            filterWallPosts();
+        } catch(err) {
+            console.error("خطأ معالجة المنشورات:", err);
         }
+    }, (error) => {
+        console.error("خطأ جلب المنشورات من السحابة:", error);
+    });
+}
+
 
         window.onload = function() {
             initCloudSession();
