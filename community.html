@@ -550,10 +550,13 @@
         window.db = db;
         window.auth = auth;
 
+        // =========================================================================
+        // 🔄 1. قراءة وإعادة توحيد معلمات الحساب والشركة (Account & Company Sync)
+        // =========================================================================
         const urlParams = new URLSearchParams(window.location.search);
+        
         let urlCompanyId = (urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || '').trim();
         let storedCompanyId = localStorage.getItem('na2la_company_id');
-
         let currentCompanyId = (urlCompanyId && urlCompanyId !== 'null' && urlCompanyId !== '') 
             ? urlCompanyId 
             : (storedCompanyId || 'company_main');
@@ -561,27 +564,28 @@
         window.companyId = currentCompanyId;
         localStorage.setItem('na2la_company_id', currentCompanyId);
 
-        let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || urlParams.get('user') || '').trim();
+        let urlUserId = (urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('user') || '').trim();
         let storedUserId = localStorage.getItem('na2la_user_id');
         if (!urlUserId && storedUserId) {
             urlUserId = storedUserId;
         }
 
+        let urlName = (urlParams.get('name') || urlParams.get('driverName') || '').trim();
         let urlAvatar = urlParams.get('avatar') || urlParams.get('photo') || '';
         let urlRole = (urlParams.get('role') || urlParams.get('rank') || urlParams.get('badge') || '').trim();
 
         let currentDriverProfile = {
-            id: '',
-            name: 'جاري التحميل...',
-            avatar: '',
+            id: urlUserId || '',
+            name: urlName || 'جاري التحميل...',
+            avatar: urlAvatar || '',
             title: '...',
             phone: '',
             rank: 'guest',
-            role: 'driver',
+            role: urlRole || 'driver',
             badge: 'سائق',
             permissions: 'صلاحيات تشغيلية',
             status: 'available',
-            details: ''
+            companyId: currentCompanyId
         };
 
         let userLiveSyncUnsubscribe = null;
@@ -599,6 +603,7 @@
             if (driversSidebarUnsubscribe) driversSidebarUnsubscribe();
         });
 
+        // العودة للرئيسية مع إرسال المعلمات كاملة دون ضياع للبيانات
         window.navigateToMain = function() {
             if (userLiveSyncUnsubscribe) userLiveSyncUnsubscribe();
             if (feedUnsubscribe) feedUnsubscribe();
@@ -608,23 +613,26 @@
             let userId = currentDriverProfile.id || urlUserId || '';
             let companyId = currentCompanyId || 'company_main';
             let role = currentDriverProfile.role || urlRole || 'driver';
-            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`;
+            let name = currentDriverProfile.name || urlName || '';
+            
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}&name=${encodeURIComponent(name)}`;
         };
 
+        // 🛡️ فحص شامل ودقيق لمُعرفات ورُتب المدراء المشرفين
         function isUserAdmin(roleValue, nameValue, badgeValue) {
             let role = String(roleValue || '').toLowerCase().trim();
             let name = String(nameValue || '').toLowerCase().trim();
             let badge = String(badgeValue || '').toLowerCase().trim();
             let urlR = String(urlRole || '').toLowerCase().trim();
-            const adminGuesses = ['admin', 'كرم عجاج', 'مدير نظام', 'مشرف', 'مدير عام', 'كرم عجاج', 'مدير شركة', 'master'];
             
-            return adminGuesses.includes(role) || 
-                   adminGuesses.includes(name) || 
-                   adminGuesses.includes(badge) || 
-                   adminGuesses.includes(urlR) || 
-                   name.includes('كرم عجاج') || 
-                   role.includes('admin') || 
-                   urlR.includes('admin');
+            const adminKeywords = [
+                'admin', 'master', 'كرم عجاج', 'كرم حمدي', 'عماد القاضي', 'emad elkady', 
+                'emad', 'elkady', 'مدير', 'مشرف', 'مدير عام', 'مدير النظام', 'مدير شركة'
+            ];
+
+            return adminKeywords.some(key => 
+                role.includes(key) || name.includes(key) || badge.includes(key) || urlR.includes(key)
+            );
         }
 
         function updateUIHeaders() {
@@ -634,9 +642,11 @@
             document.getElementById('chatActiveCompanyLabel').innerText = `متصل بالسحابة: ${currentCompanyId}`;
         }
 
+        // =========================================================================
+        // ⚡ 2. المزامنة الذكية للحساب مع قاعدة بيانات فايربيس (Cloud Sync)
+        // =========================================================================
         async function initCloudSession() {
             try {
-                // تفعيل التوثيق المجهول تلقائياً لتحقيق شرط القواعد isAuthenticated()
                 if (!auth.currentUser) {
                     await signInAnonymously(auth);
                 }
@@ -644,24 +654,25 @@
                 let found = null;
 
                 if (urlUserId) {
+                    // 1. محاولة الجلب المباشر عبر Document ID
                     const driverDocRef = doc(db, 'drivers', urlUserId);
                     const docSnap = await getDoc(driverDocRef);
 
                     if (docSnap.exists()) {
                         found = { id: docSnap.id, ...docSnap.data() };
                     } else {
-                        const qDrivers = query(collection(db, 'drivers'), limit(30));
-                        const snapshot = await getDocs(qDrivers);
-                        let target = urlUserId.toLowerCase();
-
-                        snapshot.forEach(d => {
-                            let data = d.data();
-                            let name = String(data.name || data.driverName || '').toLowerCase();
-                            let phone = String(data.phone || '').toLowerCase();
-                            if (d.id.toLowerCase() === target || name === target || phone === target || name.includes(target)) {
-                                found = { id: d.id, ...data };
+                        // 2. البحث الشامل بالهاتف أو الاسم
+                        const qByPhone = query(collection(db, 'drivers'), where('phone', '==', urlUserId), limit(1));
+                        const phoneSnap = await getDocs(qByPhone);
+                        if (!phoneSnap.empty) {
+                            found = { id: phoneSnap.docs[0].id, ...phoneSnap.docs[0].data() };
+                        } else {
+                            const qByName = query(collection(db, 'drivers'), where('name', '==', urlUserId), limit(1));
+                            const nameSnap = await getDocs(qByName);
+                            if (!nameSnap.empty) {
+                                found = { id: nameSnap.docs[0].id, ...nameSnap.docs[0].data() };
                             }
-                        });
+                        }
                     }
 
                     if (found) {
@@ -672,26 +683,27 @@
                         }
                         applyFoundDriverProfile(found);
                     } else {
-                        let isAdmCheck = isUserAdmin(urlRole, urlUserId, urlRole);
+                        let isAdmCheck = isUserAdmin(urlRole, urlName || urlUserId, urlRole);
                         currentDriverProfile = {
                             id: urlUserId,
-                            name: urlUserId,
+                            name: urlName || urlUserId,
                             rank: isAdmCheck ? 'admin' : 'driver',
                             role: isAdmCheck ? 'admin' : 'driver',
                             badge: isAdmCheck ? 'admin' : 'سائق',
                             title: isAdmCheck ? 'مدير نظام' : 'سائق معتمد',
                             permissions: isAdmCheck ? 'صلاحيات كاملة' : 'صلاحيات أساسية',
-                            phone: '',
+                            phone: urlUserId.match(/^\d+$/) ? urlUserId : '',
                             avatar: urlAvatar || '',
                             status: 'available',
                             companyId: currentCompanyId
                         };
                         localStorage.setItem('na2la_user_id', urlUserId);
                         updateAccountUI();
+                        syncUserProfileToCloud();
                         initLiveUserSync(urlUserId);
                     }
                 } else {
-                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو اسم السائق للبدء:", "سائق جديد");
+                    let enteredName = prompt("أهلاً بك في مجتمع نقلة 🚛\nيرجى إدخال اسمك الثنائي أو رقم الهاتف للبدء:", "سائق جديد");
                     let assignedName = (enteredName && enteredName.trim() !== "") ? enteredName.trim() : ("سائق_" + Math.floor(Math.random() * 1000));
                     
                     let isAdmCheck = isUserAdmin(urlRole, assignedName, urlRole);
@@ -709,11 +721,14 @@
                     };
                     localStorage.setItem('na2la_user_id', assignedName);
                     updateAccountUI();
+                    syncUserProfileToCloud();
                 }
+
                 updateUIHeaders();
                 loadCompanyCover();
                 initRealtimeFeed();
             } catch (err) {
+                console.error("خطأ المزامنة:", err);
                 updateAccountUI();
                 loadCompanyCover();
                 initRealtimeFeed();
@@ -721,18 +736,18 @@
         }
 
         function applyFoundDriverProfile(found) {
-            let isAdm = isUserAdmin(found.role || found.rank || urlRole, found.name || found.driverName || urlUserId, found.badge);
+            let isAdm = isUserAdmin(found.role || found.rank || urlRole, found.name || found.driverName || urlName || urlUserId, found.badge);
             let userAvatar = found.avatar || found.photoUrl || found.image || found.img || found.picture || found.profileImage || found.photo || urlAvatar || '';
             if (userAvatar === 'undefined' || userAvatar === 'null') userAvatar = '';
 
             currentDriverProfile = {
                 id: found.id,
-                name: found.name || found.driverName || 'سائق معتمد',
+                name: found.name || found.driverName || urlName || 'سائق معتمد',
                 phone: found.phone || '',
                 rank: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
                 role: isAdm ? 'admin' : (found.role || found.rank || 'driver'),
                 badge: isAdm ? 'admin' : (found.badge || 'سائق'),
-                title: found.title || (isAdm ? 'مدير شركة' : 'سائق معتمد'),
+                title: found.title || (isAdm ? 'مدير عام النظام' : 'سائق معتمد'),
                 permissions: isAdm ? 'صلاحيات كاملة: إدارة الأسطول، الحسابات، الخزنة، والشحنات' : 'صلاحيات تشغيلية',
                 avatar: userAvatar,
                 status: found.status || 'available',
@@ -964,7 +979,7 @@
         window.deletePostByAdmin = async function(postId) {
             if (confirm("🛡️ (صلاحيات المدير): هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
                 try {
-                    await deleteDoc(doc(collection(db, 'communityPosts'), postId));
+                    await deleteDoc(doc(db, 'communityPosts', postId));
                     alert("✔ تم حذف المنشور بنجاح.");
                 } catch(e) {
                     alert("خطأ في الحذف: " + e.message);
@@ -979,7 +994,7 @@
                     if (!post) return;
                     let comments = [...(post.comments || [])];
                     comments.splice(commentIndex, 1);
-                    await updateDoc(doc(collection(db, 'communityPosts'), postId), { comments: comments });
+                    await updateDoc(doc(db, 'communityPosts', postId), { comments: comments });
                 } catch(e) {
                     alert("خطأ في حذف التعليق: " + e.message);
                 }
@@ -1108,7 +1123,7 @@
         window.deleteChatMessage = async function(msgId) {
             if(confirm("🛡️ حذف هذه الرسالة من الشات العام؟")) {
                 try {
-                    await deleteDoc(doc(collection(db, 'chat'), msgId));
+                    await deleteDoc(doc(db, 'chat', msgId));
                 } catch(e) {}
             }
         }
@@ -1415,7 +1430,7 @@
         }
 
         window.votePoll = async function(postId, optionIndex) {
-            const postRef = doc(collection(db, 'communityPosts'), postId);
+            const postRef = doc(db, 'communityPosts', postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
@@ -1444,7 +1459,7 @@
             const popup = document.getElementById(`reactionPicker_${postId}`);
             if(popup) popup.classList.remove('active');
 
-            const postRef = doc(collection(db, 'communityPosts'), postId);
+            const postRef = doc(db, 'communityPosts', postId);
             const docSnap = await getDoc(postRef);
             if(!docSnap.exists()) return;
             const data = docSnap.data();
@@ -1534,7 +1549,7 @@
             });
 
             try {
-                await updateDoc(doc(collection(db, 'communityPosts'), postId), { comments: comments });
+                await updateDoc(doc(db, 'communityPosts', postId), { comments: comments });
                 input.value = "";
                 clearCommentMedia(postId);
             } catch(e) {
@@ -1636,7 +1651,7 @@
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <div style="width:24px; height:24px; border-radius:50%; background-size:cover; background-position:center; background-color:var(--bg-color); border:1px solid var(--border-color); ${c.avatar ? 'background-image:url(\''+c.avatar+'\'); background-size: cover; background-position: center;' : ''}">${c.avatar ? '' : '👤'}</div>
                                 <div style="flex:1;"><strong>${c.author}:</strong> ${c.text}</div>
-                                ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}', ${cIdx})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
+                                ${canDeleteComment ? `<button onclick="deleteCommentByAdmin('${p.id}',${cIdx})" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:0.75rem;" title="حذف التعليق">🗑️</button>` : ''}
                             </div>
                             ${commentMediaHtml}
                         </div>
@@ -1699,49 +1714,46 @@
         }
 
         function initRealtimeFeed() {
-    if (feedUnsubscribe) feedUnsubscribe();
-    
-    // جلب منشورات الشركة بدون شرط الترتيب المعقد لضمان سرعة الاستجابة وعدم الحاجة لفهارس معقدة
-    const qFeed = query(
-        collection(db, 'communityPosts'),
-        where('companyId', '==', currentCompanyId),
-        limit(50)
-    );
-
-    feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
-        try {
-            cachedPosts = [];
-            snapshot.forEach(d => {
-                cachedPosts.push({ id: d.id, ...d.data() });
-            });
+            if (feedUnsubscribe) feedUnsubscribe();
             
-            // ترتيب المنشورات برمجياً بالوقت
-            cachedPosts.sort((a, b) => {
-                let timeA = 0;
-                let timeB = 0;
-                if (a.timestamp && typeof a.timestamp.toMillis === 'function') {
-                    timeA = a.timestamp.toMillis();
-                } else if (a.timestamp && a.timestamp.seconds) {
-                    timeA = a.timestamp.seconds * 1000;
+            const qFeed = query(
+                collection(db, 'communityPosts'),
+                where('companyId', '==', currentCompanyId),
+                limit(50)
+            );
+
+            feedUnsubscribe = onSnapshot(qFeed, (snapshot) => {
+                try {
+                    cachedPosts = [];
+                    snapshot.forEach(d => {
+                        cachedPosts.push({ id: d.id, ...d.data() });
+                    });
+                    
+                    cachedPosts.sort((a, b) => {
+                        let timeA = 0;
+                        let timeB = 0;
+                        if (a.timestamp && typeof a.timestamp.toMillis === 'function') {
+                            timeA = a.timestamp.toMillis();
+                        } else if (a.timestamp && a.timestamp.seconds) {
+                            timeA = a.timestamp.seconds * 1000;
+                        }
+                        if (b.timestamp && typeof b.timestamp.toMillis === 'function') {
+                            timeB = b.timestamp.toMillis();
+                        } else if (b.timestamp && b.timestamp.seconds) {
+                            timeB = b.timestamp.seconds * 1000;
+                        }
+                        return timeB - timeA;
+                    });
+
+                    cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
+                    filterWallPosts();
+                } catch(err) {
+                    console.error("خطأ معالجة المنشورات:", err);
                 }
-                if (b.timestamp && typeof b.timestamp.toMillis === 'function') {
-                    timeB = b.timestamp.toMillis();
-                } else if (b.timestamp && b.timestamp.seconds) {
-                    timeB = b.timestamp.seconds * 1000;
-                }
-                return timeB - timeA;
+            }, (error) => {
+                console.error("خطأ جلب المنشورات من السحابة:", error);
             });
-
-            cachedPosts.sort((a, b) => (b.isPinned === true) - (a.isPinned === true));
-            filterWallPosts();
-        } catch(err) {
-            console.error("خطأ معالجة المنشورات:", err);
         }
-    }, (error) => {
-        console.error("خطأ جلب المنشورات من السحابة:", error);
-    });
-}
-
 
         window.onload = function() {
             initCloudSession();
