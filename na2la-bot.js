@@ -59,40 +59,107 @@
             --warning-color: #fbbf24;
             --danger-color: #f87171;
         }
-        .admin-only-section { display: none; }
-        @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        @keyframes floatAnim { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        /* إخفاء عناصر الإدارة افتراضياً ليتم التحكم بها برمجياً عبر الـ JS */
+        .admin-only-section {
+            display: none;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        @keyframes floatAnim {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
         .sync-account-hub-btn {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.3);
-            padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: bold;
-            cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35); font-family: 'Cairo', sans-serif;
-            white-space: nowrap; direction: rtl;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Cairo', sans-serif;
+            white-space: nowrap;
+            direction: rtl;
         }
-        .sync-account-hub-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5); }
-        @keyframes spinBolt { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .sync-account-hub-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+        }
+        @keyframes spinBolt {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         .spinning { animation: spinBolt 0.6s linear infinite; }
         .chat-card {
-            background: var(--bg-color); border: 1px solid var(--border-color);
-            border-right: 4px solid var(--primary-color); padding: 12px;
-            border-radius: 10px; margin-top: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            font-family: 'Cairo', sans-serif; direction: rtl; text-align: right;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-right: 4px solid var(--primary-color);
+            padding: 12px;
+            border-radius: 10px;
+            margin-top: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            font-family: 'Cairo', sans-serif;
+            direction: rtl;
+            text-align: right;
         }
         .penta-grid-box {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; font-family: 'Cairo', sans-serif;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 8px 0;
+            font-family: 'Cairo', sans-serif;
         }
         .penta-card {
-            background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        .penta-card-title { font-size: 9px; opacity: 0.8; margin-bottom: 2px; }
-        .penta-card-value { font-size: 11px; font-weight: bold; color: var(--accent-color); }
+        .penta-card-title {
+            font-size: 9px;
+            opacity: 0.8;
+            margin-bottom: 2px;
+        }
+        .penta-card-value {
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
         .bot-data-table {
-            width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px;
-            background: var(--card-bg); border-radius: 8px; overflow: hidden; direction: rtl; text-align: right;
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 11px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            direction: rtl;
+            text-align: right;
         }
-        .bot-data-table th, .bot-data-table td { border: 1px solid var(--border-color); padding: 6px 8px; text-align: center; }
-        .bot-data-table th { background: var(--primary-color); color: white; font-weight: bold; }
+        .bot-data-table th, .bot-data-table td {
+            border: 1px solid var(--border-color);
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .bot-data-table th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: bold;
+        }
+        #na2laBotModal::-webkit-scrollbar { width: 5px; }
+        #na2laBotModal::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+        #mainBotMenuDropdownMenu::-webkit-scrollbar { width: 5px; }
+        #mainBotMenuDropdownMenu::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
     `;
     document.head.appendChild(styleEl);
 
@@ -140,6 +207,19 @@
                                 <button onclick="toggleBotContinuousVoice(); closeMainBotMenus();" id="botContinuousBtn" style="background: var(--card-bg); color: #38bdf8; border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; width: 100%; display: block;">🎤 الاستماع الصوتي المستمر</button>
                                 <button onclick="toggleBotVoiceOutput(); closeMainBotMenus();" id="botVoiceToggleBtn" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; width: 100%; display: block;">🔊 تبديل الناطق الصوتي (مفعل)</button>
                                 <button onclick="clearBotChat(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--danger-color); border: 1px solid var(--danger-color); padding: 6px 10px; border-radius: 7px; text-align: right; cursor: pointer; font-weight: bold; font-family: 'Cairo', sans-serif; width: 100%; display: block;">🗑️ مسح الذاكرة الحالية</button>
+                            </div>
+
+                            <div style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--accent-color);">
+                                ⚡ إجراءات واستعلامات سريعة
+                            </div>
+                            <div id="menuDropdownQuickActionsList" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px;">
+                                <button onclick="sendBotQuickQuery('شحناتي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--accent-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📦 الشحنات</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('الجدول الخماسي'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📊 الخماسي</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('الفواتير'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🧾 الفواتير</button>
+                                <button class="admin-only-section" onclick="sendBotQuickQuery('صيانة الشاحنات'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🛠️ الصيانة</button>
+                                <button onclick="sendBotQuickQuery('معلومات صلاحية اشتراك شركتك'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--border-color); color: var(--warning-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">💳 الاشتراك</button>
+                                <button onclick="sendBotQuickQuery('اختبار القيادة'); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--purple-color); color: var(--purple-color); font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">🎓 الاختبار</button>
+                                <button onclick="exportChatArchiveData(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid #38bdf8; color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 6px; cursor: pointer; font-weight: bold;">📤 الأرشيف</button>
                             </div>
                         </div>
                     </div>
@@ -226,7 +306,7 @@
     });
 
     window.promptVisitorShipmentQuery = function() {
-        let shipmentId = prompt('أدخل رقم الشحنة المراد الاستعلام عنها (مثال: 1790022410781):');
+        let shipmentId = prompt('أدخل رقم الشحنة المراد الاستعلام عنها (مثال: 178830):');
         if (shipmentId && shipmentId.trim() !== '') {
             sendBotQuickQuery(shipmentId.trim());
         }
@@ -489,6 +569,8 @@
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
+    
+    // متغير لتخزين وقت آخر جلب لضمان عدم تكرار القراءات
     window._lastFirebaseFetchTime = 0;
 
     const driverQuizzes = [
@@ -497,6 +579,12 @@
             options: ["التوقف فوراً جانب الطريق وتأمين المقطورة", "زيادة السرعة للوصول لأقرب ورشة", "الضغط بقوة متكررة على دواسة البنزين", "إيقاف المحرك أثناء السرعة العالية"],
             correct: 0,
             explain: "انخفاض ضغط الهواء يحتم التوقف الفوري الآمن وتأمين الشاحنة لتجنب انغلاق الفرامل التلقائي (Spring Brakes)."
+        },
+        {
+            q: "كيف يجب توزيع أوزان البضائع الثقيلة على سطح المقطورة؟",
+            options: ["وضع كل الثقل في الجزء الخلفي جداً", "توزيع الثقل بانتظام فوق المحاور والمركز", "ترك الجزء الأمامي فارغاً تماماً", "تجميع كل الثقل في جهة واحدة لليمين"],
+            correct: 1,
+            explain: "التوزيع المتوازن للبضائع فوق محاور الشاحنة يضمن الثبات في المنحنيات ويمنع انزلاق المقطورة (Jackknifing)."
         }
     ];
 
@@ -579,6 +667,7 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
+    // [إصلاح رئيسي]: دالة الجلب المحدثة التي تتيح للزائر جلب الشحنات للتتبع برقمها
     window.fetchRealFirebaseData = async function(force = false) {
         let now = Date.now();
         if (!force && window._lastFirebaseFetchTime && (now - window._lastFirebaseFetchTime < 180000)) {
@@ -592,16 +681,9 @@
                 
                 if (tenant.activeRole === 'visitor') {
                     try {
-                        const shipmentsSnap = await db.collection('shipments').limit(300).get();
+                        const shipmentsSnap = await db.collection('shipments').limit(200).get();
                         if (!shipmentsSnap.empty) {
                             realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        }
-                    } catch(e) {}
-                    try {
-                        const ordersSnap = await db.collection('orders').limit(300).get();
-                        if (!ordersSnap.empty) {
-                            let ordersList = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            realFirebaseShipments = [...realFirebaseShipments, ...ordersList];
                         }
                     } catch(e) {}
                     window._lastFirebaseFetchTime = now;
@@ -618,7 +700,7 @@
                 } catch(e) {}
 
                 try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', companyId).limit(200).get();
+                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', companyId).limit(100).get();
                     if (!shipmentsSnap.empty) {
                         realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
@@ -709,9 +791,10 @@
         return subData;
     };
 
+    // [إصلاح رئيسي]: دالة مطابقة الشركة للزوار
     window.matchesCompany = function(item) {
         let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return true;
+        if (tenant.activeRole === 'visitor') return true; // السماح للزائر بمطابقة البحث برقم الشحنة لأي شركة
         if (!item) return false;
         let itemComp = String(item.companyId || 'company_main').trim().toLowerCase();
         let activeComp = String(tenant.activeCompanyId || 'company_main').trim().toLowerCase();
@@ -720,7 +803,9 @@
 
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return [];
+        if (tenant.activeRole === 'visitor') {
+            return [];
+        }
 
         let allShipments = realFirebaseShipments.length > 0 ? realFirebaseShipments : (window.appData?.shipments || []);
         let companyFiltered = allShipments.filter(matchesCompany);
@@ -834,6 +919,7 @@
             visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
         }
 
+        // إظهار أقسام الإدارة للمدير وإخفاها للسائقين باستخدام block أو none
         document.querySelectorAll('.admin-only-section').forEach(el => {
             el.style.display = isManager ? 'block' : 'none';
         });
@@ -849,6 +935,7 @@
     };
 
     window.updateSyncButtonBadge = function() {
+        let tenant = getActiveTenantContext();
         const badgeEl = document.getElementById('btn-sync-badge');
         if (badgeEl) {
             const syncedShipments = getIsolatedUserShipments();
@@ -878,7 +965,7 @@
         userTitleSpan.innerText = isVisitorRole() ? `👤 زائر كريم` : `👤 ${tenant.activeDriver}`;
         
         if (isVisitorRole()) {
-            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: var(--warning-color);">اكتب رقم شحنتك (مثل 1790022410781) في صندوق الدردشة لتتبعها فوراً.</div>`;
+            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: var(--warning-color);">اكتب رقم شحنتك (مثل 178830) في صندوق الدردشة لتتبعها فوراً.</div>`;
         } else {
             const syncedShipments = getIsolatedUserShipments();
             listContainer.innerHTML = syncedShipments.length === 0 ? `<div style="padding: 6px; text-align: center;">لا توجد شحنات معزولة</div>` :
@@ -908,8 +995,9 @@
         if (dot) { dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444'; }
     };
 
+    // التشغيل الفوري لفرض قيود الرتبة قبل جلب البيانات
     syncPlatformUserData();
-    fetchRealFirebaseData(true).then(() => { syncPlatformUserData(); });
+    fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
 
     let isBotVoiceOutputOn = true, isBotContinuousActive = false;
 
@@ -920,7 +1008,7 @@
         modal.style.display = isHidden ? 'flex' : 'none';
         if (isHidden) {
             syncPlatformUserData();
-            fetchRealFirebaseData(true).then(() => {
+            fetchRealFirebaseData().then(() => {
                 syncPlatformUserData();
                 loadChatHistory();
             });
@@ -979,7 +1067,7 @@
         if (!container) return;
 
         let welcomeText = tenant.activeRole === 'visitor' ? 
-            `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: 1790022410781...) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
+            `مرحباً بك يا <b>زائرنا الكريم</b>. يرجى كتابة <b>رقم شحنتك</b> مباشرة (مثل: 178830...) هنا في المربع أدناه لتتبع حالة شحنتك بدقة.` :
             `مرحباً بك يا <b>${tenant.activeDriver}</b> (${tenant.activeRole === 'driver' ? 'سائق' : tenant.activeRole}). تم تفعيل العزل التام وتتبع الشحنات.`;
 
         container.innerHTML = `<div style="background: var(--bg-color); padding: 12px 16px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${welcomeText}</div>`;
@@ -1030,7 +1118,6 @@
         }
     };
 
-    // [إصلاح شامل وفوري]: دالة البحث المباشر في Firebase (المجموعات: shipments و orders) ومختلف الحقول
     window.sendBotQuickQuery = async function(customText = null) {
         let inputEl = document.getElementById('na2laBotInput');
         let container = document.getElementById('na2laBotMessages');
@@ -1042,66 +1129,39 @@
         if (inputEl && !customText) inputEl.value = "";
         container.scrollTop = container.scrollHeight;
 
-        await fetchRealFirebaseData(true);
+        await fetchRealFirebaseData();
         let tenant = syncPlatformUserData();
         let botReply = '';
         let lower = text.toLowerCase();
-        let queryStr = text.trim();
 
+        let cleanedQuery = text.replace(/[^\d]/g, '');
         let matchedShipment = null;
-
-        // 1. البحث في المصفوفة المخزنة محلياً أولاً
-        matchedShipment = (realFirebaseShipments || []).find(s => {
-            let sId = String(s.id || '').trim();
-            let sNum = String(s.shipmentNumber || s.orderNumber || s.trackingNumber || '').trim();
-            let sPhone = String(s.phone || '').trim();
-            return sId === queryStr || sNum === queryStr || sId.includes(queryStr) || sNum.includes(queryStr) || sPhone === queryStr;
-        });
-
-        // 2. البحث المباشر والفوري في قاعدة بيانات Firestore (مجموعات shipments و orders)
-        if (!matchedShipment && typeof firebase !== 'undefined' && firebase.firestore) {
-            try {
-                const db = firebase.firestore();
-                const collectionsToSearch = ['shipments', 'orders'];
-
-                for (let colName of collectionsToSearch) {
-                    // أ) البحث بمعرف الوثيقة (Document ID)
-                    let docRef = await db.collection(colName).doc(queryStr).get();
-                    if (docRef.exists) {
-                        matchedShipment = { id: docRef.id, ...docRef.data() };
-                        break;
-                    }
-
-                    // ب) البحث في الحقول المختلفة (shipmentNumber, orderNumber, trackingNumber, id)
-                    for (let fieldName of ['shipmentNumber', 'orderNumber', 'trackingNumber', 'id']) {
-                        let qSnap = await db.collection(colName).where(fieldName, '==', queryStr).limit(1).get();
-                        if (!qSnap.empty) {
-                            matchedShipment = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
-                            break;
-                        }
-                    }
-                    if (matchedShipment) break;
-                }
-            } catch(err) {
-                console.error("Firestore direct query error:", err);
-            }
+        if (cleanedQuery.length >= 4) {
+            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && (String(s.id).trim() === cleanedQuery || String(s.id).includes(cleanedQuery)));
+        }
+        if (!matchedShipment) {
+            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && String(s.id).toLowerCase() === text.toLowerCase());
         }
 
         if (matchedShipment) {
             botReply = `
-                📦 <strong>نتيجة تتبع الشحنة رقم (${matchedShipment.id || queryStr}):</strong>
+                📦 <strong>نتيجة تتبع الشحنة رقم (${matchedShipment.id}):</strong>
                 <div class="chat-card">
-                    👤 <b>العميل:</b> ${matchedShipment.name || matchedShipment.client || matchedShipment.clientName || '-'}<br>
-                    📍 <b>العنوان:</b> ${matchedShipment.address || matchedShipment.destination || '-'}<br>
-                    📦 <b>الحمولة:</b> ${matchedShipment.item || matchedShipment.cargo || matchedShipment.description || '-'}<br>
-                    💰 <b>الأجرة:</b> ${matchedShipment.price || matchedShipment.total || 0} ج.م<br>
+                    👤 <b>العميل:</b> ${matchedShipment.name || '-'}<br>
+                    📍 <b>العنوان:</b> ${matchedShipment.address || '-'}<br>
+                    📦 <b>الحمولة:</b> ${matchedShipment.item || '-'}<br>
+                    💰 <b>الأجرة:</b> ${matchedShipment.price || 0} ج.م<br>
                     📌 <b>حالة الشحنة:</b> <b style="color:var(--accent-color);">${matchedShipment.status || 'نشطة'}</b><br>
-                    📅 <b>التاريخ:</b> ${matchedShipment.date || matchedShipment.timestamp || '-'}
+                    📅 <b>التاريخ:</b> ${matchedShipment.date || '-'}
                 </div>
             `;
         }
         else if (tenant.activeRole === 'visitor') {
-            botReply = `⚠️ عذراً يا زائرنا الكريم، لم يتم العثور على أي شحنة مسجلة برقم البحث ("${text}"). يرجى التأكد من رقم الشحنة الصحيح والمحاولة مرة أخرى.`;
+            if (lower.includes('كيف') || lower.includes('شحنة') || lower.includes('تتبع')) {
+                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
+            } else {
+                botReply = `⚠️ عذراً يا زائرنا الكريم، لم يتم العثور على شحنة بهذا الرقم ("${text}"). يرجى التحقق من رقم الشحنة الصحيح والمحاولة مرة أخرى.`;
+            }
         }
         else if (lower.includes('اختبار القيادة')) {
             let randQuiz = driverQuizzes[Math.floor(Math.random() * driverQuizzes.length)];
