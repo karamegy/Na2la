@@ -2068,54 +2068,43 @@ function renderAdminPendingCashRequests() {
 
         let activeListeners = {};
         
-        // دالة التهيئة المحسنة والمقيدة لتجنب القراءات المفاجئة والضخمة
         function initRealtimeListeners() {
-            if (isListenersInitialized) return;
-            isListenersInitialized = true;
+    if (isListenersInitialized) return;
+    isListenersInitialized = true;
 
-            const collections = ['shipments', 'deferredInvoices', 'consolidatedInvoices', 'treasury', 'expenses', 'drivers', 'posts', 'communityPosts', 'chat', 'docs', 'biometricCredentials', 'trucks', 'customers'];
-            
-            collections.forEach(colName => {
-                // تطبيق الفلترة الصارمة بـ where و limit لتوفير الكوتا والقراءات تماماً
-                let queryRef = db.collection(colName).where('companyId', '==', currentCompanyId).limit(100);
-                
-                if (activeListeners[colName]) {
-                    activeListeners[colName]();
-                }
-
-                activeListeners[colName] = queryRef.onSnapshot({ includeMetadataChanges: false }, snapshot => {
-                    let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    
-                    appData[colName] = rawData;
-                    
-                    scheduleSmartRender();
-
-                    if (typeof renderChatMessages === 'function') renderChatMessages();
-                    if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
-                    if (document.getElementById('deferred-invoices-tab').classList.contains('active')) loadDeferredInvoicesTable();
-                    if (document.getElementById('reports-tab').classList.contains('active')) {
-                        renderMemberSubscriptionsList();
-                        renderAdminPendingCashRequests();
-                        renderCompanyAdminSubscriptionView();
-                    }
-                    if (document.getElementById('companies-tab').classList.contains('active')) {
-                        renderCompaniesManagementTable();
-                    }
-                }, error => {
-                    console.error(`خطأ مزامنة المجموعات الآمنة: ${colName}`, error);
-                });
-            });
-
-            if (activeListeners['systemSettings']) {
-                activeListeners['systemSettings']();
-            }
-            activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
-                if (doc.exists && doc.data().newsText) {
-                    appData.newsText = doc.data().newsText;
-                    renderRSSTicker();
-                }
-            });
+    // تشغيل المزامنة الفورية للبيانات الحرجة فقط لتسريع الأداء بشكل جذري
+    const coreCollections = ['shipments', 'drivers', 'chat', 'deferredInvoices'];
+    
+    coreCollections.forEach(colName => {
+        let queryRef = db.collection(colName).where('companyId', '==', currentCompanyId).limit(50);
+        
+        if (activeListeners[colName]) {
+            activeListeners[colName]();
         }
+
+        activeListeners[colName] = queryRef.onSnapshot(snapshot => {
+            let rawData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            appData[colName] = rawData;
+            
+            scheduleSmartRender();
+            if (typeof renderChatMessages === 'function') renderChatMessages();
+            if (typeof updateGlobalChatNotificationBadge === 'function') updateGlobalChatNotificationBadge();
+        }, error => {
+            console.error(`خطأ في مزامنة مجموعة ${colName}:`, error);
+        });
+    });
+
+    // مزامنة إعدادات النظام العامة
+    if (!activeListeners['systemSettings']) {
+        activeListeners['systemSettings'] = db.collection('systemSettings').doc('config').onSnapshot(doc => {
+            if (doc.exists && doc.data().newsText) {
+                appData.newsText = doc.data().newsText;
+                renderRSSTicker();
+            }
+        });
+    }
+}
+
 
         function renderMemberSubscriptionsList() {
             if (loggedInDriverName !== 'المدير') return;
@@ -3294,42 +3283,44 @@ function renderAdminPendingCashRequests() {
         }
 
         function getCurrentDriver() {
-            let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
-            let drv = null;
+    let activeTargetName = viewingProfileName ? viewingProfileName : loggedInDriverName;
+    let drv = null;
 
-            if (appData.drivers && appData.drivers.length > 0) {
-                if (activeTargetName === 'المدير') {
-                    drv = appData.drivers.find(d => d.name === 'المدير');
-                }
-                if (!drv) {
-                    drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
-                }
-            }
-
-            if (!drv) {
-                drv = {
-                    id: 'default_admin_id',
-                    companyId: currentCompanyId,
-                    companyName: 'أسطورة الطريق الرئيسية',
-                    name: activeTargetName,
-                    phone: activeTargetName === 'كرم عجاج' ? '+201114099799' : '',
-                    role: (activeTargetName === 'كرم عجاج' || loggedInDriverName === 'المدير') ? 'admin' : 'سائق',
-                    title: (activeTargetName === 'كرم عجاج' || loggedInDriverName === 'كرم عجاج') ? 'مدير عام النظام' : 'أسطورة الطريق',
-                    status: 'متاح 🟢',
-                    avatar: '',
-                    cover: '',
-                    coverHeight: 180,
-                    advances: 0
-                };
-            }
-
-            if (drv.name === 'كرم عجاج' || loggedInDriverName === 'كرم عجاج') {
-                drv.role = 'admin';
-                drv.title = 'مدير عام النظام';
-            }
-
-            return drv;
+    if (appData.drivers && appData.drivers.length > 0) {
+        if (activeTargetName === 'المدير') {
+            drv = appData.drivers.find(d => d.name === 'المدير');
         }
+        if (!drv) {
+            drv = appData.drivers.find(d => d.name && d.name.trim() === activeTargetName.trim());
+        }
+    }
+
+    if (!drv) {
+        drv = {
+            id: 'default_driver_id',
+            companyId: currentCompanyId,
+            companyName: 'أسطورة الطريق الرئيسية',
+            name: activeTargetName,
+            phone: '',
+            role: 'سائق',
+            title: 'سائق معتمد',
+            status: 'متاح 🟢',
+            avatar: '',
+            cover: '',
+            coverHeight: 180,
+            advances: 0
+        };
+    }
+
+    // تصحيح جذري: عدم فرض صلاحية الأدمن إلا إذا كان السائق المستهدف هو كرم عجاج حصرياً
+    if (drv.name === 'كرم عجاج') {
+        drv.role = 'admin';
+        drv.title = 'مدير عام النظام';
+    }
+
+    return drv;
+}
+
 
         function renderMyAccount() {
             let drv = getCurrentDriver();
