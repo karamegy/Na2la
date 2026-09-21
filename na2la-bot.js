@@ -59,7 +59,6 @@
             --warning-color: #fbbf24;
             --danger-color: #f87171;
         }
-        /* إخفاء عناصر الإدارة افتراضياً ليتم التحكم بها برمجياً عبر الـ JS */
         .admin-only-section {
             display: none;
         }
@@ -179,11 +178,12 @@
                         </button>
                         <div id="mainBotMenuDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; width: 290px; max-height: 380px; overflow-y: auto; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-3d); z-index: 2147483648; padding: 12px; color: var(--text-color); font-size: 11px; text-align: right; direction: rtl;">
                             
-                            <div id="visitorMenuSection" style="display: none; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+                            <div id="visitorMenuSection" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px;">
                                 <div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--accent-color);">
                                     📦 استعلام الشحنات للزوار
                                 </div>
                                 <button onclick="promptVisitorShipmentQuery(); closeMainBotMenus();" style="background: var(--card-bg); border: 1px solid var(--accent-color); color: var(--accent-color); font-size: 11px; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-weight: bold; width: 100%; text-align: right; display: block;">🔍 استعلام عن شحنة برقمها</button>
+                                <button onclick="renderShipmentsInsideBot(); closeMainBotMenus();" style="background: var(--card-bg); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 7px; padding: 7px 10px; font-size: 11px; text-align: right; cursor: pointer; font-weight: bold; width: 100%; display: block;">📦 عرض الشحنات المتاحة</button>
                             </div>
 
                             <div id="managerMenuSectionHeader" style="font-weight: bold; margin-bottom: 6px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; color: var(--warning-color); display: flex; align-items: center; gap: 5px;">
@@ -342,16 +342,10 @@
         let container = document.getElementById('na2laBotMessages');
         if (!container) return;
 
-        if (tenant.activeRole === 'visitor') {
-            container.innerHTML += `<div style="background: var(--bg-color); color: var(--warning-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color);">⚠️ الزائر يمكنه تتبع شحنة برقمها مباشرة في صندوق الدردشة.</div>`;
-            container.scrollTop = container.scrollHeight;
-            return;
-        }
-
         let shipments = getIsolatedUserShipments();
-        let replyHtml = `📦 <b>عرض الشحنات المباشر (عدد: ${shipments.length}):</b>`;
+        let replyHtml = `📦 <b>عرض الشحنات المتاحة (عدد: ${shipments.length}):</b>`;
         if (shipments.length === 0) {
-            replyHtml += `<div class="chat-card">لا توجد شحنات مسجلة حالياً ضمن نطاق شركتك.</div>`;
+            replyHtml += `<div class="chat-card">لا توجد شحنات مسجلة حالياً في النظام.</div>`;
         } else {
             replyHtml += `<table class="bot-data-table"><tr><th>رقم الشحنة</th><th>العميل</th><th>الحالة</th><th>القيمة</th></tr>`;
             shipments.forEach(s => {
@@ -362,7 +356,7 @@
 
         container.innerHTML += `<div style="background: var(--bg-color); color: var(--text-color); padding: 10px 14px; border-radius: 12px; align-self: flex-end; border: 1px solid var(--border-color); text-align: right; direction: rtl;">${replyHtml}</div>`;
         container.scrollTop = container.scrollHeight;
-        speakBotReplyText("حسناً، تم عرض شحنات شركتك مباشرة في البوت.");
+        speakBotReplyText("حسناً، تم عرض الشحنات المتاحة مباشرة في البوت.");
     };
 
     window.renderPentaTableInsideBot = async function() {
@@ -569,8 +563,6 @@
     window.realFirebaseAppData = {};
     window.lastBotContext = null;
     window.isTempChatActive = false;
-    
-    // متغير لتخزين وقت آخر جلب لضمان عدم تكرار القراءات
     window._lastFirebaseFetchTime = 0;
 
     const driverQuizzes = [
@@ -667,7 +659,6 @@
         return { activeDriver, activeCompanyId, activeCompanyName, activeRole };
     };
 
-    // [إصلاح رئيسي]: دالة الجلب المحدثة التي تتيح للزائر جلب الشحنات للتتبع برقمها
     window.fetchRealFirebaseData = async function(force = false) {
         let now = Date.now();
         if (!force && window._lastFirebaseFetchTime && (now - window._lastFirebaseFetchTime < 180000)) {
@@ -679,13 +670,15 @@
                 const db = firebase.firestore();
                 let tenant = getActiveTenantContext();
                 
+                // جلب الشحنات بشكل عام للزوار أو المستخدمين للتتبع الدقيق
+                try {
+                    const shipmentsSnap = await db.collection('shipments').limit(200).get();
+                    if (!shipmentsSnap.empty) {
+                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }
+                } catch(e) {}
+
                 if (tenant.activeRole === 'visitor') {
-                    try {
-                        const shipmentsSnap = await db.collection('shipments').limit(200).get();
-                        if (!shipmentsSnap.empty) {
-                            realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        }
-                    } catch(e) {}
                     window._lastFirebaseFetchTime = now;
                     return;
                 }
@@ -696,13 +689,6 @@
                     const driversSnap = await db.collection('drivers').where('companyId', '==', companyId).limit(50).get();
                     if (!driversSnap.empty) {
                         realFirebaseDrivers = driversSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    }
-                } catch(e) {}
-
-                try {
-                    const shipmentsSnap = await db.collection('shipments').where('companyId', '==', companyId).limit(100).get();
-                    if (!shipmentsSnap.empty) {
-                        realFirebaseShipments = shipmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }
                 } catch(e) {}
 
@@ -791,23 +777,24 @@
         return subData;
     };
 
-    // [إصلاح رئيسي]: دالة مطابقة الشركة للزوار
     window.matchesCompany = function(item) {
         let tenant = getActiveTenantContext();
-        if (tenant.activeRole === 'visitor') return true; // السماح للزائر بمطابقة البحث برقم الشحنة لأي شركة
+        if (tenant.activeRole === 'visitor') return true;
         if (!item) return false;
         let itemComp = String(item.companyId || 'company_main').trim().toLowerCase();
         let activeComp = String(tenant.activeCompanyId || 'company_main').trim().toLowerCase();
         return itemComp === activeComp;
     };
 
+    // [تعديل هام للزوار]: السماح بجلب الشحنات عند طلبها للتتبع أو الاستعراض
     window.getIsolatedUserShipments = function() {
         let tenant = getActiveTenantContext();
+        let allShipments = realFirebaseShipments.length > 0 ? realFirebaseShipments : (window.appData?.shipments || []);
+        
         if (tenant.activeRole === 'visitor') {
-            return [];
+            return allShipments;
         }
 
-        let allShipments = realFirebaseShipments.length > 0 ? realFirebaseShipments : (window.appData?.shipments || []);
         let companyFiltered = allShipments.filter(matchesCompany);
 
         if (tenant.activeRole === 'admin' || tenant.activeRole === 'supervisor') {
@@ -919,7 +906,6 @@
             visitorMenuSec.style.display = isVisitor ? 'flex' : 'none';
         }
 
-        // إظهار أقسام الإدارة للمدير وإخفاها للسائقين باستخدام block أو none
         document.querySelectorAll('.admin-only-section').forEach(el => {
             el.style.display = isManager ? 'block' : 'none';
         });
@@ -935,12 +921,11 @@
     };
 
     window.updateSyncButtonBadge = function() {
-        let tenant = getActiveTenantContext();
         const badgeEl = document.getElementById('btn-sync-badge');
         if (badgeEl) {
             const syncedShipments = getIsolatedUserShipments();
             badgeEl.innerText = syncedShipments.length;
-            badgeEl.style.display = (syncedShipments.length > 0 && !isVisitorRole()) ? 'inline-block' : 'none';
+            badgeEl.style.display = (syncedShipments.length > 0) ? 'inline-block' : 'none';
         }
     };
 
@@ -964,13 +949,10 @@
 
         userTitleSpan.innerText = isVisitorRole() ? `👤 زائر كريم` : `👤 ${tenant.activeDriver}`;
         
-        if (isVisitorRole()) {
-            listContainer.innerHTML = `<div style="padding: 6px; text-align: center; color: var(--warning-color);">اكتب رقم شحنتك (مثل 178830) في صندوق الدردشة لتتبعها فوراً.</div>`;
-        } else {
-            const syncedShipments = getIsolatedUserShipments();
-            listContainer.innerHTML = syncedShipments.length === 0 ? `<div style="padding: 6px; text-align: center;">لا توجد شحنات معزولة</div>` :
-                syncedShipments.slice(0, 5).map(s => `<div style="padding: 5px 8px; background:var(--card-bg); margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="renderShipmentsInsideBot()">📦 ${s.id || 'شحنة'} (${s.status || 'نشطة'}) ⬅</div>`).join('');
-        }
+        const syncedShipments = getIsolatedUserShipments();
+        listContainer.innerHTML = syncedShipments.length === 0 ? `<div style="padding: 6px; text-align: center;">لا توجد شحنات متاحة</div>` :
+            syncedShipments.slice(0, 5).map(s => `<div style="padding: 5px 8px; background:var(--card-bg); margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="renderShipmentsInsideBot()">📦 #${s.id || 'شحنة'} (${s.status || 'نشطة'}) ⬅</div>`).join('');
+        
         dropdown.style.display = 'block';
     };
 
@@ -995,7 +977,6 @@
         if (dot) { dot.style.background = currentStatus === 'active' ? '#10b981' : '#ef4444'; }
     };
 
-    // التشغيل الفوري لفرض قيود الرتبة قبل جلب البيانات
     syncPlatformUserData();
     fetchRealFirebaseData().then(() => { syncPlatformUserData(); });
 
@@ -1137,10 +1118,10 @@
         let cleanedQuery = text.replace(/[^\d]/g, '');
         let matchedShipment = null;
         if (cleanedQuery.length >= 4) {
-            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && (String(s.id).trim() === cleanedQuery || String(s.id).includes(cleanedQuery)));
+            matchedShipment = (realFirebaseShipments || []).find(s => (String(s.id).trim() === cleanedQuery || String(s.id).includes(cleanedQuery)));
         }
         if (!matchedShipment) {
-            matchedShipment = (realFirebaseShipments || []).find(s => matchesCompany(s) && String(s.id).toLowerCase() === text.toLowerCase());
+            matchedShipment = (realFirebaseShipments || []).find(s => String(s.id).toLowerCase() === text.toLowerCase());
         }
 
         if (matchedShipment) {
@@ -1158,7 +1139,7 @@
         }
         else if (tenant.activeRole === 'visitor') {
             if (lower.includes('كيف') || lower.includes('شحنة') || lower.includes('تتبع')) {
-                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> (مثل رقم 178830...) مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
+                botReply = `📦 أهلاً بك يا زائر كريم. لتتبع شحنتك، يرجى كتابة <b>رقم الشحنة</b> مباشرة في صندوق الكتابة أدناه ليقوم النظام بعرض تفاصيلها وحالتها الفورية لك.`;
             } else {
                 botReply = `⚠️ عذراً يا زائرنا الكريم، لم يتم العثور على شحنة بهذا الرقم ("${text}"). يرجى التحقق من رقم الشحنة الصحيح والمحاولة مرة أخرى.`;
             }
