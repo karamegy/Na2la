@@ -17,7 +17,10 @@ const assetsToCache = [
   './world.html',
   './Panda.html',
   './Pandan2la.html',
-  './Com.html'
+  './Com.html',
+  './privacy.html',
+  './robots.txt',
+  './sitemap.xml'
 ];
 
 // تثبيت الخدمة وتخزين الملفات الأساسية
