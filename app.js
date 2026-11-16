@@ -2522,3 +2522,33 @@ function exportToExcel() {
 function clearAll() {
     if (currentUserRole === 'admin' && confirm('تنبيه: إعادة تحميل المنصة؟')) location.reload();
 }
+// جسر المزامنة الفوري بين app.js و na2la-bot.js
+function notifyNa2laBotSync() {
+    window.appData = appData;
+    window.currentCompanyId = currentCompanyId;
+    window.currentUserRole = currentUserRole;
+    window.loggedInDriverName = loggedInDriverName;
+    if (typeof window.syncPlatformUserData === 'function') {
+        window.syncPlatformUserData();
+    }
+}
+
+// ربط تلقائي بدوال الدخول والخروج والتحديث في app.js
+const _origFinishLogin = finishSuccessfulLogin;
+finishSuccessfulLogin = function() {
+    _origFinishLogin.apply(this, arguments);
+    notifyNa2laBotSync();
+};
+
+const _origLockSystem = lockSystem;
+lockSystem = function() {
+    _origLockSystem.apply(this, arguments);
+    notifyNa2laBotSync();
+};
+
+const _origRender = render;
+render = function() {
+    _origRender.apply(this, arguments);
+    notifyNa2laBotSync();
+};
+
