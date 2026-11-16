@@ -2,14 +2,24 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>منصة تواصل السائقين والأسطول الاحترافية - V54 PRO OPTIMIZED</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#007bff">
+    <meta name="theme-color" content="#0f172a">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --bg: #f4f6f9; --card-bg: #fff; --accent: #2563eb; --purple: #8b5cf6; }
-        body { font-family: Tahoma, sans-serif; background-color: var(--bg); margin: 0; padding: 15px; color: #333; padding-bottom: 90px; direction: rtl; }
+        * { -webkit-tap-highlight-color: transparent; }
+        body { 
+            font-family: Tahoma, sans-serif; 
+            background-color: var(--bg); 
+            margin: 0; 
+            padding: 15px; 
+            padding-top: calc(15px + env(safe-area-inset-top, 0px));
+            padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); 
+            color: #333; 
+            direction: rtl; 
+        }
         .comm-container { max-width: 850px; margin: 0 auto; background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
         h2, h3 { text-align: center; color: #222; }
         .status-bar { padding: 10px; margin-bottom: 15px; border-radius: 6px; text-align: center; font-size: 0.9rem; background: #e9ecef; }
@@ -20,9 +30,10 @@
         .btn:hover { opacity: 0.9; }
         .btn-danger { background-color: var(--danger); }
         .btn-success { background-color: var(--success); width: auto; padding: 5px 12px; font-size: 0.85rem; }
+        .btn-share { background-color: #475569; width: auto; padding: 5px 12px; font-size: 0.85rem; }
         .btn-nav { background: #475569; color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; display: inline-block; font-weight: bold; cursor: pointer; border: none; }
         .post-card { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 18px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); position: relative; }
-        .post-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        .post-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 8px; flex-wrap: wrap; gap: 6px; }
         .post-author { font-weight: bold; color: var(--primary); }
         .badge { background: #e2e8f0; color: #475569; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; }
         .badge-emergency { background: #fee2e2; color: #991b1b; }
@@ -31,7 +42,7 @@
         .post-text { margin-bottom: 12px; white-space: pre-wrap; line-height: 1.6; }
         .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; margin-top: 10px; border-radius: 6px; }
         .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-        .post-actions { display: flex; gap: 10px; margin-top: 15px; align-items: center; }
+        .post-actions { display: flex; gap: 8px; margin-top: 15px; align-items: center; flex-wrap: wrap; }
         .comments-section { margin-top: 15px; border-top: 1px dashed #ddd; padding-top: 10px; background: #f8fafc; padding: 10px; border-radius: 6px; }
         .comment-item { font-size: 0.9rem; background: #fff; padding: 8px; border-radius: 4px; margin-bottom: 6px; border: 1px solid #eee; }
     </style>
@@ -100,10 +111,77 @@
     </div>
 </div>
 
+<!-- ربط Capacitor Native -->
+<script src="capacitor.js"></script>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, query, doc, deleteDoc, updateDoc, getDoc, setDoc, limit, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ==========================================
+    // 🔌 جسر Capacitor Native لمنصة التواصل
+    // ==========================================
+    const CapacitorBridge = {
+        isNative: () => typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform(),
+
+        async init() {
+            if (!this.isNative()) return;
+            const { App, StatusBar, SplashScreen } = window.Capacitor.Plugins;
+
+            if (StatusBar) {
+                try {
+                    await StatusBar.setBackgroundColor({ color: '#0f172a' });
+                    await StatusBar.setStyle({ style: 'DARK' });
+                } catch (e) {}
+            }
+
+            if (SplashScreen) {
+                try { await SplashScreen.hide(); } catch (e) {}
+            }
+
+            if (App) {
+                App.addListener('backButton', ({ canGoBack }) => {
+                    if (canGoBack) {
+                        window.history.back();
+                    } else {
+                        window.navigateToPage('index.html');
+                    }
+                });
+            }
+        },
+
+        async vibrate(style = 'LIGHT') {
+            if (this.isNative() && window.Capacitor.Plugins.Haptics) {
+                try {
+                    await window.Capacitor.Plugins.Haptics.impact({ style });
+                    return;
+                } catch (e) {}
+            }
+            if ('vibrate' in navigator) navigator.vibrate(50);
+        },
+
+        async sharePost(author, category, text) {
+            await this.vibrate('MEDIUM');
+            const fullText = `🚛 تنبيه من أسطورة الطريق (${category})\nبواسطة: ${author}\n\n${text}`;
+            if (this.isNative() && window.Capacitor.Plugins.Share) {
+                try {
+                    await window.Capacitor.Plugins.Share.share({
+                        title: `أسطورة الطريق - ${category}`,
+                        text: fullText,
+                        dialogTitle: 'مشاركة التنبيه مع السائقين'
+                    });
+                    return;
+                } catch (e) {}
+            }
+            if (navigator.share) {
+                navigator.share({ title: `أسطورة الطريق - ${category}`, text: fullText }).catch(() => {});
+            } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(fullText);
+                alert('✅ تم نسخ نص المنشور لمشاركته!');
+            }
+        }
+    };
 
     const firebaseConfig = {
         apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
@@ -138,7 +216,8 @@
     });
 
     window.navigateToPage = function(pageName) {
-        const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}`;
+        CapacitorBridge.vibrate('LIGHT');
+        const queryParams = `?userId=${encodeURIComponent(activeSessionName)}&companyId=${encodeURIComponent(currentCompanyId)}&role=${encodeURIComponent(currentUserRole)}`;
         window.location.href = pageName + queryParams;
     };
 
@@ -175,9 +254,12 @@
     }
 
     function parseURLSession() {
+        const savedSession = JSON.parse(localStorage.getItem('na2la_active_session') || '{}');
         const urlParams = new URLSearchParams(window.location.search);
-        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
-        let urlComp = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c');
+        
+        let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || savedSession.userId || localStorage.getItem('logged_in_driver_name');
+        let urlComp = urlParams.get('companyId') || urlParams.get('company') || urlParams.get('c') || savedSession.companyId || localStorage.getItem('current_company_id');
+        let urlRole = urlParams.get('role') || savedSession.role || localStorage.getItem('current_user_role');
 
         if (externalId && externalId.trim() !== '' && externalId !== 'null' && externalId !== 'undefined') {
             activeSessionName = externalId.trim();
@@ -190,10 +272,16 @@
         } else {
             currentCompanyId = 'company_main';
         }
+
+        if (urlRole && urlRole.trim() !== '') {
+            currentUserRole = urlRole.trim();
+        }
+
         window.currentCompanyId = currentCompanyId;
     }
 
     parseURLSession();
+    CapacitorBridge.init();
 
     async function initAuth() {
         try {
@@ -227,7 +315,7 @@
                 }
             });
 
-            let isAdm = isUserAdmin(foundDriver?.role || foundDriver?.rank, activeSessionName);
+            let isAdm = isUserAdmin(foundDriver?.role || foundDriver?.rank || currentUserRole, activeSessionName);
 
             if (foundDriver) {
                 activeSessionName = foundDriver.name || foundDriver.driverName || activeSessionName;
@@ -346,6 +434,11 @@
                 });
             }
 
+            const postBody = post.text || post.content || '';
+            const encodedAuthor = encodeURIComponent(post.author || 'سائق');
+            const encodedCat = encodeURIComponent(post.category || 'عام');
+            const encodedBody = encodeURIComponent(postBody);
+
             container.innerHTML += `
                 <div class="post-card">
                     <div class="post-meta">
@@ -356,11 +449,12 @@
                         </div>
                         <span style="font-size: 11px; color: #888;">${post.date || ''}</span>
                     </div>
-                    <div class="post-text">${post.text || post.content || ''}</div>
+                    <div class="post-text">${postBody}</div>
                     ${embed ? `<div class="video-wrapper"><iframe src="${embed}"></iframe></div>` : ""}
                     
                     <div class="post-actions">
                         <button class="btn btn-success" onclick="likePost('${post.id}')">👍 أعجبني (${Object.keys(post.reactions || {}).length || post.likes || 0})</button>
+                        <button class="btn btn-share" onclick="shareCommunityPost('${encodedAuthor}', '${encodedCat}', '${encodedBody}')">🔗 مشاركة</button>
                         ${superAdmin || post.author === activeSessionName ? `<button class="btn btn-danger" style="width:auto; padding:5px 12px; font-size:0.85rem;" onclick="deletePost('${post.id}')">حذف المنشور 🗑️</button>` : ""}
                     </div>
 
@@ -377,8 +471,13 @@
         });
     }
 
+    window.shareCommunityPost = function(encAuthor, encCat, encText) {
+        CapacitorBridge.sharePost(decodeURIComponent(encAuthor), decodeURIComponent(encCat), decodeURIComponent(encText));
+    };
+
     document.getElementById("driverPostForm").onsubmit = async (e) => {
         e.preventDefault();
+        CapacitorBridge.vibrate('MEDIUM');
         const category = document.getElementById("postCategory").value;
         let newId = String(Date.now());
         
@@ -401,6 +500,7 @@
     };
 
     window.likePost = async (id) => {
+        CapacitorBridge.vibrate('LIGHT');
         const postRef = doc(db, "communityPosts", id);
         let docSnap = await getDoc(postRef);
         if(docSnap.exists()) {
@@ -417,6 +517,7 @@
 
     window.addComment = async (e, postId) => {
         e.preventDefault();
+        CapacitorBridge.vibrate('LIGHT');
         const text = document.getElementById(`commText-${postId}`).value;
         const postRef = doc(db, "communityPosts", postId);
         let docSnap = await getDoc(postRef);
@@ -436,6 +537,7 @@
     };
 
     window.deletePost = async (id) => {
+        CapacitorBridge.vibrate('HEAVY');
         if (confirm("هل أنت متأكد من حذف هذا المنشور نهائياً؟")) {
             await deleteDoc(doc(db, "communityPosts", id));
             logAuditAction(`حذف منشور برقم المعرف ${id} بواسطة ${activeSessionName}`);
@@ -443,6 +545,7 @@
     };
 
     window.toggleAdminMode = function() {
+        CapacitorBridge.vibrate('MEDIUM');
         if (!manualAdminOverride && !isUserAdmin(currentUserRole, activeSessionName)) {
             let pass = prompt("أدخل كلمة مرور المؤسس:");
             if (pass === "admin123") {
@@ -479,5 +582,6 @@
         return match ? 'https://www.youtube.com/embed/' + match[1] : null;
     }
 </script>
+<script src="na2la-bot.js"></script>
 </body>
 </html>
