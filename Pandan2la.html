@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>أسطورة الطريق - إدارة الشركات والاشتراكات الموسعة (SaaS Hub PRO MAX)</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -34,9 +34,9 @@
             --shadow-3d: 0 8px 20px -4px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
         }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         html, body { width: 100%; overflow-x: hidden; position: relative; }
-        body { background-color: var(--bg); color: var(--text-color); padding: 8px; padding-bottom: 100px; direction: rtl; transition: background 0.3s, color 0.3s; }
+        body { background-color: var(--bg); color: var(--text-color); padding: 8px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); direction: rtl; transition: background 0.3s, color 0.3s; }
         
         .app-3d-logo-container { text-align: center; margin: 4px 0 10px 0; width: 100%; padding: 0 4px; }
         .logo-3d {
@@ -125,7 +125,7 @@
             backdrop-filter: blur(4px);
         }
 
-        #toast-container { position: fixed; bottom: 75px; left: 12px; right: 12px; z-index: 99999; display: flex; flex-direction: column; gap: 6px; pointer-events: none; max-width: 400px; margin: 0 auto; }
+        #toast-container { position: fixed; bottom: calc(75px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; z-index: 99999; display: flex; flex-direction: column; gap: 6px; pointer-events: none; max-width: 400px; margin: 0 auto; }
         .toast { background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border-right: 4px solid var(--purple); animation: slideIn 0.3s ease; pointer-events: auto; }
         @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -318,11 +318,140 @@
         <div id="audit-logs-container" style="max-height: 150px; overflow-y: auto; font-size: 9px; margin-top: 6px;"></div>
     </div>
 
+    <!-- ربط Capacitor Native -->
+    <script src="capacitor.js"></script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, updateDoc, setDoc, doc, query, where, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
+        // ==========================================
+        // 1. استقبال بيانات الجلسة الموحدة من الرابط أو التخزين
+        // ==========================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const savedSession = JSON.parse(localStorage.getItem('na2la_active_session') || '{}');
+
+        const activeUserId = (urlParams.get('userId') || savedSession.userId || localStorage.getItem('logged_in_driver_id') || localStorage.getItem('logged_in_driver_name') || '1').trim();
+        const activeCompanyId = (urlParams.get('companyId') || savedSession.companyId || localStorage.getItem('current_company_id') || 'company_main').trim();
+        const activeUserRole = (urlParams.get('role') || savedSession.role || localStorage.getItem('current_user_role') || 'admin').trim();
+
+        // ==========================================
+        // 2. الجسر البرمجي الكامل لـ Capacitor Native
+        // ==========================================
+        const CapacitorNative = {
+            isNative: () => typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform(),
+
+            async init() {
+                if (!this.isNative()) return;
+                const { App, StatusBar, SplashScreen } = window.Capacitor.Plugins;
+
+                if (StatusBar) {
+                    try {
+                        await StatusBar.setBackgroundColor({ color: '#0f172a' });
+                        await StatusBar.setStyle({ style: 'DARK' });
+                    } catch (e) {}
+                }
+
+                if (SplashScreen) {
+                    try { await SplashScreen.hide(); } catch (e) {}
+                }
+
+                if (App) {
+                    App.addListener('backButton', ({ canGoBack }) => {
+                        const modals = ['addCompanyModal', 'promoCodesModal', 'companyDetailsModal'];
+                        for (const mId of modals) {
+                            const m = document.getElementById(mId);
+                            if (m && m.style.display === 'flex') {
+                                closeModal(mId);
+                                return;
+                            }
+                        }
+                        if (canGoBack) {
+                            window.history.back();
+                        } else {
+                            goBackToMain();
+                        }
+                    });
+                }
+            },
+
+            async vibrate(style = 'MEDIUM') {
+                if (this.isNative() && window.Capacitor.Plugins.Haptics) {
+                    try {
+                        await window.Capacitor.Plugins.Haptics.impact({ style });
+                        return;
+                    } catch (e) {}
+                }
+                if ('vibrate' in navigator) navigator.vibrate(70);
+            },
+
+            async verifyBiometric(reasonText = "تأكيد هوية مدير النظام لتنفيذ العملية الحساسة") {
+                if (this.isNative() && window.Capacitor.Plugins.NativeBiometric) {
+                    try {
+                        const result = await window.Capacitor.Plugins.NativeBiometric.isAvailable();
+                        if (result.isAvailable) {
+                            await window.Capacitor.Plugins.NativeBiometric.verifyIdentity({
+                                reason: reasonText,
+                                title: "حماية لوحة تحكم الشركات",
+                                subtitle: "أسطورة الطريق SaaS Hub",
+                                description: "التحقق بالبصمة قبل تنفيذ التعديل"
+                            });
+                            return true;
+                        }
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                return true;
+            },
+
+            async shareText(title, text, url = '') {
+                if (this.isNative() && window.Capacitor.Plugins.Share) {
+                    try {
+                        await window.Capacitor.Plugins.Share.share({ title, text, url, dialogTitle: title });
+                        return true;
+                    } catch (e) {}
+                }
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title, text, url });
+                        return true;
+                    } catch (e) {}
+                }
+                return false;
+            },
+
+            async saveAndShareFile(fileName, contentStr) {
+                if (this.isNative() && window.Capacitor.Plugins.Filesystem) {
+                    try {
+                        const { Filesystem, Share } = window.Capacitor.Plugins;
+                        const savedFile = await Filesystem.writeFile({
+                            path: fileName,
+                            data: contentStr,
+                            directory: 'CACHE',
+                            encoding: 'utf8'
+                        });
+                        if (Share) {
+                            await Share.share({
+                                title: 'نسخة احتياطية - أسطورة الطريق',
+                                text: 'ملف النسخة الاحتياطية للشركات والاشتراكات',
+                                url: savedFile.uri,
+                                dialogTitle: 'حفظ أو مشاركة النسخة الاحتياطية'
+                            });
+                        }
+                        return true;
+                    } catch (e) {
+                        console.error('Native Filesystem error:', e);
+                    }
+                }
+                return false;
+            }
+        };
+
+        // ==========================================
+        // 3. إعداد Firebase ومنطق SaaS Hub
+        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
@@ -337,7 +466,7 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || 'المدير';
+        let loggedInDriverName = localStorage.getItem('logged_in_driver_name') || activeUserId || 'المدير';
         let systemPricing = JSON.parse(localStorage.getItem('na2la_system_pricing') || '{"monthly": 300, "quarterly": 800, "yearly": 2500}');
         let appData = { 
             drivers: [], 
@@ -348,21 +477,16 @@
 
         function toggleSectionsDropdown(event) {
             event.stopPropagation();
+            CapacitorNative.vibrate('LIGHT');
             const menu = document.getElementById('sectionsDropdownMenu');
-            if (menu.style.display === 'block') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'block';
-            }
+            menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
         }
         window.toggleSectionsDropdown = toggleSectionsDropdown;
 
         function jumpToSection(sectionId) {
             document.getElementById('sectionsDropdownMenu').style.display = 'none';
             const target = document.getElementById(sectionId);
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         window.jumpToSection = jumpToSection;
 
@@ -372,34 +496,29 @@
         });
 
         async function enforceStrictCompanySync(currentUserId, currentCompanyId) {
-            const storedCompany = localStorage.getItem('current_company_id');
-            if (storedCompany && storedCompany !== currentCompanyId) {
-                localStorage.clear();
-                showToast("⚠️ تم اكتشاف حساب متداخل في الخلفية، وتم تطهير الجلسة لأسباب أمنية.", "error");
-                window.location.reload();
-                return;
-            }
-
             try {
-                // Ensure authentication session for Firestore rules
                 await signInAnonymously(auth).catch(() => {});
 
                 const userRef = doc(db, 'drivers', String(currentUserId));
                 const userSnap = await getDoc(userRef);
 
-                if (!userSnap.exists()) {
-                    if(loggedInDriverName === 'المدير') {
-                        localStorage.setItem('current_company_id', 'company_main');
-                        await fetchCompanyIsolatedData('company_main');
-                        return;
-                    }
+                if (userSnap.exists()) {
+                    const uData = userSnap.data();
+                    loggedInDriverName = uData.name || loggedInDriverName;
+                    localStorage.setItem('logged_in_driver_name', loggedInDriverName);
+                    document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName} (${currentCompanyId})`;
                 }
 
                 localStorage.setItem('current_company_id', currentCompanyId);
                 localStorage.setItem('logged_in_driver_id', currentUserId);
+                localStorage.setItem('na2la_active_session', JSON.stringify({
+                    userId: currentUserId,
+                    companyId: currentCompanyId,
+                    role: activeUserRole,
+                    timestamp: Date.now()
+                }));
 
                 await fetchCompanyIsolatedData(currentCompanyId);
-
             } catch (err) {
                 showToast("خطأ في مزامنة الحساب: " + err.message, "error");
             }
@@ -414,7 +533,7 @@
                 today.setHours(0,0,0,0);
 
                 let driversSnap;
-                if (loggedInDriverName === 'المدير' || companyId === 'company_main') {
+                if (loggedInDriverName === 'المدير' || companyId === 'company_main' || activeUserRole === 'super_admin') {
                     driversSnap = await getDocs(collection(db, 'drivers'));
                 } else {
                     const qDrivers = query(collection(db, 'drivers'), where('companyId', '==', companyId));
@@ -432,21 +551,21 @@
                 let reqsSnap = { docs: [] };
                 try {
                     reqsSnap = await getDocs(collection(db, 'subscription_requests'));
-                } catch (e) { console.warn("لا يمكن جلب طلبات الاشتراك:", e.message); }
+                } catch (e) {}
                 appData.subscriptionRequests = reqsSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
                 let logsSnap = { docs: [] };
                 try {
                     const qLogs = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(25));
                     logsSnap = await getDocs(qLogs);
-                } catch (e) { console.warn("لا يمكن جلب سجلات التدقيق:", e.message); }
+                } catch (e) {}
                 appData.auditLogs = logsSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
                 updateStatistics();
                 renderMemberSubscriptionsList();
                 renderAdminPendingCashRequests();
                 renderAuditLogs();
-                showToast('✅ تمت المزامنة الصارمة بنجاح تام!');
+                showToast('✅ تمت المزامنة السحابية بنجاح تام!');
             } catch (err) {
                 showToast('خطأ في جلب بيانات الشركة: ' + err.message, 'error');
             }
@@ -454,26 +573,32 @@
         window.fetchCompanyIsolatedData = fetchCompanyIsolatedData;
 
         async function fetchAllDataFromCloud() {
-            const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
-            await fetchCompanyIsolatedData(activeCompanyId);
+            await CapacitorNative.vibrate('LIGHT');
+            const targetComp = localStorage.getItem('current_company_id') || activeCompanyId || 'company_main';
+            await fetchCompanyIsolatedData(targetComp);
         }
         window.fetchAllDataFromCloud = fetchAllDataFromCloud;
 
         window.addEventListener('DOMContentLoaded', async () => {
+            await CapacitorNative.init();
             if (localStorage.getItem('dark_mode') === 'true') document.body.classList.add('dark-mode');
-            document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName}`;
+            document.getElementById('logged-admin-badge').innerText = `المستخدم: ${loggedInDriverName} (${activeCompanyId})`;
             
             document.getElementById('cfg-monthly-price').value = systemPricing.monthly;
             document.getElementById('cfg-quarterly-price').value = systemPricing.quarterly;
             document.getElementById('cfg-yearly-price').value = systemPricing.yearly;
-
-            const activeUserId = localStorage.getItem('logged_in_driver_id') || '1';
-            const activeCompanyId = localStorage.getItem('current_company_id') || 'company_main';
             
             await enforceStrictCompanySync(activeUserId, activeCompanyId);
         });
 
         async function savePricingConfiguration() {
+            await CapacitorNative.vibrate('MEDIUM');
+            const verified = await CapacitorNative.verifyBiometric("تأكيد تعديل أسعار الباقات والإيرادات");
+            if (!verified) {
+                showToast('❌ تم إلغاء العملية لعدم التحقق بالبصمة', 'error');
+                return;
+            }
+
             const m = parseFloat(document.getElementById('cfg-monthly-price').value) || 300;
             const q = parseFloat(document.getElementById('cfg-quarterly-price').value) || 800;
             const y = parseFloat(document.getElementById('cfg-yearly-price').value) || 2500;
@@ -614,6 +739,7 @@
         }
 
         async function handleCreateCompanySubmit() {
+            await CapacitorNative.vibrate('MEDIUM');
             const companyName = document.getElementById('new-comp-name').value.trim();
             const adminName = document.getElementById('new-comp-admin-name').value.trim();
             const adminPhone = document.getElementById('new-comp-admin-phone').value.trim();
@@ -653,9 +779,7 @@
                     if (userCredential && userCredential.user) {
                         authUid = userCredential.user.uid;
                     }
-                } catch (authErr) {
-                    console.warn("Auth note during company creation:", authErr);
-                }
+                } catch (authErr) {}
 
                 const newAdminData = {
                     id: authUid,
@@ -680,13 +804,13 @@
                 showToast('✅ تم إنشاء الشركة وتفعيلها بنجاح!');
                 await fetchAllDataFromCloud();
             } catch (err) {
-                console.error("Firestore Error:", err);
                 showToast('خطأ في قاعدة البيانات: ' + err.message, 'error');
             }
         }
         window.handleCreateCompanySubmit = handleCreateCompanySubmit;
 
         async function approveSubscriptionRequest(reqId, driverId, months) {
+            await CapacitorNative.vibrate('MEDIUM');
             try {
                 await signInAnonymously(auth).catch(() => {});
                 let reqItem = appData.subscriptionRequests.find(r => String(r.id) === String(reqId));
@@ -715,6 +839,7 @@
         window.approveSubscriptionRequest = approveSubscriptionRequest;
 
         async function updateMemberSub(driverId) {
+            await CapacitorNative.vibrate('MEDIUM');
             try {
                 await signInAnonymously(auth).catch(() => {});
                 let driver = appData.drivers.find(d => String(d.id) === String(driverId));
@@ -731,6 +856,12 @@
         window.updateMemberSub = updateMemberSub;
 
         async function deleteCompanyAccount(driverId, name) {
+            await CapacitorNative.vibrate('HEAVY');
+            const verified = await CapacitorNative.verifyBiometric(`تأكيد حذف حساب الشركة (${name})`);
+            if (!verified) {
+                showToast('❌ تم إلغاء الحذف لعدم التحقق بالبصمة', 'error');
+                return;
+            }
             if (!confirm(`⚠️ هل أنت متأكد من حذف الحساب والشركة (${name})؟`)) return;
             try {
                 await signInAnonymously(auth).catch(() => {});
@@ -745,6 +876,7 @@
         window.deleteCompanyAccount = deleteCompanyAccount;
 
         async function openCompanyDetails(driverId, companyId) {
+            CapacitorNative.vibrate('LIGHT');
             let driver = appData.drivers.find(d => String(d.id) === String(driverId));
             if (!driver) return;
 
@@ -773,6 +905,7 @@
         window.openCompanyDetails = openCompanyDetails;
 
         function sendWhatsAppReminder(phone, name, expiryDate) {
+            CapacitorNative.vibrate('LIGHT');
             if (!phone) { showToast('رقم الهاتف غير مسجل!', 'error'); return; }
             let cleanPhone = phone.replace(/[^0-9]/g, '');
             if (cleanPhone.startsWith('0')) cleanPhone = '2' + cleanPhone;
@@ -798,10 +931,22 @@
         }
         window.sendBulkWhatsAppReminders = sendBulkWhatsAppReminders;
 
-        function printCompanyInvoice(driverId) {
+        async function printCompanyInvoice(driverId) {
+            await CapacitorNative.vibrate('LIGHT');
             let driver = appData.drivers.find(d => String(d.id) === String(driverId));
             if (!driver) return;
+
+            if (CapacitorNative.isNative()) {
+                const invoiceText = `فاتورة اشتراك - أسطورة الطريق (SaaS Hub PRO)\n🏢 الشركة: ${driver.companyName || 'فردي'} (${driver.branch || 'الرئيسي'})\n👤 المسؤول: ${driver.name}\n📞 الهاتف: ${driver.phone || 'غير مسجل'}\n📅 انتهاء الاشتراك: ${driver.subExpiry || 'مفتوح'}\nشكراً لاختياركم أسطورة الطريق 🚀`;
+                const shared = await CapacitorNative.shareText(`فاتورة اشتراك - ${driver.companyName || driver.name}`, invoiceText);
+                if (shared) return;
+            }
+
             let win = window.open('', '_blank', 'width=800,height=600');
+            if (!win) {
+                showToast('⚠️ يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة', 'warning');
+                return;
+            }
             win.document.write(`
                 <html lang="ar" dir="rtl"><head><title>فاتورة اشتراك - ${driver.companyName || driver.name}</title>
                 <style>body{font-family:Tahoma;padding:30px;direction:rtl;}h2{color:#2563eb;}</style></head>
@@ -819,6 +964,7 @@
         window.printCompanyInvoice = printCompanyInvoice;
 
         function addNewPromoCode() {
+            CapacitorNative.vibrate('LIGHT');
             let code = document.getElementById('promo-code-input').value.trim().toUpperCase();
             let days = parseInt(document.getElementById('promo-days-input').value) || 30;
             if (!code) return;
@@ -851,9 +997,9 @@
         async function logAuditAction(action, details) {
             try {
                 await signInAnonymously(auth).catch(() => {});
-                const currentCompanyId = localStorage.getItem('current_company_id') || 'company_main';
+                const targetComp = localStorage.getItem('current_company_id') || activeCompanyId || 'company_main';
                 await addDoc(collection(db, 'audit_logs'), {
-                    companyId: currentCompanyId,
+                    companyId: targetComp,
                     adminName: loggedInDriverName,
                     action,
                     details,
@@ -871,11 +1017,21 @@
             });
         }
 
-        function exportCompaniesJSON() {
-            let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData.drivers, null, 2));
+        async function exportCompaniesJSON() {
+            await CapacitorNative.vibrate('MEDIUM');
+            const jsonStr = JSON.stringify(appData.drivers, null, 2);
+            const fileName = `companies_backup_${new Date().toISOString().split('T')[0]}.json`;
+
+            const savedNatively = await CapacitorNative.saveAndShareFile(fileName, jsonStr);
+            if (savedNatively) {
+                showToast('✅ تم تصدير ومشاركة النسخة الاحتياطية بنجاح!');
+                return;
+            }
+
+            let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
             let a = document.createElement('a');
             a.setAttribute("href", dataStr);
-            a.setAttribute("download", `companies_backup_${new Date().toISOString().split('T')[0]}.json`);
+            a.setAttribute("download", fileName);
             document.body.appendChild(a); a.click(); a.remove();
             showToast('✅ تم تصدير نسخة الاحتياط بنجاح!');
         }
@@ -890,13 +1046,20 @@
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
         window.closeModal = closeModal;
 
-        function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode')); }
+        function toggleDarkMode() { 
+            CapacitorNative.vibrate('LIGHT');
+            document.body.classList.toggle('dark-mode'); 
+            localStorage.setItem('dark_mode', document.body.classList.contains('dark-mode')); 
+        }
         window.toggleDarkMode = toggleDarkMode;
         
         function goBackToMain() { 
-            let userId = loggedInDriverName || localStorage.getItem('logged_in_driver_name') || '';
-            let companyId = localStorage.getItem('current_company_id') || 'company_main';
-            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}`; 
+            CapacitorNative.vibrate('LIGHT');
+            let userId = activeUserId || localStorage.getItem('logged_in_driver_id') || '1';
+            let companyId = localStorage.getItem('current_company_id') || activeCompanyId || 'company_main';
+            let role = activeUserRole || localStorage.getItem('current_user_role') || 'admin';
+            localStorage.setItem('na2la_active_session', JSON.stringify({ userId, companyId, role, timestamp: Date.now() }));
+            window.location.href = `index.html?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(companyId)}&role=${encodeURIComponent(role)}`; 
         }
         window.goBackToMain = goBackToMain;
 
