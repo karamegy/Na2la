@@ -35,6 +35,50 @@ let appData = {
     newsText: '🌟 نظام سحابي آمن بالكامل مع العزل التام للشركات ومصادقة البصمة البيومترية الإصدار V10 PRO 🚀'
 };
 
+// جسر موحد للتوافق الكامل مع MainActivity.java وإضافات Capacitor 6
+window.CapacitorNative = window.CapacitorNative || {
+    vibrate: function(ms = 25) {
+        try {
+            if (window.AndroidBridge && typeof window.AndroidBridge.vibrate === 'function') {
+                window.AndroidBridge.vibrate(ms);
+            } else if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
+                window.Capacitor.Plugins.Haptics.impact({ style: 'LIGHT' });
+            }
+        } catch (e) {}
+    },
+    getNativeGPS: async function() {
+        try {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation) {
+                const pos = await window.Capacitor.Plugins.Geolocation.getCurrentPosition({
+                    enableHighAccuracy: true,
+                    timeout: 10000
+                });
+                if (pos && pos.coords) {
+                    return `${pos.coords.latitude},${pos.coords.longitude}`;
+                }
+            }
+        } catch (e) {}
+        return null;
+    },
+    shareText: async function(title, text) {
+        try {
+            if (window.AndroidBridge && typeof window.AndroidBridge.shareText === 'function') {
+                window.AndroidBridge.shareText(text);
+                return true;
+            }
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) {
+                await window.Capacitor.Plugins.Share.share({
+                    title: title,
+                    text: text,
+                    dialogTitle: title
+                });
+                return true;
+            }
+        } catch (e) {}
+        return false;
+    }
+};
+
 // دالة الانتقال الآمن وتمرير الجلسة لجميع صفحات التطبيق الفرعية
 function goToAuthenticatedPage(pageName) {
     if (window.CapacitorNative) CapacitorNative.vibrate();
@@ -59,13 +103,13 @@ function escapeHTML(str) {
 async function saveNativeOrWebFile(base64Data, fileName, mimeType) {
     const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
 
-    // 1. الحفظ المباشر في مجلد التنزيلات (Downloads) عبر جسر الأندرويد AndroidBridge
-    if (window.AndroidBridge && typeof window.AndroidBridge.saveBase64File === 'function') {
-        window.AndroidBridge.saveBase64File(pureBase64, fileName, mimeType);
+    // 1. الحفظ المباشر في مجلد التنزيلات (Downloads) عبر دالة downloadFile في MainActivity.java
+    if (window.AndroidBridge && typeof window.AndroidBridge.downloadFile === 'function') {
+        window.AndroidBridge.downloadFile(fileName, pureBase64);
         return;
     }
 
-    // 2. الحفظ والمشاركة عبر إضافات Capacitor الرسمية (Filesystem + Share)
+    // 2. الحفظ والمشاركة عبر إضافات Capacitor الرسمية (Filesystem + Share) كخيار احتياطي
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
         try {
             const plugins = window.Capacitor.Plugins || {};
