@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>أسطورة الطريق - بروفايل السائق والأسطول V96 PRO SECURE SYNCED</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0f172a">
@@ -51,8 +51,8 @@
         body.theme-dark-pure { --bg: #000000; --card-bg: linear-gradient(145deg, #121212, #1a1a1a); --text-color: #e0e0e0; --border-color: #333333; }
         body.theme-light-pure { --bg: #ffffff; --card-bg: linear-gradient(145deg, #ffffff, #f1f5f9); --text-color: #0f172a; --border-color: #cbd5e1; }
 
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
-        body { background-color: var(--bg); color: var(--text-color); padding: 12px; padding-bottom: 110px; direction: rtl; transition: background 0.3s, color 0.3s; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg); color: var(--text-color); padding: 12px; padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); direction: rtl; transition: background 0.3s, color 0.3s; }
         
         .app-3d-logo-container { text-align: center; margin: 6px 0 12px 0; perspective: 1000px; }
         .logo-3d {
@@ -217,7 +217,7 @@
                     <span id="cover-height-label" style="font-size:9px; color:#fff;">180px</span>
                     <button type="button" class="btn-sm" style="background:transparent; color:#fff; border:none; cursor:pointer; width:auto; padding:2px;" onclick="adjustCoverHeight(25)">🔼</button>
                 </div>
-                <label id="gplus-cover-upload-btn-container" class="gplus-cover-upload-btn" style="display: none;">
+                <label id="gplus-cover-upload-btn-container" class="gplus-cover-upload-btn" style="display: none;" onclick="triggerNativeCoverUpload(event)">
                     📷 تغيير الغلاف <input type="file" id="profile-cover-input" accept="image/*" hidden onchange="updateProfileCover(this)">
                 </label>
             </div>
@@ -225,7 +225,7 @@
             <div class="gplus-profile-header-area">
                 <div class="gplus-avatar-wrapper">
                     <div id="gplus-avatar-img-preview" style="width:100%; height:100%; display:flex; justify-content:center; align-items:center; background:#cbd5e1; font-weight:bold;">صورة</div>
-                    <label id="gplus-avatar-upload-label-container" class="gplus-avatar-upload-label" style="display: none;">تغيير <input type="file" id="profile-avatar-input" accept="image/*" hidden onchange="updateProfileAvatar(this)"></label>
+                    <label id="gplus-avatar-upload-label-container" class="gplus-avatar-upload-label" style="display: none;" onclick="triggerNativeAvatarUpload(event)">تغيير <input type="file" id="profile-avatar-input" accept="image/*" hidden onchange="updateProfileAvatar(this)"></label>
                 </div>
                 
                 <div class="gplus-profile-info">
@@ -328,7 +328,7 @@
         <h3 style="color: var(--success);" id="profile-wall-heading">✍️ حائط النشر الحر (خاص بشركتك)</h3>
         <textarea id="profile-wall-text" placeholder="اكتب تحديثاً أو حالة طريق على هذا البروفايل..." style="height: 60px; resize: none;"></textarea>
         <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
-            <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: bold;">
+            <label style="background: var(--bg); border: 1px solid var(--border-color); padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: bold;" onclick="triggerNativeWallMedia(event)">
                 📷 إرفاق صور <input type="file" id="profile-wall-media" accept="image/*,video/*" multiple hidden onchange="previewProfileWallFiles(this)">
             </label>
             <button type="button" class="btn-success" onclick="publishProfileWallPost()" style="margin-right: auto; width: auto; padding: 6px 16px;">نشر 🚀</button>
@@ -487,9 +487,150 @@
         </a>
     </nav>
 
+    <!-- ربط Capacitor Native -->
+    <script src="capacitor.js"></script>
+
     <script>
+        // ==========================================
+        // 🔌 جسر Capacitor Native لبروفايل السائق
+        // ==========================================
+        const CapacitorNative = {
+            isNative: () => typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform(),
+
+            async init() {
+                if (!this.isNative()) return;
+                const { App, StatusBar, SplashScreen } = window.Capacitor.Plugins;
+
+                if (StatusBar) {
+                    try {
+                        await StatusBar.setBackgroundColor({ color: '#0f172a' });
+                        await StatusBar.setStyle({ style: 'DARK' });
+                    } catch (e) {}
+                }
+
+                if (SplashScreen) {
+                    try { await SplashScreen.hide(); } catch (e) {}
+                }
+
+                if (App) {
+                    App.addListener('backButton', ({ canGoBack }) => {
+                        const modals = ['activeCallModal', 'chatModal', 'shipmentsModal', 'driverQRModal', 'mediaViewerModal'];
+                        for (let id of modals) {
+                            const el = document.getElementById(id);
+                            if (el && el.style.display === 'flex') {
+                                if (id === 'activeCallModal') endActiveWebRTCCall();
+                                else el.style.display = 'none';
+                                return;
+                            }
+                        }
+                        if (canGoBack) {
+                            window.history.back();
+                        } else {
+                            window.location.href = document.getElementById('headerHomeLink').href;
+                        }
+                    });
+                }
+            },
+
+            async vibrate(style = 'LIGHT') {
+                if (this.isNative() && window.Capacitor.Plugins.Haptics) {
+                    try {
+                        await window.Capacitor.Plugins.Haptics.impact({ style });
+                        return;
+                    } catch (e) {}
+                }
+                if ('vibrate' in navigator) navigator.vibrate(60);
+            },
+
+            async capturePhoto(promptTitle = 'اختيار صورة') {
+                if (this.isNative() && window.Capacitor.Plugins.Camera) {
+                    try {
+                        const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+                            quality: 65,
+                            allowEditing: false,
+                            resultType: 'base64',
+                            source: 'PROMPT',
+                            width: 600,
+                            promptLabelHeader: promptTitle,
+                            promptLabelPhoto: 'اختيار من المعرض',
+                            promptLabelPicture: 'التقاط بالكاميرا'
+                        });
+                        if (photo && photo.base64String) {
+                            return `data:image/${photo.format || 'jpeg'};base64,${photo.base64String}`;
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                }
+                return null;
+            },
+
+            async getLocation() {
+                if (this.isNative() && window.Capacitor.Plugins.Geolocation) {
+                    try {
+                        const pos = await window.Capacitor.Plugins.Geolocation.getCurrentPosition({
+                            enableHighAccuracy: true,
+                            timeout: 10000
+                        });
+                        return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    } catch (e) {}
+                }
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) return reject('GPS غير مدعوم');
+                    navigator.geolocation.getCurrentPosition(
+                        p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+                        err => reject(err.message),
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                });
+            },
+
+            async saveAndShareCardImage(dataUrl, fileName) {
+                await this.vibrate('MEDIUM');
+                if (this.isNative() && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share) {
+                    try {
+                        const base64Data = dataUrl.split(',')[1];
+                        const saved = await window.Capacitor.Plugins.Filesystem.writeFile({
+                            path: fileName,
+                            data: base64Data,
+                            directory: 'CACHE'
+                        });
+                        await window.Capacitor.Plugins.Share.share({
+                            title: 'بطاقة السائق - أسطورة الطريق',
+                            text: 'بطاقة التعريف الرسمية - منصة نقلة',
+                            url: saved.uri,
+                            dialogTitle: 'حفظ أو مشاركة بطاقة السائق'
+                        });
+                        return true;
+                    } catch (e) {}
+                }
+                return false;
+            },
+
+            async shareText(title, text) {
+                await this.vibrate('MEDIUM');
+                if (this.isNative() && window.Capacitor.Plugins.Share) {
+                    try {
+                        await window.Capacitor.Plugins.Share.share({
+                            title: title,
+                            text: text,
+                            url: window.location.href,
+                            dialogTitle: 'مشاركة المنشور'
+                        });
+                        return;
+                    } catch (e) {}
+                }
+                if (navigator.share) {
+                    navigator.share({ title: title, text: text, url: window.location.href }).catch(() => {});
+                } else if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text);
+                    alert('تم نسخ المنشور إلى الحافظة! 🔗');
+                }
+            }
+        };
+
         const firebaseConfig = {
-            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKjePDdgxhfyIY",
+            apiKey: "AIzaSyDn-rNJ2ak3I0DdfzTZmXKJePDdgxhfyIY",
             authDomain: "n2la-642d3.firebaseapp.com",
             projectId: "n2la-642d3",
             storageBucket: "n2la-642d3.firebasestorage.app",
@@ -514,9 +655,11 @@
             "منقذ الطوارئ", "ملك المرتفعات", "بطل المهام الشاقة", "سيد المسافات الطويلة", "أسطورة الطريق"
         ];
 
+        const savedSession = JSON.parse(localStorage.getItem('na2la_active_session') || '{}');
+
         function getExternalLoginSession() {
             const urlParams = new URLSearchParams(window.location.search);
-            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name');
+            let externalId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('phone') || urlParams.get('driver') || urlParams.get('name') || savedSession.userId || localStorage.getItem('logged_in_driver_name');
 
             const isInvalidName = (val) => {
                 if (!val) return true;
@@ -535,7 +678,8 @@
         let loggedInDriverId = activeExternalSessionName;
         
         const urlParamsCheck = new URLSearchParams(window.location.search);
-        let urlCompanyIdParam = urlParamsCheck.get('companyId') || urlParamsCheck.get('company') || 'company_main';
+        let urlCompanyIdParam = urlParamsCheck.get('companyId') || urlParamsCheck.get('company') || savedSession.companyId || localStorage.getItem('current_company_id') || 'company_main';
+        let activeRoleParam = urlParamsCheck.get('role') || savedSession.role || localStorage.getItem('current_user_role') || 'driver';
         
         let viewingProfileId = loggedInDriverId;
         let currentCompanyId = urlCompanyIdParam.trim() !== '' ? urlCompanyIdParam.trim() : 'company_main';
@@ -558,7 +702,8 @@
         function updateNavigationLinks() {
             let userId = activeExternalSessionName || '';
             let compId = currentCompanyId || 'company_main';
-            let queryParams = `?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}`;
+            let role = activeRoleParam || 'driver';
+            let queryParams = `?userId=${encodeURIComponent(userId)}&companyId=${encodeURIComponent(compId)}&role=${encodeURIComponent(role)}`;
             
             document.getElementById('headerHomeLink').href = `index.html${queryParams}`;
             document.getElementById('footerHomeLink').href = `index.html${queryParams}`;
@@ -673,7 +818,7 @@
                 );
                 if (drv) {
                     let cleanN = getCleanDriverName(drv.name);
-                    let roleStr = String(drv.role || '').toLowerCase();
+                    let roleStr = String(drv.role || activeRoleParam || '').toLowerCase();
                     let isAdmin = roleStr.includes('admin') || roleStr.includes('مدير');
                     return { 
                         ...drv, 
@@ -684,7 +829,7 @@
                 }
             }
 
-            let isMasterAdminSession = sessionName === '01114099799' || sessionName === 'المدير' || sessionName.toLowerCase() === 'admin';
+            let isMasterAdminSession = sessionName === '01114099799' || sessionName === 'المدير' || sessionName.toLowerCase() === 'admin' || String(activeRoleParam).toLowerCase().includes('admin');
 
             return {
                 id: sessionName || 'guest',
@@ -716,6 +861,7 @@
         }
 
         function toggleChatAccountsListCollapse() {
+            CapacitorNative.vibrate('LIGHT');
             const content = document.getElementById('chat-accounts-collapsible-content');
             const arrow = document.getElementById('chat-collapse-arrow');
             if (content.style.display === 'none') {
@@ -728,6 +874,7 @@
         }
 
         function setAppTheme(themeName) {
+            CapacitorNative.vibrate('LIGHT');
             document.body.classList.remove('theme-emerald', 'theme-amber', 'theme-purple', 'theme-dark-pure', 'theme-light-pure');
             if (themeName !== 'default') {
                 document.body.classList.add(`theme-${themeName}`);
@@ -735,6 +882,7 @@
         }
 
         function toggleDarkMode() {
+            CapacitorNative.vibrate('LIGHT');
             document.body.classList.toggle('dark-mode');
         }
 
@@ -763,7 +911,6 @@
             renderMyAccount();
         });
 
-        // استعلام الشات المحدث والمستقر لتجنب مشاكل الفهرسة وضمان جلب الرسائل بدقة
         if (chatUnsub) chatUnsub();
         chatUnsub = db.collection('chat').where('companyId', '==', currentCompanyId).limit(100).onSnapshot(snapshot => {
             appData.chat = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -771,7 +918,6 @@
             renderChatAccountsList();
         });
 
-        // مراقبة المكالمات المحدثة لضمان مطابقة شاملة وتزامن فوري للمكالمات الواردة
         const oneMinuteAgoTime = Date.now() - 60000;
         if (callsUnsub) callsUnsub();
         callsUnsub = db.collection('webrtc_calls').where('companyId', '==', currentCompanyId).onSnapshot(snapshot => {
@@ -803,6 +949,7 @@
 
                     if (isForMe && cleanCaller !== myName && cleanCaller !== myId && cleanCaller !== mySession && callData.status === 'calling') {
                         let callerCleanName = getCleanDriverName(callData.caller);
+                        CapacitorNative.vibrate('HEAVY');
                         playAdvancedRingtone('incoming');
                         if (confirm(`📞 مكالمة واردة جديدة بقوة من (${callerCleanName}). هل تريد الرد والمتابعة؟`)) {
                             stopAdvancedRingtone();
@@ -977,6 +1124,7 @@
         }
 
         function openShipmentsModal() {
+            CapacitorNative.vibrate('LIGHT');
             const container = document.getElementById('modal-shipments-list-content');
             const sourceContainer = document.getElementById('account-specific-shipments-list');
             container.innerHTML = sourceContainer.innerHTML;
@@ -988,6 +1136,7 @@
         }
 
         function openChatModal() { 
+            CapacitorNative.vibrate('LIGHT');
             document.getElementById('chatModal').style.display = 'flex'; 
             renderChatMessages(); 
             renderChatAccountsList(); 
@@ -1012,7 +1161,6 @@
             };
 
             pc.oniceconnectionstatechange = () => {
-                console.log("ICE Connection State:", pc.iceConnectionState);
                 if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
                     document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
                 } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
@@ -1033,9 +1181,8 @@
                 }
 
                 remoteVideoElem.play().catch(e => {
-                    console.warn("Autoplay blocked, retrying with muted:", e);
                     remoteVideoElem.muted = true;
-                    remoteVideoElem.play().catch(err => console.error("Remote video play failed:", err));
+                    remoteVideoElem.play().catch(() => {});
                 });
                 
                 document.getElementById('call-modal-status').innerText = '🟢 المكالمة متصلة بنجاح (HD)';
@@ -1049,7 +1196,7 @@
                     if (pc.remoteDescription && pc.remoteDescription.type) {
                         try {
                             await pc.addIceCandidate(candidate);
-                        } catch (e) { console.error("Error adding received ICE candidate", e); }
+                        } catch (e) {}
                     } else {
                         remoteCandidateQueue.push(candidate);
                     }
@@ -1062,7 +1209,7 @@
                 let cand = remoteCandidateQueue.shift();
                 try {
                     await pc.addIceCandidate(cand);
-                } catch (e) { console.error("Error flushing queued ICE candidate", e); }
+                } catch (e) {}
             }
         }
 
@@ -1072,6 +1219,7 @@
                 return;
             }
             
+            CapacitorNative.vibrate('HEAVY');
             document.getElementById('activeCallModal').style.display = 'flex';
             document.getElementById('call-modal-title').innerText = isVideo ? '📹 مكالمة فيديو عالية الجودة...' : '📞 اتصال صوتي جاري...';
             document.getElementById('call-modal-status').innerText = 'جاري طلب إذن الكاميرا والميكروفون وبدء الرنين...';
@@ -1095,7 +1243,7 @@
                 
                 const localVideoElem = document.getElementById('localVideo');
                 localVideoElem.srcObject = localStream;
-                localVideoElem.play().catch(e => {});
+                localVideoElem.play().catch(() => {});
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 
@@ -1175,7 +1323,7 @@
                 
                 const localVideoElem = document.getElementById('localVideo');
                 localVideoElem.srcObject = localStream;
-                localVideoElem.play().catch(e => {});
+                localVideoElem.play().catch(() => {});
 
                 peerConnection = new RTCPeerConnection(rtcConfig);
                 
@@ -1223,6 +1371,7 @@
         }
 
         async function toggleCameraFacing() {
+            CapacitorNative.vibrate('LIGHT');
             currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
             if (!localStream) return;
 
@@ -1238,7 +1387,7 @@
                 localStream = newStream;
                 const localVideoElem = document.getElementById('localVideo');
                 localVideoElem.srcObject = localStream;
-                localVideoElem.play().catch(e => {});
+                localVideoElem.play().catch(() => {});
 
                 if (peerConnection) {
                     const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -1256,6 +1405,7 @@
         }
 
         function endActiveWebRTCCall() {
+            CapacitorNative.vibrate('MEDIUM');
             stopAdvancedRingtone();
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
@@ -1339,6 +1489,7 @@
         }
 
         function selectChatRoom(targetName) {
+            CapacitorNative.vibrate('LIGHT');
             currentChatTarget = targetName;
             document.getElementById('chat-current-room-title').querySelector('span').innerText = targetName === 'general' ? 'المحادثة العامة للشركة' : `محادثة خاصة مع: ${targetName}`;
             renderChatAccountsList();
@@ -1351,6 +1502,7 @@
             const text = input.value.trim();
             if(!text) return;
 
+            CapacitorNative.vibrate('LIGHT');
             let loggedInUser = getLoggedInUser();
             let realSenderName = loggedInUser.name || 'سائق';
 
@@ -1382,7 +1534,6 @@
                 return (cleanSender === loggedInUser.name && cleanTarget === currentChatTarget) || (cleanSender === currentChatTarget && cleanTarget === loggedInUser.name);
             });
 
-            // فرز الرسائل تصاعدياً حسب المعرف الزمني لضمان الظهور بالترتيب الصحيح
             filtered.sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
 
             filtered.forEach(m => {
@@ -1401,6 +1552,7 @@
         }
 
         function toggleCommentsSection(docId) {
+            CapacitorNative.vibrate('LIGHT');
             const section = document.getElementById(`comments-section-${docId}`);
             if (section) {
                 section.style.display = section.style.display === 'block' ? 'none' : 'block';
@@ -1422,6 +1574,7 @@
             let attachedImg = window[`comment_img_${docId}`] || '';
             
             if(!text && !attachedImg) return;
+            CapacitorNative.vibrate('LIGHT');
             let loggedInUser = getLoggedInUser();
 
             db.collection('profileWalls').doc(docId).get().then(doc => {
@@ -1443,6 +1596,7 @@
         }
 
         function deleteWallPost(docId, authorName) {
+            CapacitorNative.vibrate('HEAVY');
             let loggedInUser = getLoggedInUser();
             let isAdmin = loggedInUser.role === 'admin';
             
@@ -1517,7 +1671,7 @@
                     <div class="post-actions-bar">
                         <button type="button" class="post-action-btn ${isLiked ? 'liked' : ''}" onclick="toggleLike('${p.docId}', ${JSON.stringify(likesArr)})">❤️ أعجبني (${likesArr.length})</button>
                         <button type="button" class="post-action-btn" onclick="toggleCommentsSection('${p.docId}')">💬 تعليقات (${commentsCount})</button>
-                        <button type="button" class="post-action-btn" onclick="sharePost('${p.text}')">🔗 مشاركة</button>
+                        <button type="button" class="post-action-btn" onclick="sharePost('${encodeURIComponent(p.text)}')">🔗 مشاركة</button>
                     </div>
 
                     <div id="comments-section-${p.docId}" class="comments-section">
@@ -1537,6 +1691,7 @@
         }
 
         function toggleLike(docId, likesArr) {
+            CapacitorNative.vibrate('MEDIUM');
             let loggedInUser = getLoggedInUser();
             let idx = likesArr.indexOf(loggedInUser.name);
             if(idx > -1) likesArr.splice(idx, 1);
@@ -1544,16 +1699,12 @@
             db.collection('profileWalls').doc(docId).update({ likes: likesArr });
         }
 
-        function sharePost(text) {
-            if (navigator.share) { 
-                navigator.share({ title: 'أسطورة الطريق', text: text, url: window.location.href }).catch(()=>{}); 
-            } else { 
-                navigator.clipboard.writeText(text); 
-                alert('تم نسخ المنشور إلى الحافظة! 🔗'); 
-            }
+        function sharePost(encodedText) {
+            CapacitorNative.shareText('أسطورة الطريق - تحديث السائق', decodeURIComponent(encodedText));
         }
 
         function viewMedia(src) {
+            CapacitorNative.vibrate('LIGHT');
             document.getElementById('mediaViewerContent').innerHTML = `<img src="${src}" style="max-width:100%; max-height:85vh; border-radius:10px; object-fit:contain;">`;
             document.getElementById('mediaViewerModal').style.display = 'flex';
         }
@@ -1563,6 +1714,7 @@
         }
 
         function saveTruckInfo() {
+            CapacitorNative.vibrate('MEDIUM');
             let loggedInUser = getLoggedInUser();
             loggedInUser.truckPlate = document.getElementById('edit-truck-plate').value.trim();
             loggedInUser.truckModel = document.getElementById('edit-truck-model').value.trim();
@@ -1574,29 +1726,54 @@
         }
 
         function exportProfileAsImage() {
+            CapacitorNative.vibrate('MEDIUM');
             const element = document.getElementById('exportable-profile-card-wrapper');
-            html2canvas(element, { scale: 2, useCORS: true }).then(canvas => {
-                let link = document.createElement('a');
-                link.download = `driver-profile-${Date.now()}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
+            html2canvas(element, { scale: 2, useCORS: true }).then(async canvas => {
+                const dataUrl = canvas.toDataURL('image/png');
+                const fileName = `driver-profile-${Date.now()}.png`;
+                const sharedNatively = await CapacitorNative.saveAndShareCardImage(dataUrl, fileName);
+                if (!sharedNatively) {
+                    let link = document.createElement('a');
+                    link.download = fileName;
+                    link.href = dataUrl;
+                    link.click();
+                }
             });
         }
 
         function syncWalletWithPlatform() {
+            CapacitorNative.vibrate('MEDIUM');
             alert('✅ تمت مزامنة محفظة الأرباح وسجل العمليات مع المنصة الأم بنجاح!');
         }
 
-        function broadcastCurrentLocation(statusText) {
+        async function broadcastCurrentLocation(statusText) {
+            CapacitorNative.vibrate('MEDIUM');
             let loggedInUser = getLoggedInUser();
+            const logEl = document.getElementById('gps-status-log');
+            logEl.innerText = '📡 جاري التقاط إحداثيات GPS وبث الحالة...';
+
+            let coords = null;
+            try {
+                coords = await CapacitorNative.getLocation();
+            } catch (e) {}
+
             loggedInUser.status = statusText;
+            if (coords) {
+                loggedInUser.lastLat = coords.lat;
+                loggedInUser.lastLng = coords.lng;
+                loggedInUser.lastLocationTime = new Date().toISOString();
+            }
+
             db.collection('drivers').doc(String(loggedInUser.id)).set(loggedInUser, { merge: true }).then(() => {
-                document.getElementById('gps-status-log').innerText = `تم بث حالتك (${statusText}) بنجاح ✅`;
+                logEl.innerText = coords 
+                    ? `تم بث حالتك (${statusText}) وإحداثياتك (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}) بنجاح ✅`
+                    : `تم بث حالتك (${statusText}) بنجاح ✅`;
                 renderMyAccount();
             });
         }
 
         function adjustCoverHeight(delta) {
+            CapacitorNative.vibrate('LIGHT');
             let loggedInUser = getLoggedInUser();
             let currentH = loggedInUser.coverHeight || 180;
             let newH = Math.min(400, Math.max(120, currentH + delta));
@@ -1605,57 +1782,89 @@
         }
 
         function resetToMyProfile() {
+            CapacitorNative.vibrate('LIGHT');
             viewingProfileId = loggedInDriverId;
             renderMyAccount();
+        }
+
+        async function triggerNativeAvatarUpload(e) {
+            if (CapacitorNative.isNative() && window.Capacitor.Plugins.Camera) {
+                e.preventDefault();
+                const base64Img = await CapacitorNative.capturePhoto('تحديث الصورة الشخصية');
+                if (base64Img) {
+                    saveAvatarBase64(base64Img);
+                }
+            }
+        }
+
+        function saveAvatarBase64(url) {
+            let loggedInUser = getLoggedInUser();
+            if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                alert('⚠️ عذراً، لا يمكن حفظ الصورة لحساب غير مسجل.');
+                return;
+            }
+            loggedInUser.avatar = url;
+            db.collection('drivers').doc(String(loggedInUser.id)).set({
+                ...loggedInUser,
+                avatar: url,
+                companyId: currentCompanyId
+            }, { merge: true }).then(() => {
+                CapacitorNative.vibrate('MEDIUM');
+                renderMyAccount();
+                alert('✅ تم تحديث وتثبيت الصورة الشخصية ومزامنتها بملفك بنجاح!');
+            }).catch(() => {
+                alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الصورة.');
+            });
         }
 
         function updateProfileAvatar(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 400, 400, 0.7, (url) => {
-                    let loggedInUser = getLoggedInUser();
-                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
-                        alert('⚠️ عذراً، لا يمكن حفظ الصورة لحساب غير مسجل.');
-                        return;
-                    }
-                    loggedInUser.avatar = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set({
-                        ...loggedInUser,
-                        avatar: url,
-                        companyId: currentCompanyId
-                    }, { merge: true }).then(() => {
-                        renderMyAccount();
-                        alert('✅ تم تحديث وتثبيت الصورة الشخصية ومحفظتها بملفك بنجاح!');
-                    }).catch(err => {
-                        alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الصورة.');
-                    });
+                    saveAvatarBase64(url);
                 });
             }
+        }
+
+        async function triggerNativeCoverUpload(e) {
+            if (CapacitorNative.isNative() && window.Capacitor.Plugins.Camera) {
+                e.preventDefault();
+                const base64Img = await CapacitorNative.capturePhoto('تحديث صورة الغلاف');
+                if (base64Img) {
+                    saveCoverBase64(base64Img);
+                }
+            }
+        }
+
+        function saveCoverBase64(url) {
+            let loggedInUser = getLoggedInUser();
+            if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
+                alert('⚠️ عذراً، لا يمكن حفظ الغلاف لحساب غير مسجل.');
+                return;
+            }
+            loggedInUser.cover = url;
+            db.collection('drivers').doc(String(loggedInUser.id)).set({
+                ...loggedInUser,
+                cover: url,
+                companyId: currentCompanyId
+            }, { merge: true }).then(() => {
+                CapacitorNative.vibrate('MEDIUM');
+                renderMyAccount();
+                alert('✅ تم تحديث وتثبيت صورة الغلاف ومزامنتها بملفك بنجاح!');
+            }).catch(() => {
+                alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الغلاف.');
+            });
         }
 
         function updateProfileCover(input) {
             if (input.files && input.files[0]) {
                 compressImage(input.files[0], 800, 500, 0.7, (url) => {
-                    let loggedInUser = getLoggedInUser();
-                    if (!loggedInUser.id || ['زائر', 'مستخدم', 'guest'].includes(String(loggedInUser.id).toLowerCase())) {
-                        alert('⚠️ عذراً، لا يمكن حفظ الغلاف لحساب غير مسجل.');
-                        return;
-                    }
-                    loggedInUser.cover = url;
-                    db.collection('drivers').doc(String(loggedInUser.id)).set({
-                        ...loggedInUser,
-                        cover: url,
-                        companyId: currentCompanyId
-                    }, { merge: true }).then(() => {
-                        renderMyAccount();
-                        alert('✅ تم تحديث وتثبيت صورة الغلاف ومزامنتها بملفك بنجاح!');
-                    }).catch(err => {
-                        alert('⚠️ حدث خطأ أثناء مزامنة وتثبيت الغلاف.');
-                    });
+                    saveCoverBase64(url);
                 });
             }
         }
 
         function saveMyProfileChanges() {
+            CapacitorNative.vibrate('MEDIUM');
             let loggedInUser = getLoggedInUser();
             loggedInUser.name = document.getElementById('my-edit-name').value.trim();
             loggedInUser.phone = document.getElementById('my-edit-phone').value.trim();
@@ -1665,6 +1874,17 @@
                 alert('✅ تم تحديث البروفايل بنجاح!');
                 renderMyAccount();
             });
+        }
+
+        async function triggerNativeWallMedia(e) {
+            if (CapacitorNative.isNative() && window.Capacitor.Plugins.Camera) {
+                e.preventDefault();
+                const base64Img = await CapacitorNative.capturePhoto('إرفاق صورة للحائط');
+                if (base64Img) {
+                    profileWallFilesArr.push({ type: 'image', src: base64Img });
+                    document.getElementById('profile-wall-files-info').innerText = `تم إرفاق (${profileWallFilesArr.length}) صورة بنجاح ✅`;
+                }
+            }
         }
 
         function previewProfileWallFiles(input) {
@@ -1687,6 +1907,7 @@
             const text = document.getElementById('profile-wall-text').value.trim();
             if(!text && profileWallFilesArr.length === 0) { alert('أدخل نصاً أو صورة للنشر!'); return; }
             
+            CapacitorNative.vibrate('MEDIUM');
             let targetDrv = getTargetViewingDriver();
             let loggedInUser = getLoggedInUser();
 
@@ -1708,7 +1929,7 @@
                 profileWallFilesArr = [];
                 document.getElementById('profile-wall-files-info').innerText = '';
                 alert('✅ تم النشر على الحائط بنجاح والمزامنة حية!');
-            }).catch(err => {
+            }).catch(() => {
                 alert('⚠️ حدث خطأ أثناء النشر.');
             });
         }
@@ -1733,6 +1954,7 @@
                 let item = document.createElement('div');
                 item.className = 'driver-card-item';
                 item.onclick = () => {
+                    CapacitorNative.vibrate('LIGHT');
                     viewingProfileId = d.id || cleanN;
                     renderMyAccount();
                     window.scrollTo({top:0, behavior:'smooth'});
@@ -1749,6 +1971,7 @@
         }
 
         function openDriverQRModal() {
+            CapacitorNative.vibrate('LIGHT');
             let targetDrv = getTargetViewingDriver();
             const container = document.getElementById('driver-qrcode-container');
             container.innerHTML = '';
@@ -1763,7 +1986,8 @@
             document.getElementById('driverQRModal').style.display = 'none'; 
         }
 
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
+            await CapacitorNative.init();
             renderMyAccount();
         });
     </script>
