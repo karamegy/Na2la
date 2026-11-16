@@ -55,6 +55,48 @@ function escapeHTML(str) {
     );
 }
 
+// دالة موحدة لحفظ وتنزيل الملفات (PNG / PDF / Excel) على تطبيق الأندرويد Native والمتصفح
+async function saveNativeOrWebFile(base64Data, fileName, mimeType) {
+    const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+
+    // 1. الحفظ المباشر في مجلد التنزيلات (Downloads) عبر جسر الأندرويد AndroidBridge
+    if (window.AndroidBridge && typeof window.AndroidBridge.saveBase64File === 'function') {
+        window.AndroidBridge.saveBase64File(pureBase64, fileName, mimeType);
+        return;
+    }
+
+    // 2. الحفظ والمشاركة عبر إضافات Capacitor الرسمية (Filesystem + Share)
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        try {
+            const plugins = window.Capacitor.Plugins || {};
+            if (plugins.Filesystem && plugins.Share) {
+                const savedFile = await plugins.Filesystem.writeFile({
+                    path: fileName,
+                    data: pureBase64,
+                    directory: 'CACHE'
+                });
+                await plugins.Share.share({
+                    title: fileName,
+                    url: savedFile.uri,
+                    dialogTitle: 'حفظ أو مشاركة الملف'
+                });
+                return;
+            }
+        } catch (err) {
+            alert('تعذر حفظ الملف على الهاتف: ' + err.message);
+            return;
+        }
+    }
+
+    // 3. التحميل القياسي لمتصفحات الويب
+    const link = document.createElement('a');
+    link.download = fileName;
+    link.href = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${pureBase64}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 async function verifyBiometricAuth() {
     try {
         if (window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
@@ -1584,12 +1626,9 @@ function exportDeferredInvoiceImage(id) {
     populateDeferredPrintArea(inv);
     const area = document.getElementById('hidden-deferred-print-area');
     area.style.display = 'block';
-    html2canvas(area).then(canvas => {
+    html2canvas(area, { useCORS: true, scale: 2 }).then(canvas => {
         area.style.display = 'none';
-        const link = document.createElement('a');
-        link.download = `deferred-invoice-${inv.invoiceId}.png`;
-        link.href = canvas.toDataURL();
-        link.click();
+        saveNativeOrWebFile(canvas.toDataURL('image/png'), `deferred-invoice-${inv.invoiceId}.png`, 'image/png');
     });
 }
 
@@ -1599,12 +1638,18 @@ function exportDeferredInvoicePDF(id) {
     populateDeferredPrintArea(inv);
     const area = document.getElementById('hidden-deferred-print-area');
     area.style.display = 'block';
-    html2canvas(area).then(canvas => {
+    html2canvas(area, { useCORS: true, scale: 2 }).then(canvas => {
         area.style.display = 'none';
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 15, 15, 180, 0);
-        pdf.save(`deferred-invoice-${inv.invoiceId}.pdf`);
+        const imgData = canvas.toDataURL('image/png');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth() - 30;
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'PNG', 15, 15, pdfWidth, pdfHeight);
+        const pdfBase64 = pdf.output('datauristring');
+        saveNativeOrWebFile(pdfBase64, `deferred-invoice-${inv.invoiceId}.pdf`, 'application/pdf');
     });
 }
 
@@ -2384,20 +2429,25 @@ function openInvoiceStandalone() {
 }
 
 function exportInvoiceAsImage() {
-    html2canvas(document.getElementById('print-area')).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `invoice-${Date.now()}.png`;
-        link.href = canvas.toDataURL();
-        link.click();
+    const area = document.getElementById('print-area');
+    html2canvas(area, { useCORS: true, scale: 2 }).then(canvas => {
+        saveNativeOrWebFile(canvas.toDataURL('image/png'), `invoice-${Date.now()}.png`, 'image/png');
     });
 }
 
 function exportInvoiceAsPDF() {
-    html2canvas(document.getElementById('print-area')).then(canvas => {
+    const area = document.getElementById('print-area');
+    html2canvas(area, { useCORS: true, scale: 2 }).then(canvas => {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF('p', 'mm', 'a4');
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, 190, 0);
-        pdf.save(`invoice-${Date.now()}.pdf`);
+        const imgData = canvas.toDataURL('image/png');
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth() - 20;
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'PNG', 10, 10, pdfWidth, pdfHeight);
+        const pdfBase64 = pdf.output('datauristring');
+        saveNativeOrWebFile(pdfBase64, `invoice-${Date.now()}.pdf`, 'application/pdf');
     });
 }
 
@@ -2421,7 +2471,8 @@ function exportToExcel() {
     const ws = XLSX.utils.json_to_sheet(appData.shipments);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الشحنات");
-    XLSX.writeFile(wb, "na2la_data.xlsx");
+    const excelBase64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+    saveNativeOrWebFile(excelBase64, "na2la_data.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 }
 
 function clearAll() {
