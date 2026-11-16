@@ -652,11 +652,43 @@ async function finishOAuthLogin(user, role) {
     }
 }
 
+// استقبال التوكن القادم من نافذة جوجل الأصلية في الأندرويد
+window.onNativeGoogleSignInSuccess = function(idToken) {
+    try {
+        const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+        auth.signInWithCredential(credential)
+            .then((result) => {
+                if (result && result.user) {
+                    finishOAuthLogin(result.user, 'driver');
+                }
+            })
+            .catch((error) => {
+                alert("فشل التحقق السحابي من حساب جوجل: " + error.message);
+            });
+    } catch (err) {
+        alert("خطأ في معالجة بيانات الدخول: " + err.message);
+    }
+};
+
+// ربط اسم الدالة البديلة احتياطياً كما هو معرف في MainActivity.java
+window.handleGoogleIdToken = window.onNativeGoogleSignInSuccess;
+
+// تشغيل نافذة جوجل المعتمدة للأندرويد أو المتصفح
 function signInWithGoogle() {
+    // 1. إذا كان التطبيق يعمل داخل أندرويد (Capacitor / WebView)
+    if (window.AndroidBridge && typeof window.AndroidBridge.launchNativeGoogleSignIn === 'function') {
+        window.AndroidBridge.launchNativeGoogleSignIn();
+        return;
+    }
+
+    // 2. إذا كان التطبيق يعمل من متصفح الويب العادي
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     auth.signInWithPopup(provider)
         .then((result) => {
-            if (result && result.user) finishOAuthLogin(result.user, 'driver');
+            if (result && result.user) {
+                finishOAuthLogin(result.user, 'driver');
+            }
         })
         .catch((error) => {
             alert("فشل تسجيل الدخول بجوجل: " + error.message);
